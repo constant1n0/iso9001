@@ -1,0 +1,31 @@
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+*.~ 
+
+# Archivos de configuración del editor
+.vscode/
+.idea/
+
+# Archivos de dependencias
+node_modules/
+vendor/
+venv/
+.env
+
+# Archivos compilados
+*.class
+*.pyc
+*.out
+
+# Archivos de log
+*.log
+
+# Carpetas de construcción
+/build/
+/dist/
+/coverage/
+
+#Archivos ocultos
+._*
+
