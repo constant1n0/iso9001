@@ -6,28 +6,70 @@
 
 {% block content %}
 <h2>Registrar Nueva Auditoría</h2>
+
 <form method="post">
     {{ form.hidden_tag() }}
+    
     <p>
         {{ form.area_auditada.label }}<br>
         {{ form.area_auditada(size=32) }}
+        {% if form.area_auditada.errors %}
+            <ul class="errors">
+                {% for error in form.area_auditada.errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
     </p>
+
     <p>
         {{ form.fecha.label }}<br>
         {{ form.fecha }}
+        {% if form.fecha.errors %}
+            <ul class="errors">
+                {% for error in form.fecha.errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
     </p>
+
     <p>
         {{ form.auditor.label }}<br>
         {{ form.auditor(size=32) }}
+        {% if form.auditor.errors %}
+            <ul class="errors">
+                {% for error in form.auditor.errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
     </p>
+
     <p>
         {{ form.resultado.label }}<br>
         {{ form.resultado(rows=4, cols=50) }}
+        {% if form.resultado.errors %}
+            <ul class="errors">
+                {% for error in form.resultado.errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
     </p>
+
     <p>
         {{ form.accion_correctiva.label }}<br>
         {{ form.accion_correctiva(rows=4, cols=50) }}
+        {% if form.accion_correctiva.errors %}
+            <ul class="errors">
+                {% for error in form.accion_correctiva.errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
     </p>
+
     <p>{{ form.submit() }}</p>
 </form>
 {% endblock %}
