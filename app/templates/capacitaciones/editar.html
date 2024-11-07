@@ -1,0 +1,33 @@
+<!-- templates/capacitaciones/editar.html -->
+
+{% extends "base.html" %}
+
+{% block title %}Editar Capacitación{% endblock %}
+
+{% block content %}
+<h2>Editar Capacitación</h2>
+<form method="post">
+    {{ form.hidden_tag() }}
+    <p>
+        {{ form.tema.label }}<br>
+        {{ form.tema(size=32) }}
+    </p>
+    <p>
+        {{ form.fecha.label }}<br>
+        {{ form.fecha }}
+    </p>
+    <p>
+        {{ form.personal.label }}<br>
+        {{ form.personal(size=32) }}
+    </p>
+    <p>
+        {{ form.duracion_horas.label }}<br>
+        {{ form.duracion_horas }}
+    </p>
+    <p>
+        {{ form.evaluacion_final.label }}<br>
+        {{ form.evaluacion_final(size=20) }}
+    </p>
+    <p>{{ form.submit(value='Actualizar') }}</p>
+</form>
+{% endblock %}

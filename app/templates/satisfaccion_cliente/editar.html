@@ -1,0 +1,29 @@
+<!-- templates/satisfaccion_cliente/editar.html -->
+
+{% extends "base.html" %}
+
+{% block title %}Editar Encuesta de Satisfacción{% endblock %}
+
+{% block content %}
+<h2>Editar Encuesta de Satisfacción</h2>
+<form method="post">
+    {{ form.hidden_tag() }}
+    <p>
+        {{ form.cliente.label }}<br>
+        {{ form.cliente(size=32) }}
+    </p>
+    <p>
+        {{ form.fecha_encuesta.label }}<br>
+        {{ form.fecha_encuesta }}
+    </p>
+    <p>
+        {{ form.puntuacion.label }}<br>
+        {{ form.puntuacion }}
+    </p>
+    <p>
+        {{ form.comentarios.label }}<br>
+        {{ form.comentarios(rows=4, cols=50) }}
+    </p>
+    <p>{{ form.submit(value='Actualizar') }}</p>
+</form>
+{% endblock %}

@@ -1,0 +1,33 @@
+<!-- templates/auditorias/nueva.html -->
+
+{% extends "base.html" %}
+
+{% block title %}Nueva Auditoría{% endblock %}
+
+{% block content %}
+<h2>Registrar Nueva Auditoría</h2>
+<form method="post">
+    {{ form.hidden_tag() }}
+    <p>
+        {{ form.area_auditada.label }}<br>
+        {{ form.area_auditada(size=32) }}
+    </p>
+    <p>
+        {{ form.fecha.label }}<br>
+        {{ form.fecha }}
+    </p>
+    <p>
+        {{ form.auditor.label }}<br>
+        {{ form.auditor(size=32) }}
+    </p>
+    <p>
+        {{ form.resultado.label }}<br>
+        {{ form.resultado(rows=4, cols=50) }}
+    </p>
+    <p>
+        {{ form.accion_correctiva.label }}<br>
+        {{ form.accion_correctiva(rows=4, cols=50) }}
+    </p>
+    <p>{{ form.submit() }}</p>
+</form>
+{% endblock %}

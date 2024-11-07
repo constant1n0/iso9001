@@ -1,0 +1,33 @@
+<!-- templates/no_conformidades/editar.html -->
+
+{% extends "base.html" %}
+
+{% block title %}Editar No Conformidad{% endblock %}
+
+{% block content %}
+<h2>Editar No Conformidad</h2>
+<form method="post">
+    {{ form.hidden_tag() }}
+    <p>
+        {{ form.descripcion.label }}<br>
+        {{ form.descripcion(rows=4, cols=50) }}
+    </p>
+    <p>
+        {{ form.fecha_detectada.label }}<br>
+        {{ form.fecha_detectada }}
+    </p>
+    <p>
+        {{ form.responsable.label }}<br>
+        {{ form.responsable(size=32) }}
+    </p>
+    <p>
+        {{ form.estado.label }}<br>
+        {{ form.estado(size=20) }}
+    </p>
+    <p>
+        {{ form.accion_correctiva.label }}<br>
+        {{ form.accion_correctiva(rows=4, cols=50) }}
+    </p>
+    <p>{{ form.submit(value='Actualizar') }}</p>
+</form>
+{% endblock %}
