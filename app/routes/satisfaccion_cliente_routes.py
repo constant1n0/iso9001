@@ -27,3 +27,16 @@ def nueva_encuesta():
         flash('Encuesta de satisfacción registrada exitosamente', 'success')
         return redirect(url_for('satisfaccion_cliente.listar_encuestas'))
     return render_template('satisfaccion_cliente/nueva.html', form=form)
+
+@bp.route('/exportar_pdf/<int:id>', methods=['GET'])
+def exportar_pdf(id):
+    """
+    Genera un PDF para una encuesta de satisfacción específica usando su ID.
+    """
+    encuesta = SatisfaccionCliente.query.get_or_404(id)
+    rendered_html = render_template('satisfaccion_cliente/pdf_template.html', encuesta=encuesta)
+    pdf_file = HTML(string=rendered_html).write_pdf()
+    response = make_response(pdf_file)
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = f'inline; filename=encuesta_{id}.pdf'
+    return response

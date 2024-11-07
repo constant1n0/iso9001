@@ -1,0 +1,28 @@
+<!-- templates/satisfaccion_cliente/pdf_template.html -->
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Informe de Satisfacción del Cliente</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { text-align: center; }
+        .info { margin-top: 20px; }
+        .info p { margin: 5px 0; }
+        .section-title { font-weight: bold; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Informe de Satisfacción del Cliente</h1>
+    <div class="info">
+        <p><strong>Cliente:</strong> {{ encuesta.cliente }}</p>
+        <p><strong>Fecha de Encuesta:</strong> {{ encuesta.fecha_encuesta.strftime('%Y-%m-%d') }}</p>
+        <p><strong>Puntuación:</strong> {{ encuesta.puntuacion }} / 10</p>
+    </div>
+    <div class="section">
+        <p class="section-title">Comentarios:</p>
+        <p>{{ encuesta.comentarios or "No se proporcionaron comentarios adicionales" }}</p>
+    </div>
+</body>
+</html>

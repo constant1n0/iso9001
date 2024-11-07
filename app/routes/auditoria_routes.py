@@ -63,3 +63,23 @@ def eliminar_auditoria(id):
     auditoria = Auditoria.query.get_or_404(id)
     db.session.delete(auditoria)
     db
+
+@bp.route('/exportar_pdf/<int:id>', methods=['GET'])
+def exportar_pdf(id):
+    """
+    Genera un PDF para una auditoría específica usando su ID.
+    """
+    auditoria = Auditoria.query.get_or_404(id)
+    
+    # Renderiza la plantilla en HTML
+    rendered_html = render_template('auditorias/pdf_template.html', auditoria=auditoria)
+    
+    # Convierte el HTML en PDF usando WeasyPrint
+    pdf_file = HTML(string=rendered_html).write_pdf()
+    
+    # Prepara la respuesta en PDF
+    response = make_response(pdf_file)
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = f'inline; filename=auditoria_{id}.pdf'
+    
+    return response

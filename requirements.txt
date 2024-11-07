@@ -8,3 +8,5 @@ marshmallow
 marshmallow-sqlalchemy
 Flask-Caching
 Werkzeug
+WeasyPrint
+
