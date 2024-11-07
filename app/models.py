@@ -8,12 +8,14 @@ class TipoEnum(enum.Enum):
     Riesgo = 'Riesgo'
     Oportunidad = 'Oportunidad'
 
+# Enum para definir los roles de usuario
+class RoleEnum(enum.Enum):
+    ADMINISTRADOR = 'Administrador'
+    AUDITOR = 'Auditor'
+    OPERATIVO = 'Operativo'
+
 # Modelo para almacenar Partes Interesadas
 class ParteInteresada(db.Model):
-    """
-    Modelo para registrar partes interesadas y sus necesidades, expectativas
-    y objetivos estratégicos en el SGC.
-    """
     __tablename__ = 'partes_interesadas'
     id_interesado = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(50), nullable=False, unique=True, index=True)
@@ -23,10 +25,6 @@ class ParteInteresada(db.Model):
 
 # Modelo para Roles y Responsabilidades dentro del SGC
 class RolResponsabilidad(db.Model):
-    """
-    Define los roles y responsabilidades del personal, incluyendo el compromiso
-    con la calidad y descripción de la política de calidad.
-    """
     __tablename__ = 'roles_responsabilidades'
     id_rol = db.Column(db.Integer, primary_key=True)
     rol = db.Column(db.String(50), nullable=False, unique=True, index=True)
@@ -35,10 +33,6 @@ class RolResponsabilidad(db.Model):
 
 # Modelo para gestionar Riesgos y Oportunidades dentro del SGC
 class RiesgoOportunidad(db.Model):
-    """
-    Modelo para registrar y gestionar los riesgos y oportunidades asociados al
-    sistema de gestión de calidad.
-    """
     __tablename__ = 'riesgos_oportunidades'
     id_riesgo = db.Column(db.Integer, primary_key=True)
     tipo = db.Column(db.Enum(TipoEnum), nullable=False)
@@ -48,10 +42,6 @@ class RiesgoOportunidad(db.Model):
 
 # Modelo para Recursos y Capacitación del personal
 class RecursoCapacitacion(db.Model):
-    """
-    Registra los recursos necesarios para la capacitación y el desarrollo del
-    personal en relación con la calidad.
-    """
     __tablename__ = 'recursos_capacitacion'
     id_recurso = db.Column(db.Integer, primary_key=True)
     recurso_necesario = db.Column(db.Text, nullable=False)
@@ -60,10 +50,6 @@ class RecursoCapacitacion(db.Model):
 
 # Modelo para la gestión de Procesos de Operación
 class ProcesoOperacion(db.Model):
-    """
-    Almacena los procesos de operación, criterios de calidad, y aspectos de
-    control de proveedores y no conformidades.
-    """
     __tablename__ = 'procesos_operacion'
     id_proceso = db.Column(db.Integer, primary_key=True)
     proceso = db.Column(db.String(100), nullable=False, unique=True, index=True)
@@ -73,10 +59,6 @@ class ProcesoOperacion(db.Model):
 
 # Modelo para Auditorías e Indicadores
 class AuditoriaIndicador(db.Model):
-    """
-    Registra las auditorías realizadas y los indicadores de desempeño
-    relacionados con la calidad.
-    """
     __tablename__ = 'auditorias_indicadores'
     id_auditoria = db.Column(db.Integer, primary_key=True)
     area_auditoria = db.Column(db.String(50), nullable=False)
@@ -87,10 +69,6 @@ class AuditoriaIndicador(db.Model):
 
 # Modelo para Mejoras Continuas dentro del SGC
 class Mejora(db.Model):
-    """
-    Almacena registros de mejoras aplicadas, incluyendo no conformidades y
-    acciones correctivas y preventivas.
-    """
     __tablename__ = 'mejoras'
     id_mejora = db.Column(db.Integer, primary_key=True)
     no_conformidad = db.Column(db.Text, nullable=False)
@@ -100,26 +78,17 @@ class Mejora(db.Model):
 
 # Modelo para Usuarios (para autenticación y gestión de accesos)
 class User(UserMixin, db.Model):
-    """
-    Modelo de usuario que permite gestionar la autenticación y autorización en
-    el sistema. Implementa UserMixin para integrarse con Flask-Login.
-    """
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), nullable=False, unique=True, index=True)
     password = db.Column(db.String(200), nullable=False)
+    role = db.Column(db.Enum(RoleEnum), nullable=False, default=RoleEnum.OPERATIVO)
 
     def __repr__(self):
         return f'<User {self.username}>'
 
-# Nuevos Modelos Propuestos para la Gestión de Calidad (Informes)
-
 # Modelo para registrar No Conformidades dentro del SGC
 class NoConformidad(db.Model):
-    """
-    Almacena registros de no conformidades detectadas, sus responsables y
-    acciones correctivas.
-    """
     __tablename__ = 'no_conformidades'
     id = db.Column(db.Integer, primary_key=True)
     descripcion = db.Column(db.Text, nullable=False)
@@ -131,10 +100,6 @@ class NoConformidad(db.Model):
 
 # Modelo para almacenar resultados de Satisfacción del Cliente
 class SatisfaccionCliente(db.Model):
-    """
-    Guarda los resultados de encuestas de satisfacción del cliente, incluyendo
-    puntuaciones y comentarios.
-    """
     __tablename__ = 'satisfaccion_cliente'
     id = db.Column(db.Integer, primary_key=True)
     fecha_encuesta = db.Column(db.Date, nullable=False, default=datetime.utcnow)
@@ -144,10 +109,6 @@ class SatisfaccionCliente(db.Model):
 
 # Modelo para registrar Capacitaciones del Personal
 class Capacitacion(db.Model):
-    """
-    Registra capacitaciones impartidas al personal, incluyendo el tema, fecha,
-    duración, y evaluación final.
-    """
     __tablename__ = 'capacitaciones'
     id = db.Column(db.Integer, primary_key=True)
     tema = db.Column(db.String(100), nullable=False)
