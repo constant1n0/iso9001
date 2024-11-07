@@ -1,0 +1,26 @@
+<!-- templates/capacitaciones/pdf_template.html -->
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Informe de Capacitación</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { text-align: center; }
+        .info { margin-top: 20px; }
+        .info p { margin: 5px 0; }
+        .section-title { font-weight: bold; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Informe de Capacitación</h1>
+    <div class="info">
+        <p><strong>Tema:</strong> {{ capacitacion.tema }}</p>
+        <p><strong>Fecha:</strong> {{ capacitacion.fecha.strftime('%Y-%m-%d') }}</p>
+        <p><strong>Personal:</strong> {{ capacitacion.personal }}</p>
+        <p><strong>Duración (horas):</strong> {{ capacitacion.duracion_horas }}</p>
+        <p><strong>Evaluación Final:</strong> {{ capacitacion.evaluacion_final or "No evaluado" }}</p>
+    </div>
+</body>
+</html>

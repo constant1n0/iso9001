@@ -28,3 +28,13 @@ def nueva_no_conformidad():
         flash('No conformidad registrada exitosamente', 'success')
         return redirect(url_for('no_conformidad.listar_no_conformidades'))
     return render_template('no_conformidades/nueva.html', form=form)
+
+@bp.route('/exportar_pdf/<int:id>', methods=['GET'])
+def exportar_pdf(id):
+    no_conformidad = NoConformidad.query.get_or_404(id)
+    rendered_html = render_template('no_conformidades/pdf_template.html', no_conformidad=no_conformidad)
+    pdf_file = HTML(string=rendered_html).write_pdf()
+    response = make_response(pdf_file)
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = f'inline; filename=no_conformidad_{id}.pdf'
+    return response

@@ -1,0 +1,32 @@
+<!-- templates/auditorias/pdf_template.html -->
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Informe de Auditoría</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { text-align: center; }
+        .info { margin-top: 20px; }
+        .info p { margin: 5px 0; }
+        .section-title { font-weight: bold; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Informe de Auditoría</h1>
+    <div class="info">
+        <p><strong>Área Auditada:</strong> {{ auditoria.area_auditada }}</p>
+        <p><strong>Auditor:</strong> {{ auditoria.auditor }}</p>
+        <p><strong>Fecha:</strong> {{ auditoria.fecha.strftime('%Y-%m-%d') }}</p>
+    </div>
+    <div class="section">
+        <p class="section-title">Resultado:</p>
+        <p>{{ auditoria.resultado }}</p>
+    </div>
+    <div class="section">
+        <p class="section-title">Acción Correctiva:</p>
+        <p>{{ auditoria.accion_correctiva or "No aplicable" }}</p>
+    </div>
+</body>
+</html>

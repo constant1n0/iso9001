@@ -1,0 +1,29 @@
+<!-- templates/no_conformidades/pdf_template.html -->
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Informe de No Conformidad</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { text-align: center; }
+        .info { margin-top: 20px; }
+        .info p { margin: 5px 0; }
+        .section-title { font-weight: bold; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Informe de No Conformidad</h1>
+    <div class="info">
+        <p><strong>Descripción:</strong> {{ no_conformidad.descripcion }}</p>
+        <p><strong>Fecha Detectada:</strong> {{ no_conformidad.fecha_detectada.strftime('%Y-%m-%d') }}</p>
+        <p><strong>Responsable:</strong> {{ no_conformidad.responsable or "No asignado" }}</p>
+        <p><strong>Estado:</strong> {{ no_conformidad.estado }}</p>
+    </div>
+    <div class="section">
+        <p class="section-title">Acción Correctiva:</p>
+        <p>{{ no_conformidad.accion_correctiva or "No aplicable" }}</p>
+    </div>
+</body>
+</html>
