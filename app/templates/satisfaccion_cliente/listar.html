@@ -1,0 +1,46 @@
+<!-- templates/satisfaccion_cliente/listar.html -->
+
+{% extends "base.html" %}
+
+{% block title %}Lista de Encuestas de Satisfacción{% endblock %}
+
+{% block content %}
+<h2>Lista de Encuestas de Satisfacción</h2>
+
+<!-- Formulario de Búsqueda -->
+<form method="get" action="{{ url_for('satisfaccion_cliente.listar_encuestas') }}">
+    <label for="cliente">Cliente:</label>
+    <input type="text" name="cliente" id="cliente" value="{{ request.args.get('cliente', '') }}">
+    
+    <label for="puntuacion">Puntuación Mínima:</label>
+    <input type="number" name="puntuacion" id="puntuacion" min="1" max="10" value="{{ request.args.get('puntuacion', '') }}">
+    
+    <button type="submit">Buscar</button>
+    <a href="{{ url_for('satisfaccion_cliente.listar_encuestas') }}">Limpiar</a>
+</form>
+
+<table border="1">
+    <tr>
+        <th>Cliente</th>
+        <th>Fecha de Encuesta</th>
+        <th>Puntuación</th>
+        <th>Comentarios</th>
+        <th>Acciones</th>
+    </tr>
+    {% for encuesta in encuestas %}
+    <tr>
+        <td>{{ encuesta.cliente }}</td>
+        <td>{{ encuesta.fecha_encuesta.strftime('%Y-%m-%d') }}</td>
+        <td>{{ encuesta.puntuacion }}</td>
+        <td>{{ encuesta.comentarios }}</td>
+        <td>
+            <a href="{{ url_for('satisfaccion_cliente.editar_encuesta', id=encuesta.id) }}">Editar</a> |
+            <form action="{{ url_for('satisfaccion_cliente.eliminar_encuesta', id=encuesta.id) }}" method="post" style="display:inline;">
+                {{ csrf_token() }}
+                <button type="submit" onclick="return confirm('¿Estás seguro de eliminar esta encuesta?');">Eliminar</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

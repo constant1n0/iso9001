@@ -1,0 +1,44 @@
+<!-- templates/dashboard/dashboard.html -->
+
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h2>Panel de Control - Sistema de Gestión de Calidad</h2>
+
+<div class="statistics">
+    <p><strong>Total de Auditorías:</strong> {{ total_auditorias }}</p>
+    <p><strong>Total de No Conformidades:</strong> {{ total_no_conformidades }}</p>
+    <p><strong>Promedio de Satisfacción del Cliente:</strong> {{ promedio_satisfaccion | round(2) }}</p>
+    <p><strong>Total de Capacitaciones:</strong> {{ total_capacitaciones }}</p>
+</div>
+
+<div class="charts">
+    <h3>Gráfico de No Conformidades</h3>
+    <canvas id="noConformidadesChart"></canvas>
+</div>
+
+<script>
+    // Configuración del gráfico de No Conformidades
+    var ctx = document.getElementById('noConformidadesChart').getContext('2d');
+    var noConformidadesChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Abiertas', 'Cerradas'],
+            datasets: [{
+                data: [{{ no_conformidades_abiertas }}, {{ no_conformidades_cerradas }}],
+                backgroundColor: ['#FF6384', '#36A2EB']
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

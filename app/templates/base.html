@@ -6,12 +6,16 @@
     <meta charset="UTF-8">
     <title>{% block title %}Mi Aplicación Flask{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <header>
         <h1>Mi Aplicación Flask</h1>
         {% if current_user.is_authenticated %}
-            <p>Bienvenido, {{ current_user.username }} | <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a></p>
+            <p>Bienvenido, {{ current_user.username }} | 
+                <a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a> | <!-- Enlace al Dashboard -->
+                <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a>
+            </p>
         {% else %}
             <a href="{{ url_for('auth.login') }}">Iniciar sesión</a>
         {% endif %}
