@@ -2,28 +2,62 @@
 
 {% extends "base.html" %}
 
-{% block title %}Nueva Encuesta de Satisfacción{% endblock %}
+{% block title %}Nueva Satisfacción del Cliente{% endblock %}
 
 {% block content %}
-<h2>Registrar Encuesta de Satisfacción del Cliente</h2>
+<h2>Registrar Nueva Satisfacción del Cliente</h2>
+
 <form method="post">
     {{ form.hidden_tag() }}
+
     <p>
         {{ form.cliente.label }}<br>
         {{ form.cliente(size=32) }}
+        {% if form.cliente.errors %}
+            <ul class="errors">
+                {% for error in form.cliente.errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
     </p>
+
     <p>
         {{ form.fecha_encuesta.label }}<br>
         {{ form.fecha_encuesta }}
+        {% if form.fecha_encuesta.errors %}
+            <ul class="errors">
+                {% for error in form.fecha_encuesta.errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
     </p>
+
     <p>
         {{ form.puntuacion.label }}<br>
         {{ form.puntuacion }}
+        {% if form.puntuacion.errors %}
+            <ul class="errors">
+                {% for error in form.puntuacion.errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
     </p>
+
     <p>
         {{ form.comentarios.label }}<br>
         {{ form.comentarios(rows=4, cols=50) }}
+        {% if form.comentarios.errors %}
+            <ul class="errors">
+                {% for error in form.comentarios.errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
     </p>
+
     <p>{{ form.submit() }}</p>
 </form>
 {% endblock %}

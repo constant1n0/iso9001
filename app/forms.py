@@ -1,6 +1,8 @@
+from flask_login import current_user
+from .models import RoleEnum
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField
-from wtforms.validators import DataRequired, Length
+from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField
+from wtforms.validators import DataRequired, Length, NumberRange
 
 # Formulario de Inicio de Sesión
 class LoginForm(FlaskForm):
@@ -51,4 +53,25 @@ class CapacitacionForm(FlaskForm):
     evaluacion_final = StringField('Evaluación Final', validators=[Length(max=20)])
     submit = SubmitField('Guardar')
     
+# Formulario para ingresar datos de Auditoría
+class AuditoriaForm(FlaskForm):
+    area_auditada = StringField('Área Auditada', validators=[DataRequired(), Length(max=50)])
+    fecha = DateField('Fecha', validators=[DataRequired()])
+    auditor = StringField('Auditor', validators=[DataRequired(), Length(max=50)])
+    resultado = TextAreaField('Resultado', validators=[DataRequired()])
+    accion_correctiva = TextAreaField('Acción Correctiva')
+    submit = SubmitField('Guardar')
+
+    def validate(self):
+        """
+        Validación adicional para asegurar que el usuario tiene permisos para crear/editar auditorías.
+        """
+        if not super().validate():
+            return False
+        # Validar que el usuario actual tenga permiso para modificar auditorías
+        if current_user.role not in [RoleEnum.AUDITOR, RoleEnum.ADMINISTRADOR]:
+            self.area_auditada.errors.append("No tienes permiso para registrar o editar auditorías.")
+            return False
+        return True
+
 # Puedes definir formularios similares para las otras entidades
