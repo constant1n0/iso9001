@@ -1,0 +1,35 @@
+<!-- templates/base.html -->
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Mi Aplicación Flask{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Mi Aplicación Flask</h1>
+        {% if current_user.is_authenticated %}
+            <p>Bienvenido, {{ current_user.username }} | <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a></p>
+        {% else %}
+            <a href="{{ url_for('auth.login') }}">Iniciar sesión</a>
+        {% endif %}
+    </header>
+    <main>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <ul class="flashes">
+                {% for category, message in messages %}
+                    <li class="{{ category }}">{{ message }}</li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+    <footer>
+        <p>&copy; 2024 Mi Aplicación Flask</p>
+    </footer>
+</body>
+</html>

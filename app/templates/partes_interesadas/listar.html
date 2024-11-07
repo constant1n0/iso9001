@@ -1,0 +1,28 @@
+<!-- templates/partes_interesadas/listar.html -->
+
+{% extends "base.html" %}
+
+{% block title %}Partes Interesadas{% endblock %}
+
+{% block content %}
+<h2>Partes Interesadas</h2>
+<a href="{{ url_for('parte_interesada.crear_parte_interesada') }}">Nueva Parte Interesada</a>
+<table border="1">
+    <tr>
+        <th>Nombre</th>
+        <th>Acciones</th>
+    </tr>
+    {% for parte in partes %}
+    <tr>
+        <td>{{ parte.nombre }}</td>
+        <td>
+            <a href="{{ url_for('parte_interesada.editar_parte_interesada', id=parte.id_interesado) }}">Editar</a> |
+            <form action="{{ url_for('parte_interesada.eliminar_parte_interesada', id=parte.id_interesado) }}" method="post" style="display:inline;">
+                {{ csrf_token() }}
+                <button type="submit" onclick="return confirm('¿Estás seguro de que deseas eliminar esta parte interesada?');">Eliminar</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}
