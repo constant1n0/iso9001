@@ -6,7 +6,22 @@
 
 {% block content %}
 <h2>Lista de Auditorías</h2>
-<a href="{{ url_for('auditoria.nueva_auditoria') }}">Nueva Auditoría</a>
+
+<!-- Formulario de Búsqueda -->
+<form method="get" action="{{ url_for('auditoria.listar_auditorias') }}">
+    <label for="area">Área Auditada:</label>
+    <input type="text" name="area" id="area" value="{{ request.args.get('area', '') }}">
+    
+    <label for="auditor">Auditor:</label>
+    <input type="text" name="auditor" id="auditor" value="{{ request.args.get('auditor', '') }}">
+    
+    <label for="fecha">Fecha (YYYY-MM-DD):</label>
+    <input type="date" name="fecha" id="fecha" value="{{ request.args.get('fecha', '') }}">
+    
+    <button type="submit">Buscar</button>
+    <a href="{{ url_for('auditoria.listar_auditorias') }}">Limpiar</a>
+</form>
+
 <table border="1">
     <tr>
         <th>Área Auditada</th>

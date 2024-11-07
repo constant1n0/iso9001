@@ -1,0 +1,49 @@
+<!-- templates/capacitaciones/listar.html -->
+
+{% extends "base.html" %}
+
+{% block title %}Lista de Capacitaciones{% endblock %}
+
+{% block content %}
+<h2>Lista de Capacitaciones</h2>
+
+<!-- Formulario de Búsqueda -->
+<form method="get" action="{{ url_for('capacitacion.listar_capacitaciones') }}">
+    <label for="tema">Tema:</label>
+    <input type="text" name="tema" id="tema" value="{{ request.args.get('tema', '') }}">
+    
+    <label for="fecha">Fecha (YYYY-MM-DD):</label>
+    <input type="date" name="fecha" id="fecha" value="{{ request.args.get('fecha', '') }}">
+    
+    <label for="personal">Personal:</label>
+    <input type="text" name="personal" id="personal" value="{{ request.args.get('personal', '') }}">
+    
+    <button type="submit">Buscar</button>
+    <a href="{{ url_for('capacitacion.listar_capacitaciones') }}">Limpiar</a>
+</form>
+
+<table border="1">
+    <tr>
+        <th>Tema</th>
+        <th>Fecha</th>
+        <th>Personal</th>
+        <th>Duración</th>
+        <th>Acciones</th>
+    </tr>
+    {% for capacitacion in capacitaciones %}
+    <tr>
+        <td>{{ capacitacion.tema }}</td>
+        <td>{{ capacitacion.fecha.strftime('%Y-%m-%d') }}</td>
+        <td>{{ capacitacion.personal }}</td>
+        <td>{{ capacitacion.duracion_horas }}</td>
+        <td>
+            <a href="{{ url_for('capacitacion.editar_capacitacion', id=capacitacion.id) }}">Editar</a> |
+            <form action="{{ url_for('capacitacion.eliminar_capacitacion', id=capacitacion.id) }}" method="post" style="display:inline;">
+                {{ csrf_token() }}
+                <button type="submit" onclick="return confirm('¿Estás seguro de eliminar esta capacitación?');">Eliminar</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

@@ -9,7 +9,21 @@ bp = Blueprint('capacitacion', __name__, url_prefix='/capacitaciones')
 
 @bp.route('/', methods=['GET'])
 def listar_capacitaciones():
-    capacitaciones = Capacitacion.query.all()
+    query = Capacitacion.query
+    
+    tema = request.args.get('tema')
+    if tema:
+        query = query.filter(Capacitacion.tema.ilike(f'%{tema}%'))
+    
+    fecha = request.args.get('fecha')
+    if fecha:
+        query = query.filter(db.func.date(Capacitacion.fecha) == fecha)
+    
+    personal = request.args.get('personal')
+    if personal:
+        query = query.filter(Capacitacion.personal.ilike(f'%{personal}%'))
+    
+    capacitaciones = query.all()
     return render_template('capacitaciones/listar.html', capacitaciones=capacitaciones)
 
 @bp.route('/nueva', methods=['GET', 'POST'])

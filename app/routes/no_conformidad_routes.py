@@ -9,7 +9,24 @@ bp = Blueprint('no_conformidad', __name__, url_prefix='/no_conformidades')
 
 @bp.route('/', methods=['GET'])
 def listar_no_conformidades():
-    no_conformidades = NoConformidad.query.all()
+    query = NoConformidad.query
+    
+    # Filtrar por descripción
+    descripcion = request.args.get('descripcion')
+    if descripcion:
+        query = query.filter(NoConformidad.descripcion.ilike(f'%{descripcion}%'))
+    
+    # Filtrar por estado
+    estado = request.args.get('estado')
+    if estado:
+        query = query.filter(NoConformidad.estado.ilike(f'%{estado}%'))
+    
+    # Filtrar por fecha detectada
+    fecha_detectada = request.args.get('fecha_detectada')
+    if fecha_detectada:
+        query = query.filter(db.func.date(NoConformidad.fecha_detectada) == fecha_detectada)
+    
+    no_conformidades = query.all()
     return render_template('no_conformidades/listar.html', no_conformidades=no_conformidades)
 
 @bp.route('/nueva', methods=['GET', 'POST'])

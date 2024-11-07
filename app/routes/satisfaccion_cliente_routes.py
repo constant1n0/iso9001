@@ -9,7 +9,17 @@ bp = Blueprint('satisfaccion_cliente', __name__, url_prefix='/satisfaccion_clien
 
 @bp.route('/', methods=['GET'])
 def listar_encuestas():
-    encuestas = SatisfaccionCliente.query.all()
+    query = SatisfaccionCliente.query
+    
+    cliente = request.args.get('cliente')
+    if cliente:
+        query = query.filter(SatisfaccionCliente.cliente.ilike(f'%{cliente}%'))
+    
+    puntuacion = request.args.get('puntuacion')
+    if puntuacion:
+        query = query.filter(SatisfaccionCliente.puntuacion >= int(puntuacion))
+    
+    encuestas = query.all()
     return render_template('satisfaccion_cliente/listar.html', encuestas=encuestas)
 
 @bp.route('/nueva', methods=['GET', 'POST'])

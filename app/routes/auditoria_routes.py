@@ -10,9 +10,26 @@ bp = Blueprint('auditoria', __name__, url_prefix='/auditorias')
 @bp.route('/', methods=['GET'])
 def listar_auditorias():
     """
-    Lista todas las auditorías registradas en el sistema.
+    Lista todas las auditorías registradas en el sistema, con funcionalidad de búsqueda y filtrado.
     """
-    auditorias = Auditoria.query.all()
+    query = Auditoria.query
+    
+    # Filtrado por área auditada
+    area = request.args.get('area')
+    if area:
+        query = query.filter(Auditoria.area_auditada.ilike(f'%{area}%'))
+    
+    # Filtrado por auditor
+    auditor = request.args.get('auditor')
+    if auditor:
+        query = query.filter(Auditoria.auditor.ilike(f'%{auditor}%'))
+    
+    # Filtrado por fecha
+    fecha = request.args.get('fecha')
+    if fecha:
+        query = query.filter(db.func.date(Auditoria.fecha) == fecha)
+    
+    auditorias = query.all()
     return render_template('auditorias/listar.html', auditorias=auditorias)
 
 @bp.route('/nueva', methods=['GET', 'POST'])

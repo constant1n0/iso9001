@@ -1,0 +1,49 @@
+<!-- templates/no_conformidades/listar.html -->
+
+{% extends "base.html" %}
+
+{% block title %}Lista de No Conformidades{% endblock %}
+
+{% block content %}
+<h2>Lista de No Conformidades</h2>
+
+<!-- Formulario de Búsqueda -->
+<form method="get" action="{{ url_for('no_conformidad.listar_no_conformidades') }}">
+    <label for="descripcion">Descripción:</label>
+    <input type="text" name="descripcion" id="descripcion" value="{{ request.args.get('descripcion', '') }}">
+    
+    <label for="estado">Estado:</label>
+    <input type="text" name="estado" id="estado" value="{{ request.args.get('estado', '') }}">
+    
+    <label for="fecha_detectada">Fecha Detectada (YYYY-MM-DD):</label>
+    <input type="date" name="fecha_detectada" id="fecha_detectada" value="{{ request.args.get('fecha_detectada', '') }}">
+    
+    <button type="submit">Buscar</button>
+    <a href="{{ url_for('no_conformidad.listar_no_conformidades') }}">Limpiar</a>
+</form>
+
+<table border="1">
+    <tr>
+        <th>Descripción</th>
+        <th>Estado</th>
+        <th>Fecha Detectada</th>
+        <th>Acción Correctiva</th>
+        <th>Acciones</th>
+    </tr>
+    {% for no_conformidad in no_conformidades %}
+    <tr>
+        <td>{{ no_conformidad.descripcion }}</td>
+        <td>{{ no_conformidad.estado }}</td>
+        <td>{{ no_conformidad.fecha_detectada.strftime('%Y-%m-%d') }}</td>
+        <td>{{ no_conformidad.accion_correctiva }}</td>
+        <td>
+            <a href="{{ url_for('no_conformidad.editar_no_conformidad', id=no_conformidad.id) }}">Editar</a> |
+            <form action="{{ url_for('no_conformidad.eliminar_no_conformidad', id=no_conformidad.id) }}" method="post" style="display:inline;">
+                {{ csrf_token() }}
+                <button type="submit" onclick="return confirm('¿Estás seguro de eliminar esta no conformidad?');">Eliminar</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}
