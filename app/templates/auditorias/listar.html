@@ -1,0 +1,34 @@
+<!-- templates/auditorias/listar.html -->
+
+{% extends "base.html" %}
+
+{% block title %}Lista de Auditorías{% endblock %}
+
+{% block content %}
+<h2>Lista de Auditorías</h2>
+<a href="{{ url_for('auditoria.nueva_auditoria') }}">Nueva Auditoría</a>
+<table border="1">
+    <tr>
+        <th>Área Auditada</th>
+        <th>Auditor</th>
+        <th>Fecha</th>
+        <th>Resultado</th>
+        <th>Acciones</th>
+    </tr>
+    {% for auditoria in auditorias %}
+    <tr>
+        <td>{{ auditoria.area_auditada }}</td>
+        <td>{{ auditoria.auditor }}</td>
+        <td>{{ auditoria.fecha.strftime('%Y-%m-%d') }}</td>
+        <td>{{ auditoria.resultado }}</td>
+        <td>
+            <a href="{{ url_for('auditoria.editar_auditoria', id=auditoria.id) }}">Editar</a> |
+            <form action="{{ url_for('auditoria.eliminar_auditoria', id=auditoria.id) }}" method="post" style="display:inline;">
+                {{ csrf_token() }}
+                <button type="submit" onclick="return confirm('¿Estás seguro de eliminar esta auditoría?');">Eliminar</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}
