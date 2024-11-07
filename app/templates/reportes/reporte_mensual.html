@@ -1,0 +1,31 @@
+<!-- templates/reportes/reporte_mensual.html -->
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte Mensual del Sistema de Gestión de Calidad</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { text-align: center; }
+        .section { margin-top: 20px; }
+        .section-title { font-weight: bold; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Reporte Mensual del Sistema de Gestión de Calidad</h1>
+    <p>Fecha de generación: {{ fecha }}</p>
+
+    <div class="section">
+        <p class="section-title">Estadísticas Generales</p>
+        <ul>
+            <li>Total de Auditorías: {{ total_auditorias }}</li>
+            <li>Total de No Conformidades: {{ total_no_conformidades }}</li>
+            <li>Promedio de Satisfacción del Cliente: {{ promedio_satisfaccion | round(2) }}</li>
+            <li>Total de Capacitaciones: {{ total_capacitaciones }}</li>
+        </ul>
+    </div>
+
+    <p>Este reporte ofrece una visión general de los principales indicadores de calidad.</p>
+</body>
+</html>
