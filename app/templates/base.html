@@ -13,8 +13,17 @@
         <h1>Mi Aplicación Flask</h1>
         {% if current_user.is_authenticated %}
             <p>Bienvenido, {{ current_user.username }} | 
-                <a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a> | <!-- Enlace al Dashboard -->
-                <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a>
+                <a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a> <!-- Enlace al Dashboard -->
+                
+                {% if current_user.role == 'Administrador' or current_user.role == 'Auditor' %}
+                    | <a href="{{ url_for('auditoria.listar_auditorias') }}">Auditorías</a>
+                {% endif %}
+                
+                {% if current_user.role == 'Administrador' %}
+                    | <a href="{{ url_for('admin.panel') }}">Panel de Administrador</a>
+                {% endif %}
+                
+                | <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a>
             </p>
         {% else %}
             <a href="{{ url_for('auth.login') }}">Iniciar sesión</a>

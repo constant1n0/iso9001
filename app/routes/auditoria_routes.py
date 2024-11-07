@@ -1,16 +1,20 @@
-# app/routes/auditoria_routes.py
-
-from flask import Blueprint, render_template, redirect, url_for, flash, request
-from ..models import Auditoria
+from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response
+from ..models import Auditoria, RoleEnum
 from ..forms import AuditoriaForm
 from ..extensions import db
+from flask_login import login_required
+from ..utils.decorators import role_required
+from weasyprint import HTML
 
 bp = Blueprint('auditoria', __name__, url_prefix='/auditorias')
 
 @bp.route('/', methods=['GET'])
+@login_required
+@role_required(RoleEnum.AUDITOR)
 def listar_auditorias():
     """
     Lista todas las auditorías registradas en el sistema, con funcionalidad de búsqueda y filtrado.
+    Solo accesible para Auditores y Administradores.
     """
     query = Auditoria.query
     
@@ -33,10 +37,13 @@ def listar_auditorias():
     return render_template('auditorias/listar.html', auditorias=auditorias)
 
 @bp.route('/nueva', methods=['GET', 'POST'])
+@login_required
+@role_required(RoleEnum.AUDITOR)
 def nueva_auditoria():
     """
     Muestra el formulario para crear una nueva auditoría y guarda el registro
     en la base de datos al enviarlo.
+    Solo accesible para Auditores y Administradores.
     """
     form = AuditoriaForm()
     if form.validate_on_submit():
@@ -54,10 +61,13 @@ def nueva_auditoria():
     return render_template('auditorias/nueva.html', form=form)
 
 @bp.route('/editar/<int:id>', methods=['GET', 'POST'])
+@login_required
+@role_required(RoleEnum.AUDITOR)
 def editar_auditoria(id):
     """
     Carga el formulario de edición de una auditoría existente y guarda los
     cambios realizados en la base de datos.
+    Solo accesible para Auditores y Administradores.
     """
     auditoria = Auditoria.query.get_or_404(id)
     form = AuditoriaForm(obj=auditoria)
@@ -73,18 +83,26 @@ def editar_auditoria(id):
     return render_template('auditorias/editar.html', form=form, auditoria=auditoria)
 
 @bp.route('/eliminar/<int:id>', methods=['POST'])
+@login_required
+@role_required(RoleEnum.AUDITOR)
 def eliminar_auditoria(id):
     """
     Elimina una auditoría existente de la base de datos.
+    Solo accesible para Auditores y Administradores.
     """
     auditoria = Auditoria.query.get_or_404(id)
     db.session.delete(auditoria)
-    db
+    db.session.commit()
+    flash('Auditoría eliminada exitosamente', 'success')
+    return redirect(url_for('auditoria.listar_auditorias'))
 
 @bp.route('/exportar_pdf/<int:id>', methods=['GET'])
+@login_required
+@role_required(RoleEnum.AUDITOR)
 def exportar_pdf(id):
     """
     Genera un PDF para una auditoría específica usando su ID.
+    Solo accesible para Auditores y Administradores.
     """
     auditoria = Auditoria.query.get_or_404(id)
     
