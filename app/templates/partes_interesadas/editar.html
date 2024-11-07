@@ -1,0 +1,41 @@
+<!-- templates/partes_interesadas/editar.html -->
+
+{% extends "base.html" %}
+
+{% block title %}Editar Parte Interesada{% endblock %}
+
+{% block content %}
+<h2>Editar Parte Interesada</h2>
+<form method="post">
+    {{ form.hidden_tag() }}
+    <p>
+        {{ form.nombre.label }}<br>
+        {{ form.nombre(size=32) }}<br>
+        {% for error in form.nombre.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+        {% endfor %}
+    </p>
+    <p>
+        {{ form.necesidades_expectativas.label }}<br>
+        {{ form.necesidades_expectativas(rows=5, cols=40) }}<br>
+        {% for error in form.necesidades_expectativas.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+        {% endfor %}
+    </p>
+    <p>
+        {{ form.requisitos_identificados.label }}<br>
+        {{ form.requisitos_identificados(rows=5, cols=40) }}<br>
+        {% for error in form.requisitos_identificados.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+        {% endfor %}
+    </p>
+    <p>
+        {{ form.objetivo_estrategico.label }}<br>
+        {{ form.objetivo_estrategico(rows=5, cols=40) }}<br>
+        {% for error in form.objetivo_estrategico.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+        {% endfor %}
+    </p>
+    <p>{{ form.submit(value='Actualizar') }}</p>
+</form>
+{% endblock %}

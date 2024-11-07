@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Registrarse{% endblock %}
+
+{% block content %}
+<h2>Registro de Usuario</h2>
+<form method="post">
+    {{ csrf_token() }}
+    <p>
+        <label for="username">Usuario:</label><br>
+        <input type="text" id="username" name="username" required>
+    </p>
+    <p>
+        <label for="password">Contraseña:</label><br>
+        <input type="password" id="password" name="password" required>
+    </p>
+    <p>
+        <input type="submit" value="Registrarse">
+    </p>
+</form>
+{% endblock %}
