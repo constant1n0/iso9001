@@ -7,22 +7,31 @@
 {% block content %}
 <h2>Lista de Auditorías</h2>
 
-<!-- Formulario de Búsqueda Avanzada -->
+<!-- Formulario de Búsqueda -->
 <form method="get" action="{{ url_for('auditoria.listar_auditorias') }}">
-    <label for="area">Área Auditada:</label>
-    <input type="text" name="area" id="area" value="{{ request.args.get('area', '') }}">
-    
-    <label for="auditor">Auditor:</label>
-    <input type="text" name="auditor" id="auditor" value="{{ request.args.get('auditor', '') }}">
 
-    <label for="estado">Estado:</label>
-    <input type="text" name="estado" id="estado" value="{{ request.args.get('estado', '') }}">
+    <!-- Filtros Básicos -->
+    <fieldset>
+        <legend>Filtros Básicos</legend>
+        <label for="area">Área Auditada:</label>
+        <input type="text" name="area" id="area" value="{{ request.args.get('area', '') }}">
+        
+        <label for="auditor">Auditor:</label>
+        <input type="text" name="auditor" id="auditor" value="{{ request.args.get('auditor', '') }}">
+    </fieldset>
 
-    <label for="fecha_inicio">Fecha de Inicio:</label>
-    <input type="date" name="fecha_inicio" id="fecha_inicio" value="{{ request.args.get('fecha_inicio', '') }}">
+    <!-- Filtros Avanzados -->
+    <fieldset>
+        <legend>Filtros Avanzados</legend>
+        <label for="estado">Estado:</label>
+        <input type="text" name="estado" id="estado" value="{{ request.args.get('estado', '') }}">
 
-    <label for="fecha_fin">Fecha de Fin:</label>
-    <input type="date" name="fecha_fin" id="fecha_fin" value="{{ request.args.get('fecha_fin', '') }}">
+        <label for="fecha_inicio">Fecha de Inicio:</label>
+        <input type="date" name="fecha_inicio" id="fecha_inicio" value="{{ request.args.get('fecha_inicio', '') }}">
+
+        <label for="fecha_fin">Fecha de Fin:</label>
+        <input type="date" name="fecha_fin" id="fecha_fin" value="{{ request.args.get('fecha_fin', '') }}">
+    </fieldset>
 
     <button type="submit">Buscar</button>
     <a href="{{ url_for('auditoria.listar_auditorias') }}">Limpiar</a>
