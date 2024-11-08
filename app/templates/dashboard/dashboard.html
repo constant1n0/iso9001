@@ -63,6 +63,11 @@
     <canvas id="noConformidadesChart"></canvas>
 </div>
 
+<div class="charts">
+    <h3>Gráfico de Satisfacción del Cliente</h3>
+    <canvas id="satisfaccionChart"></canvas>
+</div>
+
 <script>
     // Configuración del gráfico de No Conformidades
     var ctx = document.getElementById('noConformidadesChart').getContext('2d');
@@ -80,6 +85,34 @@
             plugins: {
                 legend: {
                     position: 'top',
+                }
+            }
+        }
+    });
+
+    // Configuración del gráfico de Satisfacción del Cliente
+    var ctxSatisfaccion = document.getElementById('satisfaccionChart').getContext('2d');
+    var satisfaccionChart = new Chart(ctxSatisfaccion, {
+        type: 'bar',
+        data: {
+            labels: {{ puntuaciones_meses_labels | tojson }},
+            datasets: [{
+                label: 'Puntuación de Satisfacción (Promedio)',
+                data: {{ puntuaciones_meses_data | tojson }},
+                backgroundColor: '#4CAF50'
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false,
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 10
                 }
             }
         }

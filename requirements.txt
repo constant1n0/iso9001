@@ -10,3 +10,5 @@ Flask-Caching
 Werkzeug
 WeasyPrint
 Flask-Mail
+celery
+redis
