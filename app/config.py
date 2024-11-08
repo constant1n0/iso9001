@@ -1,6 +1,7 @@
 # config.py
 import os
 from dotenv import load_dotenv
+from celery.schedules import crontab
 
 # Cargar las variables del archivo .env
 load_dotenv()
@@ -28,3 +29,11 @@ class Config:
     # Configuración para Celery
     CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL')
     CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND')
+
+    # Programación de tareas periódicas de Celery
+    CELERYBEAT_SCHEDULE = {
+        'enviar-alerta-auditorias-proximas': {
+            'task': 'enviar_alerta_auditorias_proximas',
+            'schedule': crontab(hour=7, minute=0),  # Corre la tarea todos los días a las 7:00 AM
+        },
+    }
