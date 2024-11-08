@@ -7,17 +7,23 @@
 {% block content %}
 <h2>Lista de Auditorías</h2>
 
-<!-- Formulario de Búsqueda -->
+<!-- Formulario de Búsqueda Avanzada -->
 <form method="get" action="{{ url_for('auditoria.listar_auditorias') }}">
     <label for="area">Área Auditada:</label>
     <input type="text" name="area" id="area" value="{{ request.args.get('area', '') }}">
     
     <label for="auditor">Auditor:</label>
     <input type="text" name="auditor" id="auditor" value="{{ request.args.get('auditor', '') }}">
-    
-    <label for="fecha">Fecha (YYYY-MM-DD):</label>
-    <input type="date" name="fecha" id="fecha" value="{{ request.args.get('fecha', '') }}">
-    
+
+    <label for="estado">Estado:</label>
+    <input type="text" name="estado" id="estado" value="{{ request.args.get('estado', '') }}">
+
+    <label for="fecha_inicio">Fecha de Inicio:</label>
+    <input type="date" name="fecha_inicio" id="fecha_inicio" value="{{ request.args.get('fecha_inicio', '') }}">
+
+    <label for="fecha_fin">Fecha de Fin:</label>
+    <input type="date" name="fecha_fin" id="fecha_fin" value="{{ request.args.get('fecha_fin', '') }}">
+
     <button type="submit">Buscar</button>
     <a href="{{ url_for('auditoria.listar_auditorias') }}">Limpiar</a>
 </form>
@@ -38,6 +44,7 @@
         <td>{{ auditoria.resultado }}</td>
         <td>
             <a href="{{ url_for('auditoria.editar_auditoria', id=auditoria.id) }}">Editar</a> |
+            <a href="{{ url_for('auditoria.exportar_pdf', id=auditoria.id) }}" target="_blank">Descargar PDF</a> |
             <form action="{{ url_for('auditoria.eliminar_auditoria', id=auditoria.id) }}" method="post" style="display:inline;">
                 {{ csrf_token() }}
                 <button type="submit" onclick="return confirm('¿Estás seguro de eliminar esta auditoría?');">Eliminar</button>

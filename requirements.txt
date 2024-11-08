@@ -12,3 +12,4 @@ WeasyPrint
 Flask-Mail
 celery
 redis
+python-dotenv
