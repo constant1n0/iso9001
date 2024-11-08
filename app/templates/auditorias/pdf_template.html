@@ -6,26 +6,61 @@
     <meta charset="UTF-8">
     <title>Informe de Auditoría</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1 { text-align: center; }
-        .info { margin-top: 20px; }
-        .info p { margin: 5px 0; }
-        .section-title { font-weight: bold; margin-top: 20px; }
+        body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
+        h1 { text-align: center; margin-bottom: 20px; }
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .info-table th, .info-table td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        .section {
+            margin-top: 20px;
+        }
+        .section-title {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+            color: #444;
+        }
+        p {
+            margin: 0;
+            line-height: 1.5;
+        }
     </style>
 </head>
 <body>
     <h1>Informe de Auditoría</h1>
-    <div class="info">
-        <p><strong>Área Auditada:</strong> {{ auditoria.area_auditada }}</p>
-        <p><strong>Auditor:</strong> {{ auditoria.auditor }}</p>
-        <p><strong>Fecha:</strong> {{ auditoria.fecha.strftime('%Y-%m-%d') }}</p>
-    </div>
+    
+    <!-- Tabla de Información General -->
+    <table class="info-table">
+        <tr>
+            <th>Área Auditada</th>
+            <td>{{ auditoria.area_auditada }}</td>
+        </tr>
+        <tr>
+            <th>Auditor</th>
+            <td>{{ auditoria.auditor }}</td>
+        </tr>
+        <tr>
+            <th>Fecha</th>
+            <td>{{ auditoria.fecha.strftime('%Y-%m-%d') }}</td>
+        </tr>
+    </table>
+    
+    <!-- Sección de Resultado -->
     <div class="section">
-        <p class="section-title">Resultado:</p>
+        <p class="section-title">Resultado</p>
         <p>{{ auditoria.resultado }}</p>
     </div>
+    
+    <!-- Sección de Acción Correctiva -->
     <div class="section">
-        <p class="section-title">Acción Correctiva:</p>
+        <p class="section-title">Acción Correctiva</p>
         <p>{{ auditoria.accion_correctiva or "No aplicable" }}</p>
     </div>
 </body>
