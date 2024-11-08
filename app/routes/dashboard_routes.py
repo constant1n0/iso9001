@@ -3,27 +3,28 @@
 from flask import Blueprint, render_template
 from ..models import Auditoria, NoConformidad, SatisfaccionCliente, Capacitacion
 from ..extensions import db
-from ..utils.notifications import enviar_notificacion  # Importar la función de notificaciones
 from datetime import datetime, timedelta
+from flask_login import login_required
 
 bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 
 @bp.route('/', methods=['GET'])
+@login_required
 def dashboard():
     """
     Carga el panel de control con gráficos, estadísticas y notificaciones.
     """
-    # Estadísticas existentes
+    # Estadísticas principales
     total_auditorias = Auditoria.query.count()
     total_no_conformidades = NoConformidad.query.count()
     promedio_satisfaccion = db.session.query(db.func.avg(SatisfaccionCliente.puntuacion)).scalar()
     total_capacitaciones = Capacitacion.query.count()
     
-    # Datos para gráficos
+    # Datos para gráficos de no conformidades
     no_conformidades_abiertas = NoConformidad.query.filter_by(estado="Abierta").count()
     no_conformidades_cerradas = NoConformidad.query.filter_by(estado="Cerrada").count()
 
-    # Configuración de notificaciones
+    # Configuración de alertas
     hoy = datetime.utcnow().date()
     
     # Auditorías próximas (en los próximos 7 días)
@@ -40,12 +41,6 @@ def dashboard():
         db.func.date(Capacitacion.fecha) >= hoy,
         db.func.date(Capacitacion.fecha) <= hoy + timedelta(days=30)
     ).all()
-
-    # Notificación por correo para auditorías próximas
-    for auditoria in proximas_auditorias:
-        asunto = "Recordatorio: Auditoría Programada"
-        cuerpo = f"Recuerda que tienes una auditoría programada en {auditoria.area_auditada} para la fecha {auditoria.fecha.strftime('%Y-%m-%d')}."
-        enviar_notificacion("correo_destinatario@example.com", asunto, cuerpo)
 
     # Gráficos de Satisfacción del Cliente (puntuación promedio por mes)
     puntuaciones_meses_labels = []

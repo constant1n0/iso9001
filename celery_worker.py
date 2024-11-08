@@ -2,6 +2,7 @@ from celery import Celery
 from app import create_app, db
 from flask_mail import Message
 from app.extensions import mail
+from datetime import datetime, timedelta
 
 # Inicializa Flask y Celery
 app = create_app()
@@ -15,11 +16,6 @@ class ContextTask(celery.Task):
             return self.run(*args, **kwargs)
 
 celery.Task = ContextTask
-
-# Ejemplo de una tarea de prueba
-@celery.task
-def prueba_tarea():
-    print("Tarea de prueba ejecutada correctamente.")
 
 # Tarea programada: enviar un correo de reporte de auditorías pendientes
 @celery.task
@@ -57,3 +53,42 @@ def enviar_reporte_auditorias():
             print(f"Correo enviado a {admin.email}")
         except Exception as e:
             print(f"Error al enviar el correo a {admin.email}: {e}")
+
+# Nueva Tarea programada: enviar alertas para auditorías próximas en los próximos 7 días
+@celery.task
+def enviar_alerta_auditorias_proximas():
+    """
+    Tarea periódica para enviar un correo a los auditores recordándoles auditorías programadas en los próximos 7 días.
+    """
+    from app.models import Auditoria, User  # Importa los modelos necesarios
+    
+    # Calcula el rango de fechas para los próximos 7 días
+    hoy = datetime.utcnow().date()
+    fecha_limite = hoy + timedelta(days=7)
+    
+    # Buscar auditorías programadas en los próximos 7 días
+    auditorias_proximas = Auditoria.query.filter(
+        Auditoria.fecha.between(hoy, fecha_limite)
+    ).all()
+    
+    if auditorias_proximas:
+        # Genera el contenido del mensaje
+        mensaje = "\n".join(
+            [f"Auditoría en {a.area_auditada} - Fecha: {a.fecha.strftime('%Y-%m-%d')}" for a in auditorias_proximas]
+        )
+        
+        # Obtiene los correos de los usuarios con rol de auditor
+        auditores = User.query.filter_by(role="AUDITOR").all()
+        for auditor in auditores:
+            msg = Message(
+                subject="Recordatorio de Auditorías Próximas",
+                sender=app.config['MAIL_DEFAULT_SENDER'],
+                recipients=[auditor.email]
+            )
+            msg.body = f"Estimado/a {auditor.username},\n\nEstas son las auditorías programadas para los próximos 7 días:\n\n{mensaje}"
+            
+            try:
+                mail.send(msg)
+                print(f"Correo enviado a {auditor.email}")
+            except Exception as e:
+                print(f"Error al enviar el correo a {auditor.email}: {e}")
