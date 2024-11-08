@@ -16,6 +16,7 @@ from .routes import (
     mejora_routes
 )
 from .utils.error_handlers import handle_exception
+from celery import Celery
 
 def create_app():
     app = Flask(__name__)
@@ -50,5 +51,9 @@ def create_app():
 
     # Registrar manejadores de errores
     app.register_error_handler(Exception, handle_exception)
+
+    # Configuración de Celery
+    app.celery = Celery(app.import_name, broker=app.config['CELERY_BROKER_URL'])
+    app.celery.conf.update(app.config)
 
     return app
