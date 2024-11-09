@@ -1,4 +1,4 @@
-**Sistema de Gestión de Calidad con Flask y Celery**
+**Sistema de Gestión de Calidad ISO9001 con Flask y Celery**
 
 Este sistema de gestión de calidad ha sido desarrollado en Flask. Utiliza Celery y Redis para la gestión de tareas en segundo plano, lo que permite enviar notificaciones periódicas y ejecutar otras tareas sin bloquear el funcionamiento principal de la aplicación.
 
@@ -254,3 +254,7 @@ iso9001/
 │   ├── config.py
 │   └── __init__.py
 └── README.md
+
+## Licencia
+
+Este proyecto está licenciado bajo la Licencia Pública General GNU v3.0. Para más detalles, consulta el archivo [LICENSE](./LICENSE).
