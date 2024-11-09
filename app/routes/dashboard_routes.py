@@ -18,6 +18,7 @@ from ..models import Auditoria, NoConformidad, SatisfaccionCliente, Capacitacion
 from ..extensions import db
 from datetime import datetime, timedelta
 from flask_login import login_required
+import json
 
 bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 
@@ -56,26 +57,27 @@ def dashboard():
     ).all()
 
     # Gráficos de Satisfacción del Cliente (puntuación promedio por mes)
-    puntuaciones_meses_labels = []
-    puntuaciones_meses_data = []
-    meses = db.session.query(
+    puntuaciones_meses = db.session.query(
         db.func.extract('month', SatisfaccionCliente.fecha_encuesta).label('mes'),
         db.func.avg(SatisfaccionCliente.puntuacion).label('promedio')
     ).group_by('mes').order_by('mes').all()
 
-    for mes, promedio in meses:
-        puntuaciones_meses_labels.append(mes)
-        puntuaciones_meses_data.append(promedio)
+    puntuaciones_meses_labels = [int(mes) for mes, _ in puntuaciones_meses]
+    puntuaciones_meses_data = [float(promedio) for _, promedio in puntuaciones_meses]
+
+    # Convertir los datos de los gráficos a JSON para uso en JavaScript
+    no_conformidades_data = json.dumps([no_conformidades_abiertas, no_conformidades_cerradas])
+    puntuaciones_meses_labels_json = json.dumps(puntuaciones_meses_labels)
+    puntuaciones_meses_data_json = json.dumps(puntuaciones_meses_data)
 
     return render_template('dashboard/dashboard.html', 
                            total_auditorias=total_auditorias,
                            total_no_conformidades=total_no_conformidades,
                            promedio_satisfaccion=promedio_satisfaccion or 0,
                            total_capacitaciones=total_capacitaciones,
-                           no_conformidades_abiertas=no_conformidades_abiertas,
-                           no_conformidades_cerradas=no_conformidades_cerradas,
+                           no_conformidades_data=no_conformidades_data,
                            proximas_auditorias=proximas_auditorias,
                            no_conformidades_pendientes=no_conformidades_pendientes,
                            proximas_capacitaciones=proximas_capacitaciones,
-                           puntuaciones_meses_labels=puntuaciones_meses_labels,
-                           puntuaciones_meses_data=puntuaciones_meses_data)
+                           puntuaciones_meses_labels=puntuaciones_meses_labels_json,
+                           puntuaciones_meses_data=puntuaciones_meses_data_json)
