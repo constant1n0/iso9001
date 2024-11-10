@@ -26,7 +26,8 @@ from .routes import (
     recurso_capacitacion_routes,
     proceso_operacion_routes,
     auditoria_indicador_routes,
-    mejora_routes
+    mejora_routes,
+    dashboard_routes  # Importar el blueprint del dashboard
 )
 from .utils.error_handlers import handle_exception
 from celery import Celery
@@ -61,6 +62,7 @@ def create_app():
     app.register_blueprint(proceso_operacion_routes.bp)
     app.register_blueprint(auditoria_indicador_routes.bp)
     app.register_blueprint(mejora_routes.bp)
+    app.register_blueprint(dashboard_routes.bp)  # Registrar el blueprint del dashboard
 
     # Registrar manejadores de errores
     app.register_error_handler(Exception, handle_exception)
