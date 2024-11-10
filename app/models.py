@@ -131,3 +131,16 @@ class Capacitacion(db.Model):
     personal = db.Column(db.String(100), nullable=False)
     duracion_horas = db.Column(db.Integer)
     evaluacion_final = db.Column(db.String(20))
+
+# Modelo para Auditorías
+class Auditoria(db.Model):
+    __tablename__ = 'auditorias'
+    id = db.Column(db.Integer, primary_key=True)
+    area_auditada = db.Column(db.String(50), nullable=False)
+    fecha = db.Column(db.Date, nullable=False, default=datetime.utcnow)
+    auditor = db.Column(db.String(50), nullable=False)
+    resultado = db.Column(db.Text, nullable=False)
+    accion_correctiva = db.Column(db.Text)
+
+    def __repr__(self):
+        return f'<Auditoria {self.area_auditada}>'
