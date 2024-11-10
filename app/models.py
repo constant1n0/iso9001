@@ -144,3 +144,29 @@ class Auditoria(db.Model):
 
     def __repr__(self):
         return f'<Auditoria {self.area_auditada}>'
+    
+#Modelo para Control Documental
+
+class DocumentCategory(enum.Enum):
+    MANUAL_CALIDAD = 'Manual de Calidad'
+    PROCEDIMIENTO_OPERATIVO = 'Procedimiento Operativo'
+    INSTRUCCION_TRABAJO = 'Instrucción de Trabajo'
+    PLAN_ACCION = 'Plan de Acción'
+    OTRO = 'Otro'
+
+class Document(db.Model):
+    __tablename__ = 'documents'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    code = db.Column(db.String(50), nullable=False, unique=True, index=True)  # Código de Identificación
+    category = db.Column(db.Enum(DocumentCategory), nullable=False)
+    version = db.Column(db.String(10), nullable=False, default="1.0")  # Revisión
+    issued_date = db.Column(db.Date, default=datetime.utcnow)  # Fecha de Emisión
+    approved_by = db.Column(db.String(100), nullable=True)  # Aprobador
+    signature = db.Column(db.String(255), nullable=True)  # Ruta de la firma digital si aplica
+    content = db.Column(db.Text, nullable=False)  # Contenido del Documento
+
+    # Historial de versiones
+    def __repr__(self):
+        return f'<Document {self.title} - {self.version}>'
+
