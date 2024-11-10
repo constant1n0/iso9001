@@ -16,9 +16,8 @@
 from flask_login import current_user
 from .models import RoleEnum
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField
-from wtforms.validators import DataRequired, Length, NumberRange, EqualTo  # Añadido EqualTo
-
+from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField 
+from wtforms.validators import DataRequired, Length, NumberRange, EqualTo
 # Formulario de Inicio de Sesión
 class LoginForm(FlaskForm):
     username = StringField('Usuario', validators=[DataRequired(), Length(min=4, max=150)])
