@@ -16,7 +16,7 @@
 from flask import Blueprint, request, redirect, url_for, render_template, flash
 from flask_login import login_user, logout_user, login_required
 from werkzeug.security import check_password_hash, generate_password_hash
-from ..models import User
+from ..models import User, RoleEnum
 from ..forms import LoginForm, RegisterForm  # Importa también el formulario de registro
 from ..extensions import db
 
@@ -32,7 +32,7 @@ def login():
         if user and check_password_hash(user.password, password):
             login_user(user)
             flash('Inicio de sesión exitoso', 'success')
-            return redirect(url_for('main.index'))
+            return redirect(url_for('dashboard.dashboard'))  # Redirigir al dashboard tras el inicio de sesión
         else:
             flash('Credenciales inválidas', 'danger')
             return redirect(url_for('auth.login'))
@@ -49,7 +49,10 @@ def register():
     if form.validate_on_submit():
         username = form.username.data
         password = generate_password_hash(form.password.data)
-        user = User(username=username, password=password)
+        
+        # Asignar rol de ADMINISTRADOR si es el primer usuario
+        role = RoleEnum.ADMINISTRADOR if User.query.count() == 0 else RoleEnum.OPERATIVO
+        user = User(username=username, password=password, role=role)
         
         # Guardar el nuevo usuario en la base de datos
         db.session.add(user)
