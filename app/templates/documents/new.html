@@ -1,0 +1,68 @@
+<!-- 
+# Este archivo es parte de "ABSOLUT ISO9001".
+#
+# "ABSOLUT ISO9001" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ABSOLUT ISO9001" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+
+{% extends "base.html" %}
+
+{% block title %}Registrar Nuevo Documento{% endblock %}
+
+{% block content %}
+<h2>Registrar Nuevo Documento del SGC</h2>
+
+<form method="POST" action="{{ url_for('document.new_document') }}">
+    {{ form.hidden_tag() }}
+    
+    <div>
+        <label for="title">Título:</label>
+        {{ form.title(size=40) }}
+    </div>
+    
+    <div>
+        <label for="code">Código de Identificación:</label>
+        {{ form.code(size=20) }}
+    </div>
+    
+    <div>
+        <label for="category">Categoría:</label>
+        {{ form.category }}
+    </div>
+    
+    <div>
+        <label for="version">Versión:</label>
+        {{ form.version(size=10) }}
+    </div>
+    
+    <div>
+        <label for="issued_date">Fecha de Emisión:</label>
+        {{ form.issued_date }}
+    </div>
+    
+    <div>
+        <label for="approved_by">Aprobado por:</label>
+        {{ form.approved_by(size=40) }}
+    </div>
+    
+    <div>
+        <label for="content">Contenido del Documento:</label>
+        {{ form.content(rows=10, cols=50) }}
+    </div>
+    
+    <div>
+        <button type="submit">Guardar Documento</button>
+        <a href="{{ url_for('document.list_documents') }}">Cancelar</a>
+    </div>
+</form>
+{% endblock %}
