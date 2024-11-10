@@ -16,129 +16,130 @@
  -->
  {% extends "base.html" %}
 
-{% block title %}Dashboard{% endblock %}
-
-{% block content %}
-<h2>Panel de Control - Sistema de Gestión de Calidad</h2>
-
-<div class="statistics">
-    <p><strong>Total de Auditorías:</strong> {{ total_auditorias }}</p>
-    <p><strong>Total de No Conformidades:</strong> {{ total_no_conformidades }}</p>
-    <p><strong>Promedio de Satisfacción del Cliente:</strong> {{ promedio_satisfaccion | round(2) }}</p>
-    <p><strong>Total de Capacitaciones:</strong> {{ total_capacitaciones }}</p>
-</div>
-
-<div class="actions">
-    <h3>Acciones</h3>
-    <a href="{{ url_for('auditoria.nueva_auditoria') }}">Registrar Nueva Auditoría</a> |
-    <a href="{{ url_for('no_conformidad.nueva_no_conformidad') }}">Registrar Nueva No Conformidad</a> |
-    <a href="{{ url_for('capacitacion.nueva_capacitacion') }}">Registrar Nueva Capacitación</a> |
-    <a href="{{ url_for('satisfaccion_cliente.nueva_satisfaccion') }}">Evaluar Satisfacción del Cliente</a>
-</div>
-
-<div class="notifications">
-    <h3>Notificaciones</h3>
-
-    <!-- Auditorías Próximas -->
-    <h4>Auditorías Próximas en los Próximos 7 Días</h4>
-    {% if proximas_auditorias %}
-        <ul>
-            {% for auditoria in proximas_auditorias %}
-                <li>Auditoría en {{ auditoria.area_auditada }} - Fecha: {{ auditoria.fecha.strftime('%Y-%m-%d') }}</li>
-            {% endfor %}
-        </ul>
-    {% else %}
-        <p>No hay auditorías programadas en los próximos 7 días.</p>
-    {% endif %}
-
-    <!-- No Conformidades Abiertas -->
-    <h4>No Conformidades Abiertas</h4>
-    {% if no_conformidades_pendientes %}
-        <ul>
-            {% for nc in no_conformidades_pendientes %}
-                <li>{{ nc.descripcion }} - Responsable: {{ nc.responsable or "No asignado" }}</li>
-            {% endfor %}
-        </ul>
-    {% else %}
-        <p>No hay no conformidades abiertas.</p>
-    {% endif %}
-
-    <!-- Capacitaciones Próximas -->
-    <h4>Capacitaciones Próximas en los Próximos 30 Días</h4>
-    {% if proximas_capacitaciones %}
-        <ul>
-            {% for capacitacion in proximas_capacitaciones %}
-                <li>Capacitación: {{ capacitacion.tema }} - Fecha: {{ capacitacion.fecha.strftime('%Y-%m-%d') }} - Personal: {{ capacitacion.personal }}</li>
-            {% endfor %}
-        </ul>
-    {% else %}
-        <p>No hay capacitaciones próximas a vencer en los próximos 30 días.</p>
-    {% endif %}
-</div>
-
-<div class="charts">
-    <h3>Gráfico de No Conformidades</h3>
-    <canvas id="noConformidadesChart" style="margin-bottom: 20px;"></canvas>
-</div>
-
-<div class="charts">
-    <h3>Gráfico de Satisfacción del Cliente</h3>
-    <canvas id="satisfaccionChart"></canvas>
-</div>
-
-<script>
-    // Parse the JSON-encoded data passed from the server
-    const noConformidadesData = JSON.parse('{{ no_conformidades_data | safe }}');
-    const puntuacionesMesesLabels = JSON.parse('{{ puntuaciones_meses_labels | safe }}');
-    const puntuacionesMesesData = JSON.parse('{{ puntuaciones_meses_data | safe }}');
-
-    // No Conformidades Chart Configuration
-    const ctxNoConformidades = document.getElementById('noConformidadesChart').getContext('2d');
-    const noConformidadesChart = new Chart(ctxNoConformidades, {
-        type: 'doughnut',
-        data: {
-            labels: ['Abiertas', 'Cerradas'],
-            datasets: [{
-                data: noConformidadesData,
-                backgroundColor: ['#FF6384', '#36A2EB']
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'top',
-                }
-            }
-        }
-    });
-
-    // Satisfacción del Cliente Chart Configuration
-    const ctxSatisfaccion = document.getElementById('satisfaccionChart').getContext('2d');
-    const satisfaccionChart = new Chart(ctxSatisfaccion, {
-        type: 'bar',
-        data: {
-            labels: puntuacionesMesesLabels,
-            datasets: [{
-                label: 'Puntuación de Satisfacción (Promedio)',
-                data: puntuacionesMesesData,
-                backgroundColor: '#4CAF50'
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    display: false,
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 10
-                }
-            }
-        }
-    });
-</script>
-{% endblock %}
+ {% block title %}Dashboard{% endblock %}
+ 
+ {% block content %}
+ <h2>Panel de Control - Sistema de Gestión de Calidad</h2>
+ 
+ <div class="statistics">
+     <p><strong>Total de Auditorías:</strong> {{ total_auditorias }}</p>
+     <p><strong>Total de No Conformidades:</strong> {{ total_no_conformidades }}</p>
+     <p><strong>Promedio de Satisfacción del Cliente:</strong> {{ promedio_satisfaccion | round(2) }}</p>
+     <p><strong>Total de Capacitaciones:</strong> {{ total_capacitaciones }}</p>
+ </div>
+ 
+ <div class="actions">
+     <h3>Acciones</h3>
+     <a href="{{ url_for('auditoria.nueva_auditoria') }}">Registrar Nueva Auditoría</a> |
+     <a href="{{ url_for('no_conformidad.nueva_no_conformidad') }}">Registrar Nueva No Conformidad</a> |
+     <a href="{{ url_for('capacitacion.nueva_capacitacion') }}">Registrar Nueva Capacitación</a> |
+     <a href="{{ url_for('satisfaccion_cliente.nueva_satisfaccion') }}">Evaluar Satisfacción del Cliente</a>
+ </div>
+ 
+ <div class="notifications">
+     <h3>Notificaciones</h3>
+ 
+     <!-- Auditorías Próximas -->
+     <h4>Auditorías Próximas en los Próximos 7 Días</h4>
+     {% if proximas_auditorias %}
+         <ul>
+             {% for auditoria in proximas_auditorias %}
+                 <li>Auditoría en {{ auditoria.area_auditada }} - Fecha: {{ auditoria.fecha.strftime('%Y-%m-%d') }}</li>
+             {% endfor %}
+         </ul>
+     {% else %}
+         <p>No hay auditorías programadas en los próximos 7 días.</p>
+     {% endif %}
+ 
+     <!-- No Conformidades Abiertas -->
+     <h4>No Conformidades Abiertas</h4>
+     {% if no_conformidades_pendientes %}
+         <ul>
+             {% for nc in no_conformidades_pendientes %}
+                 <li>{{ nc.descripcion }} - Responsable: {{ nc.responsable or "No asignado" }}</li>
+             {% endfor %}
+         </ul>
+     {% else %}
+         <p>No hay no conformidades abiertas.</p>
+     {% endif %}
+ 
+     <!-- Capacitaciones Próximas -->
+     <h4>Capacitaciones Próximas en los Próximos 30 Días</h4>
+     {% if proximas_capacitaciones %}
+         <ul>
+             {% for capacitacion in proximas_capacitaciones %}
+                 <li>Capacitación: {{ capacitacion.tema }} - Fecha: {{ capacitacion.fecha.strftime('%Y-%m-%d') }} - Personal: {{ capacitacion.personal }}</li>
+             {% endfor %}
+         </ul>
+     {% else %}
+         <p>No hay capacitaciones próximas a vencer en los próximos 30 días.</p>
+     {% endif %}
+ </div>
+ 
+ <div class="charts">
+     <h3>Gráfico de No Conformidades</h3>
+     <canvas id="noConformidadesChart" style="margin-bottom: 20px;"></canvas>
+ </div>
+ 
+ <div class="charts">
+     <h3>Gráfico de Satisfacción del Cliente</h3>
+     <canvas id="satisfaccionChart"></canvas>
+ </div>
+ 
+ <script>
+     // Parse the JSON-encoded data passed from the server
+     const noConformidadesData = JSON.parse('{{ no_conformidades_data | safe }}');
+     const puntuacionesMesesLabels = JSON.parse('{{ puntuaciones_meses_labels | safe }}');
+     const puntuacionesMesesData = JSON.parse('{{ puntuaciones_meses_data | safe }}');
+ 
+     // No Conformidades Chart Configuration
+     const ctxNoConformidades = document.getElementById('noConformidadesChart').getContext('2d');
+     const noConformidadesChart = new Chart(ctxNoConformidades, {
+         type: 'doughnut',
+         data: {
+             labels: ['Abiertas', 'Cerradas'],
+             datasets: [{
+                 data: noConformidadesData,
+                 backgroundColor: ['#FF6384', '#36A2EB']
+             }]
+         },
+         options: {
+             responsive: true,
+             plugins: {
+                 legend: {
+                     position: 'top',
+                 }
+             }
+         }
+     });
+ 
+     // Satisfacción del Cliente Chart Configuration
+     const ctxSatisfaccion = document.getElementById('satisfaccionChart').getContext('2d');
+     const satisfaccionChart = new Chart(ctxSatisfaccion, {
+         type: 'bar',
+         data: {
+             labels: puntuacionesMesesLabels,
+             datasets: [{
+                 label: 'Puntuación de Satisfacción (Promedio)',
+                 data: puntuacionesMesesData,
+                 backgroundColor: '#4CAF50'
+             }]
+         },
+         options: {
+             responsive: true,
+             plugins: {
+                 legend: {
+                     display: false,
+                 }
+             },
+             scales: {
+                 y: {
+                     beginAtZero: true,
+                     max: 10
+                 }
+             }
+         }
+     });
+ </script>
+ {% endblock %}
+ 
