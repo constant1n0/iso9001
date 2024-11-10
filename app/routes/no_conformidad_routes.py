@@ -13,28 +13,31 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from flask import Blueprint, render_template, redirect, url_for, flash
+from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response
+from flask_login import login_required
 from ..models import NoConformidad
 from ..forms import NoConformidadForm
 from ..extensions import db
+from weasyprint import HTML
 
+# Define el blueprint y la URL base
 bp = Blueprint('no_conformidad', __name__, url_prefix='/no_conformidades')
 
+# Ruta para listar todas las no conformidades
 @bp.route('/', methods=['GET'])
+@login_required
 def listar_no_conformidades():
     query = NoConformidad.query
     
-    # Filtrar por descripción
+    # Filtros opcionales por descripción, estado y fecha
     descripcion = request.args.get('descripcion')
     if descripcion:
         query = query.filter(NoConformidad.descripcion.ilike(f'%{descripcion}%'))
     
-    # Filtrar por estado
     estado = request.args.get('estado')
     if estado:
         query = query.filter(NoConformidad.estado.ilike(f'%{estado}%'))
     
-    # Filtrar por fecha detectada
     fecha_detectada = request.args.get('fecha_detectada')
     if fecha_detectada:
         query = query.filter(db.func.date(NoConformidad.fecha_detectada) == fecha_detectada)
@@ -42,7 +45,9 @@ def listar_no_conformidades():
     no_conformidades = query.all()
     return render_template('no_conformidades/listar.html', no_conformidades=no_conformidades)
 
+# Ruta para registrar una nueva no conformidad
 @bp.route('/nueva', methods=['GET', 'POST'])
+@login_required
 def nueva_no_conformidad():
     form = NoConformidadForm()
     if form.validate_on_submit():
@@ -59,7 +64,9 @@ def nueva_no_conformidad():
         return redirect(url_for('no_conformidad.listar_no_conformidades'))
     return render_template('no_conformidades/nueva.html', form=form)
 
+# Ruta para exportar una no conformidad a PDF
 @bp.route('/exportar_pdf/<int:id>', methods=['GET'])
+@login_required
 def exportar_pdf(id):
     no_conformidad = NoConformidad.query.get_or_404(id)
     rendered_html = render_template('no_conformidades/pdf_template.html', no_conformidad=no_conformidad)
