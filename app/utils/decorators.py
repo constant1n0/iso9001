@@ -21,6 +21,7 @@ from ..models import RoleEnum
 def role_required(required_role):
     """
     Decorador para restringir el acceso en función del rol del usuario.
+    El rol 'ADMINISTRADOR' tiene acceso completo a todas las rutas protegidas.
     """
     def decorator(f):
         @wraps(f)
@@ -28,7 +29,8 @@ def role_required(required_role):
             if not current_user.is_authenticated:
                 flash("Por favor, inicia sesión para acceder a esta página.", "warning")
                 return redirect(url_for("auth.login"))
-            if current_user.role != required_role:
+            # Permitir siempre el acceso si el rol es ADMINISTRADOR
+            if current_user.role != required_role and current_user.role != RoleEnum.ADMINISTRADOR:
                 flash("No tienes permiso para acceder a esta página.", "danger")
                 return redirect(url_for("dashboard.dashboard"))
             return f(*args, **kwargs)
