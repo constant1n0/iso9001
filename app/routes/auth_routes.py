@@ -15,9 +15,10 @@
 
 from flask import Blueprint, request, redirect, url_for, render_template, flash
 from flask_login import login_user, logout_user, login_required
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from ..models import User
-from ..forms import LoginForm  # Importar el formulario
+from ..forms import LoginForm, RegisterForm  # Importa también el formulario de registro
+from ..extensions import db
 
 bp = Blueprint('auth', __name__)
 
@@ -36,6 +37,28 @@ def login():
             flash('Credenciales inválidas', 'danger')
             return redirect(url_for('auth.login'))
     return render_template('login.html', form=form)
+
+@bp.route('/register', methods=['GET', 'POST'])
+def register():
+    # Verificar si ya hay usuarios registrados
+    if User.query.count() > 0:
+        flash("Ya existe un usuario registrado. La página de registro está deshabilitada.", "info")
+        return redirect(url_for('auth.login'))
+    
+    form = RegisterForm()
+    if form.validate_on_submit():
+        username = form.username.data
+        password = generate_password_hash(form.password.data)
+        user = User(username=username, password=password)
+        
+        # Guardar el nuevo usuario en la base de datos
+        db.session.add(user)
+        db.session.commit()
+        
+        flash("Usuario registrado exitosamente.", "success")
+        return redirect(url_for('auth.login'))
+    
+    return render_template('register.html', form=form)
 
 @bp.route('/logout')
 @login_required
