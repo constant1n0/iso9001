@@ -86,3 +86,14 @@ class RegisterForm(FlaskForm):
     password = PasswordField('Contraseña', validators=[DataRequired(), Length(min=6)])
     confirm_password = PasswordField('Confirmar Contraseña', validators=[DataRequired(), EqualTo('password')])
     submit = SubmitField('Registrar')
+
+# Formulario para el registro y actualización de documentos
+class DocumentForm(FlaskForm):
+    title = StringField('Título', validators=[DataRequired(), Length(max=150)])
+    code = StringField('Código de Identificación', validators=[DataRequired(), Length(max=50)])
+    category = SelectField('Categoría', choices=[(cat.name, cat.value) for cat in DocumentCategory], validators=[DataRequired()])
+    version = StringField('Versión', validators=[DataRequired(), Length(max=10)])
+    issued_date = DateField('Fecha de Emisión', validators=[DataRequired()])
+    approved_by = StringField('Aprobado por', validators=[Length(max=100)])
+    content = TextAreaField('Contenido', validators=[DataRequired()])
+    submit = SubmitField('Guardar Documento')
