@@ -31,7 +31,9 @@ from .routes import (
     auditoria_routes,
     no_conformidad_routes,
     capacitacion_routes,
-    satisfaccion_cliente_routes
+    satisfaccion_cliente_routes,
+    document_routes
+
 )
 from .utils.error_handlers import handle_exception
 from celery import Celery
@@ -71,6 +73,8 @@ def create_app():
     app.register_blueprint(no_conformidad_routes.bp)
     app.register_blueprint(capacitacion_routes.bp)
     app.register_blueprint(satisfaccion_cliente_routes.bp)
+    app.register_blueprint(document_routes.bp)
+
 
 
 
