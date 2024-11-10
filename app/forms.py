@@ -89,4 +89,11 @@ class AuditoriaForm(FlaskForm):
             return False
         return True
 
+# Formulario de registro para capturar el nombre de usuario y la contraseña
+class RegisterForm(FlaskForm):
+    username = StringField('Nombre de usuario', validators=[DataRequired(), Length(min=4, max=150)])
+    password = PasswordField('Contraseña', validators=[DataRequired(), Length(min=6)])
+    confirm_password = PasswordField('Confirmar Contraseña', validators=[DataRequired(), EqualTo('password')])
+    submit = SubmitField('Registrar')
+
 # Puedes definir formularios similares para las otras entidades
