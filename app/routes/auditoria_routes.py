@@ -66,10 +66,13 @@ def listar_auditorias():
     total_auditorias = query.count()
     auditorias = query.paginate(page=page, per_page=per_page, error_out=False)
 
-    return render_template('auditorias/listar.html', auditorias=auditorias.items, 
-                           page=page, total_pages=ceil(total_auditorias / per_page),
-                           total_auditorias=total_auditorias)
-
+    return render_template(
+        'auditorias/listar.html', 
+        auditorias=auditorias.items, 
+        page=page, 
+        total_pages=ceil(total_auditorias / per_page),
+        total_auditorias=total_auditorias
+    )
 
 @bp.route('/nueva', methods=['GET', 'POST'])
 @login_required
