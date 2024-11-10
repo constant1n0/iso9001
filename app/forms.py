@@ -14,7 +14,7 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
 from flask_login import current_user
-from .models import RoleEnum
+from .models import RoleEnum, DocumentCategory
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField 
 from wtforms.validators import DataRequired, Length, NumberRange, EqualTo
