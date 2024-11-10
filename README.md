@@ -1,4 +1,4 @@
-**Sistema de Gestión de Calidad ISO9001 con Flask y Celery**
+**Sistema de Gestión de Calidad con Flask y Celery**
 
 Este sistema de gestión de calidad ha sido desarrollado en Flask. Utiliza Celery y Redis para la gestión de tareas en segundo plano, lo que permite enviar notificaciones periódicas y ejecutar otras tareas sin bloquear el funcionamiento principal de la aplicación.
 
@@ -7,6 +7,7 @@ Este sistema de gestión de calidad ha sido desarrollado en Flask. Utiliza Celer
 - Requisitos Previos
 - Instalación
 - Configuración de la Base de Datos
+- Primera Toma de Contacto en Desarrollo
 - Iniciar la Aplicación
 - Mantenimiento y Supervisión
 - Seguridad
@@ -20,6 +21,24 @@ Antes de comenzar con la instalación, asegúrate de tener los siguientes elemen
 - **Redis** - Para manejar las tareas de Celery en segundo plano.
 - **PostgreSQL** - Sistema de gestión de bases de datos para almacenar los datos de la aplicación.
 - **Servidor de Correo** (Gmail, etc.) - Para el envío de notificaciones por correo electrónico.
+
+\### Instalación de Redis
+
+Redis es necesario para manejar las tareas en segundo plano con Celery. A continuación, te explicamos cómo instalar Redis en diferentes sistemas operativos.
+
+\#### macOS Si usas Homebrew, puedes instalar Redis con los siguientes comandos:
+
+brew install redis 
+
+brew services start redis # Para iniciar Redis como un servicio
+
+\### En sistemas Ubuntu o Debian, instala Redis ejecutando:
+
+sudo apt update
+
+sudo apt install redis-server
+
+
 -----
 **Instalación**
 
@@ -63,6 +82,11 @@ CELERY\_BROKER\_URL=redis://localhost:6379/0
 
 CELERY\_RESULT\_BACKEND=redis://localhost:6379/0
 
+FLASK\_APP=run.py
+
+FLASK\_ENV=development  # Opcional, si quieres configurar el modo de desarrollo
+
+
 **Nota:** Cambia usuario, contraseña, localhost, y db\_name con los valores correspondientes a tu configuración de PostgreSQL.
 
 Para que las variables de entorno sean cargadas automáticamente, el proyecto utiliza **python-dotenv**, lo que permite que Flask lea las configuraciones directamente desde el archivo .env.
@@ -74,15 +98,19 @@ Para que las variables de entorno sean cargadas automáticamente, el proyecto ut
 
 Asegúrate de que el servicio PostgreSQL esté en ejecución y luego crea una base de datos para la aplicación.
 
-psql -U usuario
+psql -U usuario -d postgres
 
-CREATE DATABASE GestionCalidadISO9001;
+CREATE DATABASE db\_name;
 
 \q
 
 **2. Generar las Migraciones de la Base de Datos**
 
 Asegúrate de que el entorno virtual esté activado y de que las configuraciones de DATABASE\_URI en .env sean correctas.
+
+Ejecuta el comando para generar la carpeta migrations/
+
+flask db init
 
 Ejecuta el comando para generar migraciones de tus modelos en Flask:
 
@@ -100,13 +128,58 @@ Este comando creará todas las tablas en la base de datos especificada, utilizan
 
 **Nota**: Cada vez que realices cambios en los modelos, debes ejecutar flask db migrate y luego flask db upgrade para actualizar la estructura de la base de datos.
 
-**4. Iniciar el Worker de Celery**
+**Primera Toma de Contacto en Desarrollo**
 
-Celery requiere que Redis esté en ejecución. Una vez que Redis esté activo, inicia el worker de Celery para manejar tareas en segundo plano:
+**1. Arranque de la Aplicación en el Entorno de Desarrollo**
+
+- Asegúrate de que el entorno virtual está activado (source venv/bin/activate).
+- Ejecuta el servidor de Flask:
+
+flask run
+
+- Verifica que la aplicación esté funcionando en http://127.0.0.1:5000.
+
+**2. Creación del Primer Usuario**
+
+En esta configuración inicial, el sistema permite crear un primer usuario si la tabla de usuarios está vacía.
+
+- Accede a la URL /register (por ejemplo, http://127.0.0.1:5000/register) para registrar el primer usuario.
+- Completa el formulario de registro con el nombre de usuario y la contraseña deseados.
+
+**3. Iniciar Redis y Celery para Tareas en Segundo Plano**
+
+- Asegúrate de que Redis esté en ejecución (redis-server).
+- Inicia el worker de Celery:
+
+Una vez que Redis esté activo, inicia el worker de Celery para manejar tareas en segundo plano:
+
+\# Para que Redis se inicie automáticamente:
+
+sudo systemctl enable redis-server.service
+
+\# Para iniciar el servicio de Redis:
+
+sudo systemctl start redis-server
+
+
+
+\# Para confirmar que Redis está funcionando correctamente, puedes ejecutar:
+
+redis-cli ping
 
 celery -A celery\_worker.celery worker --loglevel=info
 
 **Consejo:** Para monitorear el funcionamiento de Celery y ver cuándo se ejecutan las tareas, puedes revisar el log que aparece en la consola.
+
+**4. Acceso y Comprobación del Funcionamiento del Dashboard**
+
+- Accede al dashboard de la aplicación en http://127.0.0.1:5000/dashboard tras iniciar sesión.
+- Asegúrate de que los gráficos, estadísticas y notificaciones se muestran correctamente.
+
+**5. Pruebas Básicas de Funcionalidad**
+
+- Verifica formularios y rutas principales (ej. auditorías, capacitaciones).
+- Prueba la funcionalidad de inicio y cierre de sesión para confirmar que los permisos y roles se manejan correctamente.
 
 -----
 **Mantenimiento y Supervisión**
@@ -177,7 +250,8 @@ server {
 
 }
 
-**Nota:** No olvides reiniciar Nginx tras modificar la configuración:
+**Nota:** No olvides reiniciar Nginx tras modificar la configuración
+
 
 
 iso9001/
