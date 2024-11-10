@@ -17,52 +17,35 @@
 
 {% extends "base.html" %}
 
-{% block title %}Registrar Nuevo Documento{% endblock %}
+{% block title %}Crear Nuevo Documento{% endblock %}
 
 {% block content %}
-<h2>Registrar Nuevo Documento del SGC</h2>
+<h2>Crear Nuevo Documento</h2>
 
-<form method="POST" action="{{ url_for('document.new_document') }}">
+<form action="{{ url_for('document.new_document') }}" method="POST">
     {{ form.hidden_tag() }}
-    
-    <div>
-        <label for="title">Título:</label>
-        {{ form.title(size=40) }}
+    <div class="form-group">
+        {{ form.title.label }} {{ form.title(class="form-control") }}
     </div>
-    
-    <div>
-        <label for="code">Código de Identificación:</label>
-        {{ form.code(size=20) }}
+    <div class="form-group">
+        {{ form.code.label }} {{ form.code(class="form-control") }}
     </div>
-    
-    <div>
-        <label for="category">Categoría:</label>
-        {{ form.category }}
+    <div class="form-group">
+        {{ form.category.label }} {{ form.category(class="form-control") }}
     </div>
-    
-    <div>
-        <label for="version">Versión:</label>
-        {{ form.version(size=10) }}
+    <div class="form-group">
+        {{ form.version.label }} {{ form.version(class="form-control") }}
     </div>
-    
-    <div>
-        <label for="issued_date">Fecha de Emisión:</label>
-        {{ form.issued_date }}
+    <div class="form-group">
+        {{ form.issued_date.label }} {{ form.issued_date(class="form-control") }}
     </div>
-    
-    <div>
-        <label for="approved_by">Aprobado por:</label>
-        {{ form.approved_by(size=40) }}
+    <div class="form-group">
+        {{ form.approved_by.label }} {{ form.approved_by(class="form-control") }}
     </div>
-    
-    <div>
-        <label for="content">Contenido del Documento:</label>
-        {{ form.content(rows=10, cols=50) }}
+    <div class="form-group">
+        {{ form.content.label }} {{ form.content(class="form-control", rows=5) }}
     </div>
-    
-    <div>
-        <button type="submit">Guardar Documento</button>
-        <a href="{{ url_for('document.list_documents') }}">Cancelar</a>
-    </div>
+    <button type="submit" class="btn btn-primary">Guardar</button>
 </form>
+
 {% endblock %}

@@ -20,32 +20,42 @@
 {% block title %}Lista de Documentos{% endblock %}
 
 {% block content %}
-<h2>Lista de Documentos del SGC</h2>
+<h2>Lista de Documentos</h2>
 
-<table>
-    <tr>
-        <th>Código</th>
-        <th>Título</th>
-        <th>Categoría</th>
-        <th>Versión</th>
-        <th>Fecha de Emisión</th>
-        <th>Aprobado por</th>
-        <th>Acciones</th>
-    </tr>
-    {% for document in documents %}
-    <tr>
-        <td>{{ document.code }}</td>
-        <td>{{ document.title }}</td>
-        <td>{{ document.category.value }}</td>
-        <td>{{ document.version }}</td>
-        <td>{{ document.issued_date }}</td>
-        <td>{{ document.approved_by or "N/A" }}</td>
-        <td>
-            <a href="{{ url_for('document.edit_document', id=document.id) }}">Editar</a>
-        </td>
-    </tr>
-    {% endfor %}
+<div class="actions">
+    <a href="{{ url_for('document.new_document') }}" class="btn btn-primary">Crear Nuevo Documento</a>
+</div>
+
+<table class="table table-striped mt-3">
+    <thead>
+        <tr>
+            <th>Título</th>
+            <th>Código</th>
+            <th>Categoría</th>
+            <th>Versión</th>
+            <th>Fecha de Emisión</th>
+            <th>Aprobado por</th>
+            <th>Acciones</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for document in documents %}
+        <tr>
+            <td>{{ document.title }}</td>
+            <td>{{ document.code }}</td>
+            <td>{{ document.category }}</td>
+            <td>{{ document.version }}</td>
+            <td>{{ document.issued_date.strftime('%Y-%m-%d') }}</td>
+            <td>{{ document.approved_by }}</td>
+            <td>
+                <a href="{{ url_for('document.edit_document', document_id=document.id) }}" class="btn btn-warning btn-sm">Editar</a>
+                <form action="{{ url_for('document.delete_document', document_id=document.id) }}" method="POST" style="display:inline;">
+                    <button type="submit" class="btn btn-danger btn-sm">Eliminar</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
 </table>
 
-<a href="{{ url_for('document.new_document') }}">Registrar Nuevo Documento</a>
 {% endblock %}
