@@ -13,7 +13,7 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from flask import Flask, redirect, url_for
+from flask import Flask, redirect, url_for, request
 from .config import Config
 from .extensions import db, ma, migrate, cache, csrf, login_manager
 from .models import User  # Asegúrate de que el modelo User está definido
@@ -70,9 +70,9 @@ def create_app():
     app.celery.conf.update(app.config)
 
     # Verificar si la tabla de usuarios está vacía y redirigir al formulario de registro
-    @app.before_first_request
+    @app.before_request
     def check_for_empty_users():
-        if User.query.count() == 0:
-            return redirect(url_for('auth.register'))  # Asume que existe una vista de registro en auth_routes
+        if User.query.count() == 0 and request.endpoint != 'auth.register':
+            return redirect(url_for('auth.register'))
 
     return app
