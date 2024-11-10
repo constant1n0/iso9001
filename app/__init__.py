@@ -30,6 +30,8 @@ from .routes import (
 )
 from .utils.error_handlers import handle_exception
 from celery import Celery
+from werkzeug.security import generate_password_hash
+import click
 
 def create_app():
     app = Flask(__name__)
@@ -68,5 +70,19 @@ def create_app():
     # Configuración de Celery
     app.celery = Celery(app.import_name, broker=app.config['CELERY_BROKER_URL'])
     app.celery.conf.update(app.config)
+
+    # Comando para crear un administrador
+    @app.cli.command("create-admin")
+    @click.argument("username")
+    @click.argument("password")
+    def create_admin(username, password):
+        """
+        Crea el primer usuario administrador con los datos proporcionados.
+        """
+        hashed_password = generate_password_hash(password)
+        new_user = User(username=username, password=hashed_password, role="Administrador")
+        db.session.add(new_user)
+        db.session.commit()
+        print(f"Usuario administrador '{username}' creado con éxito.")
 
     return app
