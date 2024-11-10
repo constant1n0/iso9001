@@ -13,13 +13,13 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from flask import Flask
+from flask import Flask, redirect, url_for
 from .config import Config
 from .extensions import db, ma, migrate, cache, csrf, login_manager
 from .models import User  # Asegúrate de que el modelo User está definido
 from .routes import (
     auth_routes,
-    main_routes,  # Nuevo Blueprint para rutas principales
+    main_routes,
     parte_interesada_routes,
     riesgo_oportunidad_routes,
     rol_responsabilidad_routes,
@@ -30,8 +30,6 @@ from .routes import (
 )
 from .utils.error_handlers import handle_exception
 from celery import Celery
-from werkzeug.security import generate_password_hash
-import click
 
 def create_app():
     app = Flask(__name__)
@@ -71,18 +69,10 @@ def create_app():
     app.celery = Celery(app.import_name, broker=app.config['CELERY_BROKER_URL'])
     app.celery.conf.update(app.config)
 
-    # Comando para crear un administrador
-    @app.cli.command("create-admin")
-    @click.argument("username")
-    @click.argument("password")
-    def create_admin(username, password):
-        """
-        Crea el primer usuario administrador con los datos proporcionados.
-        """
-        hashed_password = generate_password_hash(password)
-        new_user = User(username=username, password=hashed_password, role="Administrador")
-        db.session.add(new_user)
-        db.session.commit()
-        print(f"Usuario administrador '{username}' creado con éxito.")
+    # Verificar si la tabla de usuarios está vacía y redirigir al formulario de registro
+    @app.before_first_request
+    def check_for_empty_users():
+        if User.query.count() == 0:
+            return redirect(url_for('auth.register'))  # Asume que existe una vista de registro en auth_routes
 
     return app
