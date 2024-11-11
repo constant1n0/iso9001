@@ -119,7 +119,7 @@ class SatisfaccionCliente(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     fecha_encuesta = db.Column(db.Date, nullable=False, default=datetime.utcnow)
     cliente = db.Column(db.String(100), nullable=False)
-    puntuacion = db.Column(db.Integer, nullable=False)  # Supongamos de 1 a 10
+    puntuacion = db.Column(db.Integer, nullable=False)
     comentarios = db.Column(db.Text)
 
 # Modelo para registrar Capacitaciones del Personal
@@ -144,29 +144,32 @@ class Auditoria(db.Model):
 
     def __repr__(self):
         return f'<Auditoria {self.area_auditada}>'
-    
-#Modelo para Control Documental
 
+# Modelo para Control Documental
 class DocumentCategory(enum.Enum):
     MANUAL_CALIDAD = 'Manual de Calidad'
     PROCEDIMIENTO_OPERATIVO = 'Procedimiento Operativo'
     INSTRUCCION_TRABAJO = 'Instrucción de Trabajo'
-    PLAN_ACCION = 'Plan de Acción'
+    PLAN_ACCION_CORRECTIVA = 'Plan de Acción Correctiva'
+    PLAN_ACCION_PREVENTIVA = 'Plan de Acción Preventiva'
+    REGISTRO_CALIDAD = 'Registro de Calidad'
+    INFORME_REVISION = 'Informe de Revisión por la Dirección'
+    POLITICA_SEGURIDAD = 'Política de Seguridad y Salud Ocupacional'
+    INDICADOR_DESEMPENO = 'Indicador de Desempeño'
+    PLAN_CAPACITACION = 'Plan de Capacitación'
     OTRO = 'Otro'
 
 class Document(db.Model):
     __tablename__ = 'documents'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
-    code = db.Column(db.String(50), nullable=False, unique=True, index=True)  # Código de Identificación
+    code = db.Column(db.String(50), nullable=False, unique=True, index=True)
     category = db.Column(db.Enum(DocumentCategory), nullable=False)
-    version = db.Column(db.String(10), nullable=False, default="1.0")  # Revisión
-    issued_date = db.Column(db.Date, default=datetime.utcnow)  # Fecha de Emisión
-    approved_by = db.Column(db.String(100), nullable=True)  # Aprobador
-    signature = db.Column(db.String(255), nullable=True)  # Ruta de la firma digital si aplica
-    content = db.Column(db.Text, nullable=False)  # Contenido del Documento
+    version = db.Column(db.String(10), nullable=False, default="1.0")
+    issued_date = db.Column(db.Date, default=datetime.utcnow)
+    approved_by = db.Column(db.String(100), nullable=True)
+    signature = db.Column(db.String(255), nullable=True)
+    content = db.Column(db.Text, nullable=False)
 
-    # Historial de versiones
     def __repr__(self):
         return f'<Document {self.title} - {self.version}>'
-
