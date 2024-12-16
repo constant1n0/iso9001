@@ -46,9 +46,9 @@ sudo apt install redis-server
 
 Clona el repositorio en tu máquina local:
 
-git clone <URL\_DEL\_REPOSITORIO>
+git clone https://github.com/constant1n0/iso9001
 
-cd <NOMBRE\_DEL\_REPOSITORIO>
+cd iso9001
 
 **2. Crear el Entorno Virtual**
 
