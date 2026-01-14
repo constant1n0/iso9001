@@ -14,7 +14,7 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required
+from flask_login import login_required
 from ..models import ProcesoOperacion
 from ..schemas import ProcesoOperacionSchema
 from ..extensions import db, cache
@@ -27,7 +27,7 @@ procesos_operacion_schema = ProcesoOperacionSchema(many=True)
 
 # Crear un nuevo proceso de operación
 @bp.route('/', methods=['POST'])
-@jwt_required()
+@login_required
 def add_proceso_operacion():
     json_data = request.get_json()
     if not json_data:
@@ -45,17 +45,17 @@ def add_proceso_operacion():
 
 # Obtener todos los procesos de operación con paginación
 @bp.route('/', methods=['GET'])
-@jwt_required()
+@login_required
 @cache.cached(timeout=50, query_string=True)
 def get_procesos_operacion():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
-    procesos_paginados = ProcesoOperacion.query.paginate(page, per_page, error_out=False)
+    procesos_paginados = ProcesoOperacion.query.paginate(page=page, per_page=per_page, error_out=False)
     return procesos_operacion_schema.jsonify(procesos_paginados.items), 200
 
 # Actualizar un proceso de operación
 @bp.route('/<int:id>', methods=['PUT'])
-@jwt_required()
+@login_required
 def update_proceso_operacion(id):
     proceso = ProcesoOperacion.query.get_or_404(id)
     json_data = request.get_json()
@@ -74,7 +74,7 @@ def update_proceso_operacion(id):
 
 # Eliminar un proceso de operación
 @bp.route('/<int:id>', methods=['DELETE'])
-@jwt_required()
+@login_required
 def delete_proceso_operacion(id):
     proceso = ProcesoOperacion.query.get_or_404(id)
     db.session.delete(proceso)

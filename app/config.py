@@ -14,6 +14,7 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
 import os
+from datetime import timedelta
 from dotenv import load_dotenv
 from celery.schedules import crontab
 
@@ -30,6 +31,18 @@ class Config:
 
     # Clave secreta para sesiones y CSRF
     SECRET_KEY = os.environ.get('SECRET_KEY')
+
+    # Configuración de cookies de sesión seguras
+    SESSION_COOKIE_SECURE = os.environ.get('FLASK_DEBUG', 'False').lower() not in ('true', '1', 'yes')
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
+
+    # Configuración de cookies "Remember Me"
+    REMEMBER_COOKIE_SECURE = os.environ.get('FLASK_DEBUG', 'False').lower() not in ('true', '1', 'yes')
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = 'Lax'
+    REMEMBER_COOKIE_DURATION = timedelta(days=7)
 
     # Configuración de Caché
     CACHE_TYPE = 'simple'

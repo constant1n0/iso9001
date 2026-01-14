@@ -15,7 +15,7 @@
 
 from flask import Flask, redirect, url_for, request
 from .config import Config
-from .extensions import db, ma, migrate, cache, csrf, login_manager, mail
+from .extensions import db, ma, migrate, cache, csrf, login_manager, mail, limiter
 from .models import User
 from .routes import (
     auth_routes,
@@ -61,6 +61,7 @@ def create_app():
     csrf.init_app(app)
     login_manager.init_app(app)
     mail.init_app(app)
+    limiter.init_app(app)
 
     # Configurar la vista de inicio de sesión
     login_manager.login_view = 'auth.login'
@@ -133,6 +134,34 @@ def create_app():
         global _has_users
         if request.endpoint == 'auth.register' and request.method == 'POST' and response.status_code in [200, 302]:
             _has_users = True
+        return response
+
+    # Headers de seguridad HTTP
+    @app.after_request
+    def add_security_headers(response):
+        # Prevenir clickjacking
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        # Prevenir MIME type sniffing
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        # Habilitar filtro XSS del navegador
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        # Política de referencia
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        # Permisos del navegador
+        response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+        # Content Security Policy
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+            "img-src 'self' data: https:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'self';"
+        )
+        # HSTS (solo en producción con HTTPS)
+        if not app.config.get('DEBUG', False):
+            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
         return response
 
     return app

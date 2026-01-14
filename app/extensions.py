@@ -20,6 +20,8 @@ from flask_caching import Cache
 from flask_wtf import CSRFProtect
 from flask_login import LoginManager
 from flask_mail import Mail
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 db = SQLAlchemy()
 ma = Marshmallow()
@@ -28,6 +30,7 @@ cache = Cache()
 csrf = CSRFProtect()
 login_manager = LoginManager()
 mail = Mail()
+limiter = Limiter(key_func=get_remote_address, default_limits=["200 per day", "50 per hour"])
 
 def init_app(app):
     mail.init_app(app)
