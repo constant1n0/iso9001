@@ -1,0 +1,49 @@
+# Este archivo es parte de "ABSOLUT ISO9001".
+#
+# Archivo de servicio systemd para ABSOLUT ISO9001
+#
+# Instalación:
+#   sudo cp iso9001.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable iso9001
+#   sudo systemctl start iso9001
+#
+# Comandos útiles:
+#   sudo systemctl status iso9001
+#   sudo systemctl restart iso9001
+#   sudo journalctl -u iso9001 -f
+
+[Unit]
+Description=ABSOLUT ISO9001 - Sistema de Gestión de Calidad
+Documentation=https://github.com/tu-repo/iso9001
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=notify
+User=dcm
+Group=dcm
+WorkingDirectory=/home/dcm/work/iso9001
+Environment="PATH=/home/dcm/work/iso9001/venv/bin"
+EnvironmentFile=/home/dcm/work/iso9001/.env
+ExecStart=/home/dcm/work/iso9001/venv/bin/gunicorn -c gunicorn.conf.py wsgi:app
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s TERM $MAINPID
+PrivateTmp=true
+Restart=on-failure
+RestartSec=5
+KillMode=mixed
+TimeoutStopSec=30
+
+# Seguridad
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/dcm/work/iso9001
+
+# Límites
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target
