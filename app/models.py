@@ -15,6 +15,8 @@
 
 from .extensions import db
 from flask_login import UserMixin
+from flask import current_app
+from itsdangerous import URLSafeTimedSerializer as Serializer
 import enum
 from datetime import datetime
 
@@ -99,6 +101,21 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(255), nullable=True, unique=True, index=True)
     password = db.Column(db.String(256), nullable=False)
     role = db.Column(db.Enum(RoleEnum), nullable=False, default=RoleEnum.OPERATIVO)
+
+    def get_reset_token(self):
+        """Genera un token para recuperación de contraseña."""
+        s = Serializer(current_app.config['SECRET_KEY'])
+        return s.dumps({'user_id': self.id}, salt='password-reset-salt')
+
+    @staticmethod
+    def verify_reset_token(token, expires_sec=3600):
+        """Verifica el token de recuperación de contraseña."""
+        s = Serializer(current_app.config['SECRET_KEY'])
+        try:
+            data = s.loads(token, salt='password-reset-salt', max_age=expires_sec)
+        except Exception:
+            return None
+        return User.query.get(data['user_id'])
 
     def __repr__(self):
         return f'<User {self.username}>'

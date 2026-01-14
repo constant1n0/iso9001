@@ -102,3 +102,14 @@ class DocumentForm(FlaskForm):
     approved_by = StringField('Aprobado por', validators=[Length(max=100)])
     content = TextAreaField('Contenido', validators=[DataRequired()])
     submit = SubmitField('Guardar Documento')
+
+# Formulario para solicitar recuperación de contraseña
+class PasswordResetRequestForm(FlaskForm):
+    email = StringField('Correo electrónico', validators=[DataRequired(), Email()])
+    submit = SubmitField('Enviar enlace de recuperación')
+
+# Formulario para establecer nueva contraseña
+class PasswordResetForm(FlaskForm):
+    password = PasswordField('Nueva contraseña', validators=[DataRequired(), Length(min=8)])
+    confirm_password = PasswordField('Confirmar contraseña', validators=[DataRequired(), EqualTo('password')])
+    submit = SubmitField('Restablecer contraseña')

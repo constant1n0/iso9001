@@ -14,7 +14,7 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required
+from flask_login import login_required
 from ..models import AuditoriaIndicador
 from ..schemas import AuditoriaIndicadorSchema
 from ..extensions import db, cache
@@ -27,7 +27,7 @@ auditorias_indicadores_schema = AuditoriaIndicadorSchema(many=True)
 
 # Crear una nueva auditoría e indicador
 @bp.route('/', methods=['POST'])
-@jwt_required()
+@login_required
 def add_auditoria_indicador():
     json_data = request.get_json()
     if not json_data:
@@ -45,17 +45,17 @@ def add_auditoria_indicador():
 
 # Obtener todas las auditorías e indicadores con paginación
 @bp.route('/', methods=['GET'])
-@jwt_required()
+@login_required
 @cache.cached(timeout=50, query_string=True)
 def get_auditorias_indicadores():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
-    auditorias_paginadas = AuditoriaIndicador.query.paginate(page, per_page, error_out=False)
+    auditorias_paginadas = AuditoriaIndicador.query.paginate(page=page, per_page=per_page, error_out=False)
     return auditorias_indicadores_schema.jsonify(auditorias_paginadas.items), 200
 
 # Actualizar una auditoría e indicador
 @bp.route('/<int:id>', methods=['PUT'])
-@jwt_required()
+@login_required
 def update_auditoria_indicador(id):
     auditoria = AuditoriaIndicador.query.get_or_404(id)
     json_data = request.get_json()
@@ -74,7 +74,7 @@ def update_auditoria_indicador(id):
 
 # Eliminar una auditoría e indicador
 @bp.route('/<int:id>', methods=['DELETE'])
-@jwt_required()
+@login_required
 def delete_auditoria_indicador(id):
     auditoria = AuditoriaIndicador.query.get_or_404(id)
     db.session.delete(auditoria)
