@@ -64,6 +64,33 @@ def nueva_no_conformidad():
         return redirect(url_for('no_conformidad.listar_no_conformidades'))
     return render_template('no_conformidades/nueva.html', form=form)
 
+# Ruta para editar una no conformidad
+@bp.route('/editar/<int:id>', methods=['GET', 'POST'])
+@login_required
+def editar_no_conformidad(id):
+    no_conformidad = NoConformidad.query.get_or_404(id)
+    form = NoConformidadForm(obj=no_conformidad)
+    if form.validate_on_submit():
+        no_conformidad.descripcion = form.descripcion.data
+        no_conformidad.fecha_detectada = form.fecha_detectada.data
+        no_conformidad.responsable = form.responsable.data
+        no_conformidad.estado = form.estado.data
+        no_conformidad.accion_correctiva = form.accion_correctiva.data
+        db.session.commit()
+        flash('No conformidad actualizada exitosamente', 'success')
+        return redirect(url_for('no_conformidad.listar_no_conformidades'))
+    return render_template('no_conformidades/editar.html', form=form, no_conformidad=no_conformidad)
+
+# Ruta para eliminar una no conformidad
+@bp.route('/eliminar/<int:id>', methods=['POST'])
+@login_required
+def eliminar_no_conformidad(id):
+    no_conformidad = NoConformidad.query.get_or_404(id)
+    db.session.delete(no_conformidad)
+    db.session.commit()
+    flash('No conformidad eliminada exitosamente', 'success')
+    return redirect(url_for('no_conformidad.listar_no_conformidades'))
+
 # Ruta para exportar una no conformidad a PDF
 @bp.route('/exportar_pdf/<int:id>', methods=['GET'])
 @login_required

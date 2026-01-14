@@ -44,23 +44,24 @@ def register():
     if User.query.count() > 0:
         flash("Ya existe un usuario registrado. La página de registro está deshabilitada.", "info")
         return redirect(url_for('auth.login'))
-    
+
     form = RegisterForm()
     if form.validate_on_submit():
         username = form.username.data
-        password = generate_password_hash(form.password.data)
-        
+        email = form.email.data
+        password = generate_password_hash(form.password.data, method='pbkdf2:sha256')
+
         # Asignar rol de ADMINISTRADOR si es el primer usuario
         role = RoleEnum.ADMINISTRADOR if User.query.count() == 0 else RoleEnum.OPERATIVO
-        user = User(username=username, password=password, role=role)
-        
+        user = User(username=username, email=email, password=password, role=role)
+
         # Guardar el nuevo usuario en la base de datos
         db.session.add(user)
         db.session.commit()
-        
+
         flash("Usuario registrado exitosamente.", "success")
         return redirect(url_for('auth.login'))
-    
+
     return render_template('register.html', form=form)
 
 @bp.route('/logout')

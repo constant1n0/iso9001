@@ -14,10 +14,10 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
 from flask_login import current_user
-from .models import RoleEnum, DocumentCategory
+from .models import RoleEnum, DocumentCategory, EstadoAuditoriaEnum
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField 
-from wtforms.validators import DataRequired, Length, NumberRange, EqualTo
+from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField
+from wtforms.validators import DataRequired, Length, NumberRange, EqualTo, Email, Optional
 # Formulario de Inicio de Sesión
 class LoginForm(FlaskForm):
     username = StringField('Usuario', validators=[DataRequired(), Length(min=4, max=150)])
@@ -39,13 +39,18 @@ class AuditoriaForm(FlaskForm):
     auditor = StringField('Auditor', validators=[DataRequired(), Length(max=50)])
     resultado = TextAreaField('Resultado', validators=[DataRequired()])
     accion_correctiva = TextAreaField('Acción Correctiva')
+    estado = SelectField(
+        'Estado',
+        choices=[(e.name, e.value) for e in EstadoAuditoriaEnum],
+        validators=[DataRequired()]
+    )
     submit = SubmitField('Guardar')
 
-    def validate(self):
+    def validate(self, extra_validators=None):
         """
         Validación adicional para asegurar que el usuario tiene permisos para crear/editar auditorías.
         """
-        if not super().validate():
+        if not super().validate(extra_validators=extra_validators):
             return False
         # Validar que el usuario actual tenga permiso para modificar auditorías
         if current_user.role not in [RoleEnum.AUDITOR, RoleEnum.ADMINISTRADOR]:
@@ -79,10 +84,11 @@ class CapacitacionForm(FlaskForm):
     evaluacion_final = StringField('Evaluación Final', validators=[Length(max=20)])
     submit = SubmitField('Guardar')
 
-# Formulario de registro para capturar el nombre de usuario y la contraseña
+# Formulario de registro para capturar el nombre de usuario, email y la contraseña
 class RegisterForm(FlaskForm):
     username = StringField('Nombre de usuario', validators=[DataRequired(), Length(min=4, max=150)])
-    password = PasswordField('Contraseña', validators=[DataRequired(), Length(min=6)])
+    email = StringField('Correo electrónico', validators=[DataRequired(), Length(max=255)])
+    password = PasswordField('Contraseña', validators=[DataRequired(), Length(min=8)])
     confirm_password = PasswordField('Confirmar Contraseña', validators=[DataRequired(), EqualTo('password')])
     submit = SubmitField('Registrar')
 

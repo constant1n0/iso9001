@@ -85,6 +85,18 @@
         {% endif %}
     </p>
 
+    <p>
+        {{ form.estado.label }}<br>
+        {{ form.estado() }}
+        {% if form.estado.errors %}
+            <ul class="errors">
+                {% for error in form.estado.errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    </p>
+
     <p>{{ form.submit() }}</p>
 </form>
 {% endblock %}

@@ -63,6 +63,39 @@ def nueva_capacitacion():
         return redirect(url_for('capacitacion.listar_capacitaciones'))
     return render_template('capacitaciones/nueva.html', form=form)
 
+# Ruta para editar una capacitación
+@bp.route('/editar/<int:id>', methods=['GET', 'POST'])
+@login_required
+def editar_capacitacion(id):
+    """
+    Carga el formulario de edición de una capacitación y guarda los cambios en la base de datos.
+    """
+    capacitacion = Capacitacion.query.get_or_404(id)
+    form = CapacitacionForm(obj=capacitacion)
+    if form.validate_on_submit():
+        capacitacion.tema = form.tema.data
+        capacitacion.fecha = form.fecha.data
+        capacitacion.personal = form.personal.data
+        capacitacion.duracion_horas = form.duracion_horas.data
+        capacitacion.evaluacion_final = form.evaluacion_final.data
+        db.session.commit()
+        flash('Capacitación actualizada exitosamente', 'success')
+        return redirect(url_for('capacitacion.listar_capacitaciones'))
+    return render_template('capacitaciones/editar.html', form=form, capacitacion=capacitacion)
+
+# Ruta para eliminar una capacitación
+@bp.route('/eliminar/<int:id>', methods=['POST'])
+@login_required
+def eliminar_capacitacion(id):
+    """
+    Elimina una capacitación de la base de datos.
+    """
+    capacitacion = Capacitacion.query.get_or_404(id)
+    db.session.delete(capacitacion)
+    db.session.commit()
+    flash('Capacitación eliminada exitosamente', 'success')
+    return redirect(url_for('capacitacion.listar_capacitaciones'))
+
 @bp.route('/exportar_pdf/<int:id>', methods=['GET'])
 @login_required
 def exportar_pdf(id):
@@ -74,7 +107,7 @@ def exportar_pdf(id):
 
     # Convertir el HTML en PDF usando WeasyPrint
     pdf_file = HTML(string=rendered_html).write_pdf()
-    
+
     # Crear respuesta de PDF
     response = make_response(pdf_file)
     response.headers['Content-Type'] = 'application/pdf'

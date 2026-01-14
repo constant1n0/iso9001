@@ -67,6 +67,38 @@ def nueva_encuesta():
         return redirect(url_for('satisfaccion_cliente.listar_encuestas'))
     return render_template('satisfaccion_cliente/nueva.html', form=form)
 
+# Ruta para editar una encuesta de satisfacción
+@bp.route('/editar/<int:id>', methods=['GET', 'POST'])
+@login_required
+def editar_encuesta(id):
+    """
+    Carga el formulario de edición de una encuesta y guarda los cambios en la base de datos.
+    """
+    encuesta = SatisfaccionCliente.query.get_or_404(id)
+    form = SatisfaccionClienteForm(obj=encuesta)
+    if form.validate_on_submit():
+        encuesta.cliente = form.cliente.data
+        encuesta.fecha_encuesta = form.fecha_encuesta.data
+        encuesta.puntuacion = form.puntuacion.data
+        encuesta.comentarios = form.comentarios.data
+        db.session.commit()
+        flash('Encuesta actualizada exitosamente', 'success')
+        return redirect(url_for('satisfaccion_cliente.listar_encuestas'))
+    return render_template('satisfaccion_cliente/editar.html', form=form, encuesta=encuesta)
+
+# Ruta para eliminar una encuesta de satisfacción
+@bp.route('/eliminar/<int:id>', methods=['POST'])
+@login_required
+def eliminar_encuesta(id):
+    """
+    Elimina una encuesta de satisfacción de la base de datos.
+    """
+    encuesta = SatisfaccionCliente.query.get_or_404(id)
+    db.session.delete(encuesta)
+    db.session.commit()
+    flash('Encuesta eliminada exitosamente', 'success')
+    return redirect(url_for('satisfaccion_cliente.listar_encuestas'))
+
 @bp.route('/exportar_pdf/<int:id>', methods=['GET'])
 @login_required
 def exportar_pdf(id):
@@ -76,10 +108,10 @@ def exportar_pdf(id):
     encuesta = SatisfaccionCliente.query.get_or_404(id)
     rendered_html = render_template('satisfaccion_cliente/pdf_template.html', encuesta=encuesta)
     pdf_file = HTML(string=rendered_html).write_pdf()
-    
+
     # Preparar la respuesta en PDF
     response = make_response(pdf_file)
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = f'inline; filename=encuesta_{id}.pdf'
-    
+
     return response

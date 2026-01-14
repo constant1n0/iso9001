@@ -21,6 +21,9 @@ from celery.schedules import crontab
 load_dotenv()
 
 class Config:
+    # Modo de depuración (desactivado por defecto para producción)
+    DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() in ('true', '1', 'yes')
+
     # Configuración de la base de datos
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URI')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
