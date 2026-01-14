@@ -14,7 +14,7 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response
-from ..models import Auditoria, RoleEnum
+from ..models import Auditoria, RoleEnum, EstadoAuditoriaEnum
 from ..forms import AuditoriaForm
 from ..extensions import db
 from flask_login import login_required
@@ -47,10 +47,14 @@ def listar_auditorias():
     if auditor:
         query = query.filter(Auditoria.auditor.ilike(f'%{auditor}%'))
 
-    # Filtrado por estado
+    # Filtrado por estado (usando el Enum)
     estado = request.args.get('estado')
     if estado:
-        query = query.filter(Auditoria.estado.ilike(f'%{estado}%'))
+        try:
+            estado_enum = EstadoAuditoriaEnum(estado)
+            query = query.filter(Auditoria.estado == estado_enum)
+        except ValueError:
+            pass  # Ignorar valores de estado inválidos
 
     # Filtrado por rango de fechas
     fecha_inicio = request.args.get('fecha_inicio')
@@ -84,12 +88,14 @@ def nueva_auditoria():
     """
     form = AuditoriaForm()
     if form.validate_on_submit():
+        estado = EstadoAuditoriaEnum[form.estado.data] if form.estado.data else EstadoAuditoriaEnum.PENDIENTE
         nueva_auditoria = Auditoria(
             area_auditada=form.area_auditada.data,
             fecha=form.fecha.data,
             auditor=form.auditor.data,
             resultado=form.resultado.data,
-            accion_correctiva=form.accion_correctiva.data
+            accion_correctiva=form.accion_correctiva.data,
+            estado=estado
         )
         db.session.add(nueva_auditoria)
         db.session.commit()
@@ -107,12 +113,18 @@ def editar_auditoria(id):
     """
     auditoria = Auditoria.query.get_or_404(id)
     form = AuditoriaForm(obj=auditoria)
+
+    # Establecer el valor actual del estado en el formulario
+    if request.method == 'GET' and auditoria.estado:
+        form.estado.data = auditoria.estado.name
+
     if form.validate_on_submit():
         auditoria.area_auditada = form.area_auditada.data
         auditoria.fecha = form.fecha.data
         auditoria.auditor = form.auditor.data
         auditoria.resultado = form.resultado.data
         auditoria.accion_correctiva = form.accion_correctiva.data
+        auditoria.estado = EstadoAuditoriaEnum[form.estado.data]
         db.session.commit()
         flash('Auditoría actualizada exitosamente', 'success')
         return redirect(url_for('auditoria.listar_auditorias'))

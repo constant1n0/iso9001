@@ -1,0 +1,70 @@
+<!--
+# Este archivo es parte de "ABSOLUT ISO9001".
+#
+# "ABSOLUT ISO9001" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ABSOLUT ISO9001" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+
+{% extends "base.html" %}
+
+{% block title %}Mejoras Continuas{% endblock %}
+
+{% block content %}
+<h2>Mejoras Continuas</h2>
+<a href="{{ url_for('mejora.nueva_mejora') }}">Nueva Mejora</a>
+
+<table border="1">
+    <tr>
+        <th>ID</th>
+        <th>No Conformidad</th>
+        <th>Acción Correctiva</th>
+        <th>Acción Preventiva</th>
+        <th>Fecha Implementación</th>
+        <th>Acciones</th>
+    </tr>
+    {% for mejora in mejoras %}
+    <tr>
+        <td>{{ mejora.id_mejora }}</td>
+        <td>{{ mejora.no_conformidad[:50] }}{% if mejora.no_conformidad|length > 50 %}...{% endif %}</td>
+        <td>{{ mejora.accion_correctiva[:50] if mejora.accion_correctiva else '-' }}{% if mejora.accion_correctiva and mejora.accion_correctiva|length > 50 %}...{% endif %}</td>
+        <td>{{ mejora.accion_preventiva[:50] if mejora.accion_preventiva else '-' }}{% if mejora.accion_preventiva and mejora.accion_preventiva|length > 50 %}...{% endif %}</td>
+        <td>{{ mejora.fecha_implementacion.strftime('%Y-%m-%d') if mejora.fecha_implementacion else '-' }}</td>
+        <td>
+            <a href="{{ url_for('mejora.editar_mejora', id=mejora.id_mejora) }}">Editar</a> |
+            <form action="{{ url_for('mejora.eliminar_mejora', id=mejora.id_mejora) }}" method="post" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" onclick="return confirm('¿Estás seguro de que deseas eliminar esta mejora?');">Eliminar</button>
+            </form>
+        </td>
+    </tr>
+    {% else %}
+    <tr>
+        <td colspan="6">No hay mejoras registradas.</td>
+    </tr>
+    {% endfor %}
+</table>
+
+{% if pagination.pages > 1 %}
+<div class="pagination">
+    {% if pagination.has_prev %}
+    <a href="{{ url_for('mejora.listar_mejoras', page=pagination.prev_num) }}">Anterior</a>
+    {% endif %}
+
+    <span>Página {{ pagination.page }} de {{ pagination.pages }}</span>
+
+    {% if pagination.has_next %}
+    <a href="{{ url_for('mejora.listar_mejoras', page=pagination.next_num) }}">Siguiente</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

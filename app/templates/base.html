@@ -27,17 +27,17 @@
     <header>
         <h1>ABSOLUT ISO9001</h1>
         {% if current_user.is_authenticated %}
-            <p>Bienvenido, {{ current_user.username }} | 
-                <a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a> <!-- Enlace al Dashboard -->
-                
-                {% if current_user.role == 'Administrador' or current_user.role == 'Auditor' %}
+            <p>Bienvenido, {{ current_user.username }} |
+                <a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a>
+
+                {% if current_user.role.value == 'Administrador' or current_user.role.value == 'Auditor' %}
                     | <a href="{{ url_for('auditoria.listar_auditorias') }}">Auditorías</a>
                 {% endif %}
-                
-                {% if current_user.role == 'Administrador' %}
-                    | <a href="{{ url_for('admin.panel') }}">Panel de Administrador</a>
+
+                {% if current_user.role.value == 'Administrador' %}
+                    | <a href="{{ url_for('document.list_documents') }}">Documentos</a>
                 {% endif %}
-                
+
                 | <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a>
             </p>
         {% else %}

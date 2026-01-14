@@ -33,7 +33,7 @@
         <td>
             <a href="{{ url_for('parte_interesada.editar_parte_interesada', id=parte.id_interesado) }}">Editar</a> |
             <form action="{{ url_for('parte_interesada.eliminar_parte_interesada', id=parte.id_interesado) }}" method="post" style="display:inline;">
-                {{ csrf_token() }}
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" onclick="return confirm('¿Estás seguro de que deseas eliminar esta parte interesada?');">Eliminar</button>
             </form>
         </td>

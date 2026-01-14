@@ -96,7 +96,8 @@ class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), nullable=False, unique=True, index=True)
-    password = db.Column(db.String(200), nullable=False)
+    email = db.Column(db.String(255), nullable=True, unique=True, index=True)
+    password = db.Column(db.String(256), nullable=False)
     role = db.Column(db.Enum(RoleEnum), nullable=False, default=RoleEnum.OPERATIVO)
 
     def __repr__(self):
@@ -132,6 +133,13 @@ class Capacitacion(db.Model):
     duracion_horas = db.Column(db.Integer)
     evaluacion_final = db.Column(db.String(20))
 
+# Enum para definir el estado de las auditorías
+class EstadoAuditoriaEnum(enum.Enum):
+    PENDIENTE = 'Pendiente'
+    EN_PROCESO = 'En Proceso'
+    COMPLETADA = 'Completada'
+    CANCELADA = 'Cancelada'
+
 # Modelo para Auditorías
 class Auditoria(db.Model):
     __tablename__ = 'auditorias'
@@ -141,6 +149,7 @@ class Auditoria(db.Model):
     auditor = db.Column(db.String(50), nullable=False)
     resultado = db.Column(db.Text, nullable=False)
     accion_correctiva = db.Column(db.Text)
+    estado = db.Column(db.Enum(EstadoAuditoriaEnum), nullable=False, default=EstadoAuditoriaEnum.PENDIENTE)
 
     def __repr__(self):
         return f'<Auditoria {self.area_auditada}>'
