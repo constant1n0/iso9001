@@ -9,10 +9,11 @@ Add one deterministic GitHub Actions check for the existing Python 3.11 `unittes
 ## Authorization and scope
 
 - **Included:** `.github/workflows/ci.yml`, CI usage/required-check guidance in `README.md`, and the existing applicable tests.
-- **Remote authorization:** the parent pushed the CI work unit to `origin/fix/auth-bootstrap` and used the configured GitHub CLI session only to read its Actions run/logs in `constant1n0/iso9001`. No PR, merge, deployment, or repository-setting mutation was authorized or performed.
-- **Excluded:** PR/merge/branch-protection changes, deployment, live PostgreSQL/Redis/SMTP, new credentials or sessions, dependency upgrades, scanners, and auth A2/A3.
+- **Historical remote state:** the parent pushed the CI work unit to `origin/fix/auth-bootstrap` and used the configured GitHub CLI session only to read its Actions run/logs in `constant1n0/iso9001`; at that time no PR, merge, or settings mutation was authorized.
+- **Current remote authorization:** the user subsequently authorized the parent to require `Python 3.11 tests`, open the exact A1+CI PR, and merge it into `main` without bypass after PR-specific CI passes.
+- **Still excluded:** deployment, live PostgreSQL/Redis/SMTP, new credentials or sessions, dependency upgrades, scanners, auth A2/A3, and any other branch or feature.
 - Existing untracked `.atl/` and `.codegraph/` remain untouched.
-- The auth tracker records the narrowly authorized current-branch publication separately; this CI unit does not broaden remote permission.
+- The auth tracker mirrors the historical publication and current bounded CI2 authorization; neither tracker expands beyond the user's explicit scope.
 
 ## CI1 — Add the test workflow and maintainer guidance
 
@@ -39,6 +40,30 @@ Acceptance criteria:
 - [x] No dependency file, application behavior, auth tracker, or unrelated path changes.
 - [x] README names the stable check and separates CI availability from merge enforcement.
 - [x] The authorized GitHub-hosted run completed successfully for the exact behavior commit.
+
+## CI2 — Protect `main` and integrate the published A1+CI branch
+
+- **Status:** PENDING / AUTHORIZED; the parent owns every bounded Git/`gh`/API mutation.
+- **Route:** `inline-parent` for repository settings, PR checks, merge, and hosted-CI readback; `delegated` for multi-file tracker updates and preparation evidence.
+- **Repository:** `constant1n0/iso9001`; use only the existing configured Git/`gh` authentication.
+- **Pre-update boundary:** base `main@07159e95de7686f5c2f0cedb0f63af332687c93e`; published head `fix/auth-bootstrap@d76821939046ef8aa68e8a23fd69e5c78e76bac3` before these tracker-only edits.
+- **Baseline:** no PR exists; `main` is unprotected (`404 Branch not protected`), with effective branch rules `[]` and rulesets `[]`.
+- **Pre-update review size:** `1,043` additions plus deletions: `708` code/tests/README/workflow and `335` task-tracker lines. Later count growth from this preparation is documentation-only.
+- **Hosted head proof:** [run 35523106948](https://github.com/constant1n0/iso9001/actions/runs/35523106948) succeeded for exact head `d76821939046ef8aa68e8a23fd69e5c78e76bac3`.
+- **Required check identity:** context `Python 3.11 tests`, GitHub Actions `app_id: 15368` (`github-actions`).
+- **Review decision:** the maintainer explicitly approved `size:exception` for this cohesive A1+CI PR only; tests, protection, and verification remain mandatory.
+
+Execution checklist:
+
+- [ ] Configure `main` protection with `required_status_checks.strict: true`, check `{context: "Python 3.11 tests", app_id: 15368}`, and `enforce_admins: true`.
+- [ ] Read the protection back through the API and confirm strict mode, context, app ID, admin enforcement, no force pushes/deletions, and no reviewer-count requirement or unrelated rule.
+- [ ] Open one PR from `fix/auth-bootstrap` to `main`, documenting the approved `size:exception`, A1+CI boundary, four commits, verification, rollback, and A2/A3 exclusions.
+- [ ] Confirm the PR's actual base SHA, head SHA, changed-path inventory, and changed-line count before merge; any change after `d768219` must be limited to these authorized tracker updates.
+- [ ] Wait for PR-specific `Python 3.11 tests` on the PR's actual head SHA; do not substitute the earlier push run for `d768219`.
+- [ ] Merge without `--admin`, bypass, force push, or branch deletion; preserve both branches.
+- [ ] Read back `main`'s exact resulting SHA and require a successful hosted `Python 3.11 tests` run for that exact SHA.
+
+Protection rollback requires separate user authorization. Never weaken or disable protection to make this PR mergeable; stop and report any mismatch instead.
 
 ## Verification and TDD evidence strategy
 
@@ -94,6 +119,6 @@ git status --short --branch
 
 ## Rollback, enforcement, and next step
 
-Rollback removes only `.github/workflows/ci.yml` and the matching README CI guidance; application behavior and tests remain intact. Future mandatory gating requires a separate, explicitly authorized repository-rules/branch-protection change selecting `Python 3.11 tests`; creating the workflow alone does not block merges.
+CI1 rollback removes only `.github/workflows/ci.yml` and the matching README CI guidance; application behavior and tests remain intact. CI2 protection rollback is a separate remote mutation and requires separate user authorization.
 
-**Next step:** CI1 is complete. Requiring `Python 3.11 tests` before merge remains a separate repository-rules or branch-protection operation that needs explicit user authorization. Auth A2/A3 are unrelated and remain pending; no PR, merge, deployment, or repository-setting mutation occurred.
+**Next step:** CI1 is complete and CI2 is authorized but pending parent execution. The parent must apply and read back protection, open and verify the exact PR, wait for PR-specific CI, merge without bypass, and verify exact-SHA `main` CI. Auth A2/A3 remain pending and out of scope.

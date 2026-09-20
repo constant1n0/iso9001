@@ -21,7 +21,8 @@ Evidence is recorded in audit memory `#5378`. This document plans only the verif
 | RDD | `off`; native/default status handling remains in effect. |
 | Delivery strategy | `ask-on-risk`, resolved by the user to chained units. |
 | Chain strategy | `stacked-to-main`; integrate independent units into `main` in order: A1 → A2 → A3. |
-| Remote operations | The user explicitly authorized publication of the current `fix/auth-bootstrap` branch only. A1/CI commits were pushed there and CI evidence was read with the configured GitHub CLI session; no PR, merge, deployment, settings mutation, other branch, or broader remote permission was authorized. |
+| Remote operations | Historical scope authorized only publication of `fix/auth-bootstrap` and read-only CI evidence. The user has now explicitly authorized the parent, using the existing configured Git/`gh` authentication, to protect `main`, open the exact A1+CI PR, and merge it without bypass after required PR-specific CI passes. |
+| Review size | The maintainer explicitly approved `size:exception` for this cohesive A1+CI PR only; tests, protection, and verification may not be omitted or bypassed. |
 
 ## Scope
 
@@ -39,7 +40,7 @@ Evidence is recorded in audit memory `#5378`. This document plans only the verif
 - Changes to existing account records, roles, or database contents.
 - Other audit sectors, general auth redesign, MFA, authorization changes, or dependency upgrades.
 - PostgreSQL, Redis, SMTP, or other service contact during tests.
-- Remote operations beyond the explicitly authorized current-branch publication and read-only CI evidence; pull requests, merges, deployment, and production configuration mutation remain excluded.
+- Remote operations beyond the exact authorized `main` protection plus A1+CI PR/merge flow; deployment, production services, other branches/features, and A2/A3 publication or integration remain excluded.
 - Artificial code reduction, omitted tests, minification, or non-cohesive splitting to satisfy a line heuristic.
 
 ## Constraints and test environment
@@ -67,7 +68,7 @@ RED/GREEN/REFACTOR proof for A1 is recorded below. A2 and A3 evidence remains pe
 
 ### A1 — Replace public bootstrap with local CLI and add the test harness
 
-- **Status:** COMPLETED, independently/parent verified, and published to `origin/fix/auth-bootstrap`
+- **Status:** COMPLETED, independently/parent verified, and published to `origin/fix/auth-bootstrap`; not merged yet
 - **Route:** `delegated` — multi-file implementation and preparation triggers apply.
 - **Branch:** `fix/auth-bootstrap`
 - **Base boundary:** `main` at `07159e95de7686f5c2f0cedb0f63af332687c93e`
@@ -154,9 +155,19 @@ Changed paths:
 
 Concurrency guarantee: the public race is removed. The privileged local command checks for accounts before prompting and again before writing, but it does not claim cross-process serialization. Simultaneous local invocations remain an operator constraint; no migration or locking table was introduced.
 
-Review-size note: A1 contains `646` authored additions plus deletions before tracking-document overhead. No PR is being created, and no `size:exception` approval exists. The behavior, tests, and README remain one cohesive local work unit without cosmetic shrinking or omitted coverage. Any later PR preparation must resolve the greater-than-400-line budget under ordinary policy.
+Review-size note: A1 contains `646` authored additions plus deletions before tracking-document overhead. The behavior, tests, and README remain one cohesive work unit without cosmetic shrinking or omitted coverage. The maintainer has now approved `size:exception` for the exact A1+CI PR only.
 
 macOS environment caveat: the documented `venv/bin/flask --app run.py create-admin` command is valid when the native libraries required by the application's eager WeasyPrint imports are available to the dynamic loader. The isolated test harness exposes existing Homebrew library directories; it does not install or bypass those native requirements.
+
+#### Current A1 delivery authorization
+
+- Parent-owned remote scope is limited to `constant1n0/iso9001`, base `main@07159e95de7686f5c2f0cedb0f63af332687c93e`, and published source head `fix/auth-bootstrap@d76821939046ef8aa68e8a23fd69e5c78e76bac3` before these tracker-only edits.
+- Before this preparation, the branch contained four reviewed commits: A1 behavior, A1 evidence, CI, and publication proof. The full pre-update diff is `1,043` additions plus deletions; any later growth must be limited to these tracker updates.
+- The parent will require `Python 3.11 tests` (`app_id: 15368`) with strict checks and admin enforcement, then read the protection back before opening the PR.
+- The approved `size:exception` applies only to this cohesive A1+CI PR and does not authorize bypassing tests, protection, or exact-head verification.
+- Merge must wait for PR-specific CI on the PR's actual head SHA, use no admin/bypass path, preserve branches, and be followed by exact-SHA hosted CI verification on `main`.
+- Any protection rollback requires separate user authorization; protection must never be silently weakened to merge.
+- A2 and A3 remain unfixed, pending, and outside this remote authorization.
 
 ### A2 — Enforce canonical-origin reset links and token invalidation
 
@@ -206,7 +217,7 @@ main @ 07159e9
 ```
 
 - Strategy: `stacked-to-main`.
-- Planned integration order: A1, then A2, then A3. Branches are based on the previous local unit; no merge or integration is authorized yet.
+- Planned integration order remains A1, then A2, then A3. Integration is now authorized only for the exact published A1+CI branch; A2/A3 remain unauthorized and pending.
 - Initial authored running line count: `646` for A1 code, tests, and README.
 - Behavior commit: `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`, with `697` additions and `180` deletions overall.
 - Behavior commit tracking overhead: `231` additions for this task document, separate from the `466` additions and `180` deletions (`646` authored lines) in A1 code, tests, and README.
@@ -215,8 +226,8 @@ main @ 07159e9
 - Original full forecast: approximately `590–820` authored additions plus deletions.
 - Revised full forecast after observed A1 size: approximately `906–1,036` authored additions plus deletions if A2 and A3 remain within their current forecasts.
 - Per-task approximately 400-line heuristic: advisory only.
-- Size handling: one honest cohesive slicing pass has produced A1/A2/A3. A1 exceeds 400 lines, no PR is being created, and no `size:exception` is approved. Later PR preparation must resolve the budget under ordinary policy; do not shrink content artificially.
-- A1 behavior `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`, tracking closure `636649426e87cc1b9519907ffab8de2c7646f833`, and later CI `9f5723c1c431d2f15b3c676fc4058f1dc22cad89` are published to `origin/fix/auth-bootstrap`. No pull request, merge, or deployment exists.
+- Size handling: one honest cohesive slicing pass produced A1/A2/A3. The maintainer approved `size:exception` for this exact A1+CI PR only; do not shrink content artificially or omit tests.
+- A1 behavior `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`, tracking closure `636649426e87cc1b9519907ffab8de2c7646f833`, CI `9f5723c1c431d2f15b3c676fc4058f1dc22cad89`, and publication proof `d76821939046ef8aa68e8a23fd69e5c78e76bac3` are published to `origin/fix/auth-bootstrap`. No pull request or merge exists yet.
 - Existing untracked `.atl/` and `.codegraph/` directories must remain untouched.
 
 ## Known limitations and blockers
@@ -229,8 +240,8 @@ main @ 07159e9
 
 ## Progress and next step
 
-- A1: COMPLETED and published on `origin/fix/auth-bootstrap` at behavior commit `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`; tracking closure `636649426e87cc1b9519907ffab8de2c7646f833` and later CI `9f5723c1c431d2f15b3c676fc4058f1dc22cad89` are on the same branch
+- A1: COMPLETED and published on `origin/fix/auth-bootstrap` through `d76821939046ef8aa68e8a23fd69e5c78e76bac3`; exact PR/protection/merge execution is authorized to the parent and remains pending
 - A2: pending
 - A3: pending
 - Parent read-back gate: verified by the parent for this file and full Engram mirror `#5379`.
-- **Next step:** A2 remains pending for a subsequent local unit based on A1. No PR, merge, deployment, repository-setting change, other-branch publication, or A2/A3 implementation is authorized by this closure.
+- **Next step:** the parent may execute only the documented A1+CI protection, PR, no-bypass merge, and exact-SHA CI verification. A2 remains the next implementation unit; A2/A3, deployment, production services, and other branches/features remain unauthorized.
