@@ -67,13 +67,13 @@ RED/GREEN/REFACTOR proof for A1 is recorded below. A2 and A3 evidence remains pe
 
 ### A1 — Replace public bootstrap with local CLI and add the test harness
 
-- **Status:** independently and parent verified; behavior commit pending
+- **Status:** COMPLETED locally; independently and parent verified
 - **Route:** `delegated` — multi-file implementation and preparation triggers apply.
 - **Branch:** `fix/auth-bootstrap`
 - **Base boundary:** `main` at `07159e95de7686f5c2f0cedb0f63af332687c93e`
 - **Forecast:** approximately 330–430 authored additions plus deletions.
 - **Observed size:** 646 authored additions plus deletions for A1 code, tests, and README; the cohesive unit exceeded the advisory forecast and was not artificially split.
-- **Commit:** pending
+- **Behavior commit:** `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`
 
 Acceptance criteria:
 
@@ -135,6 +135,7 @@ Closure verification:
 
 - Independent functional/security verification: **PASS** after reading all candidate paths, running 10/10 tests, discovering the real Flask CLI under isolated configuration, and finding no candidate-caused blocker.
 - Parent verification: 10/10 tests passed in `0.752s`; `git diff --check` was clean; tracked diff, status, and log were inspected.
+- Closure verification after the documentation-only update: 10/10 tests passed in `0.732s`; `git diff --check` was clean.
 - Native risk assessment command `gentle-ai review assess --cwd /Users/dcm/work/iso9001 --json` was unavailable because it refused undeclared untracked inventory. The assessment is recorded as unavailable and conservatively high; the independent verifier result remains PASS. It was not retried.
 - RDD remained off. No RDD invocation, receipt, consent, review START, or review status exists.
 
@@ -198,7 +199,7 @@ Rollback boundary: restore only the previous Gunicorn logging configuration, its
 
 ```text
 main @ 07159e9
-  └─ A1 fix/auth-bootstrap
+  └─ A1 fix/auth-bootstrap @ 213ef59
        └─ A2 fix/auth-reset
             └─ A3 fix/auth-log-redaction
 ```
@@ -206,12 +207,15 @@ main @ 07159e9
 - Strategy: `stacked-to-main`.
 - Planned integration order: A1, then A2, then A3. Branches are based on the previous local unit; no merge or integration is authorized yet.
 - Initial authored running line count: `646` for A1 code, tests, and README.
-- Tracking-document overhead: reported separately from the `646`-line A1 implementation count and finalized in the closure commits.
+- Behavior commit: `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`, with `697` additions and `180` deletions overall.
+- Behavior commit tracking overhead: `231` additions for this task document, separate from the `466` additions and `180` deletions (`646` authored lines) in A1 code, tests, and README.
+- Tracking-only closure commit: separate from behavior; its immutable SHA is reported externally to avoid self-referential hashing.
+- Tracking-only closure delta: `11` additions and `7` deletions in this document.
 - Original full forecast: approximately `590–820` authored additions plus deletions.
 - Revised full forecast after observed A1 size: approximately `906–1,036` authored additions plus deletions if A2 and A3 remain within their current forecasts.
 - Per-task approximately 400-line heuristic: advisory only.
 - Size handling: one honest cohesive slicing pass has produced A1/A2/A3. A1 exceeds 400 lines, no PR is being created, and no `size:exception` is approved. Later PR preparation must resolve the budget under ordinary policy; do not shrink content artificially.
-- No commits, merges, pushes, or pull requests exist for these units yet.
+- A1 has one behavior commit and one tracking-only closure commit. No merge, push, or pull request exists.
 - Existing untracked `.atl/` and `.codegraph/` directories must remain untouched.
 
 ## Known limitations and blockers
@@ -224,8 +228,8 @@ main @ 07159e9
 
 ## Progress and next step
 
-- A1: independently and parent verified; behavior commit pending
+- A1: COMPLETED locally at behavior commit `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`; tracking-only closure recorded separately
 - A2: pending
 - A3: pending
 - Parent read-back gate: verified by the parent for this file and full Engram mirror `#5379`.
-- **Next step:** create the verified A1 behavior commit, then record its immutable identity in a tracking-only commit. A2 remains pending; no merge, push, or PR action is authorized.
+- **Next step:** A2 remains pending for a subsequent local unit based on A1. No merge, push, PR, deployment, or A2/A3 implementation is authorized by this closure.
