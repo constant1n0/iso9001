@@ -13,7 +13,11 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from flask import Flask, redirect, url_for, request
+from collections.abc import Mapping
+
+from flask import Flask
+
+from .commands import register_commands
 from .config import Config
 from .extensions import db, ma, migrate, cache, csrf, login_manager, mail, limiter
 from .models import User
@@ -35,16 +39,16 @@ from .routes import (
     document_routes
 )
 from .utils.error_handlers import register_error_handlers
+from .utils.security_logger import init_security_logging
 from celery import Celery
 
-# Variable para cachear si hay usuarios (evita queries en cada request)
-_has_users = None
 
-
-def create_app():
-    global _has_users
+def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
+    """Create and configure the Flask application."""
     app = Flask(__name__)
     app.config.from_object(Config)
+    if test_config:
+        app.config.update(test_config)
 
     # Validar configuración crítica
     if not app.config.get('SECRET_KEY'):
@@ -62,6 +66,8 @@ def create_app():
     login_manager.init_app(app)
     mail.init_app(app)
     limiter.init_app(app)
+    init_security_logging(app)
+    register_commands(app)
 
     # Configurar la vista de inicio de sesión
     login_manager.login_view = 'auth.login'
@@ -97,44 +103,6 @@ def create_app():
     if app.config.get('CELERY_BROKER_URL'):
         app.celery = Celery(app.import_name, broker=app.config['CELERY_BROKER_URL'])
         app.celery.conf.update(app.config)
-
-    # Verificar si la tabla de usuarios está vacía y redirigir al formulario de registro
-    # Optimizado para evitar consultas innecesarias
-    @app.before_request
-    def check_for_empty_users():
-        global _has_users
-
-        # Excluir archivos estáticos y endpoints específicos
-        if request.endpoint and (
-            request.endpoint.startswith('static') or
-            request.endpoint == 'auth.register' or
-            request.endpoint == 'auth.login'
-        ):
-            return None
-
-        # Si ya sabemos que hay usuarios, no hacer más queries
-        if _has_users:
-            return None
-
-        # Verificar si hay usuarios (consulta optimizada)
-        try:
-            if db.session.query(User.id).first() is None:
-                return redirect(url_for('auth.register'))
-            else:
-                _has_users = True
-        except Exception:
-            # Si hay error de BD (ej: tablas no creadas), permitir continuar
-            pass
-
-        return None
-
-    # Resetear cache cuando se registra un usuario
-    @app.after_request
-    def after_register(response):
-        global _has_users
-        if request.endpoint == 'auth.register' and request.method == 'POST' and response.status_code in [200, 302]:
-            _has_users = True
-        return response
 
     # Headers de seguridad HTTP
     @app.after_request

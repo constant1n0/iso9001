@@ -139,12 +139,19 @@ flask run
 
 - Verifica que la aplicación esté funcionando en http://127.0.0.1:5000.
 
-**2. Creación del Primer Usuario**
+**2. Create the Initial Administrator Locally**
 
-En esta configuración inicial, el sistema permite crear un primer usuario si la tabla de usuarios está vacía.
+Public user registration is disabled. Create the initial administrator from a
+trusted local shell and enter the password only at the hidden prompts:
 
-- Accede a la URL /register (por ejemplo, http://127.0.0.1:5000/register) para registrar el primer usuario.
-- Completa el formulario de registro con el nombre de usuario y la contraseña deseados.
+```bash
+venv/bin/flask --app run.py create-admin
+```
+
+The command refuses to run after any account exists and never modifies existing
+accounts. Run it once: it performs a second existence check before committing,
+but does not provide cross-process serialization for simultaneous local command
+invocations.
 
 **3. Iniciar Redis y Celery para Tareas en Segundo Plano**
 
@@ -279,7 +286,6 @@ iso9001/
 │   │   │   └── editar.html
 │   │   ├── reportes
 │   │   │   └── reporte_mensual.html
-│   │   ├── register.html
 │   │   ├── partes_interesadas
 │   │   │   ├── nueva.html
 │   │   │   ├── listar.html

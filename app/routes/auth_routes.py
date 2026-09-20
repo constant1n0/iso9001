@@ -17,11 +17,11 @@ from flask import Blueprint, request, redirect, url_for, render_template, flash
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_mail import Message
 from werkzeug.security import check_password_hash, generate_password_hash
-from ..models import User, RoleEnum
-from ..forms import LoginForm, RegisterForm, PasswordResetRequestForm, PasswordResetForm
+from ..models import User
+from ..forms import LoginForm, PasswordResetRequestForm, PasswordResetForm
 from ..extensions import db, limiter, mail
 from ..utils.security_logger import (
-    log_login_attempt, log_logout, log_registration,
+    log_login_attempt, log_logout,
     log_password_reset_request, log_password_change
 )
 
@@ -45,34 +45,6 @@ def login():
             flash('Credenciales inválidas', 'danger')
             return redirect(url_for('auth.login'))
     return render_template('login.html', form=form)
-
-@bp.route('/register', methods=['GET', 'POST'])
-@limiter.limit("3 per hour", methods=["POST"])
-def register():
-    # Verificar si ya hay usuarios registrados
-    if User.query.count() > 0:
-        flash("Ya existe un usuario registrado. La página de registro está deshabilitada.", "info")
-        return redirect(url_for('auth.login'))
-
-    form = RegisterForm()
-    if form.validate_on_submit():
-        username = form.username.data
-        email = form.email.data
-        password = generate_password_hash(form.password.data, method='pbkdf2:sha256')
-
-        # Asignar rol de ADMINISTRADOR si es el primer usuario
-        role = RoleEnum.ADMINISTRADOR if User.query.count() == 0 else RoleEnum.OPERATIVO
-        user = User(username=username, email=email, password=password, role=role)
-
-        # Guardar el nuevo usuario en la base de datos
-        db.session.add(user)
-        db.session.commit()
-
-        log_registration(username, email, success=True)
-        flash("Usuario registrado exitosamente.", "success")
-        return redirect(url_for('auth.login'))
-
-    return render_template('register.html', form=form)
 
 @bp.route('/logout')
 @login_required

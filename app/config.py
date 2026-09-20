@@ -48,6 +48,19 @@ class Config:
     CACHE_TYPE = 'simple'
     CACHE_DEFAULT_TIMEOUT = 300
 
+    # Configuración del registro de eventos de seguridad
+    SECURITY_LOG_ENABLED = os.environ.get(
+        'SECURITY_LOG_ENABLED', 'True'
+    ).lower() in ('true', '1', 'yes')
+    SECURITY_LOG_FILE = os.environ.get(
+        'SECURITY_LOG_FILE',
+        os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            'logs',
+            'security.log',
+        ),
+    )
+
     # Configuración de correo
     MAIL_SERVER = 'smtp.gmail.com'
     MAIL_PORT = 587
