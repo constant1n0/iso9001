@@ -335,6 +335,19 @@ iso9001/
 │   └── __init__.py
 └── README.md
 
+## Continuous Integration
+
+GitHub Actions runs the Python 3.11 test suite on every push, on pull requests
+targeting `main`, and when started manually. Run the same suite locally with:
+
+```bash
+venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+The stable check name is `Python 3.11 tests`. The workflow makes this check
+available, but it does not block merges unless a maintainer separately configures
+that check as required in the repository rules or branch protection settings.
+
 ## Licencia
 
 Este proyecto está licenciado bajo la Licencia Pública General GNU v3.0. Para más detalles, consulta el archivo [LICENSE](./LICENSE).
