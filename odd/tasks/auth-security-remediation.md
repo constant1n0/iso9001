@@ -21,7 +21,7 @@ Evidence is recorded in audit memory `#5378`. This document plans only the verif
 | RDD | `off`; native/default status handling remains in effect. |
 | Delivery strategy | `ask-on-risk`, resolved by the user to chained units. |
 | Chain strategy | `stacked-to-main`; integrate independent units into `main` in order: A1 → A2 → A3. |
-| Remote operations | No push, PR, merge, or other remote mutation is authorized. |
+| Remote operations | The user explicitly authorized publication of the current `fix/auth-bootstrap` branch only. A1/CI commits were pushed there and CI evidence was read with the configured GitHub CLI session; no PR, merge, deployment, settings mutation, other branch, or broader remote permission was authorized. |
 
 ## Scope
 
@@ -39,7 +39,7 @@ Evidence is recorded in audit memory `#5378`. This document plans only the verif
 - Changes to existing account records, roles, or database contents.
 - Other audit sectors, general auth redesign, MFA, authorization changes, or dependency upgrades.
 - PostgreSQL, Redis, SMTP, or other service contact during tests.
-- Pushes, pull requests, merges, deployment, or production configuration mutation.
+- Remote operations beyond the explicitly authorized current-branch publication and read-only CI evidence; pull requests, merges, deployment, and production configuration mutation remain excluded.
 - Artificial code reduction, omitted tests, minification, or non-cohesive splitting to satisfy a line heuristic.
 
 ## Constraints and test environment
@@ -67,7 +67,7 @@ RED/GREEN/REFACTOR proof for A1 is recorded below. A2 and A3 evidence remains pe
 
 ### A1 — Replace public bootstrap with local CLI and add the test harness
 
-- **Status:** COMPLETED locally; independently and parent verified
+- **Status:** COMPLETED, independently/parent verified, and published to `origin/fix/auth-bootstrap`
 - **Route:** `delegated` — multi-file implementation and preparation triggers apply.
 - **Branch:** `fix/auth-bootstrap`
 - **Base boundary:** `main` at `07159e95de7686f5c2f0cedb0f63af332687c93e`
@@ -138,6 +138,7 @@ Closure verification:
 - Closure verification after the documentation-only update: 10/10 tests passed in `0.732s`; `git diff --check` was clean.
 - Native risk assessment command `gentle-ai review assess --cwd /Users/dcm/work/iso9001 --json` was unavailable because it refused undeclared untracked inventory. The assessment is recorded as unavailable and conservatively high; the independent verifier result remains PASS. It was not retried.
 - RDD remained off. No RDD invocation, receipt, consent, review START, or review status exists.
+- Linux CI verification is recorded in [`odd/tasks/github-actions-ci.md`](github-actions-ci.md): [run 35522042241](https://github.com/constant1n0/iso9001/actions/runs/35522042241) passed 10/10 tests on Python 3.11.16 and Ubuntu 24.04 for head `9f5723c1c431d2f15b3c676fc4058f1dc22cad89`.
 
 Changed paths:
 
@@ -215,7 +216,7 @@ main @ 07159e9
 - Revised full forecast after observed A1 size: approximately `906–1,036` authored additions plus deletions if A2 and A3 remain within their current forecasts.
 - Per-task approximately 400-line heuristic: advisory only.
 - Size handling: one honest cohesive slicing pass has produced A1/A2/A3. A1 exceeds 400 lines, no PR is being created, and no `size:exception` is approved. Later PR preparation must resolve the budget under ordinary policy; do not shrink content artificially.
-- A1 has one behavior commit and one tracking-only closure commit. No merge, push, or pull request exists.
+- A1 behavior `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`, tracking closure `636649426e87cc1b9519907ffab8de2c7646f833`, and later CI `9f5723c1c431d2f15b3c676fc4058f1dc22cad89` are published to `origin/fix/auth-bootstrap`. No pull request, merge, or deployment exists.
 - Existing untracked `.atl/` and `.codegraph/` directories must remain untouched.
 
 ## Known limitations and blockers
@@ -228,8 +229,8 @@ main @ 07159e9
 
 ## Progress and next step
 
-- A1: COMPLETED locally at behavior commit `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`; tracking-only closure recorded separately
+- A1: COMPLETED and published on `origin/fix/auth-bootstrap` at behavior commit `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`; tracking closure `636649426e87cc1b9519907ffab8de2c7646f833` and later CI `9f5723c1c431d2f15b3c676fc4058f1dc22cad89` are on the same branch
 - A2: pending
 - A3: pending
 - Parent read-back gate: verified by the parent for this file and full Engram mirror `#5379`.
-- **Next step:** A2 remains pending for a subsequent local unit based on A1. No merge, push, PR, deployment, or A2/A3 implementation is authorized by this closure.
+- **Next step:** A2 remains pending for a subsequent local unit based on A1. No PR, merge, deployment, repository-setting change, other-branch publication, or A2/A3 implementation is authorized by this closure.

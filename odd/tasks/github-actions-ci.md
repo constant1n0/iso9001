@@ -9,16 +9,17 @@ Add one deterministic GitHub Actions check for the existing Python 3.11 `unittes
 ## Authorization and scope
 
 - **Included:** `.github/workflows/ci.yml`, CI usage/required-check guidance in `README.md`, and the existing applicable tests.
-- **Remote authorization:** the parent already pushed the current branch and may push a later CI work unit. After that push, the parent may use the configured GitHub CLI session only to read Actions runs/logs in `constant1n0/iso9001`; no other remote operation is authorized.
+- **Remote authorization:** the parent pushed the CI work unit to `origin/fix/auth-bootstrap` and used the configured GitHub CLI session only to read its Actions run/logs in `constant1n0/iso9001`. No PR, merge, deployment, or repository-setting mutation was authorized or performed.
 - **Excluded:** PR/merge/branch-protection changes, deployment, live PostgreSQL/Redis/SMTP, new credentials or sessions, dependency upgrades, scanners, and auth A2/A3.
 - Existing untracked `.atl/` and `.codegraph/` remain untouched.
-- The auth tracker needs a separate factual update because its old “no push” statement is now stale; do not edit it in this CI unit.
+- The auth tracker records the narrowly authorized current-branch publication separately; this CI unit does not broaden remote permission.
 
 ## CI1 — Add the test workflow and maintainer guidance
 
-- **Status:** locally verified by the parent and an independent verifier; hosted proof pending.
+- **Status:** COMPLETED; locally and GitHub-hosted verified.
 - **Route:** `delegated` because native-library setup, workflow security, docs, and platform verification form one cross-cutting unit. Preparation and implementation were delegated.
 - **Forecast:** about 55–90 authored additions plus deletions, one cohesive work unit; the ~400-line review threshold is advisory, not a compression target.
+- **Behavior commit:** `9f5723c1c431d2f15b3c676fc4058f1dc22cad89`, published to `origin/fix/auth-bootstrap`.
 
 Implemented workflow contract:
 
@@ -37,7 +38,7 @@ Acceptance criteria:
 - [x] No workflow token persists after checkout and permissions remain read-only.
 - [x] No dependency file, application behavior, auth tracker, or unrelated path changes.
 - [x] README names the stable check and separates CI availability from merge enforcement.
-- [ ] A GitHub-hosted run passes after an authorized parent push; until then remote confirmation remains pending.
+- [x] The authorized GitHub-hosted run completed successfully for the exact behavior commit.
 
 ## Verification and TDD evidence strategy
 
@@ -86,11 +87,13 @@ git status --short --branch
 - Independent verification: the contract printed `Workflow contract OK`, 10 tests passed in `0.724s`, `git diff --check` was clean, and the workflow, tracker, and README diff were accepted.
 - Parent verification: 10 tests passed in `0.722s`; the parent read the full workflow, tracker, and README diff.
 - Native risk assessment was unavailable because the tool refused the existing undeclared untracked inventory. Risk remains conservatively high; the independent local verification passed. RDD stayed off with no invocation or receipt.
-- The new 49-line workflow was read in full after writing. CI code/docs total 62 additions (49 workflow, 13 README); the 96-line tracker brings the complete authored delta to 158 additions.
-- No hosted run or runtime service boundary was exercised locally; GitHub Actions itself is the intended runtime harness and remains pending parent push.
+- The original CI behavior commit contained 158 additions: 49 workflow, 13 README, and the 96-line tracker. The workflow was read in full after writing.
+- Hosted proof: [run 35522042241](https://github.com/constant1n0/iso9001/actions/runs/35522042241) completed successfully for head `9f5723c1c431d2f15b3c676fc4058f1dc22cad89`; job `Python 3.11 tests` and every step succeeded.
+- The hosted runner used Python 3.11.16 on Ubuntu 24.04, installed the native and pinned Python dependencies successfully, and ran 10 tests in `1.391s` with `OK`; only the existing non-fatal Flask-Caching warning remained. `gh run watch --exit-status` succeeded.
+- No PR was created. The tracking-only closure commit is reported outside this document to avoid self-referential commit metadata.
 
 ## Rollback, enforcement, and next step
 
 Rollback removes only `.github/workflows/ci.yml` and the matching README CI guidance; application behavior and tests remain intact. Future mandatory gating requires a separate, explicitly authorized repository-rules/branch-protection change selecting `Python 3.11 tests`; creating the workflow alone does not block merges.
 
-**Next step:** create the authorized local work-unit commit; the parent then owns the push and read-only hosted-run inspection. Hosted-run proof remains pending; no push, PR, deployment, service contact, secret use, or repository-setting mutation occurred before this tracking update.
+**Next step:** CI1 is complete. Requiring `Python 3.11 tests` before merge remains a separate repository-rules or branch-protection operation that needs explicit user authorization. Auth A2/A3 are unrelated and remain pending; no PR, merge, deployment, or repository-setting mutation occurred.
