@@ -139,12 +139,19 @@ flask run
 
 - Verifica que la aplicación esté funcionando en http://127.0.0.1:5000.
 
-**2. Creación del Primer Usuario**
+**2. Create the Initial Administrator Locally**
 
-En esta configuración inicial, el sistema permite crear un primer usuario si la tabla de usuarios está vacía.
+Public user registration is disabled. Create the initial administrator from a
+trusted local shell and enter the password only at the hidden prompts:
 
-- Accede a la URL /register (por ejemplo, http://127.0.0.1:5000/register) para registrar el primer usuario.
-- Completa el formulario de registro con el nombre de usuario y la contraseña deseados.
+```bash
+venv/bin/flask --app run.py create-admin
+```
+
+The command refuses to run after any account exists and never modifies existing
+accounts. Run it once: it performs a second existence check before committing,
+but does not provide cross-process serialization for simultaneous local command
+invocations.
 
 **3. Iniciar Redis y Celery para Tareas en Segundo Plano**
 
@@ -279,7 +286,6 @@ iso9001/
 │   │   │   └── editar.html
 │   │   ├── reportes
 │   │   │   └── reporte_mensual.html
-│   │   ├── register.html
 │   │   ├── partes_interesadas
 │   │   │   ├── nueva.html
 │   │   │   ├── listar.html
@@ -328,6 +334,19 @@ iso9001/
 │   ├── config.py
 │   └── __init__.py
 └── README.md
+
+## Continuous Integration
+
+GitHub Actions runs the Python 3.11 test suite on every push, on pull requests
+targeting `main`, and when started manually. Run the same suite locally with:
+
+```bash
+venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+The stable check name is `Python 3.11 tests`. The workflow makes this check
+available, but it does not block merges unless a maintainer separately configures
+that check as required in the repository rules or branch protection settings.
 
 ## Licencia
 

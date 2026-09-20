@@ -84,14 +84,6 @@ class CapacitacionForm(FlaskForm):
     evaluacion_final = StringField('Evaluación Final', validators=[Length(max=20)])
     submit = SubmitField('Guardar')
 
-# Formulario de registro para capturar el nombre de usuario, email y la contraseña
-class RegisterForm(FlaskForm):
-    username = StringField('Nombre de usuario', validators=[DataRequired(), Length(min=4, max=150)])
-    email = StringField('Correo electrónico', validators=[DataRequired(), Length(max=255)])
-    password = PasswordField('Contraseña', validators=[DataRequired(), Length(min=8)])
-    confirm_password = PasswordField('Confirmar Contraseña', validators=[DataRequired(), EqualTo('password')])
-    submit = SubmitField('Registrar')
-
 # Formulario para el registro y actualización de documentos
 class DocumentForm(FlaskForm):
     title = StringField('Título', validators=[DataRequired(), Length(max=150)])

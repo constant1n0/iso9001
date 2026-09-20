@@ -14,29 +14,38 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
 import logging
-import os
-from datetime import datetime
-from flask import request
+from pathlib import Path
 
-# Crear directorio de logs si no existe
-LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs')
-os.makedirs(LOG_DIR, exist_ok=True)
+from flask import Flask, request
 
-# Configurar logger de seguridad
-security_logger = logging.getLogger('security')
+
+security_logger = logging.getLogger("security")
 security_logger.setLevel(logging.INFO)
+security_logger.propagate = False
 
-# Handler para archivo de seguridad
-security_handler = logging.FileHandler(os.path.join(LOG_DIR, 'security.log'))
-security_handler.setLevel(logging.INFO)
 
-# Formato del log
-formatter = logging.Formatter(
-    '%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-security_handler.setFormatter(formatter)
-security_logger.addHandler(security_handler)
+def init_security_logging(app: Flask) -> None:
+    """Configure the security file handler for one application instance."""
+    for handler in list(security_logger.handlers):
+        if getattr(handler, "_iso9001_security_handler", False):
+            security_logger.removeHandler(handler)
+            handler.close()
+
+    if not app.config.get("SECURITY_LOG_ENABLED", True):
+        return
+
+    log_path = Path(app.config["SECURITY_LOG_FILE"])
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(log_path)
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
+    handler._iso9001_security_handler = True
+    security_logger.addHandler(handler)
 
 
 def get_client_ip():
@@ -65,20 +74,6 @@ def log_logout(username):
     """Registra cierre de sesión."""
     ip = get_client_ip()
     security_logger.info(f"LOGOUT | user={username} | ip={ip}")
-
-
-def log_registration(username, email, success, reason=None):
-    """Registra intentos de registro."""
-    ip = get_client_ip()
-
-    if success:
-        security_logger.info(
-            f"REGISTRATION_SUCCESS | user={username} | email={email} | ip={ip}"
-        )
-    else:
-        security_logger.warning(
-            f"REGISTRATION_FAILED | user={username} | email={email} | ip={ip} | reason={reason}"
-        )
 
 
 def log_rate_limit_exceeded(endpoint):
