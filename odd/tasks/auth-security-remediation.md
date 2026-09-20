@@ -8,7 +8,7 @@ Remediate the verified authentication bootstrap and password-reset findings in t
 
 ## Problem and why it matters
 
-The application currently permits the first unauthenticated web registrant to become `ADMINISTRADOR`, with separate empty-table checks that create a race. Password-reset links trust the request Host, reset tokens remain replayable after a password change, and Gunicorn records the token-bearing request path. Together, these behaviors permit administrative takeover during bootstrap and weaken reset-token confidentiality and lifecycle control.
+Before A1, the application permitted the first unauthenticated web registrant to become `ADMINISTRADOR`, with separate empty-table checks that created a race. A1 removed that path and is now integrated. Password-reset links still trust the request Host, reset tokens remain replayable after a password change, and Gunicorn still records the token-bearing request path; those A2/A3 findings remain pending.
 
 Evidence is recorded in audit memory `#5378`. This document plans only the verified bootstrap and reset findings; other audit sectors remain deferred.
 
@@ -21,7 +21,7 @@ Evidence is recorded in audit memory `#5378`. This document plans only the verif
 | RDD | `off`; native/default status handling remains in effect. |
 | Delivery strategy | `ask-on-risk`, resolved by the user to chained units. |
 | Chain strategy | `stacked-to-main`; integrate independent units into `main` in order: A1 → A2 → A3. |
-| Remote operations | Historical scope authorized only publication of `fix/auth-bootstrap` and read-only CI evidence. The user has now explicitly authorized the parent, using the existing configured Git/`gh` authentication, to protect `main`, open the exact A1+CI PR, and merge it without bypass after required PR-specific CI passes. |
+| Remote operations | Historical scope authorized only publication and read-only CI evidence. The later bounded authorization was executed successfully: the parent protected `main`, merged exact A1+CI PR #1 without bypass after required CI, and verified the resulting `main` SHA. |
 | Review size | The maintainer explicitly approved `size:exception` for this cohesive A1+CI PR only; tests, protection, and verification may not be omitted or bypassed. |
 
 ## Scope
@@ -68,7 +68,7 @@ RED/GREEN/REFACTOR proof for A1 is recorded below. A2 and A3 evidence remains pe
 
 ### A1 — Replace public bootstrap with local CLI and add the test harness
 
-- **Status:** COMPLETED, independently/parent verified, and published to `origin/fix/auth-bootstrap`; not merged yet
+- **Status:** COMPLETED and integrated into `main` through PR #1 at merge SHA `972f158f4ba9147b7d4dd2f12acb3cb9f5cbe518`
 - **Route:** `delegated` — multi-file implementation and preparation triggers apply.
 - **Branch:** `fix/auth-bootstrap`
 - **Base boundary:** `main` at `07159e95de7686f5c2f0cedb0f63af332687c93e`
@@ -159,15 +159,15 @@ Review-size note: A1 contains `646` authored additions plus deletions before tra
 
 macOS environment caveat: the documented `venv/bin/flask --app run.py create-admin` command is valid when the native libraries required by the application's eager WeasyPrint imports are available to the dynamic loader. The isolated test harness exposes existing Homebrew library directories; it does not install or bypass those native requirements.
 
-#### Current A1 delivery authorization
+#### A1 protected delivery result
 
-- Parent-owned remote scope is limited to `constant1n0/iso9001`, base `main@07159e95de7686f5c2f0cedb0f63af332687c93e`, and published source head `fix/auth-bootstrap@d76821939046ef8aa68e8a23fd69e5c78e76bac3` before these tracker-only edits.
-- Before this preparation, the branch contained four reviewed commits: A1 behavior, A1 evidence, CI, and publication proof. The full pre-update diff is `1,043` additions plus deletions; any later growth must be limited to these tracker updates.
-- The parent will require `Python 3.11 tests` (`app_id: 15368`) with strict checks and admin enforcement, then read the protection back before opening the PR.
-- The approved `size:exception` applies only to this cohesive A1+CI PR and does not authorize bypassing tests, protection, or exact-head verification.
-- Merge must wait for PR-specific CI on the PR's actual head SHA, use no admin/bypass path, preserve branches, and be followed by exact-SHA hosted CI verification on `main`.
-- Any protection rollback requires separate user authorization; protection must never be silently weakened to merge.
-- A2 and A3 remain unfixed, pending, and outside this remote authorization.
+- Preparation trackers were committed as `92c2d3d852944e0c3bdb8a229e118f7b75dcf43b`; [PR #1](https://github.com/constant1n0/iso9001/pull/1) used base `07159e9` and exact head `92c2d3d`.
+- The PR contained five verified commits and 12 paths with 899 additions and 180 deletions (`1,079` lines). The maintainer-approved `size:exception` was recorded in its body.
+- `main` protection required strict `Python 3.11 tests` from `app_id: 15368`, enforced for administrators, disallowed force pushes/deletions, and added no reviewer-count requirement.
+- [PR run 35524353813](https://github.com/constant1n0/iso9001/actions/runs/35524353813) passed on exact head `92c2d3d`; required-check readback passed and the PR was `CLEAN`/`MERGEABLE`.
+- The parent merged without admin/bypass/force/delete. Readback confirmed `MERGED` at `2026-09-20T16:59:08Z`, merge SHA `972f158f4ba9147b7d4dd2f12acb3cb9f5cbe518`; both branches were preserved.
+- [Main run 35524407104](https://github.com/constant1n0/iso9001/actions/runs/35524407104) passed on the exact merge SHA, and final protection readback remained unchanged.
+- No deployment or live-data change occurred. A2 and A3 remain unfixed, pending, and outside this integration.
 
 ### A2 — Enforce canonical-origin reset links and token invalidation
 
@@ -210,14 +210,13 @@ Rollback boundary: restore only the previous Gunicorn logging configuration, its
 ## Delivery ledger
 
 ```text
-main @ 07159e9
-  └─ A1 fix/auth-bootstrap @ 213ef59
-       └─ A2 fix/auth-reset
-            └─ A3 fix/auth-log-redaction
+main @ 972f158 (A1+CI integrated through PR #1)
+  └─ A2 fix/auth-reset
+       └─ A3 fix/auth-log-redaction
 ```
 
 - Strategy: `stacked-to-main`.
-- Planned integration order remains A1, then A2, then A3. Integration is now authorized only for the exact published A1+CI branch; A2/A3 remain unauthorized and pending.
+- Integration order remains A1, then A2, then A3. A1 is integrated; A2/A3 remain unauthorized and pending.
 - Initial authored running line count: `646` for A1 code, tests, and README.
 - Behavior commit: `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`, with `697` additions and `180` deletions overall.
 - Behavior commit tracking overhead: `231` additions for this task document, separate from the `466` additions and `180` deletions (`646` authored lines) in A1 code, tests, and README.
@@ -227,7 +226,7 @@ main @ 07159e9
 - Revised full forecast after observed A1 size: approximately `906–1,036` authored additions plus deletions if A2 and A3 remain within their current forecasts.
 - Per-task approximately 400-line heuristic: advisory only.
 - Size handling: one honest cohesive slicing pass produced A1/A2/A3. The maintainer approved `size:exception` for this exact A1+CI PR only; do not shrink content artificially or omit tests.
-- A1 behavior `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`, tracking closure `636649426e87cc1b9519907ffab8de2c7646f833`, CI `9f5723c1c431d2f15b3c676fc4058f1dc22cad89`, and publication proof `d76821939046ef8aa68e8a23fd69e5c78e76bac3` are published to `origin/fix/auth-bootstrap`. No pull request or merge exists yet.
+- A1 behavior `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`, tracking closure `636649426e87cc1b9519907ffab8de2c7646f833`, CI `9f5723c1c431d2f15b3c676fc4058f1dc22cad89`, publication proof `d76821939046ef8aa68e8a23fd69e5c78e76bac3`, and integration preparation `92c2d3d852944e0c3bdb8a229e118f7b75dcf43b` were integrated by PR #1 as merge `972f158f4ba9147b7d4dd2f12acb3cb9f5cbe518`.
 - Existing untracked `.atl/` and `.codegraph/` directories must remain untouched.
 
 ## Known limitations and blockers
@@ -240,8 +239,8 @@ main @ 07159e9
 
 ## Progress and next step
 
-- A1: COMPLETED and published on `origin/fix/auth-bootstrap` through `d76821939046ef8aa68e8a23fd69e5c78e76bac3`; exact PR/protection/merge execution is authorized to the parent and remains pending
+- A1: COMPLETED and integrated through PR #1 at `main@972f158f4ba9147b7d4dd2f12acb3cb9f5cbe518`
 - A2: pending
 - A3: pending
 - Parent read-back gate: verified by the parent for this file and full Engram mirror `#5379`.
-- **Next step:** the parent may execute only the documented A1+CI protection, PR, no-bypass merge, and exact-SHA CI verification. A2 remains the next implementation unit; A2/A3, deployment, production services, and other branches/features remain unauthorized.
+- **Closure:** A1+CI protected integration is complete. This passive documentation closure leaves behavior/workflow identical to verified `main`; its protected delivery and transport metadata are parent-owned and recorded externally to avoid self-reference. A2 remains the next implementation unit; A2/A3, deployment, production services, and other branches/features remain unauthorized.
