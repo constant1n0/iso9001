@@ -78,6 +78,8 @@ MAIL\_PASSWORD=tu\_contraseña
 
 MAIL\_DEFAULT\_SENDER=tu\_email@example.com
 
+PASSWORD\_RESET\_BASE\_URL=https://qms.example.com
+
 CELERY\_BROKER\_URL=redis://localhost:6379/0
 
 CELERY\_RESULT\_BACKEND=redis://localhost:6379/0
@@ -90,6 +92,12 @@ FLASK\_ENV=development  # Opcional, si quieres configurar el modo de desarrollo
 **Nota:** Cambia usuario, contraseña, localhost, y db\_name con los valores correspondientes a tu configuración de PostgreSQL.
 
 Para que las variables de entorno sean cargadas automáticamente, el proyecto utiliza **python-dotenv**, lo que permite que Flask lea las configuraciones directamente desde el archivo .env.
+
+Password recovery email requires `PASSWORD_RESET_BASE_URL`. Configure it as
+the canonical root HTTPS origin only, without credentials, a path, query, or
+fragment. Missing or invalid configuration disables reset-email delivery but
+does not prevent application startup, login, or local CLI use. Reset links
+never fall back to the request Host.
 
 -----
 **Configuración de la Base de Datos**

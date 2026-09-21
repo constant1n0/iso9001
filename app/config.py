@@ -68,6 +68,7 @@ class Config:
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER')
+    PASSWORD_RESET_BASE_URL = os.environ.get('PASSWORD_RESET_BASE_URL')
 
     # Configuración para Celery
     CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL')
