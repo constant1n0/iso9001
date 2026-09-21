@@ -178,28 +178,75 @@ The parent read back this repository document and full Engram mirror `#5379`. Lo
 
 #### A2a — Enforce canonical HTTPS reset origin and generic requests
 
-- **Status:** authorized for local implementation; slice-specific evidence pending
+- **Status:** implemented and verified locally; parent-owned native assessment/consent remains pending
 - **Route:** `DIRECT` through bounded parent delegation — trigger evidence is the multi-file behavior, dependency, five-test, and documentation work unit plus the user's explicit local-preparation authorization. One writer; no child delegation is allowed.
 - **Branch:** `fix/auth-reset-origin`, created from exact local `main@9366058123bf60705804a70715dea63e763abde1`
 - **Forecast:** approximately 370–390 authored additions plus deletions, including tracker changes, with uncertainty of ±30 until materialized.
 - **Review budget:** `400` for future PR delivery; no `size:exception`. Local implementation and commits may materialize the honest size, and tests/docs/source must not be shrunk to meet it.
-- **Commit:** pending; local behavior and tracking-only closure commits are authorized.
+- **Behavior commit:** `8a7fc4169f48a4976352fc6a1bda639ddb1fff20`
+- **Observed behavior-commit size:** 377 additions and 53 deletions (`430` authored changed lines), including the prepared tracker.
+- **Observed final slice size:** `478` authored changed lines versus `main@9366058123bf60705804a70715dea63e763abde1`, including this tracking closure.
 
 Acceptance and verification checklist:
 
-- [ ] Reset links use an explicitly configured canonical HTTPS origin and never request Host data.
-- [ ] Configuration rejects a missing, malformed, non-HTTPS, or credential-bearing canonical origin without silently trusting the request.
-- [ ] A malicious Host header cannot alter the emailed reset origin.
-- [ ] Syntactically valid known and unknown email requests, invalid reset-origin configuration, and mail-send failures return indistinguishable generic outcomes without exposing account existence or operational failures.
-- [ ] Malformed email retains the existing form-validation behavior; A2a does not broaden generic-response handling to invalid form input.
-- [ ] The email-validation dependency is declared explicitly rather than relying on a transitive installation.
-- [ ] Exactly five focused A2a tests in the shared `tests/test_auth_reset.py` scaffold cover canonical-origin validation, Host isolation, generic request/failure behavior, and secret-safe logs without external services.
-- [ ] Deployment documentation identifies the required canonical HTTPS origin and email-validation dependency.
-- [ ] Observed RED, GREEN, and REFACTOR evidence, the focused command, full-suite command, exact results, actual authored size, and `git diff --check` result are recorded after implementation.
+- [x] Reset links use an explicitly configured canonical HTTPS origin and never request Host data.
+- [x] Configuration rejects a missing, malformed, non-HTTPS, or credential-bearing canonical origin without silently trusting the request.
+- [x] A malicious Host header cannot alter the emailed reset origin.
+- [x] Syntactically valid known and unknown email requests, invalid reset-origin configuration, and mail-send failures return indistinguishable generic outcomes without exposing account existence or operational failures.
+- [x] Malformed email retains the existing form-validation behavior; A2a does not broaden generic-response handling to invalid form input.
+- [x] The email-validation dependency is declared explicitly rather than relying on a transitive installation.
+- [x] Exactly five focused A2a tests in the shared `tests/test_auth_reset.py` scaffold cover canonical-origin validation, Host isolation, generic request/failure behavior, and secret-safe logs without external services.
+- [x] Deployment documentation identifies the required canonical HTTPS origin and email-validation dependency.
+- [x] Observed RED, GREEN, and REFACTOR evidence, the focused command, full-suite command, exact results, actual authored size, and `git diff --check` result are recorded after implementation.
 
 Planned focused command: `venv/bin/python -m unittest discover -s tests -p 'test_auth_reset.py' -v` (five A2a tests now; six A2b tests will be added to the same shared scaffold later). The full-suite command remains the repository command above.
 
 Rollback boundary: revert only A2a canonical-origin configuration, reset-request/email behavior, declared dependency, five focused tests, deployment documentation, and this slice's tracking updates. Token invalidation and A2b behavior must remain untouched.
+
+##### A2a implementation evidence
+
+The five original A2a tests were written first against the base implementation. Focused RED:
+
+```text
+Ran 5 tests in 1.148s
+FAILED (failures=4, errors=13)
+```
+
+The failures showed request Host control, email delivery with missing/HTTP configuration, distinguishable failure responses, and missing canonical-origin validation symbols. One secret-safe logging test already passed; no dependency failure was invented because the existing venv already contained `email-validator`.
+
+GREEN before refactor assessment:
+
+```text
+Ran 5 tests in 0.692s
+OK
+```
+
+REFACTOR assessment found no unnecessary structural change to make: the slice already matched the approved historical A2a boundary, kept the old reset-password route and model behavior, and delayed token-only helpers/imports. Final focused verification:
+
+```text
+Ran 5 tests in 0.677s
+OK
+```
+
+Full isolated Flask/SQLite suite:
+
+```text
+Ran 15 tests in 1.348s
+OK
+```
+
+`venv/bin/python -m pip check` reported `No broken requirements found.` Both `git diff --check` and `git diff --cached --check` passed with no output. The tests mocked mail and used non-routable example origins, the test-only secret, and in-memory SQLite; no DNS, SMTP, PostgreSQL, Redis, network service, or production secret was used. SQLite integration coverage does not claim PostgreSQL equivalence.
+
+Changed paths:
+
+- `README.md`
+- `app/config.py`
+- `app/routes/auth_routes.py`
+- `odd/tasks/auth-security-remediation.md`
+- `requirements.txt`
+- `tests/test_auth_reset.py`
+
+Security boundary: canonical-origin parsing rejects unsafe URL components and request Host data; syntactically valid account/failure cases share the same redirect and generic flash. Existing malformed-email form validation remains unchanged. Reset-token payload, verification, replay, and atomic update behavior remain deferred to A2b. Review state is pending parent-owned native assessment/consent; this agent did not start or approve review.
 
 #### A2b — Make reset tokens single-use with atomic consumption
 
@@ -264,6 +311,7 @@ main @ 9366058 (current exact local base; A1+CI already integrated)
 - Work-unit approximately 400-line heuristic: advisory only; PR budget `400` still applies.
 - Size handling: the original full-A2 snapshot was split once into cohesive A2a/A2b review units. The maintainer approved `size:exception` for the exact A1+CI PR only; no exception or review approval transfers to A2a/A2b. Do not shrink content artificially or omit tests/docs.
 - Historical full-A2 snapshot: `fix/auth-reset@0491c02724a612065eb39768e64377a085e108f5`, natively approved with its receipt acknowledged/burned. It is preserved untouched and supplies no review inheritance.
+- A2a behavior commit: `8a7fc4169f48a4976352fc6a1bda639ddb1fff20` (`430` authored changed lines including prepared tracking). Final A2a slice: `478` authored changed lines versus `main@9366058123bf60705804a70715dea63e763abde1`, including the tracking-only closure.
 - A1 behavior `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`, tracking closure `636649426e87cc1b9519907ffab8de2c7646f833`, CI `9f5723c1c431d2f15b3c676fc4058f1dc22cad89`, publication proof `d76821939046ef8aa68e8a23fd69e5c78e76bac3`, and integration preparation `92c2d3d852944e0c3bdb8a229e118f7b75dcf43b` were integrated by PR #1 as merge `972f158f4ba9147b7d4dd2f12acb3cb9f5cbe518`.
 - Existing untracked `.atl/` and `.codegraph/` directories must remain untouched.
 
@@ -278,8 +326,8 @@ main @ 9366058 (current exact local base; A1+CI already integrated)
 ## Progress and next step
 
 - A1: COMPLETED and integrated through PR #1 at `main@972f158f4ba9147b7d4dd2f12acb3cb9f5cbe518`
-- A2a: parent read-back complete; local implementation and work-unit commit closure authorized on `fix/auth-reset-origin`
+- A2a: implemented and verified locally at behavior commit `8a7fc4169f48a4976352fc6a1bda639ddb1fff20`; tracking-only closure and parent-owned native assessment/consent remain
 - A2b: planned from the future verified A2a commit; branch not created
 - A3: pending
 - Parent read-back gate: completed for this file and full mirror `#5379`; the parent corrected A2a boundaries before authorizing implementation.
-- **Next step:** execute A2a TDD and local commit closure, record honest results and size, mirror the full document, then return before A2b or native review. No publication, merge, remote review action, deployment, production service, A2b, or A3 work is authorized.
+- **Next step:** commit this tracking-only closure, mirror and read back the full document, then return for parent-owned native assessment/consent. No publication, merge, remote review action, deployment, production service, A2b, or A3 work is authorized.
