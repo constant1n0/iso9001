@@ -341,13 +341,13 @@ Local commit-closure verification after recording the explicit exception ran 21/
 
 ### A3 — Remove reset tokens from access logging
 
-- **Status:** independently verified with local commit closure authorized and in progress; no native approval exists or is required
+- **Status:** independently verified and closed locally by the behavior commit plus this document-only tracking closure; the closure SHA is reported externally to avoid self-reference, and no native approval was required or granted
 - **Route:** `delegated` — the existing Gunicorn configuration, one isolated regression module, deployment documentation, and preparation/closure tracking form one bounded work unit. The route evidence is the cross-file config/test/docs change plus this preparation record; one direct writer is used, with no child delegation, SDD, RDD, or review actor.
 - **Branch:** `fix/auth-log-redaction`, created from exact A2b tracking tip `cce12c852327f732edd53fb69a8a23fb063cf885`; integration or merge remains unauthorized.
 - **Base boundary:** `fix/auth-reset-tokens@cce12c852327f732edd53fb69a8a23fb063cf885`.
 - **Forecast:** approximately 120–170 authored additions plus deletions including preparation and closure tracking. The implementation remained cohesive but exceeded that estimate because the prepared tracker and independent source-sensitive regression were preserved rather than compressed; the exact observed size is recorded below and remains below the advisory delivery threshold.
 - **Review budget:** approximately `400` authored changed lines remains advisory for local implementation and the default for any future PR. A3 has no `size:exception`; `ask-on-risk` applies if the cohesive unit approaches the delivery budget.
-- **Commit:** pending
+- **Behavior commit:** `f9a5a64c184ac5a232e05f324339f160666a2722`
 
 Acceptance criteria:
 
@@ -411,7 +411,7 @@ Diff check: passed with no output
 
 Commit-closure verification after independent approval ran the full `24/24` tests in `2.678s`, reported `No broken requirements found.`, and passed both unstaged and staged diff checks without output.
 
-Observed authored size versus exact base `cce12c852327f732edd53fb69a8a23fb063cf885`: 203 additions and 32 deletions (`235` authored changed lines): `README.md` 6/0, `gunicorn.conf.py` 1/1, `odd/tasks/auth-security-remediation.md` 99/31, and `tests/test_access_logging.py` 97/0. The regression is counted from its full 97-line readback rather than omitted by tracked-only diff statistics.
+Behavior-commit authored size versus exact base `cce12c852327f732edd53fb69a8a23fb063cf885`: 203 additions and 32 deletions (`235` authored changed lines). Final local closure size after this tracking update is 204 additions and 33 deletions (`237` authored changed lines): `README.md` 6/0, `gunicorn.conf.py` 1/1, `odd/tasks/auth-security-remediation.md` 100/32, and `tests/test_access_logging.py` 97/0. The regression is counted from its full 97-line readback rather than omitted by tracked-only diff statistics.
 
 Scope and limitation: this work changes only Gunicorn's configured access-line fields, its isolated regression, README observability guidance, and this tracker. It makes no claim about arbitrary secrets placed in the retained User-Agent, application/security logs, upstream proxy logs, or other logging systems. No dependency, custom logger, auth behavior, schema, runtime service, or Spanish UI copy changed.
 
@@ -428,7 +428,7 @@ Independent closure verification:
 main @ 9366058 (A1+CI already integrated)
   └─ A2a fix/auth-reset-origin @ 668e74a (local closure and A2b base)
        └─ A2b fix/auth-reset-tokens @ cce12c8 (local behavior and tracking closure)
-            └─ A3 fix/auth-log-redaction @ cce12c8 base (authorized local work in progress)
+            └─ A3 fix/auth-log-redaction @ f9a5a64 (local behavior commit; tracking closure follows)
 ```
 
 - Strategy: `stacked-to-main`; `ask-on-risk` applies to A3, while A2b remains historically `exception-ok` under its explicit bounded approval.
@@ -443,7 +443,7 @@ main @ 9366058 (A1+CI already integrated)
 - A2b pre-closure authored size: 429 additions and 54 deletions (`483` authored lines), with the exact per-path counts recorded above. Explicit `size:exception` is approved only for this cohesive A2b work unit; final post-closure size is recorded below.
 - A2b behavior commit: `fe3773e98eee80c15f89410dc94e8e87afd09740` (`436` additions, `57` deletions, `493` authored lines).
 - A2b tracking closure and exact A3 base: `cce12c852327f732edd53fb69a8a23fb063cf885`.
-- A3 implementation passed parent and independent verification; local commit closure is authorized without RDD or native approval.
+- A3 behavior commit: `f9a5a64c184ac5a232e05f324339f160666a2722` (`203` additions, `32` deletions, `235` authored lines versus the exact A2b base).
 - A2b final authored size after tracking closure: 440 additions and 58 deletions (`498` authored lines): `README.md` 16/0, `app/models.py` 120/14, `app/routes/auth_routes.py` 20/7, `odd/tasks/auth-security-remediation.md` 108/36, and `tests/test_auth_reset.py` 176/1.
 - Work-unit approximately 400-line heuristic: advisory only; PR budget `400` still applies.
 - Size handling: the original full-A2 snapshot was split once into cohesive A2a/A2b review units. The A1+CI exception did not transfer; the maintainer separately approved `size:exception` for this exact A2b local closure. No exception transfers to A2a or A3, and no review approval transfers to A2b. Do not shrink content artificially or omit tests/docs.
@@ -468,6 +468,6 @@ main @ 9366058 (A1+CI already integrated)
 - A1: COMPLETED and integrated through PR #1 at `main@972f158f4ba9147b7d4dd2f12acb3cb9f5cbe518`
 - A2a: CLOSED locally at `668e74abfe5db1d2672d088c6373d7c3d3867bef`; native review approved and acknowledgement consumed
 - A2b: CLOSED locally at `cce12c852327f732edd53fb69a8a23fb063cf885` under the explicit A2b-only size exception; independently verified, with no native approval
-- A3: INDEPENDENTLY VERIFIED on `fix/auth-log-redaction` from exact base `cce12c852327f732edd53fb69a8a23fb063cf885`; local commit closure is authorized and in progress without native approval
-- Mirror gate: COMPLETED; the repository document and full Engram observation `#5379` were read back after replacing the prior incomplete summary.
-- **Next step:** run the final local checks, stage exactly the four A3 paths, create the cohesive behavior commit, record its SHA in this tracker, and create one tracking-only closure commit. Then mirror/read back the full tracker and stop. The DIRECT writer must not run risk assessment or native review and must not perform publication, push, PR, merge, remote application action, deployment, production service contact, tool/model configuration change, or unrelated auth work.
+- A3: INDEPENDENTLY VERIFIED and CLOSED LOCALLY by behavior commit `f9a5a64c184ac5a232e05f324339f160666a2722` plus this document-only tracking closure from exact base `cce12c852327f732edd53fb69a8a23fb063cf885`; the closure SHA is reported externally
+- Final mirror gate: this full closure document is mirrored and read back immediately after the tracking commit; observation `#5379` remains the full repository document.
+- **Next step:** report both local commit SHAs and stop. No risk assessment, native review, publication, push, PR, merge, remote application action, deployment, production service contact, tool/model configuration change, or unrelated auth work is authorized.
