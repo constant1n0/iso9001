@@ -230,6 +230,12 @@ celery -A celery\_worker.celery worker --loglevel=info
 
 - **Logs de Flask**: Revisa los logs del servidor Flask para detectar cualquier error de la aplicación.
 - **Logs de Celery**: Asegúrate de que no haya errores en el worker de Celery, especialmente para verificar que las tareas en segundo plano se ejecuten correctamente.
+- **Gunicorn access logs**: `gunicorn.conf.py` deliberately omits the request target,
+  path, query string, and Referer from access records so password-reset URLs are
+  not recorded automatically. The retained fields are the connection peer, log
+  time, response status and size, User-Agent, and request duration. User-Agent is
+  arbitrary caller-supplied text, and the connection peer may be a reverse proxy;
+  this format is not a general redaction guarantee for application or proxy logs.
 -----
 **Seguridad**
 
