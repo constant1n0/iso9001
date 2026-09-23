@@ -8,7 +8,7 @@ Remediate the verified authentication bootstrap, password-reset, and access-log 
 
 ## Problem and why it matters
 
-Before A1, the application permitted the first unauthenticated web registrant to become `ADMINISTRADOR`, with separate empty-table checks that created a race. A1 removed that path and is now integrated. The current `main` branch still trusts the request Host and accepts replayable password-reset tokens. The protected local A2a branch fixes origin handling, and this uncommitted local A2b candidate fixes token replay; neither is integrated. Gunicorn still records the token-bearing request path, which remains the separate pending A3 finding.
+Before A1, the application permitted the first unauthenticated web registrant to become `ADMINISTRADOR`, with separate empty-table checks that created a race. A1 removed that path and is now integrated. The current `main` branch still trusts the request Host and accepts replayable password-reset tokens. The protected local A2a branch fixes origin handling, and the locally committed A2b branch fixes token replay; neither is integrated. Gunicorn still records the token-bearing request path, which remains the separate pending A3 finding.
 
 Evidence is recorded in audit memory `#5378`. This document plans only the verified bootstrap and reset findings; other audit sectors remain deferred.
 
@@ -174,7 +174,7 @@ macOS environment caveat: the documented `venv/bin/flask --app run.py create-adm
 
 The previously completed full-A2 candidate remains an immutable historical snapshot at `fix/auth-reset@0491c02724a612065eb39768e64377a085e108f5`. Native review approved that exact snapshot, and its receipt was acknowledged and burned. The snapshot is a decomposition reference only: its approval, receipt, and review state do **not** transfer to either new slice.
 
-The parent read back this repository document and full Engram mirror `#5379`; they reconcile. A2a is closed locally. Local A2b implementation, tests, documentation, and verification are now authorized from the exact A2a tip. The parent retains commit ownership. Publication, merge, remote review action, network service, and A3 work remain outside scope.
+The parent read back this repository document and full Engram mirror `#5379`; they reconcile. A2a is closed locally, and A2b is implemented, verified, and committed locally from the exact A2a tip. The parent retains native-review ownership. Publication, merge, remote review action, network service, and A3 work remain outside scope.
 
 #### A2a — Enforce canonical HTTPS reset origin and generic requests
 
@@ -253,15 +253,15 @@ A2a native review approved the exact candidate and its acknowledgement consumed 
 
 #### A2b — Make reset tokens single-use with atomic consumption
 
-- **Status:** functionally implemented and verified locally; explicit A2b size exception approved and bounded local commit closure in progress
+- **Status:** functionally implemented, verified, and committed locally under the explicit A2b size exception; native review remains pending and parent-owned
 - **Route:** `delegated` — multi-file token semantics, atomic persistence, six focused tests, technical documentation, and this preparation update form one bounded work unit. One direct writer; no child delegation or SDD/review actor is allowed.
 - **Branch:** `fix/auth-reset-tokens`, created locally from exact A2a tip `668e74abfe5db1d2672d088c6373d7c3d3867bef`; intended integration remains sequential to `main` after A2a.
 - **Base boundary:** `fix/auth-reset-origin@668e74abfe5db1d2672d088c6373d7c3d3867bef`.
 - **Forecast:** approximately 360–410 authored additions plus deletions including preparation and closure tracking. The preserved historical implementation contributed a 309-line non-tracker decomposition reference, not reusable evidence.
 - **Observed size before commit-closure tracking:** 429 additions and 54 deletions (`483` authored lines): `README.md` 16/0, `app/models.py` 120/14, `app/routes/auth_routes.py` 20/7, `odd/tasks/auth-security-remediation.md` 97/32, and `tests/test_auth_reset.py` 176/1.
 - **Review budget:** `400`; explicit `size:exception` approved for this exact cohesive A2b work unit. Final actual size must be reported honestly without shrinking or transferring the exception.
-- **Behavior commit:** pending bounded local commit.
-- **Tracking closure commit:** pending; its SHA will be returned externally rather than recorded self-referentially.
+- **Behavior commit:** `fe3773e98eee80c15f89410dc94e8e87afd09740` (`436` additions and `57` deletions; `493` authored lines versus the exact A2a base after exception tracking).
+- **Tracking closure commit:** this document-only closure; its resulting SHA is returned externally rather than recorded self-referentially.
 
 Acceptance and verification checklist:
 
@@ -285,7 +285,7 @@ Rollback boundary: revert only A2b token fingerprint/validation behavior, atomic
 - **Target paths:** `app/models.py`, `app/routes/auth_routes.py`, `tests/test_auth_reset.py`, `README.md`, and this tracker only. Existing A2a configuration, generic reset-request behavior, five tests, and Spanish UI copy remain protected.
 - **Six-test coverage plan:** current-state payload/privacy and validity; expiry plus malformed/legacy/unknown-user rejection; successful reset and replay rejection; independent password change invalidation; stale-consumer compare-and-swap loss; and database-failure rollback with a non-sensitive generic response.
 - **Checks:** focused runner above; `venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v`; `venv/bin/python -m pip check`; `git diff --check`; tracked-status and authored-line review against the exact A2a base. The Flask test client and in-memory SQLite exercise the runtime boundary; mail remains mocked and no external service is contacted.
-- **Delivery controls:** `ask-on-risk` and `stacked-to-main` remain unchanged. This is one already-selected cohesive slice. The 400 authored-line per-task threshold is advisory for implementation but remains the future PR budget; no `size:exception` is authorized. If the honest slice exceeds 400 lines, stop and report forecast/actual without shrinking tests, comments, documentation, or behavior and without another artificial split.
+- **Delivery controls at preparation time:** `ask-on-risk` and `stacked-to-main` remained unchanged, and no `size:exception` was then authorized. The honest slice later exceeded 400 lines, stopped for parent review without shrinking, and received the explicit bounded exception recorded above.
 
 ##### A2b implementation evidence
 
@@ -337,6 +337,8 @@ Rollback boundary remains the five A2b paths listed above. Revert their A2b-only
 
 Parent closure proof: the parent read the candidate structure, ran the full suite with 21/21 passing in `2.658s`, and confirmed `git diff --check` was clean. Native `current-changes` assessment returned high/unassessable only because undeclared untracked `.atl/` and `.codegraph/` inventory prevents assessment. No review START, candidate consent, or approval occurred; native review remains honestly pending after commit closure.
 
+Local commit-closure verification after recording the explicit exception ran 21/21 tests in `2.661s`, reported `No broken requirements found.`, and passed both `git diff --check` and `git diff --cached --check` with no output. Only the five declared A2b paths were staged for the behavior commit; `.atl/` and `.codegraph/` remained untracked and untouched.
+
 ### A3 — Remove reset tokens from access logging
 
 - **Status:** pending
@@ -360,7 +362,7 @@ Rollback boundary: restore only the previous Gunicorn logging configuration, its
 ```text
 main @ 9366058 (A1+CI already integrated)
   └─ A2a fix/auth-reset-origin @ 668e74a (local closure and A2b base)
-       └─ A2b fix/auth-reset-tokens @ 668e74a (verified candidate; uncommitted)
+       └─ A2b fix/auth-reset-tokens @ fe3773e (behavior committed; closure follows)
             └─ A3 fix/auth-log-redaction (out of current scope)
 ```
 
@@ -374,9 +376,10 @@ main @ 9366058 (A1+CI already integrated)
 - Original full forecast: approximately `590–820` authored additions plus deletions.
 - Revised A2 slice forecasts before materialization: A2a `370–390 ±30` and A2b `360–410`, each including tracker changes. A2b materialized at the exact observed size recorded below.
 - A2b pre-closure authored size: 429 additions and 54 deletions (`483` authored lines), with the exact per-path counts recorded above. Explicit `size:exception` is approved only for this cohesive A2b work unit; final post-closure size is recorded below.
-- A2b final authored size: pending commit-closure tracking.
+- A2b behavior commit: `fe3773e98eee80c15f89410dc94e8e87afd09740` (`436` additions, `57` deletions, `493` authored lines).
+- A2b final authored size after tracking closure: 440 additions and 58 deletions (`498` authored lines): `README.md` 16/0, `app/models.py` 120/14, `app/routes/auth_routes.py` 20/7, `odd/tasks/auth-security-remediation.md` 108/36, and `tests/test_auth_reset.py` 176/1.
 - Work-unit approximately 400-line heuristic: advisory only; PR budget `400` still applies.
-- Size handling: the original full-A2 snapshot was split once into cohesive A2a/A2b review units. The maintainer approved `size:exception` for the exact A1+CI PR only; no exception or review approval transfers to A2a/A2b. Do not shrink content artificially or omit tests/docs.
+- Size handling: the original full-A2 snapshot was split once into cohesive A2a/A2b review units. The A1+CI exception did not transfer; the maintainer separately approved `size:exception` for this exact A2b local closure. No exception transfers to A2a or A3, and no review approval transfers to A2b. Do not shrink content artificially or omit tests/docs.
 - Historical full-A2 snapshot: `fix/auth-reset@0491c02724a612065eb39768e64377a085e108f5`, natively approved with its receipt acknowledged/burned. It is preserved untouched and supplies no review inheritance.
 - A2a behavior commit: `8a7fc4169f48a4976352fc6a1bda639ddb1fff20` (`430` authored changed lines including prepared tracking). Final A2a slice: `478` authored changed lines versus `main@9366058123bf60705804a70715dea63e763abde1`, including the tracking-only closure.
 - A2a tracking closure and exact A2b base: `668e74abfe5db1d2672d088c6373d7c3d3867bef`. A2a native review and acknowledgement are closed; their lineage and evidence do not transfer to A2b.
@@ -396,7 +399,7 @@ main @ 9366058 (A1+CI already integrated)
 
 - A1: COMPLETED and integrated through PR #1 at `main@972f158f4ba9147b7d4dd2f12acb3cb9f5cbe518`
 - A2a: CLOSED locally at `668e74abfe5db1d2672d088c6373d7c3d3867bef`; native review approved and acknowledgement consumed
-- A2b: FUNCTIONALLY COMPLETE and VERIFIED on `fix/auth-reset-tokens`; explicit size exception approved and bounded local commit closure in progress; native review remains pending and parent-owned
+- A2b: FUNCTIONALLY COMPLETE, VERIFIED, and LOCALLY COMMITTED on `fix/auth-reset-tokens` under the explicit size exception; native review remains pending and parent-owned
 - A3: pending
 - Parent read-back gate: completed for this file and full mirror `#5379`; the parent corrected A2a boundaries before authorizing implementation.
-- **Next step:** mirror/read back this authorization update, run the exact check-only commands, create one cohesive behavior commit, record its identity and final authored size, then create one necessary tracking-only closure commit. Stop before native review. No publication, push, PR, merge, remote review action, deployment, production service, A3, configuration change, or A2a advisory fix is authorized.
+- **Next step:** mirror/read back this final document, create its one necessary tracking-only closure commit, report both SHAs and the final authored size, then stop before native review. No publication, push, PR, merge, remote review action, deployment, production service, A3, configuration change, or A2a advisory fix is authorized.
