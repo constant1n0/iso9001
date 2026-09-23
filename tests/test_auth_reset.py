@@ -6,7 +6,9 @@ import unittest
 from unittest.mock import patch
 
 import test_auth_bootstrap as bootstrap
-from werkzeug.security import generate_password_hash
+from itsdangerous import URLSafeTimedSerializer
+from sqlalchemy.exc import SQLAlchemyError
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import db
 from app.models import RoleEnum, User
@@ -17,6 +19,7 @@ CANONICAL_RESET_BASE = "https://qms.example.invalid"
 GENERIC_RESET_MESSAGE = (
     "Se ha enviado un correo con instrucciones para restablecer tu contraseña."
 )
+INVALID_RESET_MESSAGE = "El enlace de recuperación es inválido o ha expirado."
 
 
 class AuthResetTestCase(unittest.TestCase):
@@ -37,6 +40,8 @@ class AuthResetTestCase(unittest.TestCase):
             )
             db.session.add(self.user)
             db.session.commit()
+            self.user_id = self.user.id
+            self.original_hash = self.user.password
 
     def tearDown(self) -> None:
         with self.app.app_context():
@@ -48,6 +53,10 @@ class AuthResetTestCase(unittest.TestCase):
         with client.session_transaction() as session:
             flashes = tuple(session.pop("_flashes", ()))
         return response.status_code, response.location, flashes
+
+    def _signed_payload(self, payload: object) -> str:
+        serializer = URLSafeTimedSerializer(self.app.config["SECRET_KEY"])
+        return serializer.dumps(payload, salt="password-reset-salt")
 
     def test_missing_or_invalid_base_disables_email_without_breaking_app(self) -> None:
         for reset_base in (None, "http://qms.example.invalid"):
@@ -173,6 +182,172 @@ class AuthResetTestCase(unittest.TestCase):
         output = "\n".join(captured.output)
         self.assertNotIn("/reset_password/", output)
         self.assertNotIn("eyJ", output)
+
+    def test_token_payload_hides_password_hash_and_verifies_current_state(self) -> None:
+        with self.app.app_context():
+            user = db.session.get(User, self.user_id)
+            token = user.get_reset_token()
+            payload = URLSafeTimedSerializer(
+                self.app.config["SECRET_KEY"]
+            ).loads(token, salt="password-reset-salt")
+            verification = User.verify_reset_token(token)
+
+            self.assertEqual(
+                {"user_id", "password_fingerprint"}, set(payload)
+            )
+            self.assertNotIn(user.password, repr(payload))
+            self.assertEqual(64, len(payload["password_fingerprint"]))
+            self.assertEqual(user.id, verification.user.id)
+            self.assertEqual(user.password, verification.expected_password_hash)
+
+    def test_invalid_expired_unknown_and_legacy_tokens_are_rejected(self) -> None:
+        with self.app.app_context():
+            user = db.session.get(User, self.user_id)
+            with patch("itsdangerous.timed.time.time", return_value=1_000):
+                expiring_token = user.get_reset_token()
+
+            invalid_tokens = (
+                "not-a-token",
+                self._signed_payload({}),
+                self._signed_payload(
+                    {"user_id": True, "password_fingerprint": "0" * 64}
+                ),
+                self._signed_payload(
+                    {"user_id": user.id, "password_fingerprint": "é" * 64}
+                ),
+                self._signed_payload(
+                    {"user_id": user.id, "password_fingerprint": "g" * 64}
+                ),
+                self._signed_payload({"user_id": user.id}),
+                self._signed_payload(
+                    {"user_id": 999_999, "password_fingerprint": "0" * 64}
+                ),
+                f"{user.get_reset_token()}tampered",
+            )
+
+            signatures = []
+            for token in invalid_tokens:
+                with self.subTest(token=token[:24]):
+                    self.assertIsNone(User.verify_reset_token(token))
+                    response = self.client.post(
+                        f"/reset_password/{token}",
+                        data={
+                            "password": "RejectedPassword123!",
+                            "confirm_password": "RejectedPassword123!",
+                        },
+                    )
+                    signatures.append(
+                        self._response_signature(self.client, response)
+                    )
+
+            with patch("itsdangerous.timed.time.time", return_value=4_601):
+                self.assertIsNone(User.verify_reset_token(expiring_token))
+                expired_response = self.client.post(
+                    f"/reset_password/{expiring_token}",
+                    data={
+                        "password": "RejectedPassword123!",
+                        "confirm_password": "RejectedPassword123!",
+                    },
+                )
+                signatures.append(
+                    self._response_signature(self.client, expired_response)
+                )
+
+            self.assertTrue(
+                all(signature == signatures[0] for signature in signatures)
+            )
+            self.assertTrue(
+                signatures[0][1].endswith("/reset_password_request")
+            )
+            self.assertEqual(
+                ("warning", INVALID_RESET_MESSAGE),
+                signatures[0][2][0],
+            )
+            self.assertEqual(self.original_hash, user.password)
+
+    def test_successful_reset_changes_password_and_rejects_replay(self) -> None:
+        new_password = "AfterPassword123!"
+        replay_password = "ReplayPassword123!"
+        with self.app.app_context():
+            token = db.session.get(User, self.user_id).get_reset_token()
+
+        response = self.client.post(
+            f"/reset_password/{token}",
+            data={"password": new_password, "confirm_password": new_password},
+        )
+        self.assertEqual(302, response.status_code)
+        self.assertTrue(response.location.endswith("/login"))
+
+        replay = self.client.post(
+            f"/reset_password/{token}",
+            data={
+                "password": replay_password,
+                "confirm_password": replay_password,
+            },
+        )
+        self.assertEqual(302, replay.status_code)
+        self.assertTrue(replay.location.endswith("/reset_password_request"))
+        with self.app.app_context():
+            user = db.session.get(User, self.user_id)
+            self.assertTrue(check_password_hash(user.password, new_password))
+            self.assertFalse(check_password_hash(user.password, replay_password))
+
+    def test_independent_password_change_invalidates_all_prior_tokens(self) -> None:
+        with self.app.app_context():
+            user = db.session.get(User, self.user_id)
+            first_token = user.get_reset_token()
+            second_token = user.get_reset_token()
+            user.password = generate_password_hash("IndependentChange123!")
+            db.session.commit()
+
+            self.assertIsNone(User.verify_reset_token(first_token))
+            self.assertIsNone(User.verify_reset_token(second_token))
+
+    def test_atomic_reset_update_allows_only_first_stale_snapshot(self) -> None:
+        winner_password = generate_password_hash("WinnerPassword123!")
+        loser_password = generate_password_hash("LoserPassword123!")
+
+        with self.app.app_context():
+            user = db.session.get(User, self.user_id)
+            verification = User.verify_reset_token(user.get_reset_token())
+
+            first_updated = User.update_password_from_reset(
+                verification.user.id,
+                verification.expected_password_hash,
+                winner_password,
+            )
+            second_updated = User.update_password_from_reset(
+                verification.user.id,
+                verification.expected_password_hash,
+                loser_password,
+            )
+
+            stored_user = db.session.get(User, self.user_id)
+            self.assertTrue(first_updated)
+            self.assertFalse(second_updated)
+            self.assertEqual(winner_password, stored_user.password)
+
+    def test_database_failure_rolls_back_without_sensitive_response(self) -> None:
+        new_password = "AfterFailure123!"
+        with self.app.app_context():
+            token = db.session.get(User, self.user_id).get_reset_token()
+
+        with patch.object(
+            db.session,
+            "commit",
+            side_effect=SQLAlchemyError("sensitive database detail"),
+        ):
+            response = self.client.post(
+                f"/reset_password/{token}",
+                data={"password": new_password, "confirm_password": new_password},
+            )
+
+        self.assertEqual(302, response.status_code)
+        self.assertTrue(response.location.endswith("/reset_password_request"))
+        self.assertNotIn(b"sensitive database detail", response.data)
+        with self.app.app_context():
+            stored_user = db.session.get(User, self.user_id)
+            self.assertEqual(self.original_hash, stored_user.password)
 
 
 if __name__ == "__main__":

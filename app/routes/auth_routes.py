@@ -31,7 +31,7 @@ from flask_mail import Message
 from werkzeug.security import check_password_hash, generate_password_hash
 from ..models import User
 from ..forms import LoginForm, PasswordResetRequestForm, PasswordResetForm
-from ..extensions import db, limiter, mail
+from ..extensions import limiter, mail
 from ..utils.security_logger import (
     log_login_attempt, log_logout,
     log_password_reset_request, log_password_change
@@ -45,6 +45,7 @@ HOST_LABEL_PATTERN = re.compile(
 GENERIC_RESET_MESSAGE = (
     'Se ha enviado un correo con instrucciones para restablecer tu contraseña.'
 )
+INVALID_RESET_MESSAGE = 'El enlace de recuperación es inválido o ha expirado.'
 
 
 class ResetEmailError(RuntimeError):
@@ -203,16 +204,28 @@ def reset_password(token):
     if current_user.is_authenticated:
         return redirect(url_for('dashboard.dashboard'))
 
-    user = User.verify_reset_token(token)
-    if not user:
-        flash('El enlace de recuperación es inválido o ha expirado.', 'warning')
+    verification = User.verify_reset_token(token)
+    if verification is None:
+        flash(INVALID_RESET_MESSAGE, 'warning')
         return redirect(url_for('auth.reset_password_request'))
 
     form = PasswordResetForm()
     if form.validate_on_submit():
-        user.password = generate_password_hash(form.password.data, method='pbkdf2:sha256')
-        db.session.commit()
-        log_password_change(user.username, success=True)
+        new_password_hash = generate_password_hash(
+            form.password.data,
+            method='pbkdf2:sha256',
+        )
+        updated = User.update_password_from_reset(
+            verification.user.id,
+            verification.expected_password_hash,
+            new_password_hash,
+        )
+        if not updated:
+            log_password_change(verification.user.username, success=False)
+            flash(INVALID_RESET_MESSAGE, 'warning')
+            return redirect(url_for('auth.reset_password_request'))
+
+        log_password_change(verification.user.username, success=True)
         flash('Tu contraseña ha sido actualizada exitosamente.', 'success')
         return redirect(url_for('auth.login'))
 

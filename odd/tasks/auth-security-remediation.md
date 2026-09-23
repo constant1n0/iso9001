@@ -8,7 +8,7 @@ Remediate the verified authentication bootstrap, password-reset, and access-log 
 
 ## Problem and why it matters
 
-Before A1, the application permitted the first unauthenticated web registrant to become `ADMINISTRADOR`, with separate empty-table checks that created a race. A1 removed that path and is now integrated. Password-reset links still trust the request Host, reset tokens remain replayable after a password change, and Gunicorn still records the token-bearing request path; those A2/A3 findings remain pending.
+Before A1, the application permitted the first unauthenticated web registrant to become `ADMINISTRADOR`, with separate empty-table checks that created a race. A1 removed that path and is now integrated. The current `main` branch still trusts the request Host and accepts replayable password-reset tokens. The protected local A2a branch fixes origin handling, and this uncommitted local A2b candidate fixes token replay; neither is integrated. Gunicorn still records the token-bearing request path, which remains the separate pending A3 finding.
 
 Evidence is recorded in audit memory `#5378`. This document plans only the verified bootstrap and reset findings; other audit sectors remain deferred.
 
@@ -18,12 +18,12 @@ Evidence is recorded in audit memory `#5378`. This document plans only the verif
 |---|---|
 | First administrator | Local Flask CLI only; remove public web registration and preserve existing accounts. Explicit user choice. |
 | TDD | `on`; explicit user choice. Python 3.11 stdlib `unittest` is the runner. Each new implementation slice must record its own observed RED, GREEN, then REFACTOR evidence; historical full-A2 evidence does not become proof for the new slices. |
-| RDD | `on` globally and parent-owned. This delegated A2a implementation does not start, acknowledge, approve, or burn a review. |
-| Delivery strategy | `ask-on-risk`, resolved by the user to two A2 slices after the original cohesive candidate exceeded the review budget. |
-| Chain strategy | `stacked-to-main`; integrate independent units sequentially into `main`: A1 → A2a → A2b → A3. A2b is created locally from the future A2a commit, while eventual integration targets remain sequential to `main`. |
-| Local authorization | Parent read-back of this plan and full mirror `#5379` is complete. Local A2a tests, source, documentation, verification, and work-unit commits are authorized; this invocation stops before A2b or native review. |
+| RDD | `on` globally and parent-owned. A2a native review was approved and its acknowledgement was consumed; this bounded A2b implementation does not start, acknowledge, approve, or burn another review. |
+| Delivery strategy | `ask-on-risk` selected the two A2 slices. After A2b honestly materialized above budget, the user explicitly selected `size:exception`; A2b is now `exception-ok` for local commit closure only. The exception does not transfer to A2a, A3, publication, or review consent. |
+| Chain strategy | `stacked-to-main`; integrate independent units sequentially into `main`: A1 → A2a → A2b → A3. A2b is created locally from exact A2a tip `668e74abfe5db1d2672d088c6373d7c3d3867bef`, while eventual integration targets remain sequential to `main`. |
+| Local authorization | A2a is closed locally at `668e74abfe5db1d2672d088c6373d7c3d3867bef`. After implementation and parent verification, the user explicitly authorized the cohesive A2b `size:exception` and bounded local behavior plus tracking-closure commits. Native review consent remains separate and parent-owned. |
 | Remote operations | None for A2. No publication, merge, network service, deployment, or remote review action is authorized. Historical A1 remote delivery remains recorded below. |
-| Review size | The `400` authored changed-line PR budget still applies to future delivery of each A2 slice. A1's historical `size:exception` does not transfer; no A2 PR exception exists. Honest local implementation and commits are authorized even if the materialized slice exceeds 400 lines; report the overage without another slicing pass or cosmetic shrinking. |
+| Review size | The `400` authored changed-line budget remains the default. The user approved `size:exception` for this exact cohesive A2b candidate after its 483-line pre-closure measurement (decision memory `#5511`, topic `delivery/auth-reset-a2b-size-exception`). Necessary tracking may increase the final count. No exception transfers to A2a or A3. |
 
 ## Scope
 
@@ -52,7 +52,7 @@ Evidence is recorded in audit memory `#5378`. This document plans only the verif
 - The ignored Python 3.11 `venv` now contains the unchanged `requirements.txt` dependencies; stdlib `unittest` remains the runner and pytest was not added.
 - A1 removed import-time creation of `logs/security.log`; tests disable file logging before app initialization.
 - Preserve existing Spanish UI context. New code and technical documentation default to English.
-- Approximately 400 authored changed lines is an advisory implementation heuristic. The `400` authored changed-line budget governs future PR delivery unless a maintainer grants an explicit exception; it does not block honest local implementation or commits and must not cause omitted validation, compressed code, or artificial shrinking.
+- Approximately 400 authored changed lines is an advisory implementation heuristic. The `400` authored changed-line budget governs future PR delivery unless a maintainer grants an explicit exception; it does not block honest local implementation and must not cause omitted validation, compressed code, or artificial shrinking.
 
 ## Planned checks
 
@@ -63,7 +63,7 @@ venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 git diff --check
 ```
 
-RED/GREEN/REFACTOR proof for A1 and the historical full-A2 snapshot exists. A2a, A2b, and A3 require new slice-specific evidence; planned commands and counts are not completion evidence.
+RED/GREEN/REFACTOR proof for A1, A2a, A2b, and the historical full-A2 snapshot is recorded in their respective sections. A3 still requires new slice-specific evidence; planned commands and counts are not completion evidence.
 
 ## Stable tasks and review slices
 
@@ -174,16 +174,17 @@ macOS environment caveat: the documented `venv/bin/flask --app run.py create-adm
 
 The previously completed full-A2 candidate remains an immutable historical snapshot at `fix/auth-reset@0491c02724a612065eb39768e64377a085e108f5`. Native review approved that exact snapshot, and its receipt was acknowledged and burned. The snapshot is a decomposition reference only: its approval, receipt, and review state do **not** transfer to either new slice.
 
-The parent read back this repository document and full Engram mirror `#5379`. Local A2a source, tests, documentation, verification, and work-unit commit closure are now authorized. Publication, merge, remote review action, network service, A2b, and A3 work remain outside this invocation.
+The parent read back this repository document and full Engram mirror `#5379`; they reconcile. A2a is closed locally. Local A2b implementation, tests, documentation, and verification are now authorized from the exact A2a tip. The parent retains commit ownership. Publication, merge, remote review action, network service, and A3 work remain outside scope.
 
 #### A2a — Enforce canonical HTTPS reset origin and generic requests
 
-- **Status:** implemented and verified locally; parent-owned native assessment/consent remains pending
+- **Status:** implemented, verified, and natively approved locally; acknowledgement consumed and lineage closed
 - **Route:** `DIRECT` through bounded parent delegation — trigger evidence is the multi-file behavior, dependency, five-test, and documentation work unit plus the user's explicit local-preparation authorization. One writer; no child delegation is allowed.
 - **Branch:** `fix/auth-reset-origin`, created from exact local `main@9366058123bf60705804a70715dea63e763abde1`
 - **Forecast:** approximately 370–390 authored additions plus deletions, including tracker changes, with uncertainty of ±30 until materialized.
 - **Review budget:** `400` for future PR delivery; no `size:exception`. Local implementation and commits may materialize the honest size, and tests/docs/source must not be shrunk to meet it.
 - **Behavior commit:** `8a7fc4169f48a4976352fc6a1bda639ddb1fff20`
+- **Tracking closure / exact A2a tip:** `668e74abfe5db1d2672d088c6373d7c3d3867bef`
 - **Observed behavior-commit size:** 377 additions and 53 deletions (`430` authored changed lines), including the prepared tracker.
 - **Observed final slice size:** `478` authored changed lines versus `main@9366058123bf60705804a70715dea63e763abde1`, including this tracking closure.
 
@@ -246,31 +247,95 @@ Changed paths:
 - `requirements.txt`
 - `tests/test_auth_reset.py`
 
-Security boundary: canonical-origin parsing rejects unsafe URL components and request Host data; syntactically valid account/failure cases share the same redirect and generic flash. Existing malformed-email form validation remains unchanged. Reset-token payload, verification, replay, and atomic update behavior remain deferred to A2b. Review state is pending parent-owned native assessment/consent; this agent did not start or approve review.
+Security boundary: canonical-origin parsing rejects unsafe URL components and request Host data; syntactically valid account/failure cases share the same redirect and generic flash. Existing malformed-email form validation remains unchanged. Reset-token payload, verification, replay, and atomic update behavior remain deferred to A2b.
+
+A2a native review approved the exact candidate and its acknowledgement consumed lineage `review-83dd8f35c54653b4`, target `sha256:4b87516994d51d02efa4f983cd4baeca3fe1d2facb7581bf2145967d2e3e9908`, at consumed revision `sha256:f93b2e209af4f743a48c0186cdd1b1bae9f196d30f0a5382ba62ac209d290bbf` (memory `#5507`). That review is not reusable for A2b.
 
 #### A2b — Make reset tokens single-use with atomic consumption
 
-- **Status:** planned; branch and implementation do not exist yet
-- **Route:** `DIRECT` through bounded parent delegation — trigger evidence is the multi-file token semantics, atomic persistence, six-test, and documentation work unit plus the user's explicit local-preparation authorization. One writer; no child delegation is allowed.
-- **Branch:** `fix/auth-reset-tokens`, to be created locally from the future verified A2a commit; intended integration remains sequential to `main` after A2a.
-- **Forecast:** approximately 390–410 authored additions plus deletions, including tracker changes, with uncertainty of ±30 until materialized.
-- **Review budget:** `400`; no `size:exception`. If the cohesive actual size exceeds the budget, stop and report it rather than compressing or omitting work.
-- **Commit:** pending.
+- **Status:** functionally implemented and verified locally; explicit A2b size exception approved and bounded local commit closure in progress
+- **Route:** `delegated` — multi-file token semantics, atomic persistence, six focused tests, technical documentation, and this preparation update form one bounded work unit. One direct writer; no child delegation or SDD/review actor is allowed.
+- **Branch:** `fix/auth-reset-tokens`, created locally from exact A2a tip `668e74abfe5db1d2672d088c6373d7c3d3867bef`; intended integration remains sequential to `main` after A2a.
+- **Base boundary:** `fix/auth-reset-origin@668e74abfe5db1d2672d088c6373d7c3d3867bef`.
+- **Forecast:** approximately 360–410 authored additions plus deletions including preparation and closure tracking. The preserved historical implementation contributed a 309-line non-tracker decomposition reference, not reusable evidence.
+- **Observed size before commit-closure tracking:** 429 additions and 54 deletions (`483` authored lines): `README.md` 16/0, `app/models.py` 120/14, `app/routes/auth_routes.py` 20/7, `odd/tasks/auth-security-remediation.md` 97/32, and `tests/test_auth_reset.py` 176/1.
+- **Review budget:** `400`; explicit `size:exception` approved for this exact cohesive A2b work unit. Final actual size must be reported honestly without shrinking or transferring the exception.
+- **Behavior commit:** pending bounded local commit.
+- **Tracking closure commit:** pending; its SHA will be returned externally rather than recorded self-referentially.
 
 Acceptance and verification checklist:
 
-- [ ] A reset token is valid before use, is subject to expiry, and is bound to the account's current password state without a schema migration or new token library.
-- [ ] A successful reset changes the password and invalidates the consumed token.
-- [ ] Token consumption uses an atomic compare-and-swap update so concurrent or stale consumers cannot both succeed.
-- [ ] Replayed and losing concurrent tokens fail through the same generic invalid-token path without exposing sensitive details.
-- [ ] Malformed, expired, and unknown-user tokens fail safely without changing account data.
-- [ ] Exactly six focused A2b tests are added later to the shared `tests/test_auth_reset.py` scaffold to cover validity, expiry, malformed/unknown tokens, replay, and atomic stale-consumer behavior using isolated SQLite and no external services.
-- [ ] Technical documentation explains single-use token semantics, the atomicity boundary, and operational rollback implications.
-- [ ] Observed RED, GREEN, and REFACTOR evidence, the focused command, full-suite command, exact results, actual authored size, and `git diff --check` result are recorded after implementation.
+- [x] A reset token is valid before use, is subject to expiry, and is bound to the account's current password state without a schema migration or new token library.
+- [x] A successful reset changes the password and invalidates the consumed token.
+- [x] Token consumption uses an atomic compare-and-swap update so concurrent or stale consumers cannot both succeed.
+- [x] Replayed and losing concurrent tokens fail through the same generic invalid-token path without exposing sensitive details.
+- [x] Malformed, expired, legacy, and unknown-user tokens fail safely without changing account data.
+- [x] Exactly six focused A2b tests were added to the shared `tests/test_auth_reset.py` scaffold while preserving all five A2a tests; they cover validity/privacy, expiry and malformed/legacy/unknown payloads, replay, independent password changes, stale compare-and-swap consumption, and database failure using isolated SQLite without external services.
+- [x] Technical documentation explains single-use token semantics, the atomicity boundary, legacy-link behavior, session limitation, test limitation, and operational rollback implications.
+- [x] Observed RED, GREEN, and REFACTOR evidence, focused and full-suite results, dependency health, actual authored size, and `git diff --check` are recorded.
 
-Planned focused command: `venv/bin/python -m unittest discover -s tests -p 'test_auth_reset.py' -v` (the shared module will contain the five A2a tests plus six A2b tests after A2b). The full-suite command remains the repository command above.
+Focused command: `venv/bin/python -m unittest discover -s tests -p 'test_auth_reset.py' -v` (the shared module contains the five A2a tests plus six A2b tests). The full-suite command remains the repository command above.
 
 Rollback boundary: revert only A2b token fingerprint/validation behavior, atomic compare-and-swap reset update, six focused tests, technical documentation, and this slice's tracking updates. A2a canonical-origin and generic request protections must remain intact.
+
+##### A2b preparation record
+
+- **TDD source:** explicit user choice and this task contract; stdlib `unittest` on Python 3.11. Add exactly six A2b tests to `tests/test_auth_reset.py` while preserving all five A2a tests, observe the new tests fail for the intended behavior, implement the minimum production change, then run GREEN and a REFACTOR assessment.
+- **Implementation boundary:** bind each signed timed token to a secret-keyed fingerprint of the stored password hash; strictly reject malformed, expired, legacy, or unknown-user payloads; carry the verified password snapshot into an SQLAlchemy compare-and-swap update; and route zero-row or database-failure consumption through the existing generic invalid-token path. Do not add a schema migration, dependency, token library, service call, or session-revocation claim.
+- **Target paths:** `app/models.py`, `app/routes/auth_routes.py`, `tests/test_auth_reset.py`, `README.md`, and this tracker only. Existing A2a configuration, generic reset-request behavior, five tests, and Spanish UI copy remain protected.
+- **Six-test coverage plan:** current-state payload/privacy and validity; expiry plus malformed/legacy/unknown-user rejection; successful reset and replay rejection; independent password change invalidation; stale-consumer compare-and-swap loss; and database-failure rollback with a non-sensitive generic response.
+- **Checks:** focused runner above; `venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v`; `venv/bin/python -m pip check`; `git diff --check`; tracked-status and authored-line review against the exact A2a base. The Flask test client and in-memory SQLite exercise the runtime boundary; mail remains mocked and no external service is contacted.
+- **Delivery controls:** `ask-on-risk` and `stacked-to-main` remain unchanged. This is one already-selected cohesive slice. The 400 authored-line per-task threshold is advisory for implementation but remains the future PR budget; no `size:exception` is authorized. If the honest slice exceeds 400 lines, stop and report forecast/actual without shrinking tests, comments, documentation, or behavior and without another artificial split.
+
+##### A2b implementation evidence
+
+The six A2b regression tests were added first while production remained unchanged. Focused RED:
+
+```text
+Ran 11 tests in 2.268s
+FAILED (failures=8, errors=2)
+```
+
+All five A2a tests passed. The six new methods exposed missing compare-and-swap support, an uncaught malformed payload, accepted legacy and malformed-fingerprint payloads, token survival after password changes, successful replay, raw payload shape without a password-state fingerprint, and a database failure returning HTTP 500.
+
+After the minimum model and route implementation, focused GREEN:
+
+```text
+Ran 11 tests in 1.982s
+OK
+```
+
+REFACTOR assessment found no production restructuring to justify. The invalid-token test was strengthened to drive malformed, legacy, unknown-user, and expired tokens through the same route response and verify that the stored password remains unchanged. Final focused verification:
+
+```text
+Ran 11 tests in 1.985s
+OK
+```
+
+Full isolated Flask/SQLite suite:
+
+```text
+Ran 21 tests in 2.568s
+OK
+```
+
+`venv/bin/python -m pip check` reported `No broken requirements found.` `git diff --check` passed with no output. The exact final per-path authored additions and deletions are recorded in the observed-size line above. The test harness used a test-only secret, non-routable example URL, in-memory SQLite, and mocked/suppressed mail; it contacted no DNS, SMTP, PostgreSQL, Redis, network service, or production secret.
+
+Changed paths:
+
+- `app/models.py`
+- `app/routes/auth_routes.py`
+- `tests/test_auth_reset.py`
+- `README.md`
+- `odd/tasks/auth-security-remediation.md`
+
+Security and atomicity boundary: the signed timed payload carries only the user ID and a secret-keyed HMAC fingerprint of the stored password hash. Verification strictly validates payload shape and values, compares fingerprints in constant time, and preserves the verified password snapshot for one conditional `UPDATE ... WHERE id = ... AND password = ...`. A zero-row result or SQLAlchemy failure rolls back and returns the same invalid-link response. This prevents a stale verified request from overwriting a newer password at that database statement boundary.
+
+Limitations: SQLite integration exercises the conditional-update behavior but does not prove PostgreSQL concurrency behavior in production. Existing authenticated sessions are not revoked. A2b does not redact token-bearing access paths; that remains A3. Legacy links are rejected after rollout, and rolling A2b back while links remain outstanding knowingly restores replayable behavior.
+
+Rollback boundary remains the five A2b paths listed above. Revert their A2b-only changes together; keep A2a canonical-origin and generic reset-request protections. Stop issuing reset links and allow the one-hour validity window to expire before rollback unless replay risk is explicitly accepted. No schema or dependency rollback is required.
+
+Parent closure proof: the parent read the candidate structure, ran the full suite with 21/21 passing in `2.658s`, and confirmed `git diff --check` was clean. Native `current-changes` assessment returned high/unassessable only because undeclared untracked `.atl/` and `.codegraph/` inventory prevents assessment. No review START, candidate consent, or approval occurred; native review remains honestly pending after commit closure.
 
 ### A3 — Remove reset tokens from access logging
 
@@ -293,13 +358,13 @@ Rollback boundary: restore only the previous Gunicorn logging configuration, its
 ## Delivery ledger
 
 ```text
-main @ 9366058 (current exact local base; A1+CI already integrated)
-  └─ A2a fix/auth-reset-origin
-       └─ A2b fix/auth-reset-tokens (rooted locally from future A2a commit)
+main @ 9366058 (A1+CI already integrated)
+  └─ A2a fix/auth-reset-origin @ 668e74a (local closure and A2b base)
+       └─ A2b fix/auth-reset-tokens @ 668e74a (verified candidate; uncommitted)
             └─ A3 fix/auth-log-redaction (out of current scope)
 ```
 
-- Strategy: `stacked-to-main`.
+- Strategy: `stacked-to-main`; historical selection was `ask-on-risk`, and effective A2b local commit delivery is now `exception-ok` under explicit user approval.
 - Integration order remains sequential to `main`: A1, then A2a, then A2b, then A3. A1 is integrated; A2a/A2b publication and integration remain unauthorized, and A3 is out of current scope.
 - Initial authored running line count: `646` for A1 code, tests, and README.
 - Behavior commit: `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`, with `697` additions and `180` deletions overall.
@@ -307,11 +372,14 @@ main @ 9366058 (current exact local base; A1+CI already integrated)
 - Tracking-only closure commit: separate from behavior; its immutable SHA is reported externally to avoid self-referential hashing.
 - Tracking-only closure delta: `11` additions and `7` deletions in this document.
 - Original full forecast: approximately `590–820` authored additions plus deletions.
-- Revised A2 slice forecasts: A2a `370–390 ±30` and A2b `390–410 ±30`, each including tracker changes and uncertain until materialized.
+- Revised A2 slice forecasts before materialization: A2a `370–390 ±30` and A2b `360–410`, each including tracker changes. A2b materialized at the exact observed size recorded below.
+- A2b pre-closure authored size: 429 additions and 54 deletions (`483` authored lines), with the exact per-path counts recorded above. Explicit `size:exception` is approved only for this cohesive A2b work unit; final post-closure size is recorded below.
+- A2b final authored size: pending commit-closure tracking.
 - Work-unit approximately 400-line heuristic: advisory only; PR budget `400` still applies.
 - Size handling: the original full-A2 snapshot was split once into cohesive A2a/A2b review units. The maintainer approved `size:exception` for the exact A1+CI PR only; no exception or review approval transfers to A2a/A2b. Do not shrink content artificially or omit tests/docs.
 - Historical full-A2 snapshot: `fix/auth-reset@0491c02724a612065eb39768e64377a085e108f5`, natively approved with its receipt acknowledged/burned. It is preserved untouched and supplies no review inheritance.
 - A2a behavior commit: `8a7fc4169f48a4976352fc6a1bda639ddb1fff20` (`430` authored changed lines including prepared tracking). Final A2a slice: `478` authored changed lines versus `main@9366058123bf60705804a70715dea63e763abde1`, including the tracking-only closure.
+- A2a tracking closure and exact A2b base: `668e74abfe5db1d2672d088c6373d7c3d3867bef`. A2a native review and acknowledgement are closed; their lineage and evidence do not transfer to A2b.
 - A1 behavior `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`, tracking closure `636649426e87cc1b9519907ffab8de2c7646f833`, CI `9f5723c1c431d2f15b3c676fc4058f1dc22cad89`, publication proof `d76821939046ef8aa68e8a23fd69e5c78e76bac3`, and integration preparation `92c2d3d852944e0c3bdb8a229e118f7b75dcf43b` were integrated by PR #1 as merge `972f158f4ba9147b7d4dd2f12acb3cb9f5cbe518`.
 - Existing untracked `.atl/` and `.codegraph/` directories must remain untouched.
 
@@ -320,14 +388,15 @@ main @ 9366058 (current exact local base; A1+CI already integrated)
 - The ignored Python 3.11 virtual environment and existing requirements are installed locally; no global packages or dependency files changed.
 - No pre-existing automated tests, test runner configuration, or management CLI existed before A1.
 - The canonical production origin value is an environment/deployment input; tests must use an isolated non-routable value.
-- `PasswordResetRequestForm` uses WTForms `Email`, while `email-validator` is not declared in `requirements.txt`; A2a must make the existing environment dependency explicit. The current venv already contains it from the historical full-A2 work, so no dependency installation or invented missing-dependency RED is needed.
+- `PasswordResetRequestForm` uses WTForms `Email`; A2a explicitly declared `email-validator==2.2.0` in `requirements.txt`. A2b adds no dependency and needs no installation.
 - A1 used only Flask's isolated test client/CLI and in-memory SQLite. No live database, Redis, SMTP, external service, or deployment environment was contacted.
+- A2b's SQLite tests verify the application-level conditional update and failure handling but do not constitute PostgreSQL concurrency proof.
 
 ## Progress and next step
 
 - A1: COMPLETED and integrated through PR #1 at `main@972f158f4ba9147b7d4dd2f12acb3cb9f5cbe518`
-- A2a: implemented and verified locally at behavior commit `8a7fc4169f48a4976352fc6a1bda639ddb1fff20`; tracking-only closure and parent-owned native assessment/consent remain
-- A2b: planned from the future verified A2a commit; branch not created
+- A2a: CLOSED locally at `668e74abfe5db1d2672d088c6373d7c3d3867bef`; native review approved and acknowledgement consumed
+- A2b: FUNCTIONALLY COMPLETE and VERIFIED on `fix/auth-reset-tokens`; explicit size exception approved and bounded local commit closure in progress; native review remains pending and parent-owned
 - A3: pending
 - Parent read-back gate: completed for this file and full mirror `#5379`; the parent corrected A2a boundaries before authorizing implementation.
-- **Next step:** commit this tracking-only closure, mirror and read back the full document, then return for parent-owned native assessment/consent. No publication, merge, remote review action, deployment, production service, A2b, or A3 work is authorized.
+- **Next step:** mirror/read back this authorization update, run the exact check-only commands, create one cohesive behavior commit, record its identity and final authored size, then create one necessary tracking-only closure commit. Stop before native review. No publication, push, PR, merge, remote review action, deployment, production service, A3, configuration change, or A2a advisory fix is authorized.
