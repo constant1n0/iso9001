@@ -266,6 +266,39 @@ class AuthResetTestCase(unittest.TestCase):
             )
             self.assertEqual(self.original_hash, user.password)
 
+    def test_reset_lookup_failure_keeps_generic_invalid_link_response(self) -> None:
+        """Hide lookup and cleanup failures behind the invalid-link response."""
+        password = "AfterFailure123!"
+        with self.app.app_context():
+            token = db.session.get(User, self.user_id).get_reset_token()
+
+        with (
+            patch.object(
+                db.session,
+                "get",
+                side_effect=SQLAlchemyError("sensitive lookup detail"),
+            ),
+            patch.object(
+                db.session,
+                "rollback",
+                side_effect=SQLAlchemyError("sensitive rollback detail"),
+            ) as rollback,
+        ):
+            response = self.client.post(
+                f"/reset_password/{token}",
+                data={"password": password, "confirm_password": password},
+            )
+
+        self.assertEqual(302, response.status_code)
+        self.assertTrue(response.location.endswith("/reset_password_request"))
+        self.assertEqual(
+            (("warning", INVALID_RESET_MESSAGE),),
+            self._response_signature(self.client, response)[2],
+        )
+        self.assertNotIn(b"sensitive lookup detail", response.data)
+        self.assertNotIn(b"sensitive rollback detail", response.data)
+        rollback.assert_called_once_with()
+
     def test_successful_reset_changes_password_and_rejects_replay(self) -> None:
         new_password = "AfterPassword123!"
         replay_password = "ReplayPassword123!"

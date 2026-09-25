@@ -184,7 +184,14 @@ class User(UserMixin, db.Model):
         ):
             return None
 
-        user = db.session.get(User, user_id)
+        try:
+            user = db.session.get(User, user_id)
+        except SQLAlchemyError:
+            try:
+                db.session.rollback()
+            except SQLAlchemyError:
+                pass
+            return None
         if user is None:
             return None
 
