@@ -211,6 +211,7 @@ def reset_password(token):
 
     form = PasswordResetForm()
     if form.validate_on_submit():
+        username = verification.user.username
         new_password_hash = generate_password_hash(
             form.password.data,
             method='pbkdf2:sha256',
@@ -221,11 +222,11 @@ def reset_password(token):
             new_password_hash,
         )
         if not updated:
-            log_password_change(verification.user.username, success=False)
+            log_password_change(username, success=False)
             flash(INVALID_RESET_MESSAGE, 'warning')
             return redirect(url_for('auth.reset_password_request'))
 
-        log_password_change(verification.user.username, success=True)
+        log_password_change(username, success=True)
         flash('Tu contraseña ha sido actualizada exitosamente.', 'success')
         return redirect(url_for('auth.login'))
 

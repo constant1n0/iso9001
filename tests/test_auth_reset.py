@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from typing import Any
 from unittest.mock import patch
 
 import test_auth_bootstrap as bootstrap
@@ -348,6 +349,36 @@ class AuthResetTestCase(unittest.TestCase):
         with self.app.app_context():
             stored_user = db.session.get(User, self.user_id)
             self.assertEqual(self.original_hash, stored_user.password)
+
+    def test_database_outage_after_rollback_keeps_invalid_link_response(self) -> None:
+        """Do not reload expired user fields when the database remains unavailable."""
+        password = "AfterFailure123!"
+        with self.app.app_context():
+            token = db.session.get(User, self.user_id).get_reset_token()
+            session = db.session()
+            original_execute = session.execute
+            update_attempted = False
+
+            def fail_after_update(
+                statement: Any, *args: Any, **kwargs: Any
+            ) -> Any:
+                nonlocal update_attempted
+                if statement.is_update:
+                    update_attempted = True
+                if update_attempted:
+                    raise SQLAlchemyError("sensitive database detail")
+                return original_execute(statement, *args, **kwargs)
+
+            with patch.object(session, "execute", side_effect=fail_after_update):
+                response = self.client.post(
+                    f"/reset_password/{token}",
+                    data={"password": password, "confirm_password": password},
+                )
+
+        self.assertTrue(update_attempted)
+        self.assertEqual(302, response.status_code)
+        self.assertTrue(response.location.endswith("/reset_password_request"))
+        self.assertNotIn(b"sensitive database detail", response.data)
 
 
 if __name__ == "__main__":
