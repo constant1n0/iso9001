@@ -380,6 +380,57 @@ class AuthResetTestCase(unittest.TestCase):
         self.assertTrue(response.location.endswith("/reset_password_request"))
         self.assertNotIn(b"sensitive database detail", response.data)
 
+    def test_rollback_failure_after_update_error_keeps_invalid_link(self) -> None:
+        """Return the generic response even if cleanup fails after an update error."""
+        password = "AfterFailure123!"
+        with self.app.app_context():
+            token = db.session.get(User, self.user_id).get_reset_token()
+            session = db.session()
+            original_execute = session.execute
+
+            def fail_update(statement: Any, *args: Any, **kwargs: Any) -> Any:
+                if statement.is_update:
+                    raise SQLAlchemyError("sensitive update detail")
+                return original_execute(statement, *args, **kwargs)
+
+            with (
+                patch.object(session, "execute", side_effect=fail_update),
+                patch.object(
+                    session,
+                    "rollback",
+                    side_effect=SQLAlchemyError("sensitive rollback detail"),
+                ),
+            ):
+                response = self.client.post(
+                    f"/reset_password/{token}",
+                    data={"password": password, "confirm_password": password},
+                )
+
+        self.assertEqual(302, response.status_code)
+        self.assertTrue(response.location.endswith("/reset_password_request"))
+        self.assertNotIn(b"sensitive rollback detail", response.data)
+        self.assertEqual(
+            (("warning", INVALID_RESET_MESSAGE),),
+            self._response_signature(self.client, response)[2],
+        )
+
+    def test_rollback_failure_after_zero_row_returns_false(self) -> None:
+        """Keep the conditional update's failure contract if cleanup fails."""
+        with self.app.app_context():
+            with patch.object(
+                db.session(),
+                "rollback",
+                side_effect=SQLAlchemyError("sensitive rollback detail"),
+            ) as rollback:
+                updated = User.update_password_from_reset(
+                    self.user_id,
+                    "stale password hash",
+                    generate_password_hash("AfterFailure123!"),
+                )
+
+        self.assertFalse(updated)
+        rollback.assert_called_once_with()
+
 
 if __name__ == "__main__":
     unittest.main()

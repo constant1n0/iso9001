@@ -214,14 +214,17 @@ class User(UserMixin, db.Model):
                 .values(password=new_password_hash)
                 .execution_options(synchronize_session=False)
             )
-            if result.rowcount != 1:
-                db.session.rollback()
-                return False
-            db.session.commit()
+            if result.rowcount == 1:
+                db.session.commit()
+                return True
         except SQLAlchemyError:
+            pass
+
+        try:
             db.session.rollback()
-            return False
-        return True
+        except SQLAlchemyError:
+            pass
+        return False
 
     def __repr__(self):
         return f'<User {self.username}>'
