@@ -13,12 +13,32 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from .extensions import db
-from flask_login import UserMixin
-from flask import current_app
-from itsdangerous import URLSafeTimedSerializer as Serializer
+from __future__ import annotations
+
 import enum
+import hashlib
+import hmac
+from dataclasses import dataclass
 from datetime import datetime
+
+from flask import current_app
+from flask_login import UserMixin
+from itsdangerous import BadData, URLSafeTimedSerializer as Serializer
+from sqlalchemy.exc import SQLAlchemyError
+
+from .extensions import db
+
+
+PASSWORD_RESET_SALT = 'password-reset-salt'
+PASSWORD_STATE_DOMAIN = b'iso9001-password-reset-state-v1\x00'
+
+
+@dataclass(frozen=True)
+class ResetTokenVerification:
+    """Verified reset subject and the password state used by its token."""
+
+    user: User
+    expected_password_hash: str
 
 # Enum para definir el tipo de evaluación: Riesgo u Oportunidad
 class TipoEnum(enum.Enum):
@@ -102,20 +122,116 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(256), nullable=False)
     role = db.Column(db.Enum(RoleEnum), nullable=False, default=RoleEnum.OPERATIVO)
 
-    def get_reset_token(self):
-        """Genera un token para recuperación de contraseña."""
-        s = Serializer(current_app.config['SECRET_KEY'])
-        return s.dumps({'user_id': self.id}, salt='password-reset-salt')
+    @staticmethod
+    def _password_state_fingerprint(password_hash: str) -> str:
+        """Return a secret-keyed fingerprint for the current password state."""
+        secret_key = current_app.config['SECRET_KEY']
+        key = (
+            secret_key.encode('utf-8')
+            if isinstance(secret_key, str)
+            else bytes(secret_key)
+        )
+        message = PASSWORD_STATE_DOMAIN + password_hash.encode('utf-8')
+        return hmac.new(key, message, hashlib.sha256).hexdigest()
+
+    def get_reset_token(self) -> str:
+        """Generate a timed token bound to the current password state."""
+        serializer = Serializer(current_app.config['SECRET_KEY'])
+        return serializer.dumps(
+            {
+                'user_id': self.id,
+                'password_fingerprint': self._password_state_fingerprint(
+                    self.password
+                ),
+            },
+            salt=PASSWORD_RESET_SALT,
+        )
 
     @staticmethod
-    def verify_reset_token(token, expires_sec=3600):
-        """Verifica el token de recuperación de contraseña."""
-        s = Serializer(current_app.config['SECRET_KEY'])
+    def verify_reset_token(
+        token: str,
+        expires_sec: int = 3600,
+    ) -> ResetTokenVerification | None:
+        """Verify a timed reset token against the user's password state."""
+        serializer = Serializer(current_app.config['SECRET_KEY'])
         try:
-            data = s.loads(token, salt='password-reset-salt', max_age=expires_sec)
-        except Exception:
+            data = serializer.loads(
+                token,
+                salt=PASSWORD_RESET_SALT,
+                max_age=expires_sec,
+            )
+        except (BadData, TypeError, ValueError):
             return None
-        return User.query.get(data['user_id'])
+
+        if not isinstance(data, dict) or set(data) != {
+            'user_id',
+            'password_fingerprint',
+        }:
+            return None
+
+        user_id = data['user_id']
+        fingerprint = data['password_fingerprint']
+        if (
+            type(user_id) is not int
+            or user_id <= 0
+            or not isinstance(fingerprint, str)
+            or len(fingerprint) != 64
+            or not fingerprint.isascii()
+            or any(
+                character not in '0123456789abcdef'
+                for character in fingerprint
+            )
+        ):
+            return None
+
+        try:
+            user = db.session.get(User, user_id)
+        except SQLAlchemyError:
+            try:
+                db.session.rollback()
+            except SQLAlchemyError:
+                pass
+            return None
+        if user is None:
+            return None
+
+        expected_fingerprint = User._password_state_fingerprint(user.password)
+        if not hmac.compare_digest(fingerprint, expected_fingerprint):
+            return None
+
+        return ResetTokenVerification(
+            user=user,
+            expected_password_hash=user.password,
+        )
+
+    @staticmethod
+    def update_password_from_reset(
+        user_id: int,
+        expected_password_hash: str,
+        new_password_hash: str,
+    ) -> bool:
+        """Atomically replace a password only if its verified state is current."""
+        try:
+            result = db.session.execute(
+                db.update(User)
+                .where(
+                    User.id == user_id,
+                    User.password == expected_password_hash,
+                )
+                .values(password=new_password_hash)
+                .execution_options(synchronize_session=False)
+            )
+            if result.rowcount == 1:
+                db.session.commit()
+                return True
+        except SQLAlchemyError:
+            pass
+
+        try:
+            db.session.rollback()
+        except SQLAlchemyError:
+            pass
+        return False
 
     def __repr__(self):
         return f'<User {self.username}>'

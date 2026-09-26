@@ -99,6 +99,22 @@ fragment. Missing or invalid configuration disables reset-email delivery but
 does not prevent application startup, login, or local CLI use. Reset links
 never fall back to the request Host.
 
+Reset tokens expire after one hour and are bound to the current stored password
+state through a secret-keyed fingerprint; the password hash is not placed in
+the URL. A password change invalidates every token issued for the previous
+state. Reset consumption uses a conditional database update, so a verified but
+stale token cannot overwrite a newer password and a consumed token cannot be
+replayed. Invalid, expired, unknown-user, stale, and database-failure cases use
+the same invalid-link response. Tokens issued before this password-state
+binding was introduced are rejected, so users must request a new link.
+
+This protection requires no schema migration or additional token dependency
+and does not revoke existing authenticated sessions. The isolated SQLite tests
+exercise the compare-and-swap contract but are not proof of PostgreSQL
+concurrency behavior in production. Rolling back the token model and reset
+route restores replayable reset behavior; stop issuing links and allow the
+one-hour validity window to expire before rollback unless that risk is accepted.
+
 -----
 **Configuración de la Base de Datos**
 
