@@ -42,7 +42,7 @@ max_requests_jitter = 50
 accesslog = '/home/dcm/work/iso9001/logs/gunicorn-access.log'
 errorlog = '/home/dcm/work/iso9001/logs/gunicorn-error.log'
 loglevel = 'info'
-access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s'
+access_log_format = '%(h)s %(t)s %(s)s %(b)s "%(a)s" %(D)s'
 
 # Proceso
 daemon = False
