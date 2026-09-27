@@ -8,7 +8,7 @@ Remediate the verified authentication bootstrap, password-reset, and access-log 
 
 ## Problem and why it matters
 
-Before A1, the application permitted the first unauthenticated web registrant to become `ADMINISTRADOR`, with separate empty-table checks that created a race. A1 removed that path. A2a and A2b are now integrated through PRs #3 and #4. The local A3 branch, `fix/auth-log-redaction-pr`, starts from merged `main@77332f52c5c935c0da188d7c1f46bd6cebe7d82e` and omits the token-bearing request target and referrer from Gunicorn access logging; A3 has not been pushed, published as a PR, merged, or deployed.
+Before A1, the application permitted the first unauthenticated web registrant to become `ADMINISTRADOR`, with separate empty-table checks that created a race. A1 removed that path. A1, A2a, A2b, and A3 are integrated through PRs #1, #3, #4, and #5. A3 omits the token-bearing request target and referrer from Gunicorn access logging. Post-merge CI passed; deployment and production verification have not occurred.
 
 Evidence is recorded in audit memory `#5378`. This document plans only the verified bootstrap and reset findings; other audit sectors remain deferred.
 
@@ -19,10 +19,10 @@ Evidence is recorded in audit memory `#5378`. This document plans only the verif
 | First administrator | Local Flask CLI only; remove public web registration and preserve existing accounts. Explicit user choice. |
 | TDD | `on`; explicit user choice. Python 3.11 stdlib `unittest` is the runner. Each new implementation slice must record its own observed RED, GREEN, then REFACTOR evidence; historical full-A2 evidence does not become proof for the new slices. |
 | RDD | Clone-local mode is `off` by explicit user choice (`off/clone_local`; the global default remains on). Review consent and control are user-owned. The DIRECT writer must not run native review status, assessment, start, actor, acknowledgement, or reactivation actions for A3. The parent alone may run a read-only risk classification to size ordinary functional verification; that classification does not start native review or enable RDD. Historical A2a approval remains historical only. |
-| Delivery strategy | `ask-on-risk` selected the two A2 slices and remains the A3 default. After A2b honestly materialized above budget, the user explicitly selected `size:exception`; A2b is `exception-ok` for its completed local closure only. The exception does not transfer to A2a, A3, publication, or review consent. |
-| Chain strategy | `stacked-to-main`; A1, A2a, and A2b were integrated sequentially. The original A2b branch started from A2a tip `668e74abfe5db1d2672d088c6373d7c3d3867bef`, and the original A3 commits started from A2b tip `cce12c852327f732edd53fb69a8a23fb063cf885`. The current A3 PR-preparation branch instead starts from merged `main@77332f52c5c935c0da188d7c1f46bd6cebe7d82e`. |
+| Delivery strategy | `ask-on-risk` selected the two A2 slices and governed A3 delivery. After A2b honestly materialized above budget, the user explicitly selected `size:exception`; A2b is `exception-ok` for its completed local closure only. The exception does not transfer to A2a, A3, publication, or review consent. |
+| Chain strategy | `stacked-to-main`; A1, A2a, A2b, and A3 were integrated sequentially. The original A2b branch started from A2a tip `668e74abfe5db1d2672d088c6373d7c3d3867bef`, and the original A3 commits started from A2b tip `cce12c852327f732edd53fb69a8a23fb063cf885`. The A3 PR-preparation branch instead started from merged `main@77332f52c5c935c0da188d7c1f46bd6cebe7d82e`. |
 | Local authorization | A2a is closed locally at `668e74abfe5db1d2672d088c6373d7c3d3867bef`. A2b behavior `fe3773e98eee80c15f89410dc94e8e87afd09740` and tracking closure `cce12c852327f732edd53fb69a8a23fb063cf885` are closed locally without native approval. The user explicitly authorized bounded A3 local implementation, tests, and commits without RDD, publication, or merging. |
-| Remote operations | A2a PR #3 and A2b PR #4 are already merged. A3 has not been pushed, published as a PR, merged, or deployed; this local documentation update authorizes no remote operation. |
+| Remote operations | A2a PR #3, A2b PR #4, and A3 PR #5 are merged. A3 has not been deployed or verified in production; this documentation update authorizes no remote operation. |
 | Review size | The `400` authored changed-line budget remains the default. The user approved `size:exception` for this exact cohesive A2b candidate after its 483-line pre-closure measurement (decision memory `#5511`, topic `delivery/auth-reset-a2b-size-exception`). Necessary tracking may increase the final count. No exception transfers to A2a or A3. |
 
 ## Scope
@@ -41,7 +41,7 @@ Evidence is recorded in audit memory `#5378`. This document plans only the verif
 - Changes to existing account records, roles, or database contents.
 - Other audit sectors, general auth redesign, MFA, authorization changes, or dependency upgrades.
 - PostgreSQL, Redis, SMTP, or other service contact during tests.
-- A3 remote operations, deployment, production services, and unrelated branches/features or authentication fixes remain excluded from this local update.
+- Further A3 remote operations, deployment, production services, and unrelated branches/features or authentication fixes remain excluded from this documentation update.
 - Artificial code reduction, omitted tests, minification, or non-cohesive splitting to satisfy a line heuristic.
 
 ## Constraints and test environment
@@ -341,12 +341,12 @@ Local commit-closure verification after recording the explicit exception ran 21/
 
 ### A3 — Remove reset tokens from access logging
 
-- **Status:** independently verified and closed locally by the behavior commit plus this document-only tracking closure; the closure SHA is reported externally to avoid self-reference, and no native approval was required or granted
+- **Status:** independently verified, closed locally by the behavior commit plus its document-only tracking closure, and integrated through PR #5 at `main@5bfe0ceca4a924791208f8e078f2f455abdf392f`; no native approval was required or granted
 - **Route:** `delegated` — the existing Gunicorn configuration, one isolated regression module, deployment documentation, and preparation/closure tracking form one bounded work unit. The route evidence is the cross-file config/test/docs change plus this preparation record; one direct writer is used, with no child delegation, SDD, RDD, or review actor.
-- **Original branch/base:** `fix/auth-log-redaction` was created from exact A2b tracking tip `cce12c852327f732edd53fb69a8a23fb063cf885`. Its two authored A3 commits were transplanted onto `fix/auth-log-redaction-pr` from merged `main@77332f52c5c935c0da188d7c1f46bd6cebe7d82e`; A3 remains local.
-- **Original base boundary:** `fix/auth-reset-tokens@cce12c852327f732edd53fb69a8a23fb063cf885`; current transplant base is `main@77332f52c5c935c0da188d7c1f46bd6cebe7d82e`.
+- **Original branch/base:** `fix/auth-log-redaction` was created from exact A2b tracking tip `cce12c852327f732edd53fb69a8a23fb063cf885`. Its two authored A3 commits were transplanted onto `fix/auth-log-redaction-pr` from merged `main@77332f52c5c935c0da188d7c1f46bd6cebe7d82e` before PR #5 integration.
+- **Original base boundary:** `fix/auth-reset-tokens@cce12c852327f732edd53fb69a8a23fb063cf885`; the PR transplant base was `main@77332f52c5c935c0da188d7c1f46bd6cebe7d82e`.
 - **Forecast:** approximately 120–170 authored additions plus deletions including preparation and closure tracking. The implementation remained cohesive but exceeded that estimate because the prepared tracker and independent source-sensitive regression were preserved rather than compressed; the exact observed size is recorded below and remains below the advisory delivery threshold.
-- **Review budget:** approximately `400` authored changed lines remains advisory for local implementation and the default for any future PR. A3 has no `size:exception`; `ask-on-risk` applies if the cohesive unit approaches the delivery budget.
+- **Review budget:** approximately `400` authored changed lines was advisory for local implementation and the default for PR delivery. A3 had no `size:exception`; `ask-on-risk` governed delivery if the cohesive unit approached the budget.
 - **Behavior commit:** `f9a5a64c184ac5a232e05f324339f160666a2722`
 
 Acceptance criteria:
@@ -425,12 +425,11 @@ Independent closure verification:
 ## Delivery ledger
 
 ```text
-main @ 77332f5 (A1, A2a PR #3, and A2b PR #4 integrated)
-  └─ A3 fix/auth-log-redaction-pr (local; original A3 commits transplanted and tracking updated)
+main @ 5bfe0ce (A1, A2a PR #3, A2b PR #4, and A3 PR #5 integrated)
 ```
 
-- Strategy: `stacked-to-main`; `ask-on-risk` applies to A3, while A2b remains historically `exception-ok` under its explicit bounded approval.
-- Integration order is A1, A2a, A2b, then A3. A1/A2a/A2b are integrated; A3 has not been pushed, published as a PR, merged, or deployed.
+- Strategy: `stacked-to-main`; `ask-on-risk` governed A3 delivery, while A2b remains historically `exception-ok` under its explicit bounded approval.
+- Integration order was A1, A2a, A2b, then A3. All four are integrated; A3 has not been deployed or verified in production.
 - Initial authored running line count: `646` for A1 code, tests, and README.
 - Behavior commit: `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`, with `697` additions and `180` deletions overall.
 - Behavior commit tracking overhead: `231` additions for this task document, separate from the `466` additions and `180` deletions (`646` authored lines) in A1 code, tests, and README.
@@ -466,6 +465,7 @@ main @ 77332f5 (A1, A2a PR #3, and A2b PR #4 integrated)
 - A1: COMPLETED and integrated through PR #1 at `main@972f158f4ba9147b7d4dd2f12acb3cb9f5cbe518`
 - A2a: INTEGRATED through PR #3 at `main@138450e587e03e6d7b315ab0044cc070524baae1`; original local closure `668e74abfe5db1d2672d088c6373d7c3d3867bef` remains historical evidence
 - A2b: INTEGRATED through squash-merged PR #4 at `main@77332f52c5c935c0da188d7c1f46bd6cebe7d82e`; original local closure `cce12c852327f732edd53fb69a8a23fb063cf885` remains historical evidence
-- A3: Original behavior `f9a5a64c184ac5a232e05f324339f160666a2722` and tracking closure `211c9d0e17fc666c67f5fc0f4c25b0a4eecb4b1e` were transplanted as `81c2da902763587cdc34330a7cfd894144e6e4f8` and `8d846bc06ad7182c1692024fa33be4e93fcb8752` onto local `fix/auth-log-redaction-pr` from merged A2b main; A3 is not pushed, published as a PR, merged, or deployed
+- A3: INTEGRATED through squash-merged PR #5 at `main@5bfe0ceca4a924791208f8e078f2f455abdf392f`; original behavior `f9a5a64c184ac5a232e05f324339f160666a2722` and tracking closure `211c9d0e17fc666c67f5fc0f4c25b0a4eecb4b1e` were transplanted as `81c2da902763587cdc34330a7cfd894144e6e4f8` and `8d846bc06ad7182c1692024fa33be4e93fcb8752` before integration
+- Post-A3-merge CI: [run 36314382218](https://github.com/constant1n0/iso9001/actions/runs/36314382218) passed the Python 3.11 `Run tests` job on the merge commit. This is not deployment or production verification.
 - Historical mirror gate: the original A3 closure document was mirrored and read back after its tracking commit as observation `#5379`.
-- **Next step:** validate the transplanted A3 branch and decide separately whether to publish it. This documentation commit performs no push, PR creation, merge, deployment, native review action, or unrelated auth work.
+- **Next step:** plan deployment and production verification separately if authorized. This documentation commit performs no push, PR creation, merge, deployment, native review action, or unrelated auth work.
