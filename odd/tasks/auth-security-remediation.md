@@ -8,7 +8,7 @@ Remediate the verified authentication bootstrap, password-reset, and access-log 
 
 ## Problem and why it matters
 
-Before A1, the application permitted the first unauthenticated web registrant to become `ADMINISTRADOR`, with separate empty-table checks that created a race. A1 removed that path and is now integrated. The current `main` branch still trusts the request Host and accepts replayable password-reset tokens. The protected local A2a branch fixes origin handling, and the locally committed A2b branch fixes token replay; neither is integrated. Gunicorn still records the token-bearing request path, which remains the separate pending A3 finding.
+Before A1, the application permitted the first unauthenticated web registrant to become `ADMINISTRADOR`, with separate empty-table checks that created a race. A1 removed that path. A2a and A2b are now integrated through PRs #3 and #4. The local A3 branch, `fix/auth-log-redaction-pr`, starts from merged `main@77332f52c5c935c0da188d7c1f46bd6cebe7d82e` and omits the token-bearing request target and referrer from Gunicorn access logging; A3 has not been pushed, published as a PR, merged, or deployed.
 
 Evidence is recorded in audit memory `#5378`. This document plans only the verified bootstrap and reset findings; other audit sectors remain deferred.
 
@@ -18,11 +18,11 @@ Evidence is recorded in audit memory `#5378`. This document plans only the verif
 |---|---|
 | First administrator | Local Flask CLI only; remove public web registration and preserve existing accounts. Explicit user choice. |
 | TDD | `on`; explicit user choice. Python 3.11 stdlib `unittest` is the runner. Each new implementation slice must record its own observed RED, GREEN, then REFACTOR evidence; historical full-A2 evidence does not become proof for the new slices. |
-| RDD | `on` globally and parent-owned. A2a native review was approved and its acknowledgement was consumed; this bounded A2b implementation does not start, acknowledge, approve, or burn another review. |
-| Delivery strategy | `ask-on-risk` selected the two A2 slices. After A2b honestly materialized above budget, the user explicitly selected `size:exception`; A2b is now `exception-ok` for local commit closure only. The exception does not transfer to A2a, A3, publication, or review consent. |
-| Chain strategy | `stacked-to-main`; integrate independent units sequentially into `main`: A1 → A2a → A2b → A3. A2b is created locally from exact A2a tip `668e74abfe5db1d2672d088c6373d7c3d3867bef`, while eventual integration targets remain sequential to `main`. |
-| Local authorization | A2a is closed locally at `668e74abfe5db1d2672d088c6373d7c3d3867bef`. After implementation and parent verification, the user explicitly authorized the cohesive A2b `size:exception` and bounded local behavior plus tracking-closure commits. Native review consent remains separate and parent-owned. |
-| Remote operations | None for A2. No publication, merge, network service, deployment, or remote review action is authorized. Historical A1 remote delivery remains recorded below. |
+| RDD | Clone-local mode is `off` by explicit user choice (`off/clone_local`; the global default remains on). Review consent and control are user-owned. The DIRECT writer must not run native review status, assessment, start, actor, acknowledgement, or reactivation actions for A3. The parent alone may run a read-only risk classification to size ordinary functional verification; that classification does not start native review or enable RDD. Historical A2a approval remains historical only. |
+| Delivery strategy | `ask-on-risk` selected the two A2 slices and remains the A3 default. After A2b honestly materialized above budget, the user explicitly selected `size:exception`; A2b is `exception-ok` for its completed local closure only. The exception does not transfer to A2a, A3, publication, or review consent. |
+| Chain strategy | `stacked-to-main`; A1, A2a, and A2b were integrated sequentially. The original A2b branch started from A2a tip `668e74abfe5db1d2672d088c6373d7c3d3867bef`, and the original A3 commits started from A2b tip `cce12c852327f732edd53fb69a8a23fb063cf885`. The current A3 PR-preparation branch instead starts from merged `main@77332f52c5c935c0da188d7c1f46bd6cebe7d82e`. |
+| Local authorization | A2a is closed locally at `668e74abfe5db1d2672d088c6373d7c3d3867bef`. A2b behavior `fe3773e98eee80c15f89410dc94e8e87afd09740` and tracking closure `cce12c852327f732edd53fb69a8a23fb063cf885` are closed locally without native approval. The user explicitly authorized bounded A3 local implementation, tests, and commits without RDD, publication, or merging. |
+| Remote operations | A2a PR #3 and A2b PR #4 are already merged. A3 has not been pushed, published as a PR, merged, or deployed; this local documentation update authorizes no remote operation. |
 | Review size | The `400` authored changed-line budget remains the default. The user approved `size:exception` for this exact cohesive A2b candidate after its 483-line pre-closure measurement (decision memory `#5511`, topic `delivery/auth-reset-a2b-size-exception`). Necessary tracking may increase the final count. No exception transfers to A2a or A3. |
 
 ## Scope
@@ -41,7 +41,7 @@ Evidence is recorded in audit memory `#5378`. This document plans only the verif
 - Changes to existing account records, roles, or database contents.
 - Other audit sectors, general auth redesign, MFA, authorization changes, or dependency upgrades.
 - PostgreSQL, Redis, SMTP, or other service contact during tests.
-- All A2 remote operations; deployment, production services, publication, integration, A3 implementation, and unrelated branches/features remain excluded.
+- A3 remote operations, deployment, production services, and unrelated branches/features or authentication fixes remain excluded from this local update.
 - Artificial code reduction, omitted tests, minification, or non-cohesive splitting to satisfy a line heuristic.
 
 ## Constraints and test environment
@@ -63,7 +63,7 @@ venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 git diff --check
 ```
 
-RED/GREEN/REFACTOR proof for A1, A2a, A2b, and the historical full-A2 snapshot is recorded in their respective sections. A3 still requires new slice-specific evidence; planned commands and counts are not completion evidence.
+RED/GREEN/REFACTOR proof for A1, A2a, A2b, A3, and the historical full-A2 snapshot is recorded in their respective sections.
 
 ## Stable tasks and review slices
 
@@ -174,7 +174,7 @@ macOS environment caveat: the documented `venv/bin/flask --app run.py create-adm
 
 The previously completed full-A2 candidate remains an immutable historical snapshot at `fix/auth-reset@0491c02724a612065eb39768e64377a085e108f5`. Native review approved that exact snapshot, and its receipt was acknowledged and burned. The snapshot is a decomposition reference only: its approval, receipt, and review state do **not** transfer to either new slice.
 
-The parent read back this repository document and full Engram mirror `#5379`; they reconcile. A2a is closed locally, and A2b is implemented, verified, and committed locally from the exact A2a tip. The parent retains native-review ownership. Publication, merge, remote review action, network service, and A3 work remain outside scope.
+At the time of the original A3 preparation, the prior parent readback found that Engram observation `#5379` held only a summary rather than the full repository document. That mirror gap was tracking-only and repaired without changing the valid repository history. A2a and A2b were then closed locally; both have since merged through PRs #3 and #4. The user skipped the native A2b blocker and explicitly disabled clone-local RDD; this was not native approval.
 
 #### A2a — Enforce canonical HTTPS reset origin and generic requests
 
@@ -253,7 +253,7 @@ A2a native review approved the exact candidate and its acknowledgement consumed 
 
 #### A2b — Make reset tokens single-use with atomic consumption
 
-- **Status:** functionally implemented, verified, and committed locally under the explicit A2b size exception; native review remains pending and parent-owned
+- **Status:** functionally implemented, independently verified, and closed locally under the explicit A2b size exception; no native approval was requested or granted
 - **Route:** `delegated` — multi-file token semantics, atomic persistence, six focused tests, technical documentation, and this preparation update form one bounded work unit. One direct writer; no child delegation or SDD/review actor is allowed.
 - **Branch:** `fix/auth-reset-tokens`, created locally from exact A2a tip `668e74abfe5db1d2672d088c6373d7c3d3867bef`; intended integration remains sequential to `main` after A2a.
 - **Base boundary:** `fix/auth-reset-origin@668e74abfe5db1d2672d088c6373d7c3d3867bef`.
@@ -261,7 +261,7 @@ A2a native review approved the exact candidate and its acknowledgement consumed 
 - **Observed size before commit-closure tracking:** 429 additions and 54 deletions (`483` authored lines): `README.md` 16/0, `app/models.py` 120/14, `app/routes/auth_routes.py` 20/7, `odd/tasks/auth-security-remediation.md` 97/32, and `tests/test_auth_reset.py` 176/1.
 - **Review budget:** `400`; explicit `size:exception` approved for this exact cohesive A2b work unit. Final actual size must be reported honestly without shrinking or transferring the exception.
 - **Behavior commit:** `fe3773e98eee80c15f89410dc94e8e87afd09740` (`436` additions and `57` deletions; `493` authored lines versus the exact A2a base after exception tracking).
-- **Tracking closure commit:** this document-only closure; its resulting SHA is returned externally rather than recorded self-referentially.
+- **Tracking closure / exact A3 base:** `cce12c852327f732edd53fb69a8a23fb063cf885`.
 
 Acceptance and verification checklist:
 
@@ -335,39 +335,102 @@ Limitations: SQLite integration exercises the conditional-update behavior but do
 
 Rollback boundary remains the five A2b paths listed above. Revert their A2b-only changes together; keep A2a canonical-origin and generic reset-request protections. Stop issuing reset links and allow the one-hour validity window to expire before rollback unless replay risk is explicitly accepted. No schema or dependency rollback is required.
 
-Parent closure proof: the parent read the candidate structure, ran the full suite with 21/21 passing in `2.658s`, and confirmed `git diff --check` was clean. Native `current-changes` assessment returned high/unassessable only because undeclared untracked `.atl/` and `.codegraph/` inventory prevents assessment. No review START, candidate consent, or approval occurred; native review remains honestly pending after commit closure.
+Parent closure proof: the parent read the candidate structure, ran the full suite with 21/21 passing in `2.658s`, and confirmed `git diff --check` was clean. A prior native `current-changes` assessment was unassessable because undeclared untracked `.atl/` and `.codegraph/` inventory prevents assessment. The user later skipped that blocker and disabled clone-local RDD. No review START, candidate consent, or native approval occurred.
 
-Local commit-closure verification after recording the explicit exception ran 21/21 tests in `2.661s`, reported `No broken requirements found.`, and passed both `git diff --check` and `git diff --cached --check` with no output. Only the five declared A2b paths were staged for the behavior commit; `.atl/` and `.codegraph/` remained untracked and untouched.
+Local commit-closure verification after recording the explicit exception ran 21/21 tests in `2.661s`, reported `No broken requirements found.`, and passed both `git diff --check` and `git diff --cached --check` with no output. Only the five declared A2b paths were staged for the behavior commit; `.atl/` and `.codegraph/` remained untracked and untouched. Tracking closure `cce12c852327f732edd53fb69a8a23fb063cf885` preserves the final 498-line A2b boundary.
 
 ### A3 — Remove reset tokens from access logging
 
-- **Status:** pending
-- **Route:** `delegated` — configuration, test, and documentation changes form one review unit.
-- **Branch:** `fix/auth-log-redaction`, planned from the previous local A2 unit; integration or merge remains unauthorized.
-- **Forecast:** approximately 70–110 authored additions plus deletions.
-- **Commit:** pending
+- **Status:** independently verified and closed locally by the behavior commit plus this document-only tracking closure; the closure SHA is reported externally to avoid self-reference, and no native approval was required or granted
+- **Route:** `delegated` — the existing Gunicorn configuration, one isolated regression module, deployment documentation, and preparation/closure tracking form one bounded work unit. The route evidence is the cross-file config/test/docs change plus this preparation record; one direct writer is used, with no child delegation, SDD, RDD, or review actor.
+- **Original branch/base:** `fix/auth-log-redaction` was created from exact A2b tracking tip `cce12c852327f732edd53fb69a8a23fb063cf885`. Its two authored A3 commits were transplanted onto `fix/auth-log-redaction-pr` from merged `main@77332f52c5c935c0da188d7c1f46bd6cebe7d82e`; A3 remains local.
+- **Original base boundary:** `fix/auth-reset-tokens@cce12c852327f732edd53fb69a8a23fb063cf885`; current transplant base is `main@77332f52c5c935c0da188d7c1f46bd6cebe7d82e`.
+- **Forecast:** approximately 120–170 authored additions plus deletions including preparation and closure tracking. The implementation remained cohesive but exceeded that estimate because the prepared tracker and independent source-sensitive regression were preserved rather than compressed; the exact observed size is recorded below and remains below the advisory delivery threshold.
+- **Review budget:** approximately `400` authored changed lines remains advisory for local implementation and the default for any future PR. A3 has no `size:exception`; `ask-on-risk` applies if the cohesive unit approaches the delivery budget.
+- **Behavior commit:** `f9a5a64c184ac5a232e05f324339f160666a2722`
 
 Acceptance criteria:
 
-- [ ] Gunicorn access logs do not contain request paths, query strings, or reset tokens.
-- [ ] The access log retains useful non-secret request metadata such as client, time, status, response size, user agent, and duration.
-- [ ] A configuration-level regression test proves token-bearing request targets are excluded.
-- [ ] Documentation records the observability tradeoff and safe format.
-- [ ] Observed RED, GREEN, and REFACTOR evidence plus exact check results are recorded.
+- [x] Gunicorn access logs do not contain request paths, query strings, or reset tokens.
+- [x] The access log retains useful non-secret request metadata such as client, time, status, response size, user agent, and duration.
+- [x] The format omits both the request-line atom `%(r)s` and referrer atom `%(f)s`, as well as the direct path/query atoms `%(U)s` and `%(q)s`.
+- [x] A configuration-level regression test loads the real repository format and applies Gunicorn 23.0.0's real atom formatter to token-bearing `RAW_URI`, `PATH_INFO`, `QUERY_STRING`, and `HTTP_REFERER` values without opening sockets, contacting services, or writing logs.
+- [x] Documentation records the observability tradeoff, safe format, and exact boundary: automatic request-target/referrer URL fields are excluded, but retained caller-supplied User-Agent content is not sanitized and must not be treated as a general header-redaction guarantee.
+- [x] Observed RED, GREEN, and REFACTOR evidence plus exact check results are recorded.
 
-Rollback boundary: restore only the previous Gunicorn logging configuration, its test, and documentation; doing so knowingly restores token-path disclosure.
+Planned format behavior: replace the combined format with `%(h)s %(t)s %(s)s %(b)s "%(a)s" %(D)s`. It retains Gunicorn's connection peer address, log time, response status, response bytes, User-Agent, and microsecond duration. It deliberately excludes request method/protocol together with every automatic URL-bearing atom; those extra fields are not required by the acceptance criteria. `%(h)s` may identify a proxy peer rather than the originating browser, and `%(a)s` remains arbitrary caller-supplied text. No request/response header atom, environment atom, custom logger, or new dependency is added.
+
+Proposed paths:
+
+- `gunicorn.conf.py` — replace only `access_log_format`.
+- `tests/test_access_logging.py` — add the isolated stdlib `unittest` regression using real Gunicorn atoms and the repository configuration.
+- `README.md` — document the retained fields, removed URL observability, and caller-controlled User-Agent limitation.
+- `odd/tasks/auth-security-remediation.md` — preparation and eventual RED/GREEN/REFACTOR closure evidence.
+
+TDD and checks: first add the focused regression while production configuration is unchanged and record a genuine RED caused by the token-bearing request line/referrer. Then make the one-format production change, record GREEN, assess REFACTOR without expanding the logging design, and run:
+
+```bash
+venv/bin/python -m unittest discover -s tests -p 'test_access_logging.py' -v
+venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
+venv/bin/python -m pip check
+git diff --check
+```
+
+The focused test uses `runpy` to load `gunicorn.conf.py`, in-memory response/request/environment doubles, `gunicorn.glogging.Logger.atoms`, and `SafeAtoms`; it does not construct Gunicorn's logger, start Gunicorn or Flask, open a listening socket, use the database, contact Redis/SMTP/network services, or write a real log file.
+
+Rollback boundary: revert only the `access_log_format` change, the isolated `tests/test_access_logging.py` regression, A3 README text, and A3 tracker updates. Restoring the previous format knowingly restores request-target and referrer disclosure. A2a/A2b behavior and tests remain untouched.
+
+#### A3 implementation evidence
+
+The three-test regression was written first while `gunicorn.conf.py` still used the previous combined format. Focused RED:
+
+```text
+Ran 3 tests in 0.005s
+FAILED (failures=4)
+```
+
+Two subtest failures proved that the configured format still contained `%(r)s` and `%(f)s`. Two more proved that formatting real Gunicorn atoms emitted the distinct `raw-request-marker` and `referrer-marker`. The direct `%(U)s`/`%(q)s` exclusions already passed, while source-sensitivity assertions confirmed their distinct path/query markers were present in the real atoms. The retained-metadata test also passed.
+
+After the one-line `access_log_format` replacement, focused GREEN:
+
+```text
+Ran 3 tests in 0.004s
+OK
+```
+
+REFACTOR assessment found no production structure to change: the fix remains one configuration value, and the regression already separates format policy, real-atom source sensitivity, and retained metadata. No source-mutating normalizer was applicable, so no unrelated formatting was introduced.
+
+Final verification after documentation and tracking updates:
+
+```text
+Focused: Ran 3 tests in 0.005s — OK
+Full suite: Ran 24 tests in 2.661s — OK
+Dependency check: No broken requirements found.
+Diff check: passed with no output
+```
+
+Commit-closure verification after independent approval ran the full `24/24` tests in `2.678s`, reported `No broken requirements found.`, and passed both unstaged and staged diff checks without output.
+
+Behavior-commit authored size versus exact base `cce12c852327f732edd53fb69a8a23fb063cf885`: 203 additions and 32 deletions (`235` authored changed lines). Final local closure size after this tracking update is 204 additions and 33 deletions (`237` authored changed lines): `README.md` 6/0, `gunicorn.conf.py` 1/1, `odd/tasks/auth-security-remediation.md` 100/32, and `tests/test_access_logging.py` 97/0. The regression is counted from its full 97-line readback rather than omitted by tracked-only diff statistics.
+
+Scope and limitation: this work changes only Gunicorn's configured access-line fields, its isolated regression, README observability guidance, and this tracker. It makes no claim about arbitrary secrets placed in the retained User-Agent, application/security logs, upstream proxy logs, or other logging systems. No dependency, custom logger, auth behavior, schema, runtime service, or Spanish UI copy changed.
+
+Independent closure verification:
+
+- The parent read back the source, configuration, regression, and tracker; reran the three focused tests with `3/3` passing in `0.006s`; and confirmed `git diff --check` was clean.
+- The parent's read-only risk classification was unavailable/high only because the preserved untracked `.atl/` and `.codegraph/` inventory prevents classification. It was not retried, no native lifecycle started, and clone-local RDD remained off.
+- Independent verifier `ses_f31d0a13fffeMW95eAIeXBBT50` confirmed the production delta is one access-format line across the exact four-path scope; a Gunicorn 23 atom probe excluded request line, direct path, query, and referrer while retaining all six required metadata fields; focused `3/3` passed in `0.005s`, full `24/24` passed in `2.606s`, and both dependency and diff checks passed.
+- Verifier fingerprints confirmed no verification-time file mutation. The retained caller-controlled User-Agent boundary, other-log exclusions, and no-live-server limitation remain explicit and non-blocking.
 
 ## Delivery ledger
 
 ```text
-main @ 9366058 (A1+CI already integrated)
-  └─ A2a fix/auth-reset-origin @ 668e74a (local closure and A2b base)
-       └─ A2b fix/auth-reset-tokens @ fe3773e (behavior committed; closure follows)
-            └─ A3 fix/auth-log-redaction (out of current scope)
+main @ 77332f5 (A1, A2a PR #3, and A2b PR #4 integrated)
+  └─ A3 fix/auth-log-redaction-pr (local; original A3 commits transplanted and tracking updated)
 ```
 
-- Strategy: `stacked-to-main`; historical selection was `ask-on-risk`, and effective A2b local commit delivery is now `exception-ok` under explicit user approval.
-- Integration order remains sequential to `main`: A1, then A2a, then A2b, then A3. A1 is integrated; A2a/A2b publication and integration remain unauthorized, and A3 is out of current scope.
+- Strategy: `stacked-to-main`; `ask-on-risk` applies to A3, while A2b remains historically `exception-ok` under its explicit bounded approval.
+- Integration order is A1, A2a, A2b, then A3. A1/A2a/A2b are integrated; A3 has not been pushed, published as a PR, merged, or deployed.
 - Initial authored running line count: `646` for A1 code, tests, and README.
 - Behavior commit: `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`, with `697` additions and `180` deletions overall.
 - Behavior commit tracking overhead: `231` additions for this task document, separate from the `466` additions and `180` deletions (`646` authored lines) in A1 code, tests, and README.
@@ -377,6 +440,8 @@ main @ 9366058 (A1+CI already integrated)
 - Revised A2 slice forecasts before materialization: A2a `370–390 ±30` and A2b `360–410`, each including tracker changes. A2b materialized at the exact observed size recorded below.
 - A2b pre-closure authored size: 429 additions and 54 deletions (`483` authored lines), with the exact per-path counts recorded above. Explicit `size:exception` is approved only for this cohesive A2b work unit; final post-closure size is recorded below.
 - A2b behavior commit: `fe3773e98eee80c15f89410dc94e8e87afd09740` (`436` additions, `57` deletions, `493` authored lines).
+- Original A2b tracking closure and original A3 base: `cce12c852327f732edd53fb69a8a23fb063cf885`.
+- Original A3 behavior commit: `f9a5a64c184ac5a232e05f324339f160666a2722` (`203` additions, `32` deletions, `235` authored lines versus the original A2b base); transplanted commits are `81c2da902763587cdc34330a7cfd894144e6e4f8` and `8d846bc06ad7182c1692024fa33be4e93fcb8752`.
 - A2b final authored size after tracking closure: 440 additions and 58 deletions (`498` authored lines): `README.md` 16/0, `app/models.py` 120/14, `app/routes/auth_routes.py` 20/7, `odd/tasks/auth-security-remediation.md` 108/36, and `tests/test_auth_reset.py` 176/1.
 - Work-unit approximately 400-line heuristic: advisory only; PR budget `400` still applies.
 - Size handling: the original full-A2 snapshot was split once into cohesive A2a/A2b review units. The A1+CI exception did not transfer; the maintainer separately approved `size:exception` for this exact A2b local closure. No exception transfers to A2a or A3, and no review approval transfers to A2b. Do not shrink content artificially or omit tests/docs.
@@ -394,12 +459,13 @@ main @ 9366058 (A1+CI already integrated)
 - `PasswordResetRequestForm` uses WTForms `Email`; A2a explicitly declared `email-validator==2.2.0` in `requirements.txt`. A2b adds no dependency and needs no installation.
 - A1 used only Flask's isolated test client/CLI and in-memory SQLite. No live database, Redis, SMTP, external service, or deployment environment was contacted.
 - A2b's SQLite tests verify the application-level conditional update and failure handling but do not constitute PostgreSQL concurrency proof.
+- Gunicorn is pinned at `23.0.0`. Its `%(r)s` atom is built from `RAW_URI`, `%(U)s` from `PATH_INFO`, `%(q)s` from `QUERY_STRING`, and `%(f)s` from the caller-supplied `Referer` header. Removing those atoms prevents automatic URL leakage from this Gunicorn access format, not arbitrary secrets supplied through retained fields or other application/proxy logs.
 
 ## Progress and next step
 
 - A1: COMPLETED and integrated through PR #1 at `main@972f158f4ba9147b7d4dd2f12acb3cb9f5cbe518`
-- A2a: CLOSED locally at `668e74abfe5db1d2672d088c6373d7c3d3867bef`; native review approved and acknowledgement consumed
-- A2b: FUNCTIONALLY COMPLETE, VERIFIED, and LOCALLY COMMITTED on `fix/auth-reset-tokens` under the explicit size exception; native review remains pending and parent-owned
-- A3: pending
-- Parent read-back gate: completed for this file and full mirror `#5379`; the parent corrected A2a boundaries before authorizing implementation.
-- **Next step:** mirror/read back this final document, create its one necessary tracking-only closure commit, report both SHAs and the final authored size, then stop before native review. No publication, push, PR, merge, remote review action, deployment, production service, A3, configuration change, or A2a advisory fix is authorized.
+- A2a: INTEGRATED through PR #3 at `main@138450e587e03e6d7b315ab0044cc070524baae1`; original local closure `668e74abfe5db1d2672d088c6373d7c3d3867bef` remains historical evidence
+- A2b: INTEGRATED through squash-merged PR #4 at `main@77332f52c5c935c0da188d7c1f46bd6cebe7d82e`; original local closure `cce12c852327f732edd53fb69a8a23fb063cf885` remains historical evidence
+- A3: Original behavior `f9a5a64c184ac5a232e05f324339f160666a2722` and tracking closure `211c9d0e17fc666c67f5fc0f4c25b0a4eecb4b1e` were transplanted as `81c2da902763587cdc34330a7cfd894144e6e4f8` and `8d846bc06ad7182c1692024fa33be4e93fcb8752` onto local `fix/auth-log-redaction-pr` from merged A2b main; A3 is not pushed, published as a PR, merged, or deployed
+- Historical mirror gate: the original A3 closure document was mirrored and read back after its tracking commit as observation `#5379`.
+- **Next step:** validate the transplanted A3 branch and decide separately whether to publish it. This documentation commit performs no push, PR creation, merge, deployment, native review action, or unrelated auth work.
