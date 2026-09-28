@@ -79,6 +79,12 @@ def send_upcoming_audits_alert() -> int:
     return audit_notifications.send_upcoming_audits_alert()
 
 
+@celery.task(name="iso9001.send_monthly_quality_report")
+def send_monthly_quality_report() -> int:
+    """Monthly PDF summary of quality indicators for administrators."""
+    return audit_notifications.send_monthly_quality_report()
+
+
 # Times are local to APP_TIMEZONE.
 celery.conf.beat_schedule = {
     "upcoming-audits-alert-daily": {
@@ -88,5 +94,9 @@ celery.conf.beat_schedule = {
     "pending-audits-report-weekly": {
         "task": send_pending_audits_report.name,
         "schedule": crontab(day_of_week="monday", hour=8, minute=0),
+    },
+    "monthly-quality-report": {
+        "task": send_monthly_quality_report.name,
+        "schedule": crontab(day_of_month=1, hour=8, minute=0),
     },
 }
