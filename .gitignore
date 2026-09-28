@@ -31,3 +31,9 @@ venv/
 
 # Celery beat schedule state
 celerybeat-schedule*
+
+# Gunicorn runtime
+gunicorn.pid
+
+# Local Pi runtime state
+.atl/
