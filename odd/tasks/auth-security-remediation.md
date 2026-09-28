@@ -8,7 +8,7 @@ Remediate the verified authentication bootstrap, password-reset, and access-log 
 
 ## Problem and why it matters
 
-Before A1, the application permitted the first unauthenticated web registrant to become `ADMINISTRADOR`, with separate empty-table checks that created a race. A1 removed that path. A1, A2a, A2b, and A3 are integrated through PRs #1, #3, #4, and #5. A3 omits the token-bearing request target and referrer from Gunicorn access logging. Post-merge CI passed; deployment and production verification have not occurred.
+Before A1, the application permitted the first unauthenticated web registrant to become `ADMINISTRADOR`, with separate empty-table checks that created a race. A1 removed that path. A1, A2a, A2b, and A3 are integrated through PRs #1, #3, #4, and #5. A3 omits the token-bearing request target and referrer from Gunicorn access logging. Post-merge CI passed. On 2026-09-28 `main@b4c460d` (A1–A3 plus the later Celery fix, PR #7) was deployed to production on `vulcano`; the verified scope is recorded under *Production deployment*.
 
 Evidence is recorded in audit memory `#5378`. This document plans only the verified bootstrap and reset findings; other audit sectors remain deferred.
 
@@ -22,7 +22,7 @@ Evidence is recorded in audit memory `#5378`. This document plans only the verif
 | Delivery strategy | `ask-on-risk` selected the two A2 slices and governed A3 delivery. After A2b honestly materialized above budget, the user explicitly selected `size:exception`; A2b is `exception-ok` for its completed local closure only. The exception does not transfer to A2a, A3, publication, or review consent. |
 | Chain strategy | `stacked-to-main`; A1, A2a, A2b, and A3 were integrated sequentially. The original A2b branch started from A2a tip `668e74abfe5db1d2672d088c6373d7c3d3867bef`, and the original A3 commits started from A2b tip `cce12c852327f732edd53fb69a8a23fb063cf885`. The A3 PR-preparation branch instead started from merged `main@77332f52c5c935c0da188d7c1f46bd6cebe7d82e`. |
 | Local authorization | A2a is closed locally at `668e74abfe5db1d2672d088c6373d7c3d3867bef`. A2b behavior `fe3773e98eee80c15f89410dc94e8e87afd09740` and tracking closure `cce12c852327f732edd53fb69a8a23fb063cf885` are closed locally without native approval. The user explicitly authorized bounded A3 local implementation, tests, and commits without RDD, publication, or merging. |
-| Remote operations | A2a PR #3, A2b PR #4, and A3 PR #5 are merged. A3 has not been deployed or verified in production; this documentation update authorizes no remote operation. |
+| Remote operations | A2a PR #3, A2b PR #4, and A3 PR #5 are merged. The user authorized the production deployment to `192.168.101.46` (`vulcano`) on 2026-09-28 with an empty database. |
 | Review size | The `400` authored changed-line budget remains the default. The user approved `size:exception` for this exact cohesive A2b candidate after its 483-line pre-closure measurement (decision memory `#5511`, topic `delivery/auth-reset-a2b-size-exception`). Necessary tracking may increase the final count. No exception transfers to A2a or A3. |
 
 ## Scope
@@ -425,11 +425,11 @@ Independent closure verification:
 ## Delivery ledger
 
 ```text
-main @ 5bfe0ce (A1, A2a PR #3, A2b PR #4, and A3 PR #5 integrated)
+main @ b4c460d (A1, A2a PR #3, A2b PR #4, A3 PR #5, and Celery fix PR #7 integrated; deployed to vulcano)
 ```
 
 - Strategy: `stacked-to-main`; `ask-on-risk` governed A3 delivery, while A2b remains historically `exception-ok` under its explicit bounded approval.
-- Integration order was A1, A2a, A2b, then A3. All four are integrated; A3 has not been deployed or verified in production.
+- Integration order was A1, A2a, A2b, then A3. All four are integrated and deployed; see *Production deployment* for the verified scope.
 - Initial authored running line count: `646` for A1 code, tests, and README.
 - Behavior commit: `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`, with `697` additions and `180` deletions overall.
 - Behavior commit tracking overhead: `231` additions for this task document, separate from the `466` additions and `180` deletions (`646` authored lines) in A1 code, tests, and README.
@@ -450,6 +450,29 @@ main @ 5bfe0ce (A1, A2a PR #3, A2b PR #4, and A3 PR #5 integrated)
 - A1 behavior `213ef59f4400d178bb06ba74fe06cbd42d5e70dc`, tracking closure `636649426e87cc1b9519907ffab8de2c7646f833`, CI `9f5723c1c431d2f15b3c676fc4058f1dc22cad89`, publication proof `d76821939046ef8aa68e8a23fd69e5c78e76bac3`, and integration preparation `92c2d3d852944e0c3bdb8a229e118f7b75dcf43b` were integrated by PR #1 as merge `972f158f4ba9147b7d4dd2f12acb3cb9f5cbe518`.
 - Existing untracked `.atl/` and `.codegraph/` directories must remain untouched.
 
+## Production deployment
+
+Deployed on 2026-09-28 to `vulcano` (`192.168.101.46`), served as `https://calidad.absolutoffice.com` through the shared Traefik edge (`vpn-only`, `sec-headers`, `ratelimit`). The previous installation had been down since 2026-02-12 (broken Python 3.10 virtual environment, missing database), so this was a rebuild with an **empty database** by user decision. The old checkout and PostgreSQL 17 data directory were kept untouched as archives.
+
+| Component | Deployed state |
+|---|---|
+| Code | `main@b4c460dec70e2412ea015b7dae4cb9312117c768`, migrations at head `a1b2c3d4e5f6` |
+| Web | systemd `iso9001.service`, Gunicorn bound to the Traefik bridge gateway `172.18.0.1:5000`, 3 workers (Flask-Limiter storage is per process) |
+| Database | Dedicated `postgres:17-alpine` container, `127.0.0.1:5433` only |
+| Celery | `iso9001-celery-worker` and `iso9001-celery-beat` units; dedicated password-protected Redis on `127.0.0.1:6380` |
+| Secrets | New `SECRET_KEY`, database and Redis passwords; `.env` mode `0600` |
+
+Verified in production:
+
+- A1: public registration is absent, and the initial administrator was created with the local `create-admin` CLI.
+- A2a: `PASSWORD_RESET_BASE_URL=https://calidad.absolutoffice.com`; session cookies are `Secure; HttpOnly; SameSite=Lax`; HSTS and `X-Frame-Options: DENY` are present; HTTP redirects to HTTPS. SMTP login with the configured account succeeds.
+- A3: a probe `GET /reset_password/<token>` left no token in `logs/gunicorn-access.log`. The Traefik access log did record it, so access logging is disabled for the `iso9001` Traefik router only (`observability.accessLogs: false`); other services are unchanged. A second probe appeared in neither log.
+
+Not verified in production:
+
+- An end-to-end password-reset e-mail (request, delivery, single use of the link).
+- A2b's conditional token consumption under PostgreSQL concurrency; tests remain SQLite-only.
+
 ## Known limitations and blockers
 
 - The ignored Python 3.11 virtual environment and existing requirements are installed locally; no global packages or dependency files changed.
@@ -468,4 +491,5 @@ main @ 5bfe0ce (A1, A2a PR #3, A2b PR #4, and A3 PR #5 integrated)
 - A3: INTEGRATED through squash-merged PR #5 at `main@5bfe0ceca4a924791208f8e078f2f455abdf392f`; original behavior `f9a5a64c184ac5a232e05f324339f160666a2722` and tracking closure `211c9d0e17fc666c67f5fc0f4c25b0a4eecb4b1e` were transplanted as `81c2da902763587cdc34330a7cfd894144e6e4f8` and `8d846bc06ad7182c1692024fa33be4e93fcb8752` before integration
 - Post-A3-merge CI: [run 36314382218](https://github.com/constant1n0/iso9001/actions/runs/36314382218) passed the Python 3.11 `Run tests` job on the merge commit. This is not deployment or production verification.
 - Historical mirror gate: the original A3 closure document was mirrored and read back after its tracking commit as observation `#5379`.
-- **Next step:** plan deployment and production verification separately if authorized. This documentation commit performs no push, PR creation, merge, deployment, native review action, or unrelated auth work.
+- Production: deployed to `vulcano` at `main@b4c460d` on 2026-09-28; see *Production deployment*.
+- **Next step:** run one end-to-end password reset in production to verify delivery and single use. Other audit sectors remain deferred.
