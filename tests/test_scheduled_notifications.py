@@ -15,7 +15,15 @@ import test_auth_bootstrap as bootstrap
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db, mail
-from app.models import Auditoria, EstadoAuditoriaEnum, RoleEnum, User
+from app.models import (
+    Auditoria,
+    Capacitacion,
+    EstadoAuditoriaEnum,
+    NoConformidad,
+    RoleEnum,
+    SatisfaccionCliente,
+    User,
+)
 
 
 TODAY = date(2026, 10, 5)
@@ -122,6 +130,62 @@ class ScheduledNotificationsTestCase(unittest.TestCase):
                 notifications.send_upcoming_audits_alert()
         today.assert_called_once_with()
 
+    def test_monthly_report_html_summarises_quality_records(self) -> None:
+        from app.utils import reports
+
+        self._audit("Compras", TODAY, EstadoAuditoriaEnum.PENDIENTE)
+        self._audit("Ventas", TODAY, EstadoAuditoriaEnum.COMPLETADA)
+        db.session.add(NoConformidad(descripcion="NC", fecha_detectada=TODAY))
+        for score in (4, 5):
+            db.session.add(
+                SatisfaccionCliente(fecha_encuesta=TODAY, cliente="C", puntuacion=score)
+            )
+        db.session.add(Capacitacion(tema="ISO", fecha=TODAY, personal="Equipo"))
+        db.session.commit()
+
+        html = reports.render_monthly_report_html(TODAY)
+
+        self.assertIn("2026-10-05", html)
+        self.assertIn("Total de Auditorías: 2", html)
+        self.assertIn("Total de No Conformidades: 1", html)
+        self.assertIn("Promedio de Satisfacción del Cliente: 4.5", html)
+        self.assertIn("Total de Capacitaciones: 1", html)
+
+    def test_monthly_report_pdf_goes_only_to_admins_with_email(self) -> None:
+        from app import audit_notifications as notifications
+
+        self._user("admin1", RoleEnum.ADMINISTRADOR, "admin1@example.com")
+        self._user("admin2", RoleEnum.ADMINISTRADOR, None)
+        self._user("auditor", RoleEnum.AUDITOR, "auditor@example.com")
+        db.session.commit()
+
+        with mail.record_messages() as outbox:
+            sent = notifications.send_monthly_quality_report(today=TODAY)
+
+        self.assertEqual(1, sent)
+        self.assertEqual([["admin1@example.com"]], [m.recipients for m in outbox])
+        self.assertEqual(SENDER, outbox[0].sender)
+        (attachment,) = outbox[0].attachments
+        self.assertEqual("reporte-calidad-2026-10.pdf", attachment.filename)
+        self.assertEqual("application/pdf", attachment.content_type)
+        self.assertTrue(attachment.data.startswith(b"%PDF"))
+
+    def test_monthly_report_skips_pdf_without_recipients(self) -> None:
+        from app import audit_notifications as notifications
+
+        self._user("auditor", RoleEnum.AUDITOR, "auditor@example.com")
+        db.session.commit()
+
+        with (
+            patch.object(notifications.reports, "generar_reporte_pdf") as build,
+            mail.record_messages() as outbox,
+        ):
+            sent = notifications.send_monthly_quality_report(today=TODAY)
+
+        self.assertEqual(0, sent)
+        self.assertEqual([], outbox)
+        build.assert_not_called()
+
     def test_delivery_failure_is_logged_other_recipients_still_get_mail(self) -> None:
         from app import audit_notifications as notifications
 
@@ -215,16 +279,17 @@ class CeleryWiringTestCase(unittest.TestCase):
 
     def test_every_scheduled_task_is_registered(self) -> None:
         scheduled = {entry["task"] for entry in self.probe["schedule"].values()}
-        self.assertEqual(2, len(scheduled))
+        self.assertEqual(3, len(scheduled))
         self.assertLessEqual(scheduled, set(self.probe["registered"]))
 
-    def test_schedule_runs_daily_alert_and_weekly_report_in_local_time(self) -> None:
+    def test_schedule_runs_daily_weekly_and_monthly_jobs_in_local_time(self) -> None:
         self.assertEqual("Europe/Madrid", self.probe["timezone"])
         crontabs = sorted(entry["crontab"] for entry in self.probe["schedule"].values())
         self.assertEqual(
             [
                 "<crontab: 0 7 * * * (m/h/dM/MY/d)>",
                 "<crontab: 0 8 * * monday (m/h/dM/MY/d)>",
+                "<crontab: 0 8 1 * * (m/h/dM/MY/d)>",
             ],
             crontabs,
         )

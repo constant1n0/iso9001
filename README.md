@@ -179,16 +179,18 @@ invocations.
 
 **3. Iniciar Redis y Celery para las Notificaciones Programadas**
 
-Celery envía dos avisos por correo; la aplicación web funciona sin él.
+Celery envía tres avisos por correo; la aplicación web funciona sin él.
 
 | Tarea | Destinatarios | Cuándo |
 |-------|---------------|--------|
 | `iso9001.send_upcoming_audits_alert` | Usuarios con rol Auditor | Cada día a las 7:00 |
 | `iso9001.send_pending_audits_report` | Usuarios con rol Administrador | Los lunes a las 8:00 |
+| `iso9001.send_monthly_quality_report` | Usuarios con rol Administrador | El día 1 de cada mes a las 8:00 (PDF adjunto) |
 
 Las horas son locales a `APP_TIMEZONE` (por defecto `Europe/Madrid`). El aviso
 diario incluye las auditorías pendientes o en proceso de los próximos 7 días;
-el informe semanal, las pendientes. Los usuarios sin correo se omiten. Si falla
+el informe semanal, las pendientes; el informe mensual adjunta un PDF con
+el total de auditorías, no conformidades y capacitaciones y la satisfacción media. Los usuarios sin correo se omiten. Si falla
 el envío a algún destinatario, se sigue con el resto, se registra el error y la
 tarea termina en fallo.
 
@@ -311,8 +313,6 @@ iso9001/
 ├── app
 │   ├── utils
 │   │   ├── reports.py
-│   │   ├── notifications.py
-│   │   ├── generate_report.py
 │   │   ├── error_handlers.py
 │   │   ├── decorators.py
 │   │   └── __init__.py
