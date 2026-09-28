@@ -51,7 +51,7 @@
         <td>
             <a href="{{ url_for('satisfaccion_cliente.editar_encuesta', id=encuesta.id) }}">Editar</a> |
             <form action="{{ url_for('satisfaccion_cliente.eliminar_encuesta', id=encuesta.id) }}" method="post" style="display:inline;">
-                {{ csrf_token() }}
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" onclick="return confirm('¿Estás seguro de eliminar esta encuesta?');">Eliminar</button>
             </form>
         </td>
