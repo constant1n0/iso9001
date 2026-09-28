@@ -382,6 +382,20 @@ targeting `main`, and when started manually. Run the same suite locally with:
 venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
+`tests/test_migrations.py` runs the real Alembic migrations and fails if the
+resulting schema differs from the models. The migrations use PostgreSQL-only
+DDL, so these tests need a disposable PostgreSQL database; CI provides one and
+fails if it is missing. Locally they are skipped unless you set
+`TEST_POSTGRES_URI`. The tests drop and recreate the `public` schema, so never
+point it at a real database:
+
+```bash
+docker run -d --rm --name iso9001-test-db -e POSTGRES_PASSWORD=test \
+  -p 127.0.0.1:55432:5432 postgres:17-alpine
+TEST_POSTGRES_URI=postgresql://postgres:test@127.0.0.1:55432/postgres \
+  venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
+```
+
 The stable check name is `Python 3.11 tests`. The workflow makes this check
 available, but it does not block merges unless a maintainer separately configures
 that check as required in the repository rules or branch protection settings.
