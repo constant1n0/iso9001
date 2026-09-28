@@ -177,30 +177,37 @@ accounts. Run it once: it performs a second existence check before committing,
 but does not provide cross-process serialization for simultaneous local command
 invocations.
 
-**3. Iniciar Redis y Celery para Tareas en Segundo Plano**
+**3. Iniciar Redis y Celery para las Notificaciones Programadas**
 
-- Asegúrate de que Redis esté en ejecución (redis-server).
-- Inicia el worker de Celery:
+Celery envía dos avisos por correo; la aplicación web funciona sin él.
 
-Una vez que Redis esté activo, inicia el worker de Celery para manejar tareas en segundo plano:
+| Tarea | Destinatarios | Cuándo |
+|-------|---------------|--------|
+| `iso9001.send_upcoming_audits_alert` | Usuarios con rol Auditor | Cada día a las 7:00 |
+| `iso9001.send_pending_audits_report` | Usuarios con rol Administrador | Los lunes a las 8:00 |
 
-\# Para que Redis se inicie automáticamente:
+Las horas son locales a `APP_TIMEZONE` (por defecto `Europe/Madrid`). El aviso
+diario incluye las auditorías pendientes o en proceso de los próximos 7 días;
+el informe semanal, las pendientes. Los usuarios sin correo se omiten. Si falla
+el envío a algún destinatario, se sigue con el resto, se registra el error y la
+tarea termina en fallo.
 
-sudo systemctl enable redis-server.service
+Requisitos: Redis accesible en `CELERY_BROKER_URL` y el correo configurado
+(`MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_DEFAULT_SENDER`). Con el mismo entorno
+que la aplicación web, ejecuta desde la raíz del proyecto:
 
-\# Para iniciar el servicio de Redis:
+```bash
+celery -A celery_worker.celery worker --loglevel=info
+celery -A celery_worker.celery beat --loglevel=info
+```
 
-sudo systemctl start redis-server
+En producción, usa las unidades systemd `iso9001-celery-worker.service` e
+`iso9001-celery-beat.service`. Para lanzar una tarea a mano con el worker en
+marcha:
 
-
-
-\# Para confirmar que Redis está funcionando correctamente, puedes ejecutar:
-
-redis-cli ping
-
-celery -A celery\_worker.celery worker --loglevel=info
-
-**Consejo:** Para monitorear el funcionamiento de Celery y ver cuándo se ejecutan las tareas, puedes revisar el log que aparece en la consola.
+```bash
+python -c "import celery_worker as w; w.send_upcoming_audits_alert.delay()"
+```
 
 **4. Acceso y Comprobación del Funcionamiento del Dashboard**
 
@@ -219,7 +226,7 @@ celery -A celery\_worker.celery worker --loglevel=info
 
 - **Celery**:
   - Asegúrate de que Celery esté en ejecución constantemente para que las tareas en segundo plano, como las notificaciones por correo y los reportes de auditoría, se ejecuten en el tiempo programado.
-  - Las tareas programadas deben definirse en el archivo de configuración y activarse mediante celery.conf.beat\_schedule.
+  - Las tareas programadas se definen en `celery_worker.py` (`celery.conf.beat_schedule`); ejecuta siempre worker y beat.
 - **Dashboard**:
   - Revisa regularmente el dashboard de la aplicación para asegurarte de que muestra datos precisos. Los gráficos y notificaciones deben estar actualizados con la información de la base de datos.
   - En el dashboard podrás ver:
@@ -299,7 +306,8 @@ iso9001/
 ├── migrations
 ├── flaskapp.wsgi
 ├── celery_worker.py
-├── celery_beat_schedule.py
+├── iso9001-celery-worker.service
+├── iso9001-celery-beat.service
 ├── app
 │   ├── utils
 │   │   ├── reports.py

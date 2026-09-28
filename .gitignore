@@ -29,3 +29,5 @@ venv/
 #Archivos ocultos
 ._*
 
+# Celery beat schedule state
+celerybeat-schedule*

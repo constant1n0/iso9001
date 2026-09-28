@@ -16,7 +16,6 @@
 import os
 from datetime import timedelta
 from dotenv import load_dotenv
-from celery.schedules import crontab
 
 # Cargar las variables del archivo .env
 load_dotenv()
@@ -70,14 +69,10 @@ class Config:
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER')
     PASSWORD_RESET_BASE_URL = os.environ.get('PASSWORD_RESET_BASE_URL')
 
-    # Configuración para Celery
+    # Zona horaria para fechas locales y tareas programadas
+    APP_TIMEZONE = os.environ.get('APP_TIMEZONE', 'Europe/Madrid')
+
+    # Configuración para Celery (solo la usa celery_worker.py; la
+    # programación de tareas periódicas se define allí)
     CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL')
     CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND')
-
-    # Programación de tareas periódicas de Celery
-    CELERYBEAT_SCHEDULE = {
-        'enviar-alerta-auditorias-proximas': {
-            'task': 'enviar_alerta_auditorias_proximas',
-            'schedule': crontab(hour=7, minute=0),  # Corre la tarea todos los días a las 7:00 AM
-        },
-    }
