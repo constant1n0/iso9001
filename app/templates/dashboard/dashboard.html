@@ -43,7 +43,7 @@
     <div class="kpi {{ 'kpi--alert' if no_conformidades_abiertas else '' }}">
         <span class="kpi__label">No conformidades abiertas</span>
         <span class="kpi__value">{{ no_conformidades_abiertas }}<span class="kpi__unit">/ {{ total_no_conformidades }}</span></span>
-        <span class="kpi__foot">{{ total_no_conformidades - no_conformidades_abiertas }} cerradas</span>
+        <span class="kpi__foot">{{ no_conformidades_cerradas }} {{ 'cerrada' if no_conformidades_cerradas == 1 else 'cerradas' }}</span>
     </div>
     <div class="kpi">
         <span class="kpi__label">Satisfacción media</span>

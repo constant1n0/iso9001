@@ -69,6 +69,7 @@ def dashboard():
         total_auditorias=Auditoria.query.count(),
         total_no_conformidades=NoConformidad.query.count(),
         no_conformidades_abiertas=no_conformidades_abiertas,
+        no_conformidades_cerradas=no_conformidades_cerradas,
         promedio_satisfaccion=db.session.query(
             db.func.avg(SatisfaccionCliente.puntuacion)
         ).scalar() or 0,

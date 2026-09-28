@@ -111,7 +111,7 @@ class UiFoundationTestCase(unittest.TestCase):
 
     def test_dashboard_embeds_chart_data_as_json_arrays(self) -> None:
         with self.app.app_context():
-            for estado in ("Abierta", "Abierta", "Cerrada"):
+            for estado in ("Abierta", "Abierta", "Cerrada", "En proceso"):
                 db.session.add(
                     NoConformidad(
                         descripcion="NC", fecha_detectada=date(2026, 9, 1), estado=estado
@@ -133,6 +133,8 @@ class UiFoundationTestCase(unittest.TestCase):
         self.assertEqual({"abiertas": 2, "cerradas": 1}, data["no_conformidades"])
         self.assertEqual([8, 9], data["satisfaccion"]["meses"])
         self.assertEqual([7.0, 9.0], data["satisfaccion"]["promedios"])
+        # A free-text state that is neither open nor closed is not "closed".
+        self.assertIn("1 cerrada<", html)
         self.assertIn("/static/lib/chart.umd.min.js", html)
         self.assertIn("/static/js/dashboard.js", html)
         self.assertNotIn("cdn.jsdelivr.net", html)
