@@ -14,30 +14,18 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
-
 {% extends "base.html" %}
-
-{% block title %}Iniciar Sesión{% endblock %}
-
+{% from "_partials/forms.html" import field %}
+{% block title %}Iniciar sesión{% endblock %}
 {% block content %}
-<h2>Iniciar Sesión</h2>
-<form method="post">
+{% include "_partials/brand.html" %}
+<h1>Acceso</h1>
+<p class="auth__lead">Introduce tus credenciales para entrar al sistema de gestión.</p>
+<form method="post" novalidate>
     {{ form.hidden_tag() }}
-    <p>
-        {{ form.username.label }}<br>
-        {{ form.username(size=32) }}<br>
-        {% for error in form.username.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-        {% endfor %}
-    </p>
-    <p>
-        {{ form.password.label }}<br>
-        {{ form.password(size=32) }}<br>
-        {% for error in form.password.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-        {% endfor %}
-    </p>
-    <p>{{ form.submit() }}</p>
+    {{ field(form.username, autocomplete="username", autofocus=true) }}
+    {{ field(form.password, autocomplete="current-password") }}
+    <button type="submit" class="btn btn--primary btn--block">Entrar</button>
 </form>
-<p><a href="{{ url_for('auth.reset_password_request') }}">¿Olvidaste tu contraseña?</a></p>
+<p class="auth__links"><a href="{{ url_for('auth.reset_password_request') }}">¿Has olvidado tu contraseña?</a></p>
 {% endblock %}

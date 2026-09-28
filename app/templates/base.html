@@ -14,50 +14,95 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
-
+{%- set user_role = current_user.role.value if current_user.is_authenticated else None -%}
+{%- set is_admin = user_role == 'Administrador' -%}
+{%- set nav_sections = [
+  (None, [
+    ('dashboard', 'dashboard.dashboard', 'Panel', 'P-00', True),
+  ]),
+  ('Calidad', [
+    ('auditoria', 'auditoria.listar_auditorias', 'Auditorías', '9.2', user_role in ('Administrador', 'Auditor')),
+    ('no_conformidad', 'no_conformidad.listar_no_conformidades', 'No conformidades', '10.2', True),
+    ('mejora', 'mejora.listar_mejoras', 'Mejoras', '10.3', True),
+  ]),
+  ('Clientes', [
+    ('satisfaccion_cliente', 'satisfaccion_cliente.listar_encuestas', 'Satisfacción', '9.1.2', True),
+    ('parte_interesada', 'parte_interesada.listar_partes_interesadas', 'Partes interesadas', '4.2', True),
+  ]),
+  ('Personas', [
+    ('capacitacion', 'capacitacion.listar_capacitaciones', 'Capacitaciones', '7.2', True),
+  ]),
+  ('Documentación', [
+    ('document', 'document.list_documents', 'Documentos', '7.5', is_admin),
+  ]),
+] -%}
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>{% block title %}Mi Aplicación Flask{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Inicio{% endblock %} · ISO 9001 QMS</title>
+    <link rel="preload" href="{{ url_for('static', filename='fonts/barlow-condensed-latin-600.woff2') }}" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="{{ url_for('static', filename='fonts/ibm-plex-sans-latin-400.woff2') }}" as="font" type="font/woff2" crossorigin>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+    {% block head %}{% endblock %}
 </head>
 <body>
-    <header>
-        <h1>ISO9001 QMS</h1>
-        {% if current_user.is_authenticated %}
-            <p>Bienvenido, {{ current_user.username }} |
-                <a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a>
-
-                {% if current_user.role.value == 'Administrador' or current_user.role.value == 'Auditor' %}
-                    | <a href="{{ url_for('auditoria.listar_auditorias') }}">Auditorías</a>
-                {% endif %}
-
-                {% if current_user.role.value == 'Administrador' %}
-                    | <a href="{{ url_for('document.list_documents') }}">Documentos</a>
-                {% endif %}
-
-                | <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a>
-            </p>
-        {% else %}
-            <a href="{{ url_for('auth.login') }}">Iniciar sesión</a>
-        {% endif %}
-    </header>
-    <main>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <ul class="flashes">
-                {% for category, message in messages %}
-                    <li class="{{ category }}">{{ message }}</li>
+{% if current_user.is_authenticated %}
+    <div class="app">
+        <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="Mostrar menú">
+        <label for="nav-toggle" class="nav-backdrop" aria-hidden="true"></label>
+        <aside class="sidebar" aria-label="Navegación principal">
+            {% include "_partials/brand.html" %}
+            <nav class="nav">
+                {% for group, items in nav_sections %}
+                    {% set visible = items | selectattr(4) | list %}
+                    {% if visible %}
+                        {% if group %}<div class="nav__group">{{ group }}</div>{% endif %}
+                        {% for blueprint, endpoint, label, clause, _ in visible %}
+                            <a class="nav__link" href="{{ url_for(endpoint) }}"
+                               {% if request.blueprint == blueprint %}aria-current="page"{% endif %}>
+                                {{ label }}<span class="nav__code">{{ clause }}</span>
+                            </a>
+                        {% endfor %}
+                    {% endif %}
                 {% endfor %}
-                </ul>
-            {% endif %}
-        {% endwith %}
-        {% block content %}{% endblock %}
+            </nav>
+            <div class="sidebar__footer">Cláusulas ISO 9001:2015</div>
+        </aside>
+        <div class="main">
+            <header class="topbar">
+                <label for="nav-toggle" class="nav-toggle-button" aria-hidden="true"><span></span></label>
+                <span class="topbar__crumb">{% block crumb %}Sistema de gestión de calidad{% endblock %}</span>
+                <div class="topbar__user">
+                    <div class="user-chip">
+                        <span class="user-chip__name">{{ current_user.username }}</span>
+                        <span class="user-chip__role">{{ user_role }}</span>
+                    </div>
+                    <a class="btn btn--sm" href="{{ url_for('auth.logout') }}">Salir</a>
+                </div>
+            </header>
+            <main class="content" id="contenido">
+                {% include "_partials/flashes.html" %}
+                {% block content %}{% endblock %}
+            </main>
+            <footer class="site-footer">&copy; 2024 Dámaso Constantino · ISO 9001 QMS</footer>
+        </div>
+    </div>
+{% else %}
+    <main class="auth">
+        <div class="auth__stack">
+            {% include "_partials/flashes.html" %}
+            {% block auth_content %}
+                <section class="auth__panel">
+                    <div class="auth__body">{{ self.content() }}</div>
+                </section>
+            {% endblock %}
+        </div>
     </main>
-    <footer>
-        <p>&copy; 2024 Dámaso Constantino</p>
-    </footer>
+{% endif %}
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
 </body>
 </html>

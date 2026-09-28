@@ -1,0 +1,7 @@
+<a class="brand" href="{{ url_for('dashboard.dashboard') if current_user.is_authenticated else url_for('auth.login') }}">
+    <span class="brand__mark" aria-hidden="true">Q</span>
+    <span>
+        <span class="brand__name">ISO 9001</span>
+        <span class="brand__sub">Gestión de calidad</span>
+    </span>
+</a>

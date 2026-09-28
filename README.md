@@ -373,6 +373,21 @@ iso9001/
 │   └── __init__.py
 └── README.md
 
+## User interface
+
+The UI uses a single stylesheet, `app/static/css/app.css`, with design tokens
+(black, bone white and canary yellow `#FFF000`) defined as CSS custom
+properties. All assets are served locally, so the Content-Security-Policy
+allows no external origins:
+
+- Fonts: Barlow Condensed, IBM Plex Sans and IBM Plex Mono (Fontsource 5.3.0,
+  SIL Open Font License; see `app/static/fonts/*-OFL.txt`).
+- Chart.js 4.5.1 (MIT; see `app/static/vendor/chart.js-LICENSE.md`).
+
+Shared template pieces live in `app/templates/_partials/`. Forms marked with
+`data-confirm="…"` ask for confirmation through `app/static/js/app.js`; do not
+use inline `onclick`/`onsubmit` handlers.
+
 ## Continuous Integration
 
 GitHub Actions runs the Python 3.11 test suite on every push, on pull requests

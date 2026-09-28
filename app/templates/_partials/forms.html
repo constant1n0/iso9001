@@ -1,0 +1,13 @@
+{# Render one WTForms field with its label and errors; extra keyword
+   arguments become HTML attributes of the input. #}
+{% macro field(f, class_='') %}
+    {%- set attrs = dict(kwargs) -%}
+    {%- if f.errors %}{% set _ = attrs.update({'aria-invalid': 'true'}) %}{% endif -%}
+    <div class="field {{ class_ }}{% if f.errors %} field--invalid{% endif %}">
+        {{ f.label() }}
+        {{ f(**attrs) }}
+        {% for error in f.errors %}
+            <div class="field__error">{{ error }}</div>
+        {% endfor %}
+    </div>
+{% endmacro %}

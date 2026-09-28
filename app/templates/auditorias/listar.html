@@ -15,65 +15,85 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
 {% extends "base.html" %}
-
-{% block title %}Lista de Auditorías{% endblock %}
-
+{% block title %}Auditorías{% endblock %}
+{% block crumb %}Calidad · Auditorías{% endblock %}
+{% set filtros = ['area', 'auditor', 'estado', 'fecha_inicio', 'fecha_fin'] %}
+{% set filtrando = request.args.items() | selectattr(1) | map(attribute=0) | select('in', filtros) | list %}
 {% block content %}
-<h2>Lista de Auditorías</h2>
+<header class="page-header">
+    <div>
+        <span class="page-header__eyebrow">Cláusula 9.2 · Auditoría interna</span>
+        <h1>Auditorías</h1>
+    </div>
+    <div class="page-header__actions">
+        <a class="btn btn--primary" href="{{ url_for('auditoria.nueva_auditoria') }}">+ Nueva auditoría</a>
+    </div>
+</header>
 
-<!-- Formulario de Búsqueda -->
-<form method="get" action="{{ url_for('auditoria.listar_auditorias') }}">
+<details class="filters"{% if filtrando %} open{% endif %}>
+    <summary>Filtros{% if filtrando %} <span class="badge badge--warn">{{ filtrando | length }} {{ 'activo' if filtrando | length == 1 else 'activos' }}</span>{% endif %}</summary>
+    <form method="get" action="{{ url_for('auditoria.listar_auditorias') }}" class="filters__body">
+        <div class="field"><label for="area">Área auditada</label>
+            <input type="text" name="area" id="area" value="{{ request.args.get('area', '') }}"></div>
+        <div class="field"><label for="auditor">Auditor</label>
+            <input type="text" name="auditor" id="auditor" value="{{ request.args.get('auditor', '') }}"></div>
+        <div class="field"><label for="estado">Estado</label>
+            <select name="estado" id="estado">
+                <option value="">Todos</option>
+                {% for opcion in ['Pendiente', 'En Proceso', 'Completada', 'Cancelada'] %}
+                    <option value="{{ opcion }}"{% if request.args.get('estado') == opcion %} selected{% endif %}>{{ opcion }}</option>
+                {% endfor %}
+            </select></div>
+        <div class="field"><label for="fecha_inicio">Desde</label>
+            <input type="date" name="fecha_inicio" id="fecha_inicio" value="{{ request.args.get('fecha_inicio', '') }}"></div>
+        <div class="field"><label for="fecha_fin">Hasta</label>
+            <input type="date" name="fecha_fin" id="fecha_fin" value="{{ request.args.get('fecha_fin', '') }}"></div>
+        <div class="filters__actions">
+            <button type="submit" class="btn btn--primary">Buscar</button>
+            <a class="btn btn--ghost" href="{{ url_for('auditoria.listar_auditorias') }}">Limpiar</a>
+        </div>
+    </form>
+</details>
 
-    <!-- Filtros Básicos -->
-    <fieldset>
-        <legend>Filtros Básicos</legend>
-        <label for="area">Área Auditada:</label>
-        <input type="text" name="area" id="area" value="{{ request.args.get('area', '') }}">
-        
-        <label for="auditor">Auditor:</label>
-        <input type="text" name="auditor" id="auditor" value="{{ request.args.get('auditor', '') }}">
-    </fieldset>
-
-    <!-- Filtros Avanzados -->
-    <fieldset>
-        <legend>Filtros Avanzados</legend>
-        <label for="estado">Estado:</label>
-        <input type="text" name="estado" id="estado" value="{{ request.args.get('estado', '') }}">
-
-        <label for="fecha_inicio">Fecha de Inicio:</label>
-        <input type="date" name="fecha_inicio" id="fecha_inicio" value="{{ request.args.get('fecha_inicio', '') }}">
-
-        <label for="fecha_fin">Fecha de Fin:</label>
-        <input type="date" name="fecha_fin" id="fecha_fin" value="{{ request.args.get('fecha_fin', '') }}">
-    </fieldset>
-
-    <button type="submit">Buscar</button>
-    <a href="{{ url_for('auditoria.listar_auditorias') }}">Limpiar</a>
-</form>
-
-<table border="1">
-    <tr>
-        <th>Área Auditada</th>
-        <th>Auditor</th>
-        <th>Fecha</th>
-        <th>Resultado</th>
-        <th>Acciones</th>
-    </tr>
-    {% for auditoria in auditorias %}
-    <tr>
-        <td>{{ auditoria.area_auditada }}</td>
-        <td>{{ auditoria.auditor }}</td>
-        <td>{{ auditoria.fecha.strftime('%Y-%m-%d') }}</td>
-        <td>{{ auditoria.resultado }}</td>
-        <td>
-            <a href="{{ url_for('auditoria.editar_auditoria', id=auditoria.id) }}">Editar</a> |
-            <a href="{{ url_for('auditoria.exportar_pdf', id=auditoria.id) }}" target="_blank">Descargar PDF</a> |
-            <form action="{{ url_for('auditoria.eliminar_auditoria', id=auditoria.id) }}" method="post" style="display:inline;">
-                {{ csrf_token() }}
-                <button type="submit" onclick="return confirm('¿Estás seguro de eliminar esta auditoría?');">Eliminar</button>
-            </form>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+{% if auditorias %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Fecha</th>
+                <th scope="col">Área auditada</th>
+                <th scope="col">Auditor</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Resultado</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for auditoria in auditorias %}
+            {% set estado = auditoria.estado.value if auditoria.estado else '' %}
+            <tr>
+                <td class="date">{{ auditoria.fecha.strftime('%d/%m/%Y') }}</td>
+                <td>{{ auditoria.area_auditada }}</td>
+                <td>{{ auditoria.auditor }}</td>
+                <td><span class="badge {{ {'Pendiente': 'badge--warn', 'En Proceso': 'badge--solid', 'Completada': 'badge--ok', 'Cancelada': ''}.get(estado, '') }}">{{ estado or '—' }}</span></td>
+                <td>{{ auditoria.resultado | truncate(80) }}</td>
+                <td>
+                    <div class="table__actions">
+                        <a class="btn btn--sm" href="{{ url_for('auditoria.editar_auditoria', id=auditoria.id) }}">Editar</a>
+                        <a class="btn btn--sm" href="{{ url_for('auditoria.exportar_pdf', id=auditoria.id) }}" target="_blank" rel="noopener">PDF</a>
+                        <form class="inline-form" action="{{ url_for('auditoria.eliminar_auditoria', id=auditoria.id) }}" method="post"
+                              data-confirm="¿Eliminar la auditoría de {{ auditoria.area_auditada }}?">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn--sm btn--danger">Eliminar</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    <div class="card"><p class="empty">{{ 'Ninguna auditoría coincide con los filtros.' if filtrando else 'Todavía no hay auditorías registradas.' }}</p></div>
+{% endif %}
 {% endblock %}
