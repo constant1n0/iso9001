@@ -31,6 +31,7 @@ from flask_mail import Message
 
 from .extensions import mail
 from .models import Auditoria, EstadoAuditoriaEnum, RoleEnum, User
+from .utils import reports
 
 logger = logging.getLogger(__name__)
 
@@ -104,23 +105,58 @@ def send_upcoming_audits_alert(today: date | None = None) -> int:
     )
 
 
-def _send_to_role(role: RoleEnum, subject: str, body) -> int:
+def send_monthly_quality_report(today: date | None = None) -> int:
+    """E-mail administrators the monthly quality summary as a PDF."""
+    day = today or local_today()
+    if not _recipients(RoleEnum.ADMINISTRADOR):
+        logger.info("No administrators with e-mail for the monthly report")
+        return 0
+
+    pdf = reports.generar_reporte_pdf(day)
+    return _send_to_role(
+        RoleEnum.ADMINISTRADOR,
+        subject="Reporte Mensual del Sistema de Gestión de Calidad",
+        body=lambda user: (
+            f"Hola {user.username},\n\n"
+            "Adjunto encontrarás el reporte mensual del Sistema de Gestión "
+            "de Calidad."
+        ),
+        attachment=(f"reporte-calidad-{day:%Y-%m}.pdf", "application/pdf", pdf),
+    )
+
+
+def _recipients(role: RoleEnum) -> list[User]:
+    """Users with ``role`` that have an e-mail address."""
+    users: Iterable[User] = User.query.filter_by(role=role).all()
+    recipients = []
+    for user in users:
+        if user.email:
+            recipients.append(user)
+        else:
+            logger.warning("User %s has no e-mail address; skipped", user.username)
+    return recipients
+
+
+def _send_to_role(
+    role: RoleEnum,
+    subject: str,
+    body,
+    attachment: tuple[str, str, bytes] | None = None,
+) -> int:
     """Send one message per user with ``role``; keep going on failures."""
-    recipients: Iterable[User] = User.query.filter_by(role=role).all()
     sender = current_app.config.get("MAIL_DEFAULT_SENDER")
     sent = 0
     failed: list[str] = []
 
-    for user in recipients:
-        if not user.email:
-            logger.warning("User %s has no e-mail address; skipped", user.username)
-            continue
+    for user in _recipients(role):
         message = Message(
             subject=subject,
             sender=sender,
             recipients=[user.email],
             body=body(user),
         )
+        if attachment:
+            message.attach(*attachment)
         try:
             mail.send(message)
         except Exception:
