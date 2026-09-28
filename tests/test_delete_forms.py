@@ -13,6 +13,8 @@ from app.extensions import db
 from app.models import (
     Auditoria,
     Capacitacion,
+    Document,
+    DocumentCategory,
     Mejora,
     NoConformidad,
     ParteInteresada,
@@ -37,6 +39,9 @@ MODULES = (
      lambda: SatisfaccionCliente(fecha_encuesta=DAY, cliente="C", puntuacion=8)),
     ("/mejoras/", Mejora, lambda: Mejora(no_conformidad="NC")),
     ("/partes_interesadas/", ParteInteresada, lambda: ParteInteresada(nombre="Cliente")),
+    ("/documents/", Document,
+     lambda: Document(title="Manual", code="MC-01", category=DocumentCategory.MANUAL_CALIDAD,
+                      content="Texto")),
 )
 
 
@@ -101,7 +106,8 @@ class DeleteFormsTestCase(unittest.TestCase):
             with self.subTest(url=url):
                 page = _PostForms()
                 page.feed(self.client.get(url).get_data(as_text=True))
-                (form,) = [f for f in page.forms if "eliminar" in (f["action"] or "")]
+                # Each list shows one record, so its only POST form deletes it.
+                (form,) = page.forms
 
                 self.assertTrue(form["fields"].get("csrf_token"), "hidden csrf_token missing")
                 self.assertNotIn(form["fields"]["csrf_token"], form["text"],
