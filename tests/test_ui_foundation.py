@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import unittest
 from datetime import date
 
@@ -18,6 +19,37 @@ PASSWORD = "StrongPassword123!"
 DATA_SCRIPT = re.compile(
     r'<script type="application/json" id="dashboard-data">(.*?)</script>', re.S
 )
+
+
+STATIC_DIR = bootstrap.PROJECT_ROOT / "app" / "static"
+
+
+class StaticAssetsTrackedTestCase(unittest.TestCase):
+    """Every static file referenced by templates or CSS must be committed.
+
+    A file can exist locally but be excluded by .gitignore (this happened
+    with a generic ``vendor/`` rule), which breaks it only after deploy.
+    """
+
+    def test_referenced_static_files_are_tracked_by_git(self) -> None:
+        tracked = set(
+            subprocess.run(
+                ["git", "ls-files", "app/static"],
+                cwd=bootstrap.PROJECT_ROOT, capture_output=True, text=True, check=True,
+            ).stdout.split()
+        )
+        referenced = set()
+        for template in (bootstrap.PROJECT_ROOT / "app" / "templates").rglob("*.html"):
+            for name in re.findall(
+                r"url_for\('static',\s*filename='([^']+)'\)", template.read_text()
+            ):
+                referenced.add(f"app/static/{name}")
+        for css in STATIC_DIR.rglob("*.css"):
+            for name in re.findall(r'url\("\.\./([^"]+)"\)', css.read_text()):
+                referenced.add(f"app/static/{name}")
+
+        self.assertGreater(len(referenced), 5)
+        self.assertEqual(set(), referenced - tracked)
 
 
 class UiFoundationTestCase(unittest.TestCase):
@@ -55,7 +87,7 @@ class UiFoundationTestCase(unittest.TestCase):
         for path in (
             "/static/css/app.css",
             "/static/js/dashboard.js",
-            "/static/vendor/chart.umd.min.js",
+            "/static/lib/chart.umd.min.js",
             "/static/fonts/barlow-condensed-latin-600.woff2",
             "/static/fonts/ibm-plex-sans-latin-400.woff2",
             "/static/fonts/ibm-plex-mono-latin-400.woff2",
@@ -101,7 +133,7 @@ class UiFoundationTestCase(unittest.TestCase):
         self.assertEqual({"abiertas": 2, "cerradas": 1}, data["no_conformidades"])
         self.assertEqual([8, 9], data["satisfaccion"]["meses"])
         self.assertEqual([7.0, 9.0], data["satisfaccion"]["promedios"])
-        self.assertIn("/static/vendor/chart.umd.min.js", html)
+        self.assertIn("/static/lib/chart.umd.min.js", html)
         self.assertIn("/static/js/dashboard.js", html)
         self.assertNotIn("cdn.jsdelivr.net", html)
 

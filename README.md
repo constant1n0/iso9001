@@ -382,7 +382,7 @@ allows no external origins:
 
 - Fonts: Barlow Condensed, IBM Plex Sans and IBM Plex Mono (Fontsource 5.3.0,
   SIL Open Font License; see `app/static/fonts/*-OFL.txt`).
-- Chart.js 4.5.1 (MIT; see `app/static/vendor/chart.js-LICENSE.md`).
+- Chart.js 4.5.1 (MIT; see `app/static/lib/chart.js-LICENSE.md`).
 
 Shared template pieces live in `app/templates/_partials/`. Forms marked with
 `data-confirm="…"` ask for confirmation through `app/static/js/app.js`; do not

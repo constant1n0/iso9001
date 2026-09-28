@@ -133,6 +133,6 @@
 {% endblock %}
 {% block scripts %}
 <script type="application/json" id="dashboard-data">{{ chart_data | tojson }}</script>
-<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='lib/chart.umd.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}
