@@ -40,7 +40,6 @@ from .routes import (
 )
 from .utils.error_handlers import register_error_handlers
 from .utils.security_logger import init_security_logging
-from celery import Celery
 
 
 def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
@@ -98,11 +97,6 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
 
     # Registrar manejadores de errores
     register_error_handlers(app)
-
-    # Configuración de Celery (solo si está configurado)
-    if app.config.get('CELERY_BROKER_URL'):
-        app.celery = Celery(app.import_name, broker=app.config['CELERY_BROKER_URL'])
-        app.celery.conf.update(app.config)
 
     # Headers de seguridad HTTP
     @app.after_request

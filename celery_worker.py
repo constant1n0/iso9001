@@ -13,107 +13,80 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
+"""Celery application for scheduled audit notifications.
+
+Run from the project root with the same environment as the web app:
+
+    celery -A celery_worker.celery worker --loglevel=info
+    celery -A celery_worker.celery beat --loglevel=info
+
+The worker and beat need ``CELERY_BROKER_URL`` (for example a Redis URL).
+"""
+
 from celery import Celery
+from celery.schedules import crontab
+from flask import Flask
+
 from app import create_app
-from flask_mail import Message
-from app.extensions import mail
-from datetime import datetime, timedelta
+from app import audit_notifications
 
-# Inicializa Flask y Celery
-app = create_app()
-celery = Celery(app.import_name, broker=app.config['CELERY_BROKER_URL'])
-celery.conf.update(app.config)
 
-# Configuración de contexto de aplicación Flask en tareas de Celery
-class ContextTask(celery.Task):
-    def __call__(self, *args, **kwargs):
-        with app.app_context():
-            return self.run(*args, **kwargs)
+def create_celery(flask_app: Flask) -> Celery:
+    """Build a Celery app that runs every task inside ``flask_app``'s context.
 
-celery.Task = ContextTask
-
-# Tarea programada: enviar un correo de reporte de auditorías pendientes
-@celery.task
-def enviar_reporte_auditorias():
+    Only Celery settings are passed on: copying the whole Flask config would
+    expose secrets such as ``SECRET_KEY`` through ``celery inspect conf``.
     """
-    Tarea periódica para enviar un reporte de auditorías pendientes a los administradores.
-    """
-    from app.models import Auditoria, User, RoleEnum, EstadoAuditoriaEnum
+    broker_url = flask_app.config.get("CELERY_BROKER_URL")
+    if not broker_url:
+        raise RuntimeError(
+            "CELERY_BROKER_URL no está configurada. Configure la variable de "
+            "entorno CELERY_BROKER_URL para ejecutar Celery."
+        )
 
-    # Obtener auditorías pendientes usando el Enum correcto
-    auditorias_pendientes = Auditoria.query.filter_by(estado=EstadoAuditoriaEnum.PENDIENTE).all()
-
-    # Si no hay auditorías pendientes, salir de la tarea
-    if not auditorias_pendientes:
-        print("No hay auditorías pendientes para reportar.")
-        return
-
-    # Genera el contenido del reporte
-    reporte = "\n".join(
-        [f"Auditoría ID: {a.id} - Área: {a.area_auditada} - Fecha: {a.fecha.strftime('%Y-%m-%d')}" for a in auditorias_pendientes]
+    celery_app = Celery(flask_app.import_name)
+    celery_app.conf.update(
+        broker_url=broker_url,
+        result_backend=flask_app.config.get("CELERY_RESULT_BACKEND") or None,
+        task_ignore_result=True,
+        broker_connection_retry_on_startup=True,
+        timezone=flask_app.config["APP_TIMEZONE"],
+        enable_utc=True,
     )
 
-    # Configura y envía el correo a los administradores (usando el Enum correcto)
-    administradores = User.query.filter_by(role=RoleEnum.ADMINISTRADOR).all()
-    for admin in administradores:
-        # Verificar que el admin tenga email configurado
-        if not admin.email:
-            print(f"Usuario {admin.username} no tiene email configurado")
-            continue
+    class FlaskContextTask(celery_app.Task):
+        def __call__(self, *args, **kwargs):
+            with flask_app.app_context():
+                return self.run(*args, **kwargs)
 
-        msg = Message(
-            subject="Reporte de Auditorías Pendientes",
-            sender=app.config['MAIL_DEFAULT_SENDER'],
-            recipients=[admin.email]
-        )
-        msg.body = f"Hola {admin.username},\n\nAquí está el reporte de auditorías pendientes:\n\n{reporte}"
+    celery_app.Task = FlaskContextTask
+    return celery_app
 
-        try:
-            mail.send(msg)
-            print(f"Correo enviado a {admin.email}")
-        except Exception as e:
-            print(f"Error al enviar el correo a {admin.email}: {e}")
 
-# Nueva Tarea programada: enviar alertas para auditorías próximas en los próximos 7 días
-@celery.task
-def enviar_alerta_auditorias_proximas():
-    """
-    Tarea periódica para enviar un correo a los auditores recordándoles auditorías programadas en los próximos 7 días.
-    """
-    from app.models import Auditoria, User, RoleEnum
+app = create_app()
+celery = create_celery(app)
 
-    # Calcula el rango de fechas para los próximos 7 días
-    hoy = datetime.utcnow().date()
-    fecha_limite = hoy + timedelta(days=7)
 
-    # Buscar auditorías programadas en los próximos 7 días
-    auditorias_proximas = Auditoria.query.filter(
-        Auditoria.fecha.between(hoy, fecha_limite)
-    ).all()
+@celery.task(name="iso9001.send_pending_audits_report")
+def send_pending_audits_report() -> int:
+    """Weekly report of pending audits for administrators."""
+    return audit_notifications.send_pending_audits_report()
 
-    if auditorias_proximas:
-        # Genera el contenido del mensaje
-        mensaje = "\n".join(
-            [f"Auditoría en {a.area_auditada} - Fecha: {a.fecha.strftime('%Y-%m-%d')}" for a in auditorias_proximas]
-        )
 
-        # Obtiene los correos de los usuarios con rol de auditor (usando el Enum correcto)
-        auditores = User.query.filter_by(role=RoleEnum.AUDITOR).all()
-        for auditor in auditores:
-            # Verificar que el auditor tenga email configurado
-            if not auditor.email:
-                print(f"Usuario {auditor.username} no tiene email configurado")
-                continue
+@celery.task(name="iso9001.send_upcoming_audits_alert")
+def send_upcoming_audits_alert() -> int:
+    """Daily reminder to auditors of active audits in the next seven days."""
+    return audit_notifications.send_upcoming_audits_alert()
 
-            msg = Message(
-                subject="Recordatorio de Auditorías Próximas",
-                sender=app.config['MAIL_DEFAULT_SENDER'],
-                recipients=[auditor.email]
-            )
-            msg.body = f"Estimado/a {auditor.username},\n\nEstas son las auditorías programadas para los próximos 7 días:\n\n{mensaje}"
 
-            try:
-                mail.send(msg)
-                print(f"Correo enviado a {auditor.email}")
-            except Exception as e:
-                print(f"Error al enviar el correo a {auditor.email}: {e}")
+# Times are local to APP_TIMEZONE.
+celery.conf.beat_schedule = {
+    "upcoming-audits-alert-daily": {
+        "task": send_upcoming_audits_alert.name,
+        "schedule": crontab(hour=7, minute=0),
+    },
+    "pending-audits-report-weekly": {
+        "task": send_pending_audits_report.name,
+        "schedule": crontab(day_of_week="monday", hour=8, minute=0),
+    },
+}

@@ -1,0 +1,41 @@
+# Este archivo es parte de "ISO9001 QMS".
+#
+# Servicio systemd para el worker de Celery de ISO9001 QMS
+#
+# Instalación:
+#   sudo cp iso9001-celery-worker.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now iso9001-celery-worker
+#
+# Comandos útiles:
+#   sudo systemctl status iso9001-celery-worker
+#   sudo journalctl -u iso9001-celery-worker -f
+
+[Unit]
+Description=ISO9001 QMS - Celery worker
+Documentation=https://github.com/constant1n0/iso9001
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=dcm
+Group=dcm
+WorkingDirectory=/home/dcm/work/iso9001
+Environment="PATH=/home/dcm/work/iso9001/venv/bin"
+EnvironmentFile=/home/dcm/work/iso9001/.env
+ExecStart=/home/dcm/work/iso9001/venv/bin/celery -A celery_worker.celery worker --loglevel=info --concurrency=1 --hostname=iso9001@%H
+PrivateTmp=true
+Restart=on-failure
+RestartSec=10
+KillMode=mixed
+TimeoutStopSec=30
+
+# Seguridad
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/dcm/work/iso9001
+
+[Install]
+WantedBy=multi-user.target
