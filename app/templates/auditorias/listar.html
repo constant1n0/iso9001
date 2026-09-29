@@ -69,7 +69,7 @@
             <a href="{{ url_for('auditoria.editar_auditoria', id=auditoria.id) }}">Editar</a> |
             <a href="{{ url_for('auditoria.exportar_pdf', id=auditoria.id) }}" target="_blank">Descargar PDF</a> |
             <form action="{{ url_for('auditoria.eliminar_auditoria', id=auditoria.id) }}" method="post" style="display:inline;">
-                {{ csrf_token() }}
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" onclick="return confirm('¿Estás seguro de eliminar esta auditoría?');">Eliminar</button>
             </form>
         </td>

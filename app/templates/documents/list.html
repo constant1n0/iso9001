@@ -50,6 +50,7 @@
             <td>
                 <a href="{{ url_for('document.edit_document', document_id=document.id) }}" class="btn btn-warning btn-sm">Editar</a>
                 <form action="{{ url_for('document.delete_document', document_id=document.id) }}" method="POST" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-danger btn-sm">Eliminar</button>
                 </form>
             </td>
