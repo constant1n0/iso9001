@@ -1,4 +1,4 @@
-<!-- 
+<!--
 # Este archivo es parte de "ISO9001 QMS".
 #
 # "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
@@ -14,43 +14,11 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
-
 {% extends "base.html" %}
-
-{% block title %}Nueva Parte Interesada{% endblock %}
-
+{% from "_partials/ui.html" import page_header, form_card %}
+{% block title %}Nueva parte interesada{% endblock %}
+{% block crumb %}Clientes · Partes interesadas{% endblock %}
 {% block content %}
-<h2>Nueva Parte Interesada</h2>
-<form method="post">
-    {{ form.hidden_tag() }}
-    <p>
-        {{ form.nombre.label }}<br>
-        {{ form.nombre(size=32) }}<br>
-        {% for error in form.nombre.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-        {% endfor %}
-    </p>
-    <p>
-        {{ form.necesidades_expectativas.label }}<br>
-        {{ form.necesidades_expectativas(rows=5, cols=40) }}<br>
-        {% for error in form.necesidades_expectativas.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-        {% endfor %}
-    </p>
-    <p>
-        {{ form.requisitos_identificados.label }}<br>
-        {{ form.requisitos_identificados(rows=5, cols=40) }}<br>
-        {% for error in form.requisitos_identificados.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-        {% endfor %}
-    </p>
-    <p>
-        {{ form.objetivo_estrategico.label }}<br>
-        {{ form.objetivo_estrategico(rows=5, cols=40) }}<br>
-        {% for error in form.objetivo_estrategico.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-        {% endfor %}
-    </p>
-    <p>{{ form.submit() }}</p>
-</form>
+{{ page_header('Cláusula 4.2 · Partes interesadas', 'Nueva parte interesada') }}
+{{ form_card(form, url_for('parte_interesada.listar_partes_interesadas'), 'Registrar parte interesada') }}
 {% endblock %}

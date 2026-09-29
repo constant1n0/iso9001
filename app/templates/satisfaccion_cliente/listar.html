@@ -1,4 +1,4 @@
-<!-- 
+<!--
 # Este archivo es parte de "ISO9001 QMS".
 #
 # "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
@@ -14,48 +14,62 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
-
 {% extends "base.html" %}
-
-{% block title %}Lista de Encuestas de Satisfacción{% endblock %}
-
+{% from "_partials/ui.html" import page_header, delete_form, empty_state %}
+{% block title %}Satisfacción del cliente{% endblock %}
+{% block crumb %}Clientes · Satisfacción{% endblock %}
+{% set filtrando = request.args.items() | selectattr(1) | map(attribute=0) | select('in', ['cliente', 'puntuacion']) | list %}
 {% block content %}
-<h2>Lista de Encuestas de Satisfacción</h2>
+{% call page_header('Cláusula 9.1.2 · Satisfacción del cliente', 'Encuestas de satisfacción') %}
+    <a class="btn btn--primary" href="{{ url_for('satisfaccion_cliente.nueva_encuesta') }}">+ Nueva encuesta</a>
+{% endcall %}
 
-<!-- Formulario de Búsqueda -->
-<form method="get" action="{{ url_for('satisfaccion_cliente.listar_encuestas') }}">
-    <label for="cliente">Cliente:</label>
-    <input type="text" name="cliente" id="cliente" value="{{ request.args.get('cliente', '') }}">
-    
-    <label for="puntuacion">Puntuación Mínima:</label>
-    <input type="number" name="puntuacion" id="puntuacion" min="1" max="10" value="{{ request.args.get('puntuacion', '') }}">
-    
-    <button type="submit">Buscar</button>
-    <a href="{{ url_for('satisfaccion_cliente.listar_encuestas') }}">Limpiar</a>
-</form>
+<details class="filters"{% if filtrando %} open{% endif %}>
+    <summary>Filtros{% if filtrando %} <span class="badge badge--warn">{{ filtrando | length }} {{ 'activo' if filtrando | length == 1 else 'activos' }}</span>{% endif %}</summary>
+    <form method="get" action="{{ url_for('satisfaccion_cliente.listar_encuestas') }}" class="filters__body">
+        <div class="field"><label for="cliente">Cliente</label>
+            <input type="text" name="cliente" id="cliente" value="{{ request.args.get('cliente', '') }}"></div>
+        <div class="field"><label for="puntuacion">Puntuación mínima</label>
+            <input type="number" name="puntuacion" id="puntuacion" min="1" max="10" value="{{ request.args.get('puntuacion', '') }}"></div>
+        <div class="filters__actions">
+            <button type="submit" class="btn btn--primary">Buscar</button>
+            <a class="btn btn--ghost" href="{{ url_for('satisfaccion_cliente.listar_encuestas') }}">Limpiar</a>
+        </div>
+    </form>
+</details>
 
-<table border="1">
-    <tr>
-        <th>Cliente</th>
-        <th>Fecha de Encuesta</th>
-        <th>Puntuación</th>
-        <th>Comentarios</th>
-        <th>Acciones</th>
-    </tr>
-    {% for encuesta in encuestas %}
-    <tr>
-        <td>{{ encuesta.cliente }}</td>
-        <td>{{ encuesta.fecha_encuesta.strftime('%Y-%m-%d') }}</td>
-        <td>{{ encuesta.puntuacion }}</td>
-        <td>{{ encuesta.comentarios }}</td>
-        <td>
-            <a href="{{ url_for('satisfaccion_cliente.editar_encuesta', id=encuesta.id) }}">Editar</a> |
-            <form action="{{ url_for('satisfaccion_cliente.eliminar_encuesta', id=encuesta.id) }}" method="post" style="display:inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" onclick="return confirm('¿Estás seguro de eliminar esta encuesta?');">Eliminar</button>
-            </form>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+{% if encuestas %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Fecha</th>
+                <th scope="col">Cliente</th>
+                <th scope="col" class="num">Puntuación</th>
+                <th scope="col">Comentarios</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for encuesta in encuestas %}
+            <tr>
+                <td class="date">{{ encuesta.fecha_encuesta.strftime('%d/%m/%Y') }}</td>
+                <td>{{ encuesta.cliente }}</td>
+                <td class="num"><span class="badge {{ 'badge--ok' if encuesta.puntuacion >= 8 else 'badge--warn' if encuesta.puntuacion >= 5 else 'badge--danger' }}">{{ encuesta.puntuacion }} / 10</span></td>
+                <td>{{ encuesta.comentarios | truncate(90) if encuesta.comentarios else '—' }}</td>
+                <td>
+                    <div class="table__actions">
+                        <a class="btn btn--sm" href="{{ url_for('satisfaccion_cliente.editar_encuesta', id=encuesta.id) }}">Editar</a>
+                        <a class="btn btn--sm" href="{{ url_for('satisfaccion_cliente.exportar_pdf', id=encuesta.id) }}" target="_blank" rel="noopener">PDF</a>
+                        {{ delete_form(url_for('satisfaccion_cliente.eliminar_encuesta', id=encuesta.id), '¿Eliminar la encuesta de ' ~ encuesta.cliente ~ '?') }}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    {{ empty_state('Ninguna encuesta coincide con los filtros.' if filtrando else 'Todavía no hay encuestas registradas.') }}
+{% endif %}
 {% endblock %}

@@ -1,4 +1,4 @@
-<!-- 
+<!--
 # Este archivo es parte de "ISO9001 QMS".
 #
 # "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
@@ -14,30 +14,46 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
-
 {% extends "base.html" %}
-
-{% block title %}Partes Interesadas{% endblock %}
-
+{% from "_partials/ui.html" import page_header, delete_form, empty_state %}
+{% block title %}Partes interesadas{% endblock %}
+{% block crumb %}Clientes · Partes interesadas{% endblock %}
 {% block content %}
-<h2>Partes Interesadas</h2>
-<a href="{{ url_for('parte_interesada.crear_parte_interesada') }}">Nueva Parte Interesada</a>
-<table border="1">
-    <tr>
-        <th>Nombre</th>
-        <th>Acciones</th>
-    </tr>
-    {% for parte in partes %}
-    <tr>
-        <td>{{ parte.nombre }}</td>
-        <td>
-            <a href="{{ url_for('parte_interesada.editar_parte_interesada', id=parte.id_interesado) }}">Editar</a> |
-            <form action="{{ url_for('parte_interesada.eliminar_parte_interesada', id=parte.id_interesado) }}" method="post" style="display:inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" onclick="return confirm('¿Estás seguro de que deseas eliminar esta parte interesada?');">Eliminar</button>
-            </form>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+{% call page_header('Cláusula 4.2 · Partes interesadas', 'Partes interesadas') %}
+    <a class="btn btn--primary" href="{{ url_for('parte_interesada.crear_parte_interesada') }}">+ Nueva parte interesada</a>
+{% endcall %}
+
+{% if partes %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Nombre</th>
+                <th scope="col">Necesidades y expectativas</th>
+                <th scope="col">Requisitos</th>
+                <th scope="col">Objetivo estratégico</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for parte in partes %}
+            <tr>
+                <td>{{ parte.nombre }}</td>
+                <td>{{ parte.necesidades_expectativas | truncate(70) if parte.necesidades_expectativas else '—' }}</td>
+                <td>{{ parte.requisitos_identificados | truncate(70) if parte.requisitos_identificados else '—' }}</td>
+                <td>{{ parte.objetivo_estrategico | truncate(70) if parte.objetivo_estrategico else '—' }}</td>
+                <td>
+                    <div class="table__actions">
+                        <a class="btn btn--sm" href="{{ url_for('parte_interesada.editar_parte_interesada', id=parte.id_interesado) }}">Editar</a>
+                        {{ delete_form(url_for('parte_interesada.eliminar_parte_interesada', id=parte.id_interesado), '¿Eliminar la parte interesada ' ~ parte.nombre ~ '?') }}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    {{ empty_state('Todavía no hay partes interesadas registradas.') }}
+{% endif %}
 {% endblock %}
