@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import os
 import subprocess
 import sys
@@ -145,11 +146,15 @@ class ScheduledNotificationsTestCase(unittest.TestCase):
 
         html = reports.render_monthly_report_html(TODAY)
 
-        self.assertIn("2026-10-05", html)
-        self.assertIn("Total de Auditorías: 2", html)
-        self.assertIn("Total de No Conformidades: 1", html)
-        self.assertIn("Promedio de Satisfacción del Cliente: 4.5", html)
-        self.assertIn("Total de Capacitaciones: 1", html)
+        self.assertIn("05/10/2026", html)
+        kpis = dict(re.findall(
+            r'kpi__label">([^<]+)</span><span class="kpi__value">([^<]+)<', html
+        ))
+        self.assertEqual(
+            {"Auditorías": "2", "No conformidades": "1",
+             "Satisfacción media": "4.5", "Capacitaciones": "1"},
+            kpis,
+        )
 
     def test_monthly_report_pdf_goes_only_to_admins_with_email(self) -> None:
         from app import audit_notifications as notifications

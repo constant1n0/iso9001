@@ -18,19 +18,17 @@
 from datetime import date
 
 from flask import render_template
-from weasyprint import HTML
 
 from ..extensions import db
 from ..models import Auditoria, Capacitacion, NoConformidad, SatisfaccionCliente
+from .pdf import render_pdf
 
 
-def render_monthly_report_html(fecha: date) -> str:
-    """Render the HTML summary of the key quality indicators."""
+def _monthly_report_context(fecha: date) -> dict:
     promedio_satisfaccion = (
         db.session.query(db.func.avg(SatisfaccionCliente.puntuacion)).scalar() or 0
     )
-    return render_template(
-        'reportes/reporte_mensual.html',
+    return dict(
         fecha=fecha,
         total_auditorias=Auditoria.query.count(),
         total_no_conformidades=NoConformidad.query.count(),
@@ -39,6 +37,13 @@ def render_monthly_report_html(fecha: date) -> str:
     )
 
 
+def render_monthly_report_html(fecha: date) -> str:
+    """Render the HTML summary of the key quality indicators."""
+    return render_template('reportes/reporte_mensual.html', **_monthly_report_context(fecha),
+                           generado=fecha)
+
+
 def generar_reporte_pdf(fecha: date) -> bytes:
     """Build the monthly summary report as PDF bytes."""
-    return HTML(string=render_monthly_report_html(fecha)).write_pdf()
+    return render_pdf('reportes/reporte_mensual.html', **_monthly_report_context(fecha),
+                      generado=fecha)

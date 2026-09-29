@@ -13,13 +13,13 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response
+from flask import Blueprint, current_app, render_template, redirect, url_for, flash, request
 from ..models import Auditoria, RoleEnum, EstadoAuditoriaEnum
 from ..forms import AuditoriaForm
 from ..extensions import db
 from flask_login import login_required
 from ..utils.decorators import role_required
-from weasyprint import HTML
+from ..utils.pdf import pdf_response, render_pdf
 from math import ceil
 
 bp = Blueprint('auditoria', __name__, url_prefix='/auditorias')
@@ -153,18 +153,8 @@ def exportar_pdf(id):
     auditoria = Auditoria.query.get_or_404(id)
 
     try:
-        # Renderiza la plantilla en HTML
-        rendered_html = render_template('auditorias/pdf_template.html', auditoria=auditoria)
-        
-        # Convierte el HTML en PDF usando WeasyPrint
-        pdf_file = HTML(string=rendered_html).write_pdf()
-        
-        # Prepara la respuesta en PDF
-        response = make_response(pdf_file)
-        response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'inline; filename=auditoria_{id}.pdf'
-        
-        return response
-    except Exception as e:
+        return pdf_response(render_pdf('auditorias/pdf_template.html', auditoria=auditoria), f'auditoria_{id}.pdf')
+    except Exception:
+        current_app.logger.exception('Error generating PDF for audit %s', id)
         flash('Error al generar el PDF de la auditoría.', 'danger')
         return redirect(url_for('auditoria.listar_auditorias'))

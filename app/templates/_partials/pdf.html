@@ -1,0 +1,15 @@
+{# Key/value table for PDF documents: rows is a list of (label, value). #}
+{% macro fields(rows) %}
+<table class="fields">
+    {% for label, value in rows %}
+    <tr><th>{{ label }}</th><td>{{ value }}</td></tr>
+    {% endfor %}
+</table>
+{% endmacro %}
+
+{% macro section(title, text, empty='No aplica') %}
+<div class="section">
+    <h2>{{ title }}</h2>
+    {% if text %}<p>{{ text }}</p>{% else %}<p class="muted">{{ empty }}</p>{% endif %}
+</div>
+{% endmacro %}
