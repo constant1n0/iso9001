@@ -468,10 +468,18 @@ Verified in production:
 - A2a: `PASSWORD_RESET_BASE_URL=https://calidad.absolutoffice.com`; session cookies are `Secure; HttpOnly; SameSite=Lax`; HSTS and `X-Frame-Options: DENY` are present; HTTP redirects to HTTPS. SMTP login with the configured account succeeds.
 - A3: a probe `GET /reset_password/<token>` left no token in `logs/gunicorn-access.log`. The Traefik access log did record it, so access logging is disabled for the `iso9001` Traefik router only (`observability.accessLogs: false`); other services are unchanged. A second probe appeared in neither log.
 
+Verified against PostgreSQL (2026-09-29):
+
+- A2b under real concurrency. `tests/test_reset_concurrency.py` runs in CI against PostgreSQL 17, the same engine as production:
+  - 8 threads race `update_password_from_reset` with the same expected hash, and exactly one wins;
+  - 8 simultaneous HTTP submissions of the same reset link produce exactly one password change;
+  - a later submission is rejected and leaves the password unchanged.
+- The test detects the flaw it guards against. Removing the `password == expected` condition made all 8 racers succeed, and both tests failed.
+- This proves the behaviour on PostgreSQL's default `READ COMMITTED` isolation, not on the production database itself.
+
 Not verified in production:
 
 - An end-to-end password-reset e-mail (request, delivery, single use of the link).
-- A2b's conditional token consumption under PostgreSQL concurrency; tests remain SQLite-only.
 
 ## Known limitations and blockers
 
@@ -480,7 +488,7 @@ Not verified in production:
 - The canonical production origin value is an environment/deployment input; tests must use an isolated non-routable value.
 - `PasswordResetRequestForm` uses WTForms `Email`; A2a explicitly declared `email-validator==2.2.0` in `requirements.txt`. A2b adds no dependency and needs no installation.
 - A1 used only Flask's isolated test client/CLI and in-memory SQLite. No live database, Redis, SMTP, external service, or deployment environment was contacted.
-- A2b's SQLite tests verify the application-level conditional update and failure handling but do not constitute PostgreSQL concurrency proof.
+- A2b's SQLite tests verify the application-level conditional update and failure handling; PostgreSQL concurrency is covered separately by `tests/test_reset_concurrency.py` in CI.
 - Gunicorn is pinned at `23.0.0`. Its `%(r)s` atom is built from `RAW_URI`, `%(U)s` from `PATH_INFO`, `%(q)s` from `QUERY_STRING`, and `%(f)s` from the caller-supplied `Referer` header. Removing those atoms prevents automatic URL leakage from this Gunicorn access format, not arbitrary secrets supplied through retained fields or other application/proxy logs.
 
 ## Progress and next step
