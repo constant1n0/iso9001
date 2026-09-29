@@ -34,7 +34,7 @@
         <div class="field"><label for="estado">Estado</label>
             <select name="estado" id="estado">
                 <option value="">Todos</option>
-                {% for opcion in estilo_estado %}
+                {% for opcion in estados %}
                     <option value="{{ opcion }}"{% if request.args.get('estado') == opcion %} selected{% endif %}>{{ opcion }}</option>
                 {% endfor %}
             </select></div>

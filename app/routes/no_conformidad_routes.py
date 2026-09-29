@@ -16,7 +16,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response
 from flask_login import login_required
 from ..models import NoConformidad
-from ..forms import NoConformidadForm
+from ..forms import ESTADOS_NO_CONFORMIDAD, NoConformidadForm
 from ..extensions import db
 from weasyprint import HTML
 
@@ -43,7 +43,13 @@ def listar_no_conformidades():
         query = query.filter(db.func.date(NoConformidad.fecha_detectada) == fecha_detectada)
     
     no_conformidades = query.all()
-    return render_template('no_conformidades/listar.html', no_conformidades=no_conformidades)
+    # Fixed states first, then any legacy free-text values still stored.
+    heredados = sorted(
+        {estado for (estado,) in db.session.query(NoConformidad.estado).distinct()}
+        - set(ESTADOS_NO_CONFORMIDAD)
+    )
+    return render_template('no_conformidades/listar.html', no_conformidades=no_conformidades,
+                           estados=[*ESTADOS_NO_CONFORMIDAD, *heredados])
 
 # Ruta para registrar una nueva no conformidad
 @bp.route('/nueva', methods=['GET', 'POST'])
@@ -70,6 +76,13 @@ def nueva_no_conformidad():
 def editar_no_conformidad(id):
     no_conformidad = NoConformidad.query.get_or_404(id)
     form = NoConformidadForm(obj=no_conformidad)
+    # Records created when the state was free text keep their value
+    # unless the user picks another one.
+    if no_conformidad.estado not in ESTADOS_NO_CONFORMIDAD:
+        form.estado.choices = [
+            (no_conformidad.estado, f'{no_conformidad.estado} (heredado)'),
+            *form.estado.choices,
+        ]
     if form.validate_on_submit():
         no_conformidad.descripcion = form.descripcion.data
         no_conformidad.fecha_detectada = form.fecha_detectada.data
