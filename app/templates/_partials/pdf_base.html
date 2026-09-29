@@ -1,0 +1,41 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{# Base layout for PDFs rendered by app.utils.pdf.render_pdf (WeasyPrint). #}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}{% endblock %}</title>
+    <link rel="stylesheet" href="css/pdf.css">
+</head>
+<body>
+    <header class="doc-header">
+        <div class="doc-header__row">
+            <div class="doc-mark">Q</div>
+            <div class="doc-brand">ISO 9001<small>Gestión de calidad</small></div>
+            <div class="doc-meta">
+                <strong>{% block clause %}{% endblock %}</strong><br>
+                Generado el {{ generado.strftime('%d/%m/%Y') }}
+            </div>
+        </div>
+    </header>
+    <div class="hazard"></div>
+    <h1>{{ self.title() }}</h1>
+    <p class="doc-subtitle">{% block subtitle %}{% endblock %}</p>
+    {% block content %}{% endblock %}
+</body>
+</html>

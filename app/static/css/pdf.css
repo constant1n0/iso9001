@@ -1,0 +1,73 @@
+/*
+ * Este archivo es parte de "ISO9001 QMS" (GPL-3.0-or-later).
+ *
+ * Print theme for WeasyPrint PDFs: white paper to save ink, black header
+ * band and canary accents (never canary text on white).
+ */
+
+@font-face { font-family: "Barlow Condensed"; font-weight: 600; src: url("../fonts/barlow-condensed-latin-600.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 700; src: url("../fonts/barlow-condensed-latin-700.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 400; src: url("../fonts/ibm-plex-sans-latin-400.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 600; src: url("../fonts/ibm-plex-sans-latin-600.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 400; src: url("../fonts/ibm-plex-mono-latin-400.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 500; src: url("../fonts/ibm-plex-mono-latin-500.woff2") format("woff2"); }
+
+@page {
+  size: A4;
+  margin: 18mm 16mm 20mm;
+  @bottom-left {
+    content: "ISO 9001 · Sistema de gestión de calidad";
+    font: 400 7.5pt "IBM Plex Mono";
+    color: #6b675f;
+  }
+  @bottom-right {
+    content: "Página " counter(page) " de " counter(pages);
+    font: 400 7.5pt "IBM Plex Mono";
+    color: #6b675f;
+  }
+}
+
+html { color: #111; font: 400 10pt/1.5 "IBM Plex Sans", sans-serif; }
+body { margin: 0; }
+
+.doc-header { background: #0a0a0a; color: #ede8dc; padding: 5mm 6mm; }
+/* WeasyPrint ignores flex gap: spacing uses margins. */
+.doc-header__row { display: flex; align-items: center; }
+.doc-mark {
+  flex: none; width: 11mm; height: 11mm; margin-right: 4mm; background: #fff000; color: #0a0a0a;
+  font: 700 20pt/11mm "Barlow Condensed"; text-align: center;
+}
+.doc-brand { font: 700 13pt/1 "Barlow Condensed"; letter-spacing: 0.04em; }
+.doc-brand small { display: block; margin-top: 1mm; color: #b9b3a6; font: 400 7pt/1 "IBM Plex Mono"; letter-spacing: 0.12em; text-transform: uppercase; }
+.doc-meta { margin-left: auto; text-align: right; color: #b9b3a6; font: 400 7.5pt/1.5 "IBM Plex Mono"; }
+.doc-meta strong { color: #fff000; font-weight: 500; }
+.hazard { height: 2.2mm; background: repeating-linear-gradient(-45deg, #fff000, #fff000 2.4mm, #0a0a0a 2.4mm, #0a0a0a 4.8mm); }
+
+h1 {
+  margin: 7mm 0 1mm; font: 700 24pt/1.05 "Barlow Condensed";
+  letter-spacing: 0.02em; text-transform: uppercase;
+}
+.doc-subtitle { margin: 0 0 6mm; color: #6b675f; font: 400 8pt "IBM Plex Mono"; letter-spacing: 0.1em; text-transform: uppercase; }
+
+.fields { width: 100%; border-collapse: collapse; margin-bottom: 6mm; }
+.fields th, .fields td { padding: 2.4mm 3mm; border-bottom: 0.3mm solid #d9d4c8; text-align: left; vertical-align: top; }
+.fields th { width: 34%; color: #6b675f; font: 500 7.5pt "IBM Plex Mono"; letter-spacing: 0.08em; text-transform: uppercase; }
+.fields tr:first-child th, .fields tr:first-child td { border-top: 0.6mm solid #0a0a0a; }
+
+.section { margin-bottom: 6mm; page-break-inside: avoid; }
+.section h2 {
+  margin: 0 0 2mm; padding-left: 2.5mm; border-left: 1.2mm solid #fff000;
+  font: 600 13pt/1.2 "Barlow Condensed"; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.section p { margin: 0; white-space: pre-wrap; }
+.muted { color: #6b675f; }
+
+.badge { display: inline-block; padding: 0.3mm 2mm; border: 0.3mm solid #0a0a0a; font: 500 7.5pt "IBM Plex Mono"; letter-spacing: 0.08em; text-transform: uppercase; }
+.badge--solid { background: #0a0a0a; color: #fff000; }
+
+/* Table layout: WeasyPrint's flex sizing overflows with borders/padding. */
+.kpis { display: table; width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 3mm 0; margin: 2mm 0 7mm; }
+.kpi { display: table-cell; padding: 4mm; border: 0.3mm solid #d9d4c8; border-bottom: 1.2mm solid #0a0a0a; }
+.kpi--accent { border-bottom-color: #fff000; }
+.kpi__label { display: block; color: #6b675f; font: 500 7pt "IBM Plex Mono"; letter-spacing: 0.1em; text-transform: uppercase; }
+.kpi__value { display: block; margin-top: 2mm; font: 700 26pt/1 "Barlow Condensed"; }

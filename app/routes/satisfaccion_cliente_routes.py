@@ -13,12 +13,12 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response
+from flask import Blueprint, render_template, redirect, url_for, flash, request
 from ..models import SatisfaccionCliente
 from ..forms import SatisfaccionClienteForm
 from ..extensions import db
 from flask_login import login_required
-from weasyprint import HTML
+from ..utils.pdf import pdf_response, render_pdf
 
 bp = Blueprint('satisfaccion_cliente', __name__, url_prefix='/satisfaccion_cliente')
 
@@ -106,12 +106,4 @@ def exportar_pdf(id):
     Genera un PDF para una encuesta de satisfacción específica usando su ID.
     """
     encuesta = SatisfaccionCliente.query.get_or_404(id)
-    rendered_html = render_template('satisfaccion_cliente/pdf_template.html', encuesta=encuesta)
-    pdf_file = HTML(string=rendered_html).write_pdf()
-
-    # Preparar la respuesta en PDF
-    response = make_response(pdf_file)
-    response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = f'inline; filename=encuesta_{id}.pdf'
-
-    return response
+    return pdf_response(render_pdf('satisfaccion_cliente/pdf_template.html', encuesta=encuesta), f'encuesta_{id}.pdf')

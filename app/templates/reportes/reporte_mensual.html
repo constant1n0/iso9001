@@ -1,4 +1,4 @@
-<!-- 
+<!--
 # Este archivo es parte de "ISO9001 QMS".
 #
 # "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
@@ -14,33 +14,19 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
-
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Reporte Mensual del Sistema de Gestión de Calidad</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1 { text-align: center; }
-        .section { margin-top: 20px; }
-        .section-title { font-weight: bold; margin-top: 10px; }
-    </style>
-</head>
-<body>
-    <h1>Reporte Mensual del Sistema de Gestión de Calidad</h1>
-    <p>Fecha de generación: {{ fecha }}</p>
-
-    <div class="section">
-        <p class="section-title">Estadísticas Generales</p>
-        <ul>
-            <li>Total de Auditorías: {{ total_auditorias }}</li>
-            <li>Total de No Conformidades: {{ total_no_conformidades }}</li>
-            <li>Promedio de Satisfacción del Cliente: {{ promedio_satisfaccion | round(2) }}</li>
-            <li>Total de Capacitaciones: {{ total_capacitaciones }}</li>
-        </ul>
-    </div>
-
-    <p>Este reporte ofrece una visión general de los principales indicadores de calidad.</p>
-</body>
-</html>
+{% extends "_partials/pdf_base.html" %}
+{% block title %}Informe mensual de calidad{% endblock %}
+{% block clause %}Cláusula 9.1 · Seguimiento y medición{% endblock %}
+{% block subtitle %}Situación a {{ fecha.strftime('%d/%m/%Y') }}{% endblock %}
+{% block content %}
+<div class="kpis">
+    <div class="kpi kpi--accent"><span class="kpi__label">Auditorías</span><span class="kpi__value">{{ total_auditorias }}</span></div>
+    <div class="kpi"><span class="kpi__label">No conformidades</span><span class="kpi__value">{{ total_no_conformidades }}</span></div>
+    <div class="kpi"><span class="kpi__label">Satisfacción media</span><span class="kpi__value">{{ '%.1f' | format(promedio_satisfaccion) }}</span></div>
+    <div class="kpi"><span class="kpi__label">Capacitaciones</span><span class="kpi__value">{{ total_capacitaciones }}</span></div>
+</div>
+<div class="section">
+    <h2>Alcance</h2>
+    <p>Indicadores acumulados del sistema de gestión de calidad a la fecha del informe. La satisfacción media se expresa sobre 10.</p>
+</div>
+{% endblock %}

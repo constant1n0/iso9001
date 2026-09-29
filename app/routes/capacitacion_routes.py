@@ -13,12 +13,12 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response
+from flask import Blueprint, render_template, redirect, url_for, flash, request
 from ..models import Capacitacion
 from ..forms import CapacitacionForm
 from ..extensions import db
 from flask_login import login_required
-from weasyprint import HTML
+from ..utils.pdf import pdf_response, render_pdf
 
 bp = Blueprint('capacitacion', __name__, url_prefix='/capacitaciones')
 
@@ -103,13 +103,4 @@ def exportar_pdf(id):
     Genera un PDF para un registro de capacitación específico usando su ID.
     """
     capacitacion = Capacitacion.query.get_or_404(id)
-    rendered_html = render_template('capacitaciones/pdf_template.html', capacitacion=capacitacion)
-
-    # Convertir el HTML en PDF usando WeasyPrint
-    pdf_file = HTML(string=rendered_html).write_pdf()
-
-    # Crear respuesta de PDF
-    response = make_response(pdf_file)
-    response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = f'inline; filename=capacitacion_{id}.pdf'
-    return response
+    return pdf_response(render_pdf('capacitaciones/pdf_template.html', capacitacion=capacitacion), f'capacitacion_{id}.pdf')

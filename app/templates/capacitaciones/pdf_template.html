@@ -1,4 +1,4 @@
-<!-- 
+<!--
 # Este archivo es parte de "ISO9001 QMS".
 #
 # "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
@@ -14,27 +14,17 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Informe de Capacitación</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1 { text-align: center; }
-        .info { margin-top: 20px; }
-        .info p { margin: 5px 0; }
-        .section-title { font-weight: bold; margin-top: 20px; }
-    </style>
-</head>
-<body>
-    <h1>Informe de Capacitación</h1>
-    <div class="info">
-        <p><strong>Tema:</strong> {{ capacitacion.tema }}</p>
-        <p><strong>Fecha:</strong> {{ capacitacion.fecha.strftime('%Y-%m-%d') }}</p>
-        <p><strong>Personal:</strong> {{ capacitacion.personal }}</p>
-        <p><strong>Duración (horas):</strong> {{ capacitacion.duracion_horas }}</p>
-        <p><strong>Evaluación Final:</strong> {{ capacitacion.evaluacion_final or "No evaluado" }}</p>
-    </div>
-</body>
-</html>
+{% extends "_partials/pdf_base.html" %}
+{% from "_partials/pdf.html" import fields %}
+{% block title %}Registro de capacitación{% endblock %}
+{% block clause %}Cláusula 7.2 · Competencia{% endblock %}
+{% block subtitle %}Capacitación n.º {{ capacitacion.id }} · {{ capacitacion.tema }}{% endblock %}
+{% block content %}
+{{ fields([
+    ('Tema', capacitacion.tema),
+    ('Fecha', capacitacion.fecha.strftime('%d/%m/%Y')),
+    ('Personal', capacitacion.personal),
+    ('Duración', (capacitacion.duracion_horas ~ ' h') if capacitacion.duracion_horas is not none else '—'),
+    ('Evaluación final', capacitacion.evaluacion_final or 'Sin evaluar'),
+]) }}
+{% endblock %}

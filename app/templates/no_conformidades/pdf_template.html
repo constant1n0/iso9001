@@ -1,4 +1,4 @@
-<!-- 
+<!--
 # Este archivo es parte de "ISO9001 QMS".
 #
 # "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
@@ -14,30 +14,18 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Informe de No Conformidad</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1 { text-align: center; }
-        .info { margin-top: 20px; }
-        .info p { margin: 5px 0; }
-        .section-title { font-weight: bold; margin-top: 20px; }
-    </style>
-</head>
-<body>
-    <h1>Informe de No Conformidad</h1>
-    <div class="info">
-        <p><strong>Descripción:</strong> {{ no_conformidad.descripcion }}</p>
-        <p><strong>Fecha Detectada:</strong> {{ no_conformidad.fecha_detectada.strftime('%Y-%m-%d') }}</p>
-        <p><strong>Responsable:</strong> {{ no_conformidad.responsable or "No asignado" }}</p>
-        <p><strong>Estado:</strong> {{ no_conformidad.estado }}</p>
-    </div>
-    <div class="section">
-        <p class="section-title">Acción Correctiva:</p>
-        <p>{{ no_conformidad.accion_correctiva or "No aplicable" }}</p>
-    </div>
-</body>
-</html>
+{% extends "_partials/pdf_base.html" %}
+{% from "_partials/pdf.html" import fields, section %}
+{% block title %}Informe de no conformidad{% endblock %}
+{% block clause %}Cláusula 10.2 · No conformidad y acción correctiva{% endblock %}
+{% block subtitle %}No conformidad n.º {{ no_conformidad.id }}{% endblock %}
+{% block content %}
+{{ fields([
+    ('Fecha detectada', no_conformidad.fecha_detectada.strftime('%d/%m/%Y')),
+    ('Responsable', no_conformidad.responsable or 'Sin asignar'),
+    ('Estado', no_conformidad.estado),
+    ('Fecha de cierre', no_conformidad.fecha_cierre.strftime('%d/%m/%Y') if no_conformidad.fecha_cierre else '—'),
+]) }}
+{{ section('Descripción', no_conformidad.descripcion) }}
+{{ section('Acción correctiva', no_conformidad.accion_correctiva) }}
+{% endblock %}

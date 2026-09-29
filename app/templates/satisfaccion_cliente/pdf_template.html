@@ -1,4 +1,4 @@
-<!-- 
+<!--
 # Este archivo es parte de "ISO9001 QMS".
 #
 # "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
@@ -14,30 +14,16 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
-
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Informe de Satisfacción del Cliente</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1 { text-align: center; }
-        .info { margin-top: 20px; }
-        .info p { margin: 5px 0; }
-        .section-title { font-weight: bold; margin-top: 20px; }
-    </style>
-</head>
-<body>
-    <h1>Informe de Satisfacción del Cliente</h1>
-    <div class="info">
-        <p><strong>Cliente:</strong> {{ encuesta.cliente }}</p>
-        <p><strong>Fecha de Encuesta:</strong> {{ encuesta.fecha_encuesta.strftime('%Y-%m-%d') }}</p>
-        <p><strong>Puntuación:</strong> {{ encuesta.puntuacion }} / 10</p>
-    </div>
-    <div class="section">
-        <p class="section-title">Comentarios:</p>
-        <p>{{ encuesta.comentarios or "No se proporcionaron comentarios adicionales" }}</p>
-    </div>
-</body>
-</html>
+{% extends "_partials/pdf_base.html" %}
+{% from "_partials/pdf.html" import fields, section %}
+{% block title %}Encuesta de satisfacción{% endblock %}
+{% block clause %}Cláusula 9.1.2 · Satisfacción del cliente{% endblock %}
+{% block subtitle %}Encuesta n.º {{ encuesta.id }} · {{ encuesta.cliente }}{% endblock %}
+{% block content %}
+{{ fields([
+    ('Cliente', encuesta.cliente),
+    ('Fecha de la encuesta', encuesta.fecha_encuesta.strftime('%d/%m/%Y')),
+    ('Puntuación', encuesta.puntuacion ~ ' / 10'),
+]) }}
+{{ section('Comentarios', encuesta.comentarios, 'Sin comentarios adicionales') }}
+{% endblock %}
