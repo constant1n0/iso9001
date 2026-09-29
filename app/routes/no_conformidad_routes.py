@@ -36,7 +36,7 @@ def listar_no_conformidades():
     
     estado = request.args.get('estado')
     if estado:
-        query = query.filter(NoConformidad.estado.ilike(f'%{estado}%'))
+        query = query.filter(NoConformidad.estado == estado)
     
     fecha_detectada = request.args.get('fecha_detectada')
     if fecha_detectada:

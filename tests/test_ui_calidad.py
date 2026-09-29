@@ -112,6 +112,17 @@ class CalidadScreensTestCase(unittest.TestCase):
             self.assertEqual("Pendiente revisión", nc.estado)
             self.assertEqual("Etiqueta ilegible en lote 42", nc.descripcion)
 
+    def test_state_filter_matches_exactly(self) -> None:
+        with self.app.app_context():
+            db.session.add(NoConformidad(descripcion="Reabierta tras auditoría",
+                                         fecha_detectada=DAY, estado="Reabierta"))
+            db.session.commit()
+
+        html = self.client.get("/no_conformidades/?estado=Abierta").get_data(as_text=True)
+
+        self.assertIn("Etiqueta ilegible", html)
+        self.assertNotIn("Reabierta tras auditoría", html)
+
 
 if __name__ == "__main__":
     unittest.main()
