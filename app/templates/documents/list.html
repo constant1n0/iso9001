@@ -1,4 +1,4 @@
-<!-- 
+<!--
 # Este archivo es parte de "ISO9001 QMS".
 #
 # "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
@@ -14,49 +14,50 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
-
 {% extends "base.html" %}
-
-{% block title %}Lista de Documentos{% endblock %}
-
+{% from "_partials/ui.html" import page_header, delete_form, empty_state %}
+{% block title %}Documentos{% endblock %}
+{% block crumb %}Documentación · Documentos{% endblock %}
 {% block content %}
-<h2>Lista de Documentos</h2>
+{% call page_header('Cláusula 7.5 · Información documentada', 'Documentos') %}
+    <a class="btn btn--primary" href="{{ url_for('document.new_document') }}">+ Nuevo documento</a>
+{% endcall %}
 
-<div class="actions">
-    <a href="{{ url_for('document.new_document') }}" class="btn btn-primary">Crear Nuevo Documento</a>
+{% if documents %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Código</th>
+                <th scope="col">Título</th>
+                <th scope="col">Categoría</th>
+                <th scope="col">Versión</th>
+                <th scope="col">Emisión</th>
+                <th scope="col">Aprobado por</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for document in documents %}
+            <tr>
+                <td class="mono">{{ document.code }}</td>
+                <td>{{ document.title }}</td>
+                <td><span class="badge">{{ document.category.value }}</span></td>
+                <td class="mono">v{{ document.version }}</td>
+                <td class="date">{{ document.issued_date.strftime('%d/%m/%Y') }}</td>
+                <td>{{ document.approved_by or '—' }}</td>
+                <td>
+                    <div class="table__actions">
+                        <a class="btn btn--sm" href="{{ url_for('document.edit_document', document_id=document.id) }}">Editar</a>
+                        {{ delete_form(url_for('document.delete_document', document_id=document.id), '¿Eliminar el documento ' ~ document.code ~ '?') }}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
-
-<table class="table table-striped mt-3">
-    <thead>
-        <tr>
-            <th>Título</th>
-            <th>Código</th>
-            <th>Categoría</th>
-            <th>Versión</th>
-            <th>Fecha de Emisión</th>
-            <th>Aprobado por</th>
-            <th>Acciones</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for document in documents %}
-        <tr>
-            <td>{{ document.title }}</td>
-            <td>{{ document.code }}</td>
-            <td>{{ document.category }}</td>
-            <td>{{ document.version }}</td>
-            <td>{{ document.issued_date.strftime('%Y-%m-%d') }}</td>
-            <td>{{ document.approved_by }}</td>
-            <td>
-                <a href="{{ url_for('document.edit_document', document_id=document.id) }}" class="btn btn-warning btn-sm">Editar</a>
-                <form action="{{ url_for('document.delete_document', document_id=document.id) }}" method="POST" style="display:inline;">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-danger btn-sm">Eliminar</button>
-                </form>
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-
+{% else %}
+    {{ empty_state('Todavía no hay documentos registrados.') }}
+{% endif %}
 {% endblock %}

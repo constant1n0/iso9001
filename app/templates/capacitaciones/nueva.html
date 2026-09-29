@@ -1,4 +1,4 @@
-<!-- 
+<!--
 # Este archivo es parte de "ISO9001 QMS".
 #
 # "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
@@ -15,75 +15,10 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
 {% extends "base.html" %}
-
-{% block title %}Nueva Capacitación{% endblock %}
-
+{% from "_partials/ui.html" import page_header, form_card %}
+{% block title %}Nueva capacitación{% endblock %}
+{% block crumb %}Personas · Capacitaciones{% endblock %}
 {% block content %}
-<h2>Registrar Nueva Capacitación</h2>
-
-<form method="post">
-    {{ form.hidden_tag() }}
-
-    <p>
-        {{ form.tema.label }}<br>
-        {{ form.tema(size=32) }}
-        {% if form.tema.errors %}
-            <ul class="errors">
-                {% for error in form.tema.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </p>
-
-    <p>
-        {{ form.fecha.label }}<br>
-        {{ form.fecha }}
-        {% if form.fecha.errors %}
-            <ul class="errors">
-                {% for error in form.fecha.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </p>
-
-    <p>
-        {{ form.personal.label }}<br>
-        {{ form.personal(size=32) }}
-        {% if form.personal.errors %}
-            <ul class="errors">
-                {% for error in form.personal.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </p>
-
-    <p>
-        {{ form.duracion_horas.label }}<br>
-        {{ form.duracion_horas }}
-        {% if form.duracion_horas.errors %}
-            <ul class="errors">
-                {% for error in form.duracion_horas.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </p>
-
-    <p>
-        {{ form.evaluacion_final.label }}<br>
-        {{ form.evaluacion_final(size=20) }}
-        {% if form.evaluacion_final.errors %}
-            <ul class="errors">
-                {% for error in form.evaluacion_final.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </p>
-
-    <p>{{ form.submit() }}</p>
-</form>
+{{ page_header('Cláusula 7.2 · Competencia', 'Nueva capacitación') }}
+{{ form_card(form, url_for('capacitacion.listar_capacitaciones'), 'Registrar capacitación') }}
 {% endblock %}

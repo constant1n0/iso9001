@@ -93,7 +93,7 @@ class CapacitacionForm(FlaskForm):
     tema = StringField('Tema', validators=[DataRequired(), Length(max=100)])
     fecha = DateField('Fecha', validators=[DataRequired()])
     personal = StringField('Personal', validators=[DataRequired(), Length(max=100)])
-    duracion_horas = IntegerField('Duración en Horas')
+    duracion_horas = IntegerField('Duración en Horas', validators=[Optional(), NumberRange(min=0)])
     evaluacion_final = StringField('Evaluación Final', validators=[Length(max=20)])
     submit = SubmitField('Guardar')
 

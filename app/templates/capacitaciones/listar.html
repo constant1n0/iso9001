@@ -1,4 +1,4 @@
-<!-- 
+<!--
 # Este archivo es parte de "ISO9001 QMS".
 #
 # "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
@@ -15,49 +15,65 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
 {% extends "base.html" %}
-
-{% block title %}Lista de Capacitaciones{% endblock %}
-
+{% from "_partials/ui.html" import page_header, delete_form, empty_state %}
+{% block title %}Capacitaciones{% endblock %}
+{% block crumb %}Personas · Capacitaciones{% endblock %}
+{% set filtrando = request.args.items() | selectattr(1) | map(attribute=0) | select('in', ['tema', 'fecha', 'personal']) | list %}
 {% block content %}
-<h2>Lista de Capacitaciones</h2>
+{% call page_header('Cláusula 7.2 · Competencia', 'Capacitaciones') %}
+    <a class="btn btn--primary" href="{{ url_for('capacitacion.nueva_capacitacion') }}">+ Nueva capacitación</a>
+{% endcall %}
 
-<!-- Formulario de Búsqueda -->
-<form method="get" action="{{ url_for('capacitacion.listar_capacitaciones') }}">
-    <label for="tema">Tema:</label>
-    <input type="text" name="tema" id="tema" value="{{ request.args.get('tema', '') }}">
-    
-    <label for="fecha">Fecha (YYYY-MM-DD):</label>
-    <input type="date" name="fecha" id="fecha" value="{{ request.args.get('fecha', '') }}">
-    
-    <label for="personal">Personal:</label>
-    <input type="text" name="personal" id="personal" value="{{ request.args.get('personal', '') }}">
-    
-    <button type="submit">Buscar</button>
-    <a href="{{ url_for('capacitacion.listar_capacitaciones') }}">Limpiar</a>
-</form>
+<details class="filters"{% if filtrando %} open{% endif %}>
+    <summary>Filtros{% if filtrando %} <span class="badge badge--warn">{{ filtrando | length }} {{ 'activo' if filtrando | length == 1 else 'activos' }}</span>{% endif %}</summary>
+    <form method="get" action="{{ url_for('capacitacion.listar_capacitaciones') }}" class="filters__body">
+        <div class="field"><label for="tema">Tema</label>
+            <input type="text" name="tema" id="tema" value="{{ request.args.get('tema', '') }}"></div>
+        <div class="field"><label for="fecha">Fecha</label>
+            <input type="date" name="fecha" id="fecha" value="{{ request.args.get('fecha', '') }}"></div>
+        <div class="field"><label for="personal">Personal</label>
+            <input type="text" name="personal" id="personal" value="{{ request.args.get('personal', '') }}"></div>
+        <div class="filters__actions">
+            <button type="submit" class="btn btn--primary">Buscar</button>
+            <a class="btn btn--ghost" href="{{ url_for('capacitacion.listar_capacitaciones') }}">Limpiar</a>
+        </div>
+    </form>
+</details>
 
-<table border="1">
-    <tr>
-        <th>Tema</th>
-        <th>Fecha</th>
-        <th>Personal</th>
-        <th>Duración</th>
-        <th>Acciones</th>
-    </tr>
-    {% for capacitacion in capacitaciones %}
-    <tr>
-        <td>{{ capacitacion.tema }}</td>
-        <td>{{ capacitacion.fecha.strftime('%Y-%m-%d') }}</td>
-        <td>{{ capacitacion.personal }}</td>
-        <td>{{ capacitacion.duracion_horas }}</td>
-        <td>
-            <a href="{{ url_for('capacitacion.editar_capacitacion', id=capacitacion.id) }}">Editar</a> |
-            <form action="{{ url_for('capacitacion.eliminar_capacitacion', id=capacitacion.id) }}" method="post" style="display:inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" onclick="return confirm('¿Estás seguro de eliminar esta capacitación?');">Eliminar</button>
-            </form>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+{% if capacitaciones %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Fecha</th>
+                <th scope="col">Tema</th>
+                <th scope="col">Personal</th>
+                <th scope="col" class="num">Horas</th>
+                <th scope="col">Evaluación</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for capacitacion in capacitaciones %}
+            <tr>
+                <td class="date">{{ capacitacion.fecha.strftime('%d/%m/%Y') }}</td>
+                <td>{{ capacitacion.tema }}</td>
+                <td>{{ capacitacion.personal }}</td>
+                <td class="num">{{ capacitacion.duracion_horas if capacitacion.duracion_horas is not none else '—' }}</td>
+                <td>{{ capacitacion.evaluacion_final or '—' }}</td>
+                <td>
+                    <div class="table__actions">
+                        <a class="btn btn--sm" href="{{ url_for('capacitacion.editar_capacitacion', id=capacitacion.id) }}">Editar</a>
+                        <a class="btn btn--sm" href="{{ url_for('capacitacion.exportar_pdf', id=capacitacion.id) }}" target="_blank" rel="noopener">PDF</a>
+                        {{ delete_form(url_for('capacitacion.eliminar_capacitacion', id=capacitacion.id), '¿Eliminar la capacitación ' ~ capacitacion.tema ~ '?') }}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    {{ empty_state('Ninguna capacitación coincide con los filtros.' if filtrando else 'Todavía no hay capacitaciones registradas.') }}
+{% endif %}
 {% endblock %}

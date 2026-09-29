@@ -58,6 +58,9 @@ def new_document():
 def edit_document(document_id):
     document = Document.query.get_or_404(document_id)
     form = DocumentForm(obj=document)
+    # The select uses enum names as values; preselect the stored category.
+    if request.method == 'GET':
+        form.category.data = document.category.name
     if form.validate_on_submit():
         document.title = form.title.data
         document.code = form.code.data
