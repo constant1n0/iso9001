@@ -13,7 +13,7 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from flask import Blueprint, render_template
+from flask import Blueprint, redirect, url_for
 from flask_login import login_required
 
 bp = Blueprint('main', __name__)
@@ -21,4 +21,4 @@ bp = Blueprint('main', __name__)
 @bp.route('/')
 @login_required
 def index():
-    return render_template('index.html')
+    return redirect(url_for('dashboard.dashboard'))

@@ -334,7 +334,6 @@ iso9001/
 │   │   │   ├── listar.html
 │   │   │   └── editar.html
 │   │   ├── login.html
-│   │   ├── index.html
 │   │   ├── dashboard
 │   │   │   └── dashboard.html
 │   │   ├── capacitaciones

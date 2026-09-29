@@ -42,7 +42,7 @@ def listar_no_conformidades():
     if fecha_detectada:
         query = query.filter(db.func.date(NoConformidad.fecha_detectada) == fecha_detectada)
     
-    no_conformidades = query.all()
+    no_conformidades = query.order_by(NoConformidad.fecha_detectada.desc()).all()
     # Fixed states first, then any legacy free-text values still stored.
     heredados = sorted(
         {estado for (estado,) in db.session.query(NoConformidad.estado).distinct()}

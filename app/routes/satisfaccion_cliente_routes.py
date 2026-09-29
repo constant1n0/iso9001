@@ -44,7 +44,7 @@ def listar_encuestas():
         except ValueError:
             flash('La puntuación debe ser un número entero.', 'warning')
     
-    encuestas = query.all()
+    encuestas = query.order_by(SatisfaccionCliente.fecha_encuesta.desc()).all()
     return render_template('satisfaccion_cliente/listar.html', encuestas=encuestas)
 
 @bp.route('/nueva', methods=['GET', 'POST'])

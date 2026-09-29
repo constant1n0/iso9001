@@ -24,7 +24,7 @@ bp = Blueprint('parte_interesada', __name__, url_prefix='/partes_interesadas')
 @bp.route('/', methods=['GET'])
 @login_required
 def listar_partes_interesadas():
-    partes = ParteInteresada.query.all()
+    partes = ParteInteresada.query.order_by(ParteInteresada.nombre).all()
     return render_template('partes_interesadas/listar.html', partes=partes)
 
 @bp.route('/nueva', methods=['GET', 'POST'])

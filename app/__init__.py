@@ -114,10 +114,10 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
         # Content Security Policy
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
-            # 'unsafe-inline' is still needed by inline confirm() handlers in
-            # templates not yet migrated to data-confirm.
-            "script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline'; "
+            # No inline scripts, handlers or styles (enforced by
+            # tests/test_ui_cierre.py), so 'unsafe-inline' is not needed.
+            "script-src 'self'; "
+            "style-src 'self'; "
             "font-src 'self'; "
             "img-src 'self' data:; "
             "connect-src 'self'; "
