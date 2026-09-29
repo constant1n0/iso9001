@@ -14,30 +14,11 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
-
 {% extends "base.html" %}
-
-{% block title %}Editar Mejora{% endblock %}
-
+{% from "_partials/ui.html" import page_header, form_card %}
+{% block title %}Editar mejora{% endblock %}
+{% block crumb %}Calidad · Mejoras{% endblock %}
 {% block content %}
-<h2>Editar Mejora</h2>
-<form method="post">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <p>
-        <label for="no_conformidad">No Conformidad:</label><br>
-        <textarea name="no_conformidad" id="no_conformidad" rows="4" cols="50" required>{{ mejora.no_conformidad }}</textarea>
-    </p>
-    <p>
-        <label for="accion_correctiva">Acción Correctiva:</label><br>
-        <textarea name="accion_correctiva" id="accion_correctiva" rows="4" cols="50">{{ mejora.accion_correctiva or '' }}</textarea>
-    </p>
-    <p>
-        <label for="accion_preventiva">Acción Preventiva:</label><br>
-        <textarea name="accion_preventiva" id="accion_preventiva" rows="4" cols="50">{{ mejora.accion_preventiva or '' }}</textarea>
-    </p>
-    <p>
-        <button type="submit">Guardar Cambios</button>
-        <a href="{{ url_for('mejora.listar_mejoras') }}">Cancelar</a>
-    </p>
-</form>
+{{ page_header('Cláusula 10.3 · Mejora continua', 'Editar mejora') }}
+{{ form_card(form, url_for('mejora.listar_mejoras'), 'Guardar cambios') }}
 {% endblock %}

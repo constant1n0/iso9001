@@ -1,0 +1,41 @@
+{# Shared page building blocks. #}
+{% from "_partials/forms.html" import field %}
+
+{# Page title with an eyebrow; wrap in {% call %} to add action buttons. #}
+{% macro page_header(eyebrow, title) %}
+<header class="page-header">
+    <div>
+        <span class="page-header__eyebrow">{{ eyebrow }}</span>
+        <h1>{{ title }}</h1>
+    </div>
+    {% if caller is defined %}<div class="page-header__actions">{{ caller() }}</div>{% endif %}
+</header>
+{% endmacro %}
+
+{# Every visible field of a WTForms form, textareas at full width. #}
+{% macro form_card(form, cancel_url, submit_label='Guardar') %}
+<form method="post" class="form-card" novalidate>
+    {{ form.hidden_tag() }}
+    <div class="form-grid">
+        {% for f in form if f.type not in ('CSRFTokenField', 'HiddenField', 'SubmitField') %}
+            {{ field(f, class_='field--wide' if f.type == 'TextAreaField' else '') }}
+        {% endfor %}
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn--primary">{{ submit_label }}</button>
+        <a class="btn btn--ghost" href="{{ cancel_url }}">Cancelar</a>
+    </div>
+</form>
+{% endmacro %}
+
+{# POST delete button; confirmation handled by static/js/app.js. #}
+{% macro delete_form(action, message) %}
+<form class="inline-form" action="{{ action }}" method="post" data-confirm="{{ message }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn--sm btn--danger">Eliminar</button>
+</form>
+{% endmacro %}
+
+{% macro empty_state(message) %}
+<div class="card"><p class="empty">{{ message }}</p></div>
+{% endmacro %}

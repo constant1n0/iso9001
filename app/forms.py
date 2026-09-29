@@ -58,14 +58,27 @@ class AuditoriaForm(FlaskForm):
             return False
         return True
 
+# Estados posibles de una No Conformidad (columna de texto en la base de datos)
+ESTADOS_NO_CONFORMIDAD = ('Abierta', 'En proceso', 'Cerrada')
+
+
 # Formulario para registrar No Conformidades
 class NoConformidadForm(FlaskForm):
     descripcion = TextAreaField('Descripción', validators=[DataRequired()])
     fecha_detectada = DateField('Fecha Detectada', validators=[DataRequired()])
     responsable = StringField('Responsable', validators=[Length(max=50)])
-    estado = StringField('Estado', default='Abierta', validators=[DataRequired(), Length(max=20)])
+    estado = SelectField('Estado', choices=[(e, e) for e in ESTADOS_NO_CONFORMIDAD],
+                         default='Abierta', validators=[DataRequired()])
     accion_correctiva = TextAreaField('Acción Correctiva')
     submit = SubmitField('Guardar')
+
+# Formulario para registrar Mejoras (acciones correctivas y preventivas)
+class MejoraForm(FlaskForm):
+    no_conformidad = TextAreaField('No conformidad', validators=[DataRequired()])
+    accion_correctiva = TextAreaField('Acción correctiva')
+    accion_preventiva = TextAreaField('Acción preventiva')
+    submit = SubmitField('Guardar')
+
 
 # Formulario para encuestas de Satisfacción del Cliente
 class SatisfaccionClienteForm(FlaskForm):
