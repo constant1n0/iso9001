@@ -13,14 +13,17 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
+from datetime import timedelta
+
 from flask import Blueprint, render_template
-from ..models import Auditoria, NoConformidad, SatisfaccionCliente, Capacitacion
-from ..extensions import db
-from datetime import datetime, timedelta
 from flask_login import login_required
-import json
+
+from ..audit_notifications import local_today
+from ..extensions import db
+from ..models import Auditoria, Capacitacion, NoConformidad, SatisfaccionCliente
 
 bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
+
 
 @bp.route('/', methods=['GET'])
 @login_required
@@ -28,56 +31,51 @@ def dashboard():
     """
     Carga el panel de control con gráficos, estadísticas y notificaciones.
     """
-    # Estadísticas principales
-    total_auditorias = Auditoria.query.count()
-    total_no_conformidades = NoConformidad.query.count()
-    promedio_satisfaccion = db.session.query(db.func.avg(SatisfaccionCliente.puntuacion)).scalar()
-    total_capacitaciones = Capacitacion.query.count()
-    
-    # Datos para gráficos de no conformidades
+    hoy = local_today()
+
     no_conformidades_abiertas = NoConformidad.query.filter_by(estado="Abierta").count()
     no_conformidades_cerradas = NoConformidad.query.filter_by(estado="Cerrada").count()
 
-    # Configuración de alertas
-    hoy = datetime.utcnow().date()
-    
-    # Auditorías próximas (en los próximos 7 días)
     proximas_auditorias = Auditoria.query.filter(
-        db.func.date(Auditoria.fecha) >= hoy,
-        db.func.date(Auditoria.fecha) <= hoy + timedelta(days=7)
-    ).all()
-    
-    # No conformidades abiertas
-    no_conformidades_pendientes = NoConformidad.query.filter_by(estado="Abierta").all()
-    
-    # Capacitaciones próximas (en los próximos 30 días)
+        Auditoria.fecha.between(hoy, hoy + timedelta(days=7))
+    ).order_by(Auditoria.fecha).all()
+    no_conformidades_pendientes = NoConformidad.query.filter_by(
+        estado="Abierta"
+    ).order_by(NoConformidad.fecha_detectada).all()
     proximas_capacitaciones = Capacitacion.query.filter(
-        db.func.date(Capacitacion.fecha) >= hoy,
-        db.func.date(Capacitacion.fecha) <= hoy + timedelta(days=30)
-    ).all()
+        Capacitacion.fecha.between(hoy, hoy + timedelta(days=30))
+    ).order_by(Capacitacion.fecha).all()
 
-    # Gráficos de Satisfacción del Cliente (puntuación promedio por mes)
+    # Puntuación media de satisfacción por mes
+    mes = db.func.extract('month', SatisfaccionCliente.fecha_encuesta).label('mes')
     puntuaciones_meses = db.session.query(
-        db.func.extract('month', SatisfaccionCliente.fecha_encuesta).label('mes'),
-        db.func.avg(SatisfaccionCliente.puntuacion).label('promedio')
-    ).group_by('mes').order_by('mes').all()
+        mes, db.func.avg(SatisfaccionCliente.puntuacion)
+    ).group_by(mes).order_by(mes).all()
 
-    puntuaciones_meses_labels = [int(mes) for mes, _ in puntuaciones_meses]
-    puntuaciones_meses_data = [float(promedio) for _, promedio in puntuaciones_meses]
+    chart_data = {
+        "no_conformidades": {
+            "abiertas": no_conformidades_abiertas,
+            "cerradas": no_conformidades_cerradas,
+        },
+        "satisfaccion": {
+            "meses": [int(m) for m, _ in puntuaciones_meses],
+            "promedios": [round(float(avg), 2) for _, avg in puntuaciones_meses],
+        },
+    }
 
-    # Convertir los datos de los gráficos a JSON para uso en JavaScript
-    no_conformidades_data = json.dumps([no_conformidades_abiertas, no_conformidades_cerradas])
-    puntuaciones_meses_labels_json = json.dumps(puntuaciones_meses_labels)
-    puntuaciones_meses_data_json = json.dumps(puntuaciones_meses_data)
-
-    return render_template('dashboard/dashboard.html', 
-                           total_auditorias=total_auditorias,
-                           total_no_conformidades=total_no_conformidades,
-                           promedio_satisfaccion=promedio_satisfaccion or 0,
-                           total_capacitaciones=total_capacitaciones,
-                           no_conformidades_data=no_conformidades_data,
-                           proximas_auditorias=proximas_auditorias,
-                           no_conformidades_pendientes=no_conformidades_pendientes,
-                           proximas_capacitaciones=proximas_capacitaciones,
-                           puntuaciones_meses_labels=puntuaciones_meses_labels_json,
-                           puntuaciones_meses_data=puntuaciones_meses_data_json)
+    return render_template(
+        'dashboard/dashboard.html',
+        hoy=hoy,
+        total_auditorias=Auditoria.query.count(),
+        total_no_conformidades=NoConformidad.query.count(),
+        no_conformidades_abiertas=no_conformidades_abiertas,
+        no_conformidades_cerradas=no_conformidades_cerradas,
+        promedio_satisfaccion=db.session.query(
+            db.func.avg(SatisfaccionCliente.puntuacion)
+        ).scalar() or 0,
+        total_capacitaciones=Capacitacion.query.count(),
+        proximas_auditorias=proximas_auditorias,
+        no_conformidades_pendientes=no_conformidades_pendientes,
+        proximas_capacitaciones=proximas_capacitaciones,
+        chart_data=chart_data,
+    )

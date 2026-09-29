@@ -14,133 +14,125 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
- {% extends "base.html" %}
+{% extends "base.html" %}
+{% block title %}Panel{% endblock %}
+{% block crumb %}Panel · {{ hoy.strftime('%d/%m/%Y') }}{% endblock %}
+{% set role = current_user.role.value %}
+{% block content %}
+<header class="page-header">
+    <div>
+        <span class="page-header__eyebrow">P-00 · Estado del sistema</span>
+        <h1>Panel de control</h1>
+    </div>
+    <div class="page-header__actions">
+        {% if role in ('Administrador', 'Auditor') %}
+            <a class="btn btn--primary" href="{{ url_for('auditoria.nueva_auditoria') }}">+ Auditoría</a>
+        {% endif %}
+        <a class="btn" href="{{ url_for('no_conformidad.nueva_no_conformidad') }}">+ No conformidad</a>
+        <a class="btn" href="{{ url_for('capacitacion.nueva_capacitacion') }}">+ Capacitación</a>
+        <a class="btn" href="{{ url_for('satisfaccion_cliente.nueva_encuesta') }}">+ Encuesta</a>
+    </div>
+</header>
 
- {% block title %}Dashboard{% endblock %}
- 
- {% block content %}
- <h2>Panel de Control - Sistema de Gestión de Calidad</h2>
- 
- <div class="statistics">
-     <p><strong>Total de Auditorías:</strong> {{ total_auditorias }}</p>
-     <p><strong>Total de No Conformidades:</strong> {{ total_no_conformidades }}</p>
-     <p><strong>Promedio de Satisfacción del Cliente:</strong> {{ promedio_satisfaccion | round(2) }}</p>
-     <p><strong>Total de Capacitaciones:</strong> {{ total_capacitaciones }}</p>
- </div>
- 
- <div class="actions">
-     <h3>Acciones</h3>
-     <a href="{{ url_for('auditoria.nueva_auditoria') }}">Registrar Nueva Auditoría</a> |
-     <a href="{{ url_for('no_conformidad.nueva_no_conformidad') }}">Registrar Nueva No Conformidad</a> |
-     <a href="{{ url_for('capacitacion.nueva_capacitacion') }}">Registrar Nueva Capacitación</a> |
-     <a href="{{ url_for('satisfaccion_cliente.nueva_encuesta') }}">Evaluar Satisfacción del Cliente</a> |
-     <a href="{{ url_for('document.list_documents') }}">Gestionar Documentos</a>
- </div>
- 
- <div class="notifications">
-     <h3>Notificaciones</h3>
- 
-     <!-- Auditorías Próximas -->
-     <h4>Auditorías Próximas en los Próximos 7 Días</h4>
-     {% if proximas_auditorias %}
-         <ul>
-             {% for auditoria in proximas_auditorias %}
-                 <li>Auditoría en {{ auditoria.area_auditada }} - Fecha: {{ auditoria.fecha.strftime('%Y-%m-%d') }}</li>
-             {% endfor %}
-         </ul>
-     {% else %}
-         <p>No hay auditorías programadas en los próximos 7 días.</p>
-     {% endif %}
- 
-     <!-- No Conformidades Abiertas -->
-     <h4>No Conformidades Abiertas</h4>
-     {% if no_conformidades_pendientes %}
-         <ul>
-             {% for nc in no_conformidades_pendientes %}
-                 <li>{{ nc.descripcion }} - Responsable: {{ nc.responsable or "No asignado" }}</li>
-             {% endfor %}
-         </ul>
-     {% else %}
-         <p>No hay no conformidades abiertas.</p>
-     {% endif %}
- 
-     <!-- Capacitaciones Próximas -->
-     <h4>Capacitaciones Próximas en los Próximos 30 Días</h4>
-     {% if proximas_capacitaciones %}
-         <ul>
-             {% for capacitacion in proximas_capacitaciones %}
-                 <li>Capacitación: {{ capacitacion.tema }} - Fecha: {{ capacitacion.fecha.strftime('%Y-%m-%d') }} - Personal: {{ capacitacion.personal }}</li>
-             {% endfor %}
-         </ul>
-     {% else %}
-         <p>No hay capacitaciones próximas a vencer en los próximos 30 días.</p>
-     {% endif %}
- </div>
- 
- <div class="charts">
-     <h3>Gráfico de No Conformidades</h3>
-     <canvas id="noConformidadesChart" style="margin-bottom: 20px;"></canvas>
- </div>
- 
- <div class="charts">
-     <h3>Gráfico de Satisfacción del Cliente</h3>
-     <canvas id="satisfaccionChart"></canvas>
- </div>
- 
- <script>
-     // Datos JSON desde el servidor para gráficos
-     const noConformidadesData = JSON.parse('{{ no_conformidades_data | tojson | safe }}');
-     const puntuacionesMesesLabels = JSON.parse('{{ puntuaciones_meses_labels | tojson | safe }}');
-     const puntuacionesMesesData = JSON.parse('{{ puntuaciones_meses_data | tojson | safe }}');
- 
-     // Configuración de Gráfico de No Conformidades
-     const ctxNoConformidades = document.getElementById('noConformidadesChart').getContext('2d');
-     const noConformidadesChart = new Chart(ctxNoConformidades, {
-         type: 'doughnut',
-         data: {
-             labels: ['Abiertas', 'Cerradas'],
-             datasets: [{
-                 data: noConformidadesData,
-                 backgroundColor: ['#FF6384', '#36A2EB']
-             }]
-         },
-         options: {
-             responsive: true,
-             plugins: {
-                 legend: {
-                     position: 'top',
-                 }
-             }
-         }
-     });
- 
-     // Configuración de Gráfico de Satisfacción del Cliente
-     const ctxSatisfaccion = document.getElementById('satisfaccionChart').getContext('2d');
-     const satisfaccionChart = new Chart(ctxSatisfaccion, {
-         type: 'bar',
-         data: {
-             labels: puntuacionesMesesLabels,
-             datasets: [{
-                 label: 'Puntuación de Satisfacción (Promedio)',
-                 data: puntuacionesMesesData,
-                 backgroundColor: '#4CAF50'
-             }]
-         },
-         options: {
-             responsive: true,
-             plugins: {
-                 legend: {
-                     display: false,
-                 }
-             },
-             scales: {
-                 y: {
-                     beginAtZero: true,
-                     max: 10
-                 }
-             }
-         }
-     });
- </script>
- {% endblock %}
- 
+<section class="grid grid--kpi" aria-label="Indicadores">
+    <div class="kpi kpi--accent">
+        <span class="kpi__label">Auditorías</span>
+        <span class="kpi__value">{{ total_auditorias }}</span>
+        <span class="kpi__foot">{{ proximas_auditorias | length }} en los próximos 7 días</span>
+    </div>
+    <div class="kpi {{ 'kpi--alert' if no_conformidades_abiertas else '' }}">
+        <span class="kpi__label">No conformidades abiertas</span>
+        <span class="kpi__value">{{ no_conformidades_abiertas }}<span class="kpi__unit">/ {{ total_no_conformidades }}</span></span>
+        <span class="kpi__foot">{{ no_conformidades_cerradas }} {{ 'cerrada' if no_conformidades_cerradas == 1 else 'cerradas' }}</span>
+    </div>
+    <div class="kpi">
+        <span class="kpi__label">Satisfacción media</span>
+        <span class="kpi__value">{{ '%.1f' | format(promedio_satisfaccion) }}<span class="kpi__unit">/ 10</span></span>
+        <span class="kpi__foot">Todas las encuestas</span>
+    </div>
+    <div class="kpi">
+        <span class="kpi__label">Capacitaciones</span>
+        <span class="kpi__value">{{ total_capacitaciones }}</span>
+        <span class="kpi__foot">{{ proximas_capacitaciones | length }} en los próximos 30 días</span>
+    </div>
+</section>
+
+<section class="grid grid--3" aria-label="Avisos">
+    <article class="card">
+        <header class="card__header">
+            <h2 class="card__title">Auditorías próximas</h2>
+            <span class="card__meta">7 días</span>
+        </header>
+        {% if proximas_auditorias %}
+            <ul class="list">
+                {% for a in proximas_auditorias %}
+                    <li class="list__item">
+                        <span class="list__primary">{{ a.area_auditada }}</span>
+                        <span class="list__secondary">{{ a.fecha.strftime('%d/%m') }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="empty">Sin auditorías programadas.</p>
+        {% endif %}
+    </article>
+    <article class="card">
+        <header class="card__header">
+            <h2 class="card__title">No conformidades abiertas</h2>
+            {% if no_conformidades_pendientes %}<span class="badge badge--danger">{{ no_conformidades_pendientes | length }}</span>{% endif %}
+        </header>
+        {% if no_conformidades_pendientes %}
+            <ul class="list">
+                {% for nc in no_conformidades_pendientes %}
+                    <li class="list__item">
+                        <span class="list__primary">{{ nc.descripcion | truncate(60) }}</span>
+                        <span class="list__secondary">{{ nc.responsable or "Sin asignar" }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="empty">Ninguna abierta.</p>
+        {% endif %}
+    </article>
+    <article class="card">
+        <header class="card__header">
+            <h2 class="card__title">Capacitaciones próximas</h2>
+            <span class="card__meta">30 días</span>
+        </header>
+        {% if proximas_capacitaciones %}
+            <ul class="list">
+                {% for c in proximas_capacitaciones %}
+                    <li class="list__item">
+                        <span class="list__primary">{{ c.tema }}<br><span class="muted">{{ c.personal }}</span></span>
+                        <span class="list__secondary">{{ c.fecha.strftime('%d/%m') }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="empty">Sin capacitaciones previstas.</p>
+        {% endif %}
+    </article>
+</section>
+
+<section class="grid grid--2" aria-label="Gráficas">
+    <article class="card">
+        <header class="card__header">
+            <h2 class="card__title">No conformidades</h2>
+            <span class="card__meta">Abiertas / cerradas</span>
+        </header>
+        <div class="card__body"><div class="chart"><canvas id="chart-nc" role="img" aria-label="No conformidades abiertas y cerradas"></canvas></div></div>
+    </article>
+    <article class="card">
+        <header class="card__header">
+            <h2 class="card__title">Satisfacción del cliente</h2>
+            <span class="card__meta">Media mensual</span>
+        </header>
+        <div class="card__body"><div class="chart"><canvas id="chart-satisfaccion" role="img" aria-label="Satisfacción media por mes"></canvas></div></div>
+    </article>
+</section>
+{% endblock %}
+{% block scripts %}
+<script type="application/json" id="dashboard-data">{{ chart_data | tojson }}</script>
+<script src="{{ url_for('static', filename='lib/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}
