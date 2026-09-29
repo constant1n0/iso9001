@@ -88,6 +88,30 @@ class CalidadScreensTestCase(unittest.TestCase):
             states = sorted(nc.estado for nc in NoConformidad.query.all())
         self.assertEqual(["Abierta", "En proceso"], states)
 
+    def test_legacy_free_text_state_is_preserved_when_editing(self) -> None:
+        with self.app.app_context():
+            nc = db.session.get(NoConformidad, 1)
+            nc.estado = "Pendiente revisión"
+            db.session.commit()
+
+        edit = self.client.get("/no_conformidades/editar/1").get_data(as_text=True)
+        self.assertTrue(
+            re.search(r'<option selected value="Pendiente revisión">', edit),
+            "legacy state is not preselected",
+        )
+        listing = self.client.get("/no_conformidades/").get_data(as_text=True)
+        self.assertIn('<option value="Pendiente revisión"', listing)
+
+        response = self.client.post("/no_conformidades/editar/1", data={
+            "descripcion": "Etiqueta ilegible en lote 42", "fecha_detectada": "2026-10-05",
+            "estado": "Pendiente revisión",
+        })
+        self.assertEqual(302, response.status_code)
+        with self.app.app_context():
+            nc = db.session.get(NoConformidad, 1)
+            self.assertEqual("Pendiente revisión", nc.estado)
+            self.assertEqual("Etiqueta ilegible en lote 42", nc.descripcion)
+
 
 if __name__ == "__main__":
     unittest.main()
