@@ -53,7 +53,7 @@
         <td>
             <a href="{{ url_for('no_conformidad.editar_no_conformidad', id=no_conformidad.id) }}">Editar</a> |
             <form action="{{ url_for('no_conformidad.eliminar_no_conformidad', id=no_conformidad.id) }}" method="post" style="display:inline;">
-                {{ csrf_token() }}
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" onclick="return confirm('¿Estás seguro de eliminar esta no conformidad?');">Eliminar</button>
             </form>
         </td>

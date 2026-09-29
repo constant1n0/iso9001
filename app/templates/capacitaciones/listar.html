@@ -53,7 +53,7 @@
         <td>
             <a href="{{ url_for('capacitacion.editar_capacitacion', id=capacitacion.id) }}">Editar</a> |
             <form action="{{ url_for('capacitacion.eliminar_capacitacion', id=capacitacion.id) }}" method="post" style="display:inline;">
-                {{ csrf_token() }}
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" onclick="return confirm('¿Estás seguro de eliminar esta capacitación?');">Eliminar</button>
             </form>
         </td>
