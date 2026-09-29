@@ -15,6 +15,7 @@
 
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required
+from ..forms import MejoraForm
 from ..models import Mejora
 from ..schemas import MejoraSchema
 from ..extensions import db, cache
@@ -38,31 +39,33 @@ def listar_mejoras():
 @bp.route('/nueva', methods=['GET', 'POST'])
 @login_required
 def nueva_mejora():
-    if request.method == 'POST':
+    form = MejoraForm()
+    if form.validate_on_submit():
         nueva_mejora = Mejora(
-            no_conformidad=request.form.get('no_conformidad'),
-            accion_correctiva=request.form.get('accion_correctiva'),
-            accion_preventiva=request.form.get('accion_preventiva')
+            no_conformidad=form.no_conformidad.data,
+            accion_correctiva=form.accion_correctiva.data,
+            accion_preventiva=form.accion_preventiva.data
         )
         db.session.add(nueva_mejora)
         db.session.commit()
         flash('Mejora registrada exitosamente', 'success')
         return redirect(url_for('mejora.listar_mejoras'))
-    return render_template('mejoras/nueva.html')
+    return render_template('mejoras/nueva.html', form=form)
 
 # Editar una mejora
 @bp.route('/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
 def editar_mejora(id):
     mejora = Mejora.query.get_or_404(id)
-    if request.method == 'POST':
-        mejora.no_conformidad = request.form.get('no_conformidad')
-        mejora.accion_correctiva = request.form.get('accion_correctiva')
-        mejora.accion_preventiva = request.form.get('accion_preventiva')
+    form = MejoraForm(obj=mejora)
+    if form.validate_on_submit():
+        mejora.no_conformidad = form.no_conformidad.data
+        mejora.accion_correctiva = form.accion_correctiva.data
+        mejora.accion_preventiva = form.accion_preventiva.data
         db.session.commit()
         flash('Mejora actualizada exitosamente', 'success')
         return redirect(url_for('mejora.listar_mejoras'))
-    return render_template('mejoras/editar.html', mejora=mejora)
+    return render_template('mejoras/editar.html', form=form, mejora=mejora)
 
 # Eliminar una mejora
 @bp.route('/eliminar/<int:id>', methods=['POST'])

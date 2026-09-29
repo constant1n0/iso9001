@@ -1,4 +1,4 @@
-<!-- 
+<!--
 # Este archivo es parte de "ISO9001 QMS".
 #
 # "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
@@ -14,89 +14,13 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
-
 {% extends "base.html" %}
-
-{% block title %}Editar Auditoría{% endblock %}
-
+{% from "_partials/ui.html" import page_header, form_card %}
+{% block title %}Editar auditoría{% endblock %}
+{% block crumb %}Calidad · Auditorías{% endblock %}
 {% block content %}
-<h2>Editar Auditoría</h2>
-
-<form method="post">
-    {{ form.hidden_tag() }}
-    
-    <p>
-        {{ form.area_auditada.label }}<br>
-        {{ form.area_auditada(size=32) }}
-        {% if form.area_auditada.errors %}
-            <ul class="errors">
-                {% for error in form.area_auditada.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </p>
-
-    <p>
-        {{ form.fecha.label }}<br>
-        {{ form.fecha }}
-        {% if form.fecha.errors %}
-            <ul class="errors">
-                {% for error in form.fecha.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </p>
-
-    <p>
-        {{ form.auditor.label }}<br>
-        {{ form.auditor(size=32) }}
-        {% if form.auditor.errors %}
-            <ul class="errors">
-                {% for error in form.auditor.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </p>
-
-    <p>
-        {{ form.resultado.label }}<br>
-        {{ form.resultado(rows=4, cols=50) }}
-        {% if form.resultado.errors %}
-            <ul class="errors">
-                {% for error in form.resultado.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </p>
-
-    <p>
-        {{ form.accion_correctiva.label }}<br>
-        {{ form.accion_correctiva(rows=4, cols=50) }}
-        {% if form.accion_correctiva.errors %}
-            <ul class="errors">
-                {% for error in form.accion_correctiva.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </p>
-
-    <p>
-        {{ form.estado.label }}<br>
-        {{ form.estado() }}
-        {% if form.estado.errors %}
-            <ul class="errors">
-                {% for error in form.estado.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </p>
-
-    <p>{{ form.submit() }}</p>
-</form>
+{% call page_header('Cláusula 9.2 · Auditoría interna', 'Editar auditoría') %}
+    <a class="btn" href="{{ url_for('auditoria.exportar_pdf', id=auditoria.id) }}" target="_blank" rel="noopener">PDF</a>
+{% endcall %}
+{{ form_card(form, url_for('auditoria.listar_auditorias'), 'Guardar cambios') }}
 {% endblock %}

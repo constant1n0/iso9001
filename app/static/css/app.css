@@ -142,7 +142,8 @@ hr { border: 0; border-top: 1px solid var(--ink-3); margin: var(--space-5) 0; }
 
 label { display: inline-block; margin-bottom: var(--space-1); color: var(--bone-dim); font: 500 12px/1.4 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; }
 
-input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+/* :where() keeps specificity low so component states (e.g. errors) win. */
+input:where(:not([type="checkbox"], [type="radio"], [type="submit"], [type="button"])),
 select, textarea {
   width: 100%;
   max-width: 100%;
@@ -371,7 +372,7 @@ ul, ol { padding-left: var(--space-5); }
 .table-wrap table { min-width: 640px; }
 .table-wrap th { background: var(--ink-0); position: sticky; top: 0; }
 .table-wrap tr:last-child td { border-bottom: 0; }
-.table__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); white-space: nowrap; }
+.table__actions { display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: var(--space-2); white-space: nowrap; }
 td.num, th.num { text-align: right; font-family: var(--font-mono); }
 td.date { font-family: var(--font-mono); color: var(--bone-dim); white-space: nowrap; }
 
@@ -393,6 +394,12 @@ td.date { font-family: var(--font-mono); color: var(--bone-dim); white-space: no
 .field__error { margin-top: var(--space-1); color: var(--danger); font-size: 13px; }
 .field--invalid input, .field--invalid select, .field--invalid textarea { border-color: var(--danger); }
 .form-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--ink-3); }
+
+.form-card { max-width: 880px; padding: var(--space-5); border: 1px solid var(--ink-3); background: var(--ink-1); }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); column-gap: var(--space-4); }
+.form-grid .field--wide { grid-column: 1 / -1; }
+
+.pagination { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-4); color: var(--bone-mute); font: 400 13px/1 var(--font-mono); }
 
 .flashes { margin: 0 0 var(--space-5); padding: 0; list-style: none; }
 .flash {

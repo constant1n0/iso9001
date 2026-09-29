@@ -1,4 +1,4 @@
-<!-- 
+<!--
 # Este archivo es parte de "ISO9001 QMS".
 #
 # "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
@@ -15,75 +15,12 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
 {% extends "base.html" %}
-
-{% block title %}Editar No Conformidad{% endblock %}
-
+{% from "_partials/ui.html" import page_header, form_card %}
+{% block title %}Editar no conformidad{% endblock %}
+{% block crumb %}Calidad · No conformidades{% endblock %}
 {% block content %}
-<h2>Editar No Conformidad</h2>
-
-<form method="post">
-    {{ form.hidden_tag() }}
-
-    <p>
-        {{ form.descripcion.label }}<br>
-        {{ form.descripcion(rows=4, cols=50) }}
-        {% if form.descripcion.errors %}
-            <ul class="errors">
-                {% for error in form.descripcion.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </p>
-
-    <p>
-        {{ form.fecha_detectada.label }}<br>
-        {{ form.fecha_detectada }}
-        {% if form.fecha_detectada.errors %}
-            <ul class="errors">
-                {% for error in form.fecha_detectada.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </p>
-
-    <p>
-        {{ form.responsable.label }}<br>
-        {{ form.responsable(size=32) }}
-        {% if form.responsable.errors %}
-            <ul class="errors">
-                {% for error in form.responsable.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </p>
-
-    <p>
-        {{ form.estado.label }}<br>
-        {{ form.estado(size=20) }}
-        {% if form.estado.errors %}
-            <ul class="errors">
-                {% for error in form.estado.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </p>
-
-    <p>
-        {{ form.accion_correctiva.label }}<br>
-        {{ form.accion_correctiva(rows=4, cols=50) }}
-        {% if form.accion_correctiva.errors %}
-            <ul class="errors">
-                {% for error in form.accion_correctiva.errors %}
-                    <li>{{ error }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </p>
-
-    <p>{{ form.submit() }}</p>
-</form>
+{% call page_header('Cláusula 10.2 · No conformidad y acción correctiva', 'Editar no conformidad') %}
+    <a class="btn" href="{{ url_for('no_conformidad.exportar_pdf', id=no_conformidad.id) }}" target="_blank" rel="noopener">PDF</a>
+{% endcall %}
+{{ form_card(form, url_for('no_conformidad.listar_no_conformidades'), 'Guardar cambios') }}
 {% endblock %}

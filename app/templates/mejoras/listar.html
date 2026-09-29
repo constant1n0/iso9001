@@ -14,57 +14,55 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
-
 {% extends "base.html" %}
-
-{% block title %}Mejoras Continuas{% endblock %}
-
+{% from "_partials/ui.html" import page_header, delete_form, empty_state %}
+{% block title %}Mejoras{% endblock %}
+{% block crumb %}Calidad · Mejoras{% endblock %}
 {% block content %}
-<h2>Mejoras Continuas</h2>
-<a href="{{ url_for('mejora.nueva_mejora') }}">Nueva Mejora</a>
+{% call page_header('Cláusula 10.3 · Mejora continua', 'Mejoras') %}
+    <a class="btn btn--primary" href="{{ url_for('mejora.nueva_mejora') }}">+ Nueva mejora</a>
+{% endcall %}
 
-<table border="1">
-    <tr>
-        <th>ID</th>
-        <th>No Conformidad</th>
-        <th>Acción Correctiva</th>
-        <th>Acción Preventiva</th>
-        <th>Fecha Implementación</th>
-        <th>Acciones</th>
-    </tr>
-    {% for mejora in mejoras %}
-    <tr>
-        <td>{{ mejora.id_mejora }}</td>
-        <td>{{ mejora.no_conformidad[:50] }}{% if mejora.no_conformidad|length > 50 %}...{% endif %}</td>
-        <td>{{ mejora.accion_correctiva[:50] if mejora.accion_correctiva else '-' }}{% if mejora.accion_correctiva and mejora.accion_correctiva|length > 50 %}...{% endif %}</td>
-        <td>{{ mejora.accion_preventiva[:50] if mejora.accion_preventiva else '-' }}{% if mejora.accion_preventiva and mejora.accion_preventiva|length > 50 %}...{% endif %}</td>
-        <td>{{ mejora.fecha_implementacion.strftime('%Y-%m-%d') if mejora.fecha_implementacion else '-' }}</td>
-        <td>
-            <a href="{{ url_for('mejora.editar_mejora', id=mejora.id_mejora) }}">Editar</a> |
-            <form action="{{ url_for('mejora.eliminar_mejora', id=mejora.id_mejora) }}" method="post" style="display:inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" onclick="return confirm('¿Estás seguro de que deseas eliminar esta mejora?');">Eliminar</button>
-            </form>
-        </td>
-    </tr>
-    {% else %}
-    <tr>
-        <td colspan="6">No hay mejoras registradas.</td>
-    </tr>
-    {% endfor %}
-</table>
-
-{% if pagination.pages > 1 %}
-<div class="pagination">
-    {% if pagination.has_prev %}
-    <a href="{{ url_for('mejora.listar_mejoras', page=pagination.prev_num) }}">Anterior</a>
-    {% endif %}
-
-    <span>Página {{ pagination.page }} de {{ pagination.pages }}</span>
-
-    {% if pagination.has_next %}
-    <a href="{{ url_for('mejora.listar_mejoras', page=pagination.next_num) }}">Siguiente</a>
-    {% endif %}
+{% if mejoras %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col" class="num">#</th>
+                <th scope="col">No conformidad</th>
+                <th scope="col">Acción correctiva</th>
+                <th scope="col">Acción preventiva</th>
+                <th scope="col">Implantada</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for mejora in mejoras %}
+            <tr>
+                <td class="num">{{ mejora.id_mejora }}</td>
+                <td>{{ mejora.no_conformidad | truncate(60) }}</td>
+                <td>{{ mejora.accion_correctiva | truncate(60) if mejora.accion_correctiva else '—' }}</td>
+                <td>{{ mejora.accion_preventiva | truncate(60) if mejora.accion_preventiva else '—' }}</td>
+                <td class="date">{{ mejora.fecha_implementacion.strftime('%d/%m/%Y') if mejora.fecha_implementacion else '—' }}</td>
+                <td>
+                    <div class="table__actions">
+                        <a class="btn btn--sm" href="{{ url_for('mejora.editar_mejora', id=mejora.id_mejora) }}">Editar</a>
+                        {{ delete_form(url_for('mejora.eliminar_mejora', id=mejora.id_mejora), '¿Eliminar esta mejora?') }}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
+{% if pagination.pages > 1 %}
+<nav class="pagination" aria-label="Paginación">
+    {% if pagination.has_prev %}<a class="btn btn--sm" href="{{ url_for('mejora.listar_mejoras', page=pagination.prev_num) }}">← Anterior</a>{% else %}<span></span>{% endif %}
+    <span>Página {{ pagination.page }} de {{ pagination.pages }}</span>
+    {% if pagination.has_next %}<a class="btn btn--sm" href="{{ url_for('mejora.listar_mejoras', page=pagination.next_num) }}">Siguiente →</a>{% else %}<span></span>{% endif %}
+</nav>
+{% endif %}
+{% else %}
+    {{ empty_state('Todavía no hay mejoras registradas.') }}
 {% endif %}
 {% endblock %}
