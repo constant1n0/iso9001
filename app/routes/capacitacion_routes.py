@@ -42,7 +42,7 @@ def listar_capacitaciones():
     if personal:
         query = query.filter(Capacitacion.personal.ilike(f'%{personal}%'))
 
-    capacitaciones = query.all()
+    capacitaciones = query.order_by(Capacitacion.fecha.desc()).all()
     return render_template('capacitaciones/listar.html', capacitaciones=capacitaciones)
 
 @bp.route('/nueva', methods=['GET', 'POST'])

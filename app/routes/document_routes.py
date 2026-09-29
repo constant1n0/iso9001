@@ -28,7 +28,7 @@ bp = Blueprint('document', __name__, url_prefix='/documents')
 @login_required
 @role_required(RoleEnum.ADMINISTRADOR)
 def list_documents():
-    documents = Document.query.all()
+    documents = Document.query.order_by(Document.code).all()
     return render_template('documents/list.html', documents=documents)
 
 @bp.route('/new', methods=['GET', 'POST'])

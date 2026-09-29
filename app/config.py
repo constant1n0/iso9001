@@ -69,6 +69,9 @@ class Config:
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER')
     PASSWORD_RESET_BASE_URL = os.environ.get('PASSWORD_RESET_BASE_URL')
 
+    # Mensajes de validación de WTForms en español (ver forms.BaseForm)
+    WTF_I18N_ENABLED = False
+
     # Zona horaria para fechas locales y tareas programadas
     APP_TIMEZONE = os.environ.get('APP_TIMEZONE', 'Europe/Madrid')
 
