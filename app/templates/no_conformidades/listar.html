@@ -72,7 +72,9 @@
                     <div class="table__actions">
                         <a class="btn btn--sm" href="{{ url_for('no_conformidad.editar_no_conformidad', id=nc.id) }}">Editar</a>
                         <a class="btn btn--sm" href="{{ url_for('no_conformidad.exportar_pdf', id=nc.id) }}" target="_blank" rel="noopener">PDF</a>
-                        {{ delete_form(url_for('no_conformidad.eliminar_no_conformidad', id=nc.id), '¿Eliminar esta no conformidad?') }}
+                        {% if is_admin %}
+                            {{ delete_form(url_for('no_conformidad.eliminar_no_conformidad', id=nc.id), '¿Eliminar esta no conformidad?') }}
+                        {% endif %}
                     </div>
                 </td>
             </tr>
