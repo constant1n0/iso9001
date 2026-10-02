@@ -139,6 +139,23 @@ class UiFoundationTestCase(unittest.TestCase):
         self.assertIn("/static/js/dashboard.js", html)
         self.assertNotIn("cdn.jsdelivr.net", html)
 
+    def test_footer_credits_the_author_with_the_current_year(self) -> None:
+        from app.audit_notifications import local_today
+
+        self._login("admin")
+        with self.app.app_context():
+            year = local_today().year
+        html = self.client.get("/dashboard/").get_data(as_text=True)
+        footer = re.search(r'<footer class="site-footer">(.*?)</footer>', html, re.S).group(1)
+
+        self.assertIn(f"&copy; {year} ", footer)
+        self.assertRegex(
+            footer,
+            r'<a href="https://github.com/constant1n0" rel="author noopener" '
+            r'target="_blank">constant1n0</a>',
+        )
+        self.assertNotIn("Dámaso", footer)
+
     def test_navigation_shows_only_modules_the_role_can_open(self) -> None:
         self._login("operario")
         html = self.client.get("/dashboard/").get_data(as_text=True)

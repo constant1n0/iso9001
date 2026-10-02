@@ -87,7 +87,9 @@
                 {% include "_partials/flashes.html" %}
                 {% block content %}{% endblock %}
             </main>
-            <footer class="site-footer">&copy; 2024 Dámaso Constantino · ISO 9001 QMS</footer>
+            <footer class="site-footer">
+                &copy; {{ current_year }} <a href="https://github.com/constant1n0" rel="author noopener" target="_blank">constant1n0</a> · ISO 9001 QMS
+            </footer>
         </div>
     </div>
 {% else %}

@@ -14,6 +14,8 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
 from collections.abc import Mapping
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from flask import Flask
 
@@ -97,6 +99,11 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
 
     # Registrar manejadores de errores
     register_error_handlers(app)
+
+    @app.context_processor
+    def inject_current_year():
+        # Footer copyright year, in the application's timezone.
+        return {'current_year': datetime.now(ZoneInfo(app.config['APP_TIMEZONE'])).year}
 
     # Headers de seguridad HTTP
     @app.after_request
