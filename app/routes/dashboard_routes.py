@@ -21,6 +21,7 @@ from flask_login import login_required
 from ..audit_notifications import local_today
 from ..extensions import db
 from ..models import Auditoria, Capacitacion, NoConformidad, SatisfaccionCliente
+from ..services.nonconformities import ESTADO_ABIERTA, ESTADO_CERRADA
 
 bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 
@@ -33,14 +34,14 @@ def dashboard():
     """
     hoy = local_today()
 
-    no_conformidades_abiertas = NoConformidad.query.filter_by(estado="Abierta").count()
-    no_conformidades_cerradas = NoConformidad.query.filter_by(estado="Cerrada").count()
+    no_conformidades_abiertas = NoConformidad.query.filter_by(estado=ESTADO_ABIERTA).count()
+    no_conformidades_cerradas = NoConformidad.query.filter_by(estado=ESTADO_CERRADA).count()
 
     proximas_auditorias = Auditoria.query.filter(
         Auditoria.fecha.between(hoy, hoy + timedelta(days=7))
     ).order_by(Auditoria.fecha).all()
     no_conformidades_pendientes = NoConformidad.query.filter_by(
-        estado="Abierta"
+        estado=ESTADO_ABIERTA
     ).order_by(NoConformidad.fecha_detectada).all()
     proximas_capacitaciones = Capacitacion.query.filter(
         Capacitacion.fecha.between(hoy, hoy + timedelta(days=30))
