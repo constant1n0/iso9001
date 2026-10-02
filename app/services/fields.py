@@ -86,3 +86,16 @@ def reject_unknown(data: Mapping[str, Any], allowed: frozenset[str]) -> None:
     unknown = sorted(set(data) - allowed)
     if unknown:
         raise ValidationError(f"Campos no permitidos: {', '.join(unknown)}.")
+
+
+def integer(data: Mapping[str, Any], key: str, *, required: bool = False,
+            minimum: int | None = None, maximum: int | None = None) -> int | None:
+    """Whole number within optional bounds; optional ones may be ``None``."""
+    value = data[key]
+    if value is None and not required:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValidationError(f"El campo «{key}» debe ser un número entero.")
+    if (minimum is not None and value < minimum) or (maximum is not None and value > maximum):
+        raise ValidationError(f"El campo «{key}» está fuera del rango permitido.")
+    return value
