@@ -94,9 +94,13 @@ Forecasts count authored additions plus deletions. Route for every task: **deleg
 - [x] **QF-3 — `AuditLog` model, migration, recorder and flush guard.** Forecast 300-380.
   - Acceptance: append-only API (no update or delete path); changed fields only; passwords never recorded; migration upgrades and downgrades on PostgreSQL.
 - [x] **QF-4 — Record metadata mixin and migration.** Forecast 250-330.
-  - Acceptance: services set `created_*`/`updated_*`; legacy rows remain NULL; tz-aware timestamps.
+  - Acceptance: explicit stamping helpers exist and are tested; legacy rows remain NULL; tz-aware timestamps. Wiring the helpers into real create/update paths is part of each service task (QF-5 to QF-8).
 - [ ] **QF-5 — Nonconformity service pilot.** Forecast 330-400.
   - Routes become thin adapters; create, update and delete go through the service with audit rows; the state constant is centralized and reused by forms and the dashboard.
+  - The service stamps `created_*`/`updated_*` on real create and update paths (review finding R3-stamping-unwired).
+  - The flush guard treats a new audited instance without a primary key as unaudited (review finding R3-guard-pending-pk), and nonconformity route tests run with the guard installed.
+  - HTML form posts get a deliberate, tested outcome for `NotFound`, `Conflict` and `ValidationError` (review suggestion R3-domain-html-json).
+  - The Flask-free check for `app.services` becomes an import-level (AST) check (review suggestion R3-flask-free-textual).
 - [ ] **QF-6 — Audit and document services.** Forecast 330-400.
 - [ ] **QF-7 — Generic CRUD helper and HTML registers.** Training, satisfaction surveys, stakeholders and improvements (HTML). Forecast 350-400.
 - [ ] **QF-8 — JSON API and JSON registers through services.** Improvements JSON API and the five JSON registers; characterization tests first; `IntegrityError` → 409; drop the JSON GET cache (D11). Forecast 350-400.
@@ -124,7 +128,7 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 - Strategy: `auto-chain`, chain strategy `stacked-to-main`: each pull request targets the previous slice branch, the first targets `main`.
 - Slice boundaries and the commits each pull request holds are recorded here as they are created.
 - Running count: `288558e` 363 lines (documentation), `55c22a9` 93, `ada3b81` about 282, `3a74697` about 276, `89b1f31` 320.
-- Slice plan: PR 1 = `288558e` ([#20](https://github.com/constant1n0/iso9001/pull/20), merged `ea5b91b`); PR 2 = `55c22a9` + `ada3b81` ([#21](https://github.com/constant1n0/iso9001/pull/21), merged `38f7646`); PR 3 = `3a74697` ([#22](https://github.com/constant1n0/iso9001/pull/22), merged `01cb6a6`); PR 4 = `89b1f31` + `9d4f877` ([#23](https://github.com/constant1n0/iso9001/pull/23), merged `ddf9e63`); PR 5 = `9559f5d` ([#24](https://github.com/constant1n0/iso9001/pull/24)); PR 6 = `aa12c2f`; PR 7 = `1e385cf` + `50a177f` (QF-3 hardening); PR 8 = QF-4. Each is opened after the previous one merges, then rebased on `main` by merging `main` into the feature branch.
+- Slice plan: PR 1 = `288558e` ([#20](https://github.com/constant1n0/iso9001/pull/20), merged `ea5b91b`); PR 2 = `55c22a9` + `ada3b81` ([#21](https://github.com/constant1n0/iso9001/pull/21), merged `38f7646`); PR 3 = `3a74697` ([#22](https://github.com/constant1n0/iso9001/pull/22), merged `01cb6a6`); PR 4 = `89b1f31` + `9d4f877` ([#23](https://github.com/constant1n0/iso9001/pull/23), merged `ddf9e63`); PR 5 = `9559f5d` ([#24](https://github.com/constant1n0/iso9001/pull/24)); PR 6 = `aa12c2f`; PR 5 merged `72949cf`; PR 6 = `aa12c2f` ([#25](https://github.com/constant1n0/iso9001/pull/25), merged `0cc95e6`); PR 7 = `1e385cf` + `50a177f` ([#26](https://github.com/constant1n0/iso9001/pull/26)); PR 8 = `316a90b` (QF-4). Each is opened after the previous one merges, then rebased on `main` by merging `main` into the feature branch.
 
 ## Findings during implementation
 
@@ -137,6 +141,8 @@ Recorded by QF-2 characterization; encoded as-is and fixed by the task named.
 - **No routes exist for users or the audit log**, so those resources enter the policy when their adapters exist.
 - **Review suggestion R3-domain-html-json** (QF-5): for HTML form posts, `NotFound`, `Conflict` and `ValidationError` return a JSON body; decide flash-and-redirect behaviour and pin it with tests when services are wired into routes.
 - **Review suggestion R3-flask-free-textual** (QF-5): the Flask-free guard for `app.services` is a source-text check; strengthen it to an import-level check.
+- **Review warning R3-guard-pending-pk** (QF-5): pending inserts have no primary key in `before_flush`, so new instances share the key `(table, None)`; a new audited instance without a primary key must count as unaudited.
+- **Review warning R3-stamping-unwired** (QF-5+): no real create/update path calls the stamping helpers yet; each service task wires them.
 
 ## Progress
 
@@ -146,8 +152,8 @@ Recorded by QF-2 characterization; encoded as-is and fixed by the task named.
 | QF-1 | Done | `55c22a9` | RED: 3 of 5 new tests failed (OPERATIVO and AUDITOR deleted; delete control rendered). GREEN: 76 tests OK incl. PostgreSQL; parent spot check of the 5 new tests OK | Medium, `under_budget`; covered by review `review-346107ba1909d990` |
 | QF-2 | Done | `ada3b81` (actor, domain errors, HTTP handlers), `3a74697` (policy), `89b1f31` (characterization) | RED: `ModuleNotFoundError` for `app.services` in 16 new tests and 2 characterization tests. GREEN: 96 tests OK incl. PostgreSQL; the full suite passed at each of the three commits | Range `288558e..89b1f31`: medium, `slice_budget_reached`; consent granted; review `review-346107ba1909d990` (lens `review-reliability`) **approved** and acknowledged (authority burned); reviewed boundary advanced to `89b1f31` |
 | QF-3 | Done | `9559f5d` (table), `aa12c2f` (recorder), `1e385cf` (append-only + flush guard), then the review-findings fix in the commit that records this row | RED: `ImportError` for `app.services.audit` in 20 new tests; hardening RED: update without `before` not rejected, two instances with one audit row not caught. GREEN: 97 / 109 / 118 tests at the three commits, 121 after hardening, incl. PostgreSQL migration upgrade/downgrade, JSONB and CHECK checks | Range `9d4f877..1e385cf`: medium, `slice_budget_reached`; consent granted; review `review-788622beda6891f8` (lens reliability) **approved** and acknowledged; 3 warnings + 1 suggestion fixed in the hardening commit; boundary advanced to `1e385cf` |
-| QF-4 | Done | The commit that records this row (mixin, migration `d5a9f3b7c1e2`, `app/services/attribution.py`) | RED: `KeyError: 'created_at'` for every audited model; PostgreSQL `UndefinedColumn` for the legacy-row and user-delete tests. GREEN: 132 tests OK incl. PostgreSQL (legacy rows keep NULL metadata after upgrade; deleting a user sets `*_by_id` to NULL; downgrade drops the columns) | Pending assessment |
+| QF-4 | Done | The commit that records this row (mixin, migration `d5a9f3b7c1e2`, `app/services/attribution.py`) | RED: `KeyError: 'created_at'` for every audited model; PostgreSQL `UndefinedColumn` for the legacy-row and user-delete tests. GREEN: 132 tests OK incl. PostgreSQL (legacy rows keep NULL metadata after upgrade; deleting a user sets `*_by_id` to NULL; downgrade drops the columns) Range `1e385cf..316a90b` (QF-3 hardening + QF-4): medium, `slice_budget_reached`; consent granted; review `review-ce8842d37011fbe8` **approved** and acknowledged; 2 warnings moved to QF-5; boundary advanced to `316a90b` |
 
 ## Next step
 
-Deliver PR 5-7 (QF-3; PR 5 is [#24](https://github.com/constant1n0/iso9001/pull/24)) and PR 8 (QF-4), then implement QF-5 (nonconformity service pilot).
+Merge PR 7 (#26) when CI is green, deliver PR 8 (QF-4), and implement QF-5 (nonconformity service pilot).

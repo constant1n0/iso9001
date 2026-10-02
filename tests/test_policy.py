@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import unittest
 
 from app.models import RoleEnum
@@ -32,6 +33,43 @@ EXPECTED = {
     "TRAINING_RESOURCES": (ALL_ROLES, ALL_ROLES),
     "PROCESS_OPERATIONS": (ALL_ROLES, ALL_ROLES),
 }
+
+FORBIDDEN_MODULES = ("flask", "flask_login", "werkzeug.local", "app.routes")
+FORBIDDEN_NAMES = frozenset({"current_user", "request"})
+
+
+def _is_forbidden(module: str) -> bool:
+    return any(module == m or module.startswith(f"{m}.") for m in FORBIDDEN_MODULES)
+
+
+def forbidden_framework_use(source: str) -> list[str]:
+    """Forbidden modules imported and request globals referenced by ``source``.
+
+    Parses the syntax tree, so comments, docstrings and look-alike names such
+    as ``request_id`` never count. Relative imports are resolved against the
+    ``app.services`` package.
+    """
+    found: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            found += [a.name for a in node.names if _is_forbidden(a.name)]
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                base = ["app", "services"][: 2 - (node.level - 1)]
+                module = ".".join([*base, *([node.module] if node.module else [])])
+            else:
+                module = node.module or ""
+            if _is_forbidden(module):
+                found.append(module)
+            found += [a.name for a in node.names if a.name in FORBIDDEN_NAMES]
+            found += [
+                f"{module}.{a.name}"
+                for a in node.names
+                if _is_forbidden(f"{module}.{a.name}") and not _is_forbidden(module)
+            ]
+        elif isinstance(node, ast.Name) and node.id in FORBIDDEN_NAMES:
+            found.append(node.id)
+    return found
 
 
 def make_actor(role, channel="web", scopes=None):
@@ -150,16 +188,46 @@ class ActorTestCase(unittest.TestCase):
         scoped = Actor.from_user(user, channel="mcp", scopes=["read"])
         self.assertEqual(frozenset({"read"}), scoped.scopes)
 
-    def test_service_package_does_not_import_flask(self) -> None:
+    def test_flask_free_check_detects_forbidden_imports_and_globals(self) -> None:
+        bad = {
+            "import flask": ["flask"],
+            "from flask import g": ["flask"],
+            "import flask_login": ["flask_login"],
+            "from flask_login import current_user": ["flask_login", "current_user"],
+            "from werkzeug.local import LocalProxy": ["werkzeug.local"],
+            "from ..routes import x": ["app.routes"],
+            "from .. import routes": ["app.routes"],
+            "import app.routes.foo": ["app.routes.foo"],
+            "def f():\n    return request.args": ["request"],
+        }
+        for source, expected in bad.items():
+            with self.subTest(source=source):
+                found = forbidden_framework_use(source)
+                for item in expected:
+                    self.assertIn(item, found)
+        for source in ("from ..models import User", "request_id = 1", "import json"):
+            with self.subTest(source=source):
+                self.assertEqual([], forbidden_framework_use(source))
+
+    def test_service_package_is_framework_free(self) -> None:
+        """No service module imports Flask, Flask-Login, werkzeug.local or routes.
+
+        Flask-SQLAlchemy still reaches the services transitively through
+        ``app.models`` and ``app.extensions``. That is accepted: the future MCP
+        process runs inside an application context. What must never happen is a
+        direct dependency on the request/session machinery, so a service stays
+        callable with an explicit ``Session`` and ``Actor`` and nothing else.
+        """
         import pathlib
+
         import app.services as pkg
 
         root = pathlib.Path(pkg.__file__).parent
-        for path in root.glob("*.py"):
-            text = path.read_text()
+        modules = sorted(root.glob("*.py"))
+        self.assertGreater(len(modules), 1)
+        for path in modules:
             with self.subTest(module=path.name):
-                self.assertNotIn("import flask", text)
-                self.assertNotIn("from flask", text)
+                self.assertEqual([], forbidden_framework_use(path.read_text()))
 
 
 class DomainErrorsTestCase(unittest.TestCase):

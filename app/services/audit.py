@@ -217,10 +217,15 @@ def install_audit_guard(
             if not isinstance(obj, audited):
                 continue
             name = sa_inspect(obj).mapper.local_table.name
-            if name in table_names and (name, _primary_key(obj)) not in recorded:
+            pk = _primary_key(obj)
+            # A pending insert has no primary key yet, so no audit row can
+            # identify it (several would share the key (table, None)).
+            # ``record`` flushes a new instance before adding its row, hence
+            # a keyless one here was never audited.
+            if name in table_names and (pk is None or (name, pk) not in recorded):
                 raise AuditGuardViolation(
                     f"{type(obj).__name__} changed without an AuditLog row "
-                    f"for {name!r} #{_primary_key(obj)} in the same flush"
+                    f"for {name!r} #{pk} in the same flush"
                 )
 
     event.listen(target, "before_flush", _guard)

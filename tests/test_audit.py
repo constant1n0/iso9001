@@ -332,6 +332,27 @@ class FlushGuardTestCase(AuditDbBase):
         db.session.commit()
         self.assertEqual(2, db.session.query(audit.AuditLog).count())
 
+    def test_two_new_instances_sharing_one_audit_row_without_pk_fail_the_guard(self) -> None:
+        audit = self.install()
+        first = NoConformidad(descripcion="a", fecha_detectada=date(2026, 10, 1))
+        second = NoConformidad(descripcion="b", fecha_detectada=date(2026, 10, 1))
+        db.session.add_all([first, second])
+        # Both pending instances have no primary key yet, so they would share
+        # the key (table, None); one audit row must not cover them both.
+        db.session.add(
+            audit.AuditLog(
+                entity_type="no_conformidades",
+                entity_id=None,
+                action="create",
+                actor_user_id=7,
+                actor_label="alice",
+                channel="web",
+            )
+        )
+        with self.assertRaises(audit.AuditGuardViolation):
+            db.session.flush()
+        db.session.rollback()
+
     def test_removing_the_guard_stops_enforcement(self) -> None:
         audit = audit_module()
         remove = audit.install_audit_guard(db.session, audit.AUDITED_MODELS)
