@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 import test_auth_bootstrap as bootstrap
 from werkzeug.security import generate_password_hash
@@ -82,6 +83,44 @@ class DomainErrorHandlersTestCase(unittest.TestCase):
                 ("danger", "No tienes permiso para acceder a esta página."),
                 session["_flashes"],
             )
+
+    def test_html_not_found_uses_the_existing_404_response(self) -> None:
+        self._login()
+        response = self.client.get("/_test/raise/not_found")
+        self.assertEqual(404, response.status_code)
+        self.assertEqual({"message": "Recurso no encontrado"}, response.get_json())
+
+    def test_html_conflict_and_validation_flash_the_safe_message_and_go_back(self) -> None:
+        self._login()
+        expected = {
+            "conflict": "Registro duplicado.",
+            "invalid": "Dato no válido.",
+        }
+        for kind, message in expected.items():
+            with self.subTest(kind=kind):
+                response = self.client.post(
+                    f"/_test/raise/{kind}",
+                    headers={"Referer": "http://localhost/no_conformidades/nueva?x=1"},
+                )
+                self.assertEqual(302, response.status_code)
+                self.assertEqual("/no_conformidades/nueva?x=1", response.headers["Location"])
+                with self.client.session_transaction() as session:
+                    self.assertIn(("danger", message), session["_flashes"])
+
+    def test_html_back_target_falls_back_to_the_dashboard_when_unsafe(self) -> None:
+        self._login()
+        for referer in (None, "https://evil.example/steal", "//evil.example/x", "not a url"):
+            with self.subTest(referer=referer):
+                headers = {} if referer is None else {"Referer": referer}
+                response = self.client.post("/_test/raise/invalid", headers=headers)
+                self.assertEqual(302, response.status_code)
+                self.assertTrue(response.headers["Location"].endswith("/dashboard/"))
+
+    def test_html_domain_errors_roll_back_the_session(self) -> None:
+        self._login()
+        with patch("app.utils.error_handlers.db.session.rollback") as rollback:
+            self.client.post("/_test/raise/conflict")
+        rollback.assert_called()
 
     def test_unrelated_exceptions_still_use_the_global_handler(self) -> None:
         response = self.client.post("/_test/raise/boom", json={})
