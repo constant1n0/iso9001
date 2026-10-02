@@ -15,6 +15,7 @@
 
 from flask_login import current_user
 from .models import RoleEnum, DocumentCategory, EstadoAuditoriaEnum
+from .services.nonconformities import ESTADOS_NO_CONFORMIDAD
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField
 from wtforms.validators import DataRequired, Length, NumberRange, EqualTo, Email, Optional
@@ -69,8 +70,6 @@ class AuditoriaForm(BaseForm):
             return False
         return True
 
-# Estados posibles de una No Conformidad (columna de texto en la base de datos)
-ESTADOS_NO_CONFORMIDAD = ('Abierta', 'En proceso', 'Cerrada')
 
 
 # Formulario para registrar No Conformidades
