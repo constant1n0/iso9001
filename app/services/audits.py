@@ -21,15 +21,19 @@ Authorization comes from ``policy`` (resource ``AUDITS``); validation mirrors
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date
+from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import Auditoria, EstadoAuditoriaEnum
-from . import policy
+from . import audit, fields, policy
 from .actor import Actor
-from .errors import NotFound
+from .attribution import stamp_created, stamp_updated
+from .errors import Conflict, NotFound
 from .policy import Action, Resource
 
 
@@ -80,3 +84,81 @@ def list_page(
         .offset((max(page, 1) - 1) * per_page)
     )
     return list(session.scalars(query)), total
+
+
+AREA_MAX = 50  # mirrors Auditoria.area_auditada and the web form
+AUDITOR_MAX = 50  # mirrors Auditoria.auditor and the web form
+WRITABLE_FIELDS = frozenset(
+    {"area_auditada", "fecha", "auditor", "resultado", "accion_correctiva", "estado"}
+)
+REQUIRED_ON_CREATE = frozenset({"area_auditada", "fecha", "auditor", "resultado"})
+
+
+def _clean(data: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate the keys present in ``data`` and return the normalized values."""
+    fields.reject_unknown(data, WRITABLE_FIELDS)
+    clean: dict[str, Any] = {}
+    if "area_auditada" in data:
+        clean["area_auditada"] = fields.text(
+            data, "area_auditada", required=True, max_length=AREA_MAX
+        )
+    if "fecha" in data:
+        clean["fecha"] = fields.required_date(data, "fecha")
+    if "auditor" in data:
+        clean["auditor"] = fields.text(data, "auditor", required=True, max_length=AUDITOR_MAX)
+    if "resultado" in data:
+        clean["resultado"] = fields.text(data, "resultado", required=True)
+    if "accion_correctiva" in data:
+        clean["accion_correctiva"] = fields.text(data, "accion_correctiva", strip=False)
+    if "estado" in data:
+        clean["estado"] = fields.enum_member(data, "estado", EstadoAuditoriaEnum)
+    return clean
+
+
+def _flush(session: Session) -> None:
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        raise Conflict() from exc
+
+
+def create(session: Session, actor: Actor, data: Mapping[str, Any]) -> Auditoria:
+    """Create an audit; area, date, auditor and result are required."""
+    policy.require(actor, Action.CREATE, Resource.AUDITS)
+    fields.require_keys(data, REQUIRED_ON_CREATE)
+    values = {"estado": EstadoAuditoriaEnum.PENDIENTE} | _clean(data)
+    created = Auditoria(**values)
+    stamp_created(created, actor)
+    session.add(created)
+    try:
+        audit.record(session, actor, "create", created)  # flushes to obtain the id
+    except IntegrityError as exc:
+        raise Conflict() from exc
+    return created
+
+
+def update(
+    session: Session, actor: Actor, audit_id: int, data: Mapping[str, Any]
+) -> Auditoria:
+    """Apply the given fields; a call that changes nothing writes nothing."""
+    policy.require(actor, Action.UPDATE, Resource.AUDITS)
+    found = _load(session, audit_id)
+    values = _clean(data)
+    before = audit.snapshot(found)
+    if all(getattr(found, key) == value for key, value in values.items()):
+        return found
+    for key, value in values.items():
+        setattr(found, key, value)
+    stamp_updated(found, actor)
+    audit.record(session, actor, "update", found, before=before)
+    _flush(session)
+    return found
+
+
+def delete(session: Session, actor: Actor, audit_id: int) -> None:
+    """Hard-delete an audit, keeping its full snapshot in the audit log."""
+    policy.require(actor, Action.DELETE, Resource.AUDITS)
+    found = _load(session, audit_id)
+    audit.record(session, actor, "delete", found)
+    session.delete(found)
+    _flush(session)
