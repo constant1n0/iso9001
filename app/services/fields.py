@@ -33,14 +33,21 @@ E = TypeVar("E", bound=enum.Enum)
 
 def text(data: Mapping[str, Any], key: str, *, required: bool = False,
          max_length: int | None = None, strip: bool = True) -> Any:
-    """Text value: optional ones may be ``None``; required ones must be non-blank."""
+    """Text value: required ones must be non-blank; optional blank ones become ``None``.
+
+    Forms post an empty string for a blank optional field while stored rows hold
+    NULL, so normalising here keeps an unchanged edit a no-op.
+    """
     value = data[key]
     if value is None and not required:
         return None
     if not isinstance(value, str):
         raise ValidationError(f"El campo «{key}» debe ser texto.")
+    blank = not value.strip()
+    if blank and not required:
+        return None
     value = value.strip() if strip else value
-    if required and not value:
+    if blank:
         raise ValidationError(f"El campo «{key}» es obligatorio.")
     if max_length is not None and len(value) > max_length:
         raise ValidationError(
