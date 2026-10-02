@@ -211,3 +211,118 @@ class AuditDatabaseTestCase(AuditDbBase):
             if m.class_ not in (User, models.AuditLog)
         }
         self.assertEqual(domain, set(audit.AUDITED_MODELS))
+
+    def test_audit_log_rows_cannot_be_updated(self) -> None:
+        audit = audit_module()
+        row = audit.record(db.session, make_actor(), "create", self.new_nc())
+        db.session.commit()
+        row.actor_label = "mallory"
+        with self.assertRaises(audit.AuditLogImmutable):
+            db.session.flush()
+        db.session.rollback()
+
+    def test_audit_log_rows_cannot_be_deleted(self) -> None:
+        audit = audit_module()
+        row = audit.record(db.session, make_actor(), "create", self.new_nc())
+        db.session.commit()
+        db.session.delete(row)
+        with self.assertRaises(audit.AuditLogImmutable):
+            db.session.flush()
+        db.session.rollback()
+
+
+class FlushGuardTestCase(AuditDbBase):
+    def install(self):
+        audit = audit_module()
+        remove = audit.install_audit_guard(db.session, audit.AUDITED_MODELS)
+        self.addCleanup(remove)
+        return audit
+
+    def test_flush_with_audit_row_passes_for_create_update_delete(self) -> None:
+        audit = self.install()
+        nc = NoConformidad(descripcion="x", fecha_detectada=date(2026, 10, 1))
+        db.session.add(nc)
+        audit.record(db.session, make_actor(), "create", nc)
+        db.session.commit()
+        before = audit.snapshot(nc)
+        nc.estado = "Cerrada"
+        audit.record(db.session, make_actor(), "update", nc, before=before)
+        db.session.commit()
+        audit.record(db.session, make_actor(), "delete", nc)
+        db.session.delete(nc)
+        db.session.commit()
+        self.assertEqual(3, db.session.query(audit.AuditLog).count())
+
+    def test_flush_without_audit_row_fails_for_each_change_kind(self) -> None:
+        audit = self.install()
+        nc = NoConformidad(descripcion="x", fecha_detectada=date(2026, 10, 1))
+        db.session.add(nc)
+        with self.assertRaises(audit.AuditGuardViolation):
+            db.session.flush()
+        db.session.rollback()
+
+        db.session.add(NoConformidad(descripcion="y", fecha_detectada=date(2026, 10, 1)))
+        with self.assertRaises(audit.AuditGuardViolation):
+            db.session.commit()
+        db.session.rollback()
+
+    def test_update_and_delete_without_audit_row_fail(self) -> None:
+        audit = audit_module()
+        nc = self.new_nc()
+        db.session.commit()
+        remove = audit.install_audit_guard(db.session, audit.AUDITED_MODELS)
+        self.addCleanup(remove)
+        nc.estado = "Cerrada"
+        with self.assertRaises(audit.AuditGuardViolation):
+            db.session.flush()
+        db.session.rollback()
+        db.session.delete(db.session.get(NoConformidad, nc.id))
+        with self.assertRaises(audit.AuditGuardViolation):
+            db.session.flush()
+        db.session.rollback()
+
+    def test_unaudited_models_and_untouched_instances_are_ignored(self) -> None:
+        audit = self.install()
+        db.session.add(User(username="dan", password="x", role=RoleEnum.OPERATIVO))
+        db.session.flush()
+        self.assertEqual(0, db.session.query(audit.AuditLog).count())
+
+    def test_audit_row_for_another_entity_type_does_not_satisfy_the_guard(self) -> None:
+        audit = self.install()
+        from app.models import Auditoria
+
+        other = Auditoria(area_auditada="a", auditor="b", resultado="c", fecha=date(2026, 10, 1))
+        db.session.add(other)
+        audit.record(db.session, make_actor(), "create", other)
+        db.session.flush()
+        db.session.add(NoConformidad(descripcion="x", fecha_detectada=date(2026, 10, 1)))
+        with self.assertRaises(audit.AuditGuardViolation):
+            db.session.flush()
+        db.session.rollback()
+
+    def test_removing_the_guard_stops_enforcement(self) -> None:
+        audit = audit_module()
+        remove = audit.install_audit_guard(db.session, audit.AUDITED_MODELS)
+        remove()
+        db.session.add(NoConformidad(descripcion="x", fecha_detectada=date(2026, 10, 1)))
+        db.session.flush()
+
+
+class ProductionIsolationTestCase(unittest.TestCase):
+    def test_guard_is_not_installed_by_default(self) -> None:
+        app = bootstrap.build_app()
+        with app.app_context():
+            from sqlalchemy.orm import Session
+
+            self.assertFalse(event.contains(Session, "before_flush", lambda *a: None))
+            self.assertFalse(
+                any(
+                    getattr(fn, "__module__", "") == "app.services.audit"
+                    and fn.__name__ == "_guard"
+                    for fn in db.session().dispatch.before_flush
+                )
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

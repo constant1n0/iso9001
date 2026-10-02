@@ -13,20 +13,22 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-"""Audit recorder for domain writes.
+"""Append-only audit recorder for domain writes.
 
 Services call :func:`record` next to each create, update or delete; the
-adapter owns the commit.
+adapter owns the commit. :func:`install_audit_guard` is a test-only safety
+net and is never installed by production code.
 """
 
 from __future__ import annotations
 
 import enum
+from collections.abc import Callable, Iterable
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import event, inspect as sa_inspect
 from sqlalchemy.orm import Session
 
 from .. import models
@@ -50,6 +52,15 @@ AUDITED_MODELS: tuple[type, ...] = tuple(
     )
 )
 
+_SUSPEND_GUARD = "audit_guard_suspended"
+
+
+class AuditLogImmutable(Exception):
+    """An existing audit row was flushed for UPDATE or DELETE."""
+
+
+class AuditGuardViolation(Exception):
+    """An audited entity changed in a flush without a matching audit row."""
 
 
 def is_sensitive(name: str) -> bool:
@@ -128,8 +139,13 @@ def record(
         raise ValueError(f"Unknown audit action: {action!r}")
 
     if action == "create" and _primary_key(instance) is None:
-        # The primary key is assigned by the database; flush this one row first.
-        session.flush([instance])
+        # The primary key is assigned by the database; flush this one row
+        # first, with the guard suspended because its audit row is added next.
+        session.info[_SUSPEND_GUARD] = True
+        try:
+            session.flush([instance])
+        finally:
+            session.info.pop(_SUSPEND_GUARD, None)
 
     scrubbed_before, scrubbed_after = _scrub(before), _scrub(after)
     if action == "create":
@@ -158,3 +174,48 @@ def record(
     session.add(row)
     return row
 
+
+@event.listens_for(AuditLog, "before_update")
+def _forbid_update(mapper: Any, connection: Any, target: AuditLog) -> None:
+    raise AuditLogImmutable("Audit log rows are append-only and cannot be updated")
+
+
+@event.listens_for(AuditLog, "before_delete")
+def _forbid_delete(mapper: Any, connection: Any, target: AuditLog) -> None:
+    raise AuditLogImmutable("Audit log rows are append-only and cannot be deleted")
+
+
+def install_audit_guard(
+    target: Any, audited_models: Iterable[type] = AUDITED_MODELS
+) -> Callable[[], None]:
+    """Test-only: fail flushes that change audited entities without an audit row.
+
+    ``target`` is a Session, sessionmaker or scoped session. Returns a
+    function that removes the guard. Never call this from production code.
+    """
+    audited = tuple(audited_models)
+    table_names = {sa_inspect(cls).local_table.name for cls in audited}
+
+    def _guard(session: Session, flush_context: Any, instances: Any) -> None:
+        if session.info.get(_SUSPEND_GUARD):
+            return
+        recorded = {
+            obj.entity_type for obj in session.new if isinstance(obj, AuditLog)
+        }
+        changed = [
+            *session.new,
+            *(obj for obj in session.dirty if session.is_modified(obj)),
+            *session.deleted,
+        ]
+        for obj in changed:
+            if not isinstance(obj, audited):
+                continue
+            name = sa_inspect(obj).mapper.local_table.name
+            if name in table_names and name not in recorded:
+                raise AuditGuardViolation(
+                    f"{type(obj).__name__} changed without an AuditLog row "
+                    f"for {name!r} in the same flush"
+                )
+
+    event.listen(target, "before_flush", _guard)
+    return lambda: event.remove(target, "before_flush", _guard)
