@@ -27,6 +27,7 @@ from itsdangerous import BadData, URLSafeTimedSerializer as Serializer
 from sqlalchemy import BigInteger, Integer
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import declared_attr
 
 from .extensions import db
 
@@ -53,8 +54,44 @@ class RoleEnum(enum.Enum):
     AUDITOR = 'Auditor'
     OPERATIVO = 'Operativo'
 
+class RecordMetadataMixin:
+    """Who created and last changed a record, and when.
+
+    Columns are nullable with no default of any kind: services stamp them
+    explicitly (see ``services.attribution``) and rows that predate the
+    columns keep NULL instead of an invented attribution.
+    """
+
+    created_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    @declared_attr
+    def created_by_id(cls):
+        return db.Column(
+            db.Integer,
+            db.ForeignKey(
+                'users.id',
+                name=f'fk_{cls.__tablename__}_created_by_id_users',
+                ondelete='SET NULL',
+            ),
+            nullable=True,
+        )
+
+    @declared_attr
+    def updated_by_id(cls):
+        return db.Column(
+            db.Integer,
+            db.ForeignKey(
+                'users.id',
+                name=f'fk_{cls.__tablename__}_updated_by_id_users',
+                ondelete='SET NULL',
+            ),
+            nullable=True,
+        )
+
+
 # Modelo para almacenar Partes Interesadas
-class ParteInteresada(db.Model):
+class ParteInteresada(RecordMetadataMixin, db.Model):
     __tablename__ = 'partes_interesadas'
     id_interesado = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(50), nullable=False, unique=True, index=True)
@@ -63,7 +100,7 @@ class ParteInteresada(db.Model):
     objetivo_estrategico = db.Column(db.Text)
 
 # Modelo para Roles y Responsabilidades dentro del SGC
-class RolResponsabilidad(db.Model):
+class RolResponsabilidad(RecordMetadataMixin, db.Model):
     __tablename__ = 'roles_responsabilidades'
     id_rol = db.Column(db.Integer, primary_key=True)
     rol = db.Column(db.String(50), nullable=False, unique=True, index=True)
@@ -71,7 +108,7 @@ class RolResponsabilidad(db.Model):
     descripcion_politica_calidad = db.Column(db.Text)
 
 # Modelo para gestionar Riesgos y Oportunidades dentro del SGC
-class RiesgoOportunidad(db.Model):
+class RiesgoOportunidad(RecordMetadataMixin, db.Model):
     __tablename__ = 'riesgos_oportunidades'
     id_riesgo = db.Column(db.Integer, primary_key=True)
     tipo = db.Column(db.Enum(TipoEnum), nullable=False)
@@ -80,7 +117,7 @@ class RiesgoOportunidad(db.Model):
     plan_accion = db.Column(db.Text)
 
 # Modelo para Recursos y Capacitación del personal
-class RecursoCapacitacion(db.Model):
+class RecursoCapacitacion(RecordMetadataMixin, db.Model):
     __tablename__ = 'recursos_capacitacion'
     id_recurso = db.Column(db.Integer, primary_key=True)
     recurso_necesario = db.Column(db.Text, nullable=False)
@@ -88,7 +125,7 @@ class RecursoCapacitacion(db.Model):
     descripcion_documentacion = db.Column(db.Text)
 
 # Modelo para la gestión de Procesos de Operación
-class ProcesoOperacion(db.Model):
+class ProcesoOperacion(RecordMetadataMixin, db.Model):
     __tablename__ = 'procesos_operacion'
     id_proceso = db.Column(db.Integer, primary_key=True)
     proceso = db.Column(db.String(100), nullable=False, unique=True, index=True)
@@ -97,7 +134,7 @@ class ProcesoOperacion(db.Model):
     no_conformidad = db.Column(db.Text)
 
 # Modelo para Auditorías e Indicadores
-class AuditoriaIndicador(db.Model):
+class AuditoriaIndicador(RecordMetadataMixin, db.Model):
     __tablename__ = 'auditorias_indicadores'
     id_auditoria = db.Column(db.Integer, primary_key=True)
     area_auditoria = db.Column(db.String(50), nullable=False)
@@ -107,7 +144,7 @@ class AuditoriaIndicador(db.Model):
     indicador_desempeno = db.Column(db.Text)
 
 # Modelo para Mejoras Continuas dentro del SGC
-class Mejora(db.Model):
+class Mejora(RecordMetadataMixin, db.Model):
     __tablename__ = 'mejoras'
     id_mejora = db.Column(db.Integer, primary_key=True)
     no_conformidad = db.Column(db.Text, nullable=False)
@@ -239,7 +276,7 @@ class User(UserMixin, db.Model):
         return f'<User {self.username}>'
 
 # Modelo para registrar No Conformidades dentro del SGC
-class NoConformidad(db.Model):
+class NoConformidad(RecordMetadataMixin, db.Model):
     __tablename__ = 'no_conformidades'
     id = db.Column(db.Integer, primary_key=True)
     descripcion = db.Column(db.Text, nullable=False)
@@ -250,7 +287,7 @@ class NoConformidad(db.Model):
     fecha_cierre = db.Column(db.Date)
 
 # Modelo para almacenar resultados de Satisfacción del Cliente
-class SatisfaccionCliente(db.Model):
+class SatisfaccionCliente(RecordMetadataMixin, db.Model):
     __tablename__ = 'satisfaccion_cliente'
     id = db.Column(db.Integer, primary_key=True)
     fecha_encuesta = db.Column(db.Date, nullable=False, default=datetime.utcnow)
@@ -259,7 +296,7 @@ class SatisfaccionCliente(db.Model):
     comentarios = db.Column(db.Text)
 
 # Modelo para registrar Capacitaciones del Personal
-class Capacitacion(db.Model):
+class Capacitacion(RecordMetadataMixin, db.Model):
     __tablename__ = 'capacitaciones'
     id = db.Column(db.Integer, primary_key=True)
     tema = db.Column(db.String(100), nullable=False)
@@ -276,7 +313,7 @@ class EstadoAuditoriaEnum(enum.Enum):
     CANCELADA = 'Cancelada'
 
 # Modelo para Auditorías
-class Auditoria(db.Model):
+class Auditoria(RecordMetadataMixin, db.Model):
     __tablename__ = 'auditorias'
     id = db.Column(db.Integer, primary_key=True)
     area_auditada = db.Column(db.String(50), nullable=False)
@@ -303,7 +340,7 @@ class DocumentCategory(enum.Enum):
     PLAN_CAPACITACION = 'Plan de Capacitación'
     OTRO = 'Otro'
 
-class Document(db.Model):
+class Document(RecordMetadataMixin, db.Model):
     __tablename__ = 'documents'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
