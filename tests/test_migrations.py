@@ -95,8 +95,84 @@ class MigrationsTestCase(unittest.TestCase):
                         )
                     )
             self.assertIn("ck_audit_logs_channel", str(raised.exception))
-            downgrade(directory=MIGRATIONS_DIR, revision="-1")
+            downgrade(directory=MIGRATIONS_DIR, revision="b7e2c9d41f03")
             self.assertNotIn("audit_logs", inspect(db.engine).get_table_names())
+
+    def _insert_legacy_user_and_nc(self) -> None:
+        with db.engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO users (username, password, role) "
+                    "VALUES ('legacy', 'x', 'OPERATIVO')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO no_conformidades "
+                    "(descripcion, fecha_detectada, estado) "
+                    "VALUES ('vieja', '2026-01-01', 'Abierta')"
+                )
+            )
+
+    def test_metadata_migration_keeps_legacy_rows_null_and_downgrades(self) -> None:
+        from app.services.audit import AUDITED_MODELS
+
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision="c4d8e1f2a9b7")
+            self._insert_legacy_user_and_nc()
+            upgrade(directory=MIGRATIONS_DIR)
+            with db.engine.connect() as connection:
+                row = connection.execute(
+                    text(
+                        "SELECT created_at, created_by_id, updated_at, "
+                        "updated_by_id FROM no_conformidades"
+                    )
+                ).one()
+            self.assertEqual((None, None, None, None), tuple(row))
+            inspector = inspect(db.engine)
+            for model in AUDITED_MODELS:
+                names = {c["name"] for c in inspector.get_columns(model.__tablename__)}
+                self.assertLessEqual(
+                    {"created_at", "created_by_id", "updated_at", "updated_by_id"},
+                    names,
+                    model.__tablename__,
+                )
+            downgrade(directory=MIGRATIONS_DIR, revision="c4d8e1f2a9b7")
+            inspector = inspect(db.engine)
+            for model in AUDITED_MODELS:
+                names = {c["name"] for c in inspector.get_columns(model.__tablename__)}
+                self.assertFalse(
+                    names & {"created_at", "created_by_id", "updated_at", "updated_by_id"},
+                    model.__tablename__,
+                )
+                self.assertFalse(
+                    [
+                        fk
+                        for fk in inspector.get_foreign_keys(model.__tablename__)
+                        if fk["name"] and fk["name"].endswith("_users")
+                    ],
+                    model.__tablename__,
+                )
+
+    def test_deleting_a_user_nulls_the_attribution_ids(self) -> None:
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR)
+            self._insert_legacy_user_and_nc()
+            with db.engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "UPDATE no_conformidades SET created_by_id = "
+                        "(SELECT id FROM users), updated_by_id = "
+                        "(SELECT id FROM users)"
+                    )
+                )
+                connection.execute(text("DELETE FROM users"))
+                row = connection.execute(
+                    text(
+                        "SELECT created_by_id, updated_by_id FROM no_conformidades"
+                    )
+                ).one()
+            self.assertEqual((None, None), tuple(row))
 
 
 if __name__ == "__main__":
