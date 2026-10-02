@@ -13,8 +13,7 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from flask_login import current_user
-from .models import RoleEnum, DocumentCategory, EstadoAuditoriaEnum
+from .models import DocumentCategory, EstadoAuditoriaEnum
 from .services.nonconformities import ESTADOS_NO_CONFORMIDAD
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField
@@ -57,19 +56,6 @@ class AuditoriaForm(BaseForm):
         validators=[DataRequired()]
     )
     submit = SubmitField('Guardar')
-
-    def validate(self, extra_validators=None):
-        """
-        Validación adicional para asegurar que el usuario tiene permisos para crear/editar auditorías.
-        """
-        if not super().validate(extra_validators=extra_validators):
-            return False
-        # Validar que el usuario actual tenga permiso para modificar auditorías
-        if current_user.role not in [RoleEnum.AUDITOR, RoleEnum.ADMINISTRADOR]:
-            self.area_auditada.errors.append("No tienes permiso para registrar o editar auditorías.")
-            return False
-        return True
-
 
 
 # Formulario para registrar No Conformidades

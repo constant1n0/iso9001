@@ -13,16 +13,44 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from flask import Blueprint, current_app, render_template, redirect, url_for, flash, request
-from ..models import Auditoria, RoleEnum, EstadoAuditoriaEnum
-from ..forms import AuditoriaForm
-from ..extensions import db
-from flask_login import login_required
-from ..utils.decorators import role_required
-from ..utils.pdf import pdf_response, render_pdf
+from datetime import date
 from math import ceil
 
+from flask import Blueprint, current_app, render_template, redirect, url_for, flash, request
+from flask_login import login_required
+from ..models import RoleEnum, EstadoAuditoriaEnum
+from ..forms import AuditoriaForm
+from ..extensions import db
+from ..services import audits
+from ..utils.decorators import role_required
+from ..utils.pdf import pdf_response, render_pdf
+from ..utils.web_actor import current_actor
+
 bp = Blueprint('auditoria', __name__, url_prefix='/auditorias')
+
+FORM_FIELDS = ('area_auditada', 'fecha', 'auditor', 'resultado', 'accion_correctiva', 'estado')
+
+
+def _form_data(form):
+    """Whitelisted service payload taken from a validated form."""
+    return {name: getattr(form, name).data for name in FORM_FIELDS}
+
+
+def _date_arg(name):
+    """Query-string date, or None when absent or malformed."""
+    try:
+        return date.fromisoformat(request.args.get(name, ''))
+    except ValueError:
+        return None
+
+
+def _estado_arg():
+    """Query-string state as an enum member, or None when absent or unknown."""
+    try:
+        return EstadoAuditoriaEnum(request.args.get('estado'))
+    except ValueError:
+        return None
+
 
 @bp.route('/', methods=['GET'])
 @login_required
@@ -35,44 +63,21 @@ def listar_auditorias():
     page = request.args.get('page', 1, type=int)
     per_page = 10  # Número de auditorías por página
 
-    query = Auditoria.query
-
-    # Filtrado por área auditada
-    area = request.args.get('area')
-    if area:
-        query = query.filter(Auditoria.area_auditada.ilike(f'%{area}%'))
-
-    # Filtrado por auditor
-    auditor = request.args.get('auditor')
-    if auditor:
-        query = query.filter(Auditoria.auditor.ilike(f'%{auditor}%'))
-
-    # Filtrado por estado (usando el Enum)
-    estado = request.args.get('estado')
-    if estado:
-        try:
-            estado_enum = EstadoAuditoriaEnum(estado)
-            query = query.filter(Auditoria.estado == estado_enum)
-        except ValueError:
-            pass  # Ignorar valores de estado inválidos
-
-    # Filtrado por rango de fechas
-    fecha_inicio = request.args.get('fecha_inicio')
-    fecha_fin = request.args.get('fecha_fin')
-    if fecha_inicio and fecha_fin:
-        query = query.filter(Auditoria.fecha.between(fecha_inicio, fecha_fin))
-    elif fecha_inicio:
-        query = query.filter(Auditoria.fecha >= fecha_inicio)
-    elif fecha_fin:
-        query = query.filter(Auditoria.fecha <= fecha_fin)
-
-    # Paginación
-    total_auditorias = query.count()
-    auditorias = query.paginate(page=page, per_page=per_page, error_out=False)
+    auditorias, total_auditorias = audits.list_page(
+        db.session,
+        current_actor(),
+        area=request.args.get('area'),
+        auditor=request.args.get('auditor'),
+        estado=_estado_arg(),
+        fecha_inicio=_date_arg('fecha_inicio'),
+        fecha_fin=_date_arg('fecha_fin'),
+        page=page,
+        per_page=per_page,
+    )
 
     return render_template(
         'auditorias/listar.html', 
-        auditorias=auditorias.items, 
+        auditorias=auditorias, 
         page=page, 
         total_pages=ceil(total_auditorias / per_page),
         total_auditorias=total_auditorias
@@ -88,16 +93,7 @@ def nueva_auditoria():
     """
     form = AuditoriaForm()
     if form.validate_on_submit():
-        estado = EstadoAuditoriaEnum[form.estado.data] if form.estado.data else EstadoAuditoriaEnum.PENDIENTE
-        nueva_auditoria = Auditoria(
-            area_auditada=form.area_auditada.data,
-            fecha=form.fecha.data,
-            auditor=form.auditor.data,
-            resultado=form.resultado.data,
-            accion_correctiva=form.accion_correctiva.data,
-            estado=estado
-        )
-        db.session.add(nueva_auditoria)
+        audits.create(db.session, current_actor(), _form_data(form))
         db.session.commit()
         flash('Auditoría creada exitosamente', 'success')
         return redirect(url_for('auditoria.listar_auditorias'))
@@ -111,7 +107,8 @@ def editar_auditoria(id):
     Carga el formulario de edición de una auditoría existente y guarda los
     cambios realizados en la base de datos.
     """
-    auditoria = Auditoria.query.get_or_404(id)
+    actor = current_actor()
+    auditoria = audits.get(db.session, actor, id)
     form = AuditoriaForm(obj=auditoria)
 
     # Establecer el valor actual del estado en el formulario
@@ -119,12 +116,7 @@ def editar_auditoria(id):
         form.estado.data = auditoria.estado.name
 
     if form.validate_on_submit():
-        auditoria.area_auditada = form.area_auditada.data
-        auditoria.fecha = form.fecha.data
-        auditoria.auditor = form.auditor.data
-        auditoria.resultado = form.resultado.data
-        auditoria.accion_correctiva = form.accion_correctiva.data
-        auditoria.estado = EstadoAuditoriaEnum[form.estado.data]
+        audits.update(db.session, actor, id, _form_data(form))
         db.session.commit()
         flash('Auditoría actualizada exitosamente', 'success')
         return redirect(url_for('auditoria.listar_auditorias'))
@@ -137,8 +129,7 @@ def eliminar_auditoria(id):
     """
     Elimina una auditoría existente de la base de datos.
     """
-    auditoria = Auditoria.query.get_or_404(id)
-    db.session.delete(auditoria)
+    audits.delete(db.session, current_actor(), id)
     db.session.commit()
     flash('Auditoría eliminada exitosamente', 'success')
     return redirect(url_for('auditoria.listar_auditorias'))
@@ -150,7 +141,7 @@ def exportar_pdf(id):
     """
     Genera un PDF para una auditoría específica usando su ID.
     """
-    auditoria = Auditoria.query.get_or_404(id)
+    auditoria = audits.get(db.session, current_actor(), id)
 
     try:
         return pdf_response(render_pdf('auditorias/pdf_template.html', auditoria=auditoria), f'auditoria_{id}.pdf')
