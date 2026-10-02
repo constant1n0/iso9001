@@ -13,8 +13,16 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from flask import jsonify, current_app
+from flask import current_app, flash, jsonify, redirect, request, url_for
 import logging
+
+from ..services.errors import (
+    Conflict,
+    DomainError,
+    NotFound,
+    PermissionDenied,
+    ValidationError,
+)
 
 # Configurar logging para errores
 logger = logging.getLogger(__name__)
@@ -56,8 +64,43 @@ def handle_400(e):
     return jsonify({'message': 'Solicitud inválida'}), 400
 
 
+_DOMAIN_STATUS = {
+    NotFound: 404,
+    Conflict: 409,
+    PermissionDenied: 403,
+    ValidationError: 422,
+}
+
+
+def _wants_json() -> bool:
+    """True for JSON bodies or clients that prefer JSON over HTML."""
+    return request.is_json or (
+        request.accept_mimetypes.best_match(['text/html', 'application/json'])
+        == 'application/json'
+    )
+
+
+def handle_domain_error(e: DomainError):
+    """Traduce un error de dominio en una respuesta HTTP, nunca en un 500.
+
+    JSON: ``{"error": mensaje}`` con 404/409/403/422. HTML: un
+    ``PermissionDenied`` replica a ``role_required`` (aviso y redirección al
+    panel); el resto responde igual que los demás manejadores (JSON).
+    """
+    status = next(
+        (code for cls, code in _DOMAIN_STATUS.items() if isinstance(e, cls)), 400
+    )
+    if isinstance(e, PermissionDenied) and not _wants_json():
+        flash('No tienes permiso para acceder a esta página.', 'danger')
+        return redirect(url_for('dashboard.dashboard'))
+    return jsonify({'error': e.message}), status
+
+
 def register_error_handlers(app):
     """Registra todos los manejadores de errores en la aplicación."""
+    # Flask resolves handlers by exception MRO, so DomainError always wins
+    # over the generic Exception handler regardless of registration order.
+    app.register_error_handler(DomainError, handle_domain_error)
     app.register_error_handler(Exception, handle_exception)
     app.register_error_handler(404, handle_404)
     app.register_error_handler(403, handle_403)

@@ -85,7 +85,7 @@ Inputs: `docs/iso-9001-gap-analysis.md` (roadmap Wave 0) and the exploration bel
 
 Forecasts count authored additions plus deletions. Route for every task: **delegated direct**, because each touches two or more non-trivial files (code plus tests).
 
-- [ ] **QF-1 — Restrict nonconformity delete to ADMIN.** Forecast 40-80.
+- [x] **QF-1 — Restrict nonconformity delete to ADMIN.** Forecast 40-80.
   - RED: an OPERATIVO and an AUDITOR POST to `/no_conformidades/eliminar/<id>` and the record survives; ADMIN still deletes.
   - Acceptance: non-admin delete is refused without deleting; the list hides the delete control for non-admins; existing tests stay green.
 - [ ] **QF-2 — Domain kernel and policy with today's matrix.** Forecast 300-380.
@@ -123,13 +123,15 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 
 - Strategy: `auto-chain`, chain strategy `stacked-to-main`: each pull request targets the previous slice branch, the first targets `main`.
 - Slice boundaries and the commits each pull request holds are recorded here as they are created.
+- Running count: `288558e` 363 lines (documentation), `55c22a9` 93 lines.
 
 ## Progress
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| QF-1 | Pending | — | — | — |
+| Docs | Done | `288558e` | Structural readback | Passive (`non_executable_only`); boundary advanced to `288558e` |
+| QF-1 | Done | `55c22a9` | RED: 3 of 5 new tests failed (OPERATIVO and AUDITOR deleted; delete control rendered). GREEN: 76 tests OK incl. PostgreSQL; parent spot check of the 5 new tests OK | Medium, `under_budget`; pending in slice from `288558e` |
 
 ## Next step
 
-Commit QF-1, assess it, then implement QF-2.
+Implement QF-2 (domain kernel and policy with today's matrix).
