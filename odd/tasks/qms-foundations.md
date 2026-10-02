@@ -88,7 +88,7 @@ Forecasts count authored additions plus deletions. Route for every task: **deleg
 - [x] **QF-1 — Restrict nonconformity delete to ADMIN.** Forecast 40-80.
   - RED: an OPERATIVO and an AUDITOR POST to `/no_conformidades/eliminar/<id>` and the record survives; ADMIN still deletes.
   - Acceptance: non-admin delete is refused without deleting; the list hides the delete control for non-admins; existing tests stay green.
-- [ ] **QF-2 — Domain kernel and policy with today's matrix.** Forecast 300-380.
+- [x] **QF-2 — Domain kernel and policy with today's matrix.** Forecast 300-380.
   - `Actor` (user id, label, role, channel, scopes), domain errors (`NotFound`, `Conflict`, `PermissionDenied`, `ValidationError`), `policy` encoding current behaviour including QF-1, error handlers registered before the global `Exception` handler.
   - Characterization tests for role denials and the JSON registers, written first.
 - [ ] **QF-3 — `AuditLog` model, migration, recorder and flush guard.** Forecast 300-380.
@@ -123,15 +123,29 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 
 - Strategy: `auto-chain`, chain strategy `stacked-to-main`: each pull request targets the previous slice branch, the first targets `main`.
 - Slice boundaries and the commits each pull request holds are recorded here as they are created.
-- Running count: `288558e` 363 lines (documentation), `55c22a9` 93 lines.
+- Running count: `288558e` 363 lines (documentation), `55c22a9` 93, `ada3b81` about 282, `3a74697` about 276, `89b1f31` 320.
+- Slice plan: PR 1 = `288558e` ([#20](https://github.com/constant1n0/iso9001/pull/20), merged as `ea5b91b`); PR 2 = `55c22a9` + `ada3b81`; PR 3 = `3a74697`; PR 4 = `89b1f31`. Each is opened after the previous one merges, then rebased on `main` by merging `main` into the feature branch.
+
+## Findings during implementation
+
+Recorded by QF-2 characterization; encoded as-is and fixed by the task named.
+
+- **JSON register writes return 500** (QF-8): POST and PUT on the five JSON registers and the improvements JSON API fail because `load_instance=True` schemas return model instances that the routes treat as dicts. Already reported by the September 2026 bug audit. The characterization tests pin `500` until QF-8 flips them to `201`/`200`.
+- **No role gating on JSON registers and the improvements API** (QF-9): every role can create, update and delete.
+- **OPERATIVO can delete** improvements, surveys, training records and stakeholders (QF-9).
+- **`AuditoriaForm.validate` permission check is redundant** with `role_required` on audit routes (QF-6 cleanup).
+- **No routes exist for users or the audit log**, so those resources enter the policy when their adapters exist.
+- **Review suggestion R3-domain-html-json** (QF-5): for HTML form posts, `NotFound`, `Conflict` and `ValidationError` return a JSON body; decide flash-and-redirect behaviour and pin it with tests when services are wired into routes.
+- **Review suggestion R3-flask-free-textual** (QF-5): the Flask-free guard for `app.services` is a source-text check; strengthen it to an import-level check.
 
 ## Progress
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
 | Docs | Done | `288558e` | Structural readback | Passive (`non_executable_only`); boundary advanced to `288558e` |
-| QF-1 | Done | `55c22a9` | RED: 3 of 5 new tests failed (OPERATIVO and AUDITOR deleted; delete control rendered). GREEN: 76 tests OK incl. PostgreSQL; parent spot check of the 5 new tests OK | Medium, `under_budget`; pending in slice from `288558e` |
+| QF-1 | Done | `55c22a9` | RED: 3 of 5 new tests failed (OPERATIVO and AUDITOR deleted; delete control rendered). GREEN: 76 tests OK incl. PostgreSQL; parent spot check of the 5 new tests OK | Medium, `under_budget`; covered by review `review-346107ba1909d990` |
+| QF-2 | Done | `ada3b81` (actor, domain errors, HTTP handlers), `3a74697` (policy), `89b1f31` (characterization) | RED: `ModuleNotFoundError` for `app.services` in 16 new tests and 2 characterization tests. GREEN: 96 tests OK incl. PostgreSQL; the full suite passed at each of the three commits | Range `288558e..89b1f31`: medium, `slice_budget_reached`; consent granted; review `review-346107ba1909d990` (lens `review-reliability`) **approved** and acknowledged (authority burned); reviewed boundary advanced to `89b1f31` |
 
 ## Next step
 
-Implement QF-2 (domain kernel and policy with today's matrix).
+Open PR 2 (`55c22a9` + `ada3b81`), merge when CI is green, continue with PR 3 and PR 4, and implement QF-3.
