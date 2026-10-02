@@ -91,7 +91,7 @@ Forecasts count authored additions plus deletions. Route for every task: **deleg
 - [x] **QF-2 — Domain kernel and policy with today's matrix.** Forecast 300-380.
   - `Actor` (user id, label, role, channel, scopes), domain errors (`NotFound`, `Conflict`, `PermissionDenied`, `ValidationError`), `policy` encoding current behaviour including QF-1, error handlers registered before the global `Exception` handler.
   - Characterization tests for role denials and the JSON registers, written first.
-- [ ] **QF-3 — `AuditLog` model, migration, recorder and flush guard.** Forecast 300-380.
+- [x] **QF-3 — `AuditLog` model, migration, recorder and flush guard.** Forecast 300-380.
   - Acceptance: append-only API (no update or delete path); changed fields only; passwords never recorded; migration upgrades and downgrades on PostgreSQL.
 - [ ] **QF-4 — Record metadata mixin and migration.** Forecast 250-330.
   - Acceptance: services set `created_*`/`updated_*`; legacy rows remain NULL; tz-aware timestamps.
@@ -124,7 +124,7 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 - Strategy: `auto-chain`, chain strategy `stacked-to-main`: each pull request targets the previous slice branch, the first targets `main`.
 - Slice boundaries and the commits each pull request holds are recorded here as they are created.
 - Running count: `288558e` 363 lines (documentation), `55c22a9` 93, `ada3b81` about 282, `3a74697` about 276, `89b1f31` 320.
-- Slice plan: PR 1 = `288558e` ([#20](https://github.com/constant1n0/iso9001/pull/20), merged as `ea5b91b`); PR 2 = `55c22a9` + `ada3b81`; PR 3 = `3a74697`; PR 4 = `89b1f31`. Each is opened after the previous one merges, then rebased on `main` by merging `main` into the feature branch.
+- Slice plan: PR 1 = `288558e` ([#20](https://github.com/constant1n0/iso9001/pull/20), merged `ea5b91b`); PR 2 = `55c22a9` + `ada3b81` ([#21](https://github.com/constant1n0/iso9001/pull/21), merged `38f7646`); PR 3 = `3a74697` ([#22](https://github.com/constant1n0/iso9001/pull/22), merged `01cb6a6`); PR 4 = `89b1f31` + `9d4f877` ([#23](https://github.com/constant1n0/iso9001/pull/23)); PR 5 = `9559f5d`; PR 6 = `aa12c2f`; PR 7 = `1e385cf` + the QF-3 hardening commit. Each is opened after the previous one merges, then rebased on `main` by merging `main` into the feature branch.
 
 ## Findings during implementation
 
@@ -145,7 +145,8 @@ Recorded by QF-2 characterization; encoded as-is and fixed by the task named.
 | Docs | Done | `288558e` | Structural readback | Passive (`non_executable_only`); boundary advanced to `288558e` |
 | QF-1 | Done | `55c22a9` | RED: 3 of 5 new tests failed (OPERATIVO and AUDITOR deleted; delete control rendered). GREEN: 76 tests OK incl. PostgreSQL; parent spot check of the 5 new tests OK | Medium, `under_budget`; covered by review `review-346107ba1909d990` |
 | QF-2 | Done | `ada3b81` (actor, domain errors, HTTP handlers), `3a74697` (policy), `89b1f31` (characterization) | RED: `ModuleNotFoundError` for `app.services` in 16 new tests and 2 characterization tests. GREEN: 96 tests OK incl. PostgreSQL; the full suite passed at each of the three commits | Range `288558e..89b1f31`: medium, `slice_budget_reached`; consent granted; review `review-346107ba1909d990` (lens `review-reliability`) **approved** and acknowledged (authority burned); reviewed boundary advanced to `89b1f31` |
+| QF-3 | Done | `9559f5d` (table), `aa12c2f` (recorder), `1e385cf` (append-only + flush guard), then the review-findings fix in the commit that records this row | RED: `ImportError` for `app.services.audit` in 20 new tests; hardening RED: update without `before` not rejected, two instances with one audit row not caught. GREEN: 97 / 109 / 118 tests at the three commits, 121 after hardening, incl. PostgreSQL migration upgrade/downgrade, JSONB and CHECK checks | Range `9d4f877..1e385cf`: medium, `slice_budget_reached`; consent granted; review `review-788622beda6891f8` (lens reliability) **approved** and acknowledged; 3 warnings + 1 suggestion fixed in the hardening commit; boundary advanced to `1e385cf` |
 
 ## Next step
 
-Open PR 2 (`55c22a9` + `ada3b81`), merge when CI is green, continue with PR 3 and PR 4, and implement QF-3.
+Merge PR 4 (#23) when CI is green, deliver PR 5-7 (QF-3), and implement QF-4.

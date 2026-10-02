@@ -15,6 +15,7 @@ from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from flask_migrate import downgrade, upgrade
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 
@@ -84,7 +85,7 @@ class MigrationsTestCase(unittest.TestCase):
             columns = {c["name"]: c for c in inspector.get_columns("audit_logs")}
             self.assertEqual("JSONB", type(columns["before"]["type"]).__name__)
             self.assertEqual("JSONB", type(columns["after"]["type"]).__name__)
-            with self.assertRaises(Exception):
+            with self.assertRaises(IntegrityError) as raised:
                 with db.engine.begin() as connection:
                     connection.execute(
                         text(
@@ -93,6 +94,7 @@ class MigrationsTestCase(unittest.TestCase):
                             "VALUES ('x', 'create', 'a', 'bogus')"
                         )
                     )
+            self.assertIn("ck_audit_logs_channel", str(raised.exception))
             downgrade(directory=MIGRATIONS_DIR, revision="-1")
             self.assertNotIn("audit_logs", inspect(db.engine).get_table_names())
 
