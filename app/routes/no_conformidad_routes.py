@@ -15,9 +15,10 @@
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required
-from ..models import NoConformidad
+from ..models import NoConformidad, RoleEnum
 from ..forms import ESTADOS_NO_CONFORMIDAD, NoConformidadForm
 from ..extensions import db
+from ..utils.decorators import role_required
 from ..utils.pdf import pdf_response, render_pdf
 
 # Define el blueprint y la URL base
@@ -97,6 +98,7 @@ def editar_no_conformidad(id):
 # Ruta para eliminar una no conformidad
 @bp.route('/eliminar/<int:id>', methods=['POST'])
 @login_required
+@role_required(RoleEnum.ADMINISTRADOR)
 def eliminar_no_conformidad(id):
     no_conformidad = NoConformidad.query.get_or_404(id)
     db.session.delete(no_conformidad)
