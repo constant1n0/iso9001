@@ -14,35 +14,34 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request
-from ..models import Capacitacion
 from ..forms import CapacitacionForm
 from ..extensions import db
+from ..services import training
 from flask_login import login_required
 from ..utils.pdf import pdf_response, render_pdf
+from ..utils.web_actor import current_actor
+from ..utils.web_args import date_arg
 
 bp = Blueprint('capacitacion', __name__, url_prefix='/capacitaciones')
+
+FORM_FIELDS = ('tema', 'fecha', 'personal', 'duracion_horas', 'evaluacion_final')
+
+
+def _form_data(form):
+    """Whitelisted service payload taken from a validated form."""
+    return {name: getattr(form, name).data for name in FORM_FIELDS}
+
 
 @bp.route('/', methods=['GET'])
 @login_required
 def listar_capacitaciones():
-    query = Capacitacion.query
-
-    # Filtrado por tema
-    tema = request.args.get('tema')
-    if tema:
-        query = query.filter(Capacitacion.tema.ilike(f'%{tema}%'))
-
-    # Filtrado por fecha
-    fecha = request.args.get('fecha')
-    if fecha:
-        query = query.filter(db.func.date(Capacitacion.fecha) == fecha)
-
-    # Filtrado por personal
-    personal = request.args.get('personal')
-    if personal:
-        query = query.filter(Capacitacion.personal.ilike(f'%{personal}%'))
-
-    capacitaciones = query.order_by(Capacitacion.fecha.desc()).all()
+    capacitaciones = training.list_(
+        db.session,
+        current_actor(),
+        tema=request.args.get('tema'),
+        fecha=date_arg('fecha'),
+        personal=request.args.get('personal'),
+    )
     return render_template('capacitaciones/listar.html', capacitaciones=capacitaciones)
 
 @bp.route('/nueva', methods=['GET', 'POST'])
@@ -50,14 +49,7 @@ def listar_capacitaciones():
 def nueva_capacitacion():
     form = CapacitacionForm()
     if form.validate_on_submit():
-        nueva_capacitacion = Capacitacion(
-            tema=form.tema.data,
-            fecha=form.fecha.data,
-            personal=form.personal.data,
-            duracion_horas=form.duracion_horas.data,
-            evaluacion_final=form.evaluacion_final.data
-        )
-        db.session.add(nueva_capacitacion)
+        training.create(db.session, current_actor(), _form_data(form))
         db.session.commit()
         flash('Capacitación registrada exitosamente', 'success')
         return redirect(url_for('capacitacion.listar_capacitaciones'))
@@ -70,14 +62,11 @@ def editar_capacitacion(id):
     """
     Carga el formulario de edición de una capacitación y guarda los cambios en la base de datos.
     """
-    capacitacion = Capacitacion.query.get_or_404(id)
+    actor = current_actor()
+    capacitacion = training.get(db.session, actor, id)
     form = CapacitacionForm(obj=capacitacion)
     if form.validate_on_submit():
-        capacitacion.tema = form.tema.data
-        capacitacion.fecha = form.fecha.data
-        capacitacion.personal = form.personal.data
-        capacitacion.duracion_horas = form.duracion_horas.data
-        capacitacion.evaluacion_final = form.evaluacion_final.data
+        training.update(db.session, actor, id, _form_data(form))
         db.session.commit()
         flash('Capacitación actualizada exitosamente', 'success')
         return redirect(url_for('capacitacion.listar_capacitaciones'))
@@ -90,8 +79,7 @@ def eliminar_capacitacion(id):
     """
     Elimina una capacitación de la base de datos.
     """
-    capacitacion = Capacitacion.query.get_or_404(id)
-    db.session.delete(capacitacion)
+    training.delete(db.session, current_actor(), id)
     db.session.commit()
     flash('Capacitación eliminada exitosamente', 'success')
     return redirect(url_for('capacitacion.listar_capacitaciones'))
@@ -102,5 +90,5 @@ def exportar_pdf(id):
     """
     Genera un PDF para un registro de capacitación específico usando su ID.
     """
-    capacitacion = Capacitacion.query.get_or_404(id)
+    capacitacion = training.get(db.session, current_actor(), id)
     return pdf_response(render_pdf('capacitaciones/pdf_template.html', capacitacion=capacitacion), f'capacitacion_{id}.pdf')

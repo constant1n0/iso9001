@@ -13,7 +13,6 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from datetime import date
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required
@@ -24,6 +23,7 @@ from ..services import nonconformities
 from ..utils.decorators import role_required
 from ..utils.pdf import pdf_response, render_pdf
 from ..utils.web_actor import current_actor
+from ..utils.web_args import date_arg
 
 # Define el blueprint y la URL base
 bp = Blueprint('no_conformidad', __name__, url_prefix='/no_conformidades')
@@ -36,14 +36,6 @@ def _form_data(form):
     return {name: getattr(form, name).data for name in FORM_FIELDS}
 
 
-def _date_arg(name):
-    """Query-string date, or None when absent or malformed."""
-    try:
-        return date.fromisoformat(request.args.get(name, ''))
-    except ValueError:
-        return None
-
-
 # Ruta para listar todas las no conformidades
 @bp.route('/', methods=['GET'])
 @login_required
@@ -54,7 +46,7 @@ def listar_no_conformidades():
         actor,
         descripcion=request.args.get('descripcion'),
         estado=request.args.get('estado'),
-        fecha_detectada=_date_arg('fecha_detectada'),
+        fecha_detectada=date_arg('fecha_detectada'),
     )
     return render_template('no_conformidades/listar.html', no_conformidades=no_conformidades,
                            estados=nonconformities.available_states(db.session, actor))
