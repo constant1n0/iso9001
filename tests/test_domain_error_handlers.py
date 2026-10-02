@@ -122,6 +122,13 @@ class DomainErrorHandlersTestCase(unittest.TestCase):
             self.client.post("/_test/raise/conflict")
         rollback.assert_called()
 
+    def test_json_conflict_and_validation_roll_back_the_session(self) -> None:
+        for kind in ("conflict", "invalid"):
+            with self.subTest(kind=kind):
+                with patch("app.utils.error_handlers.db.session.rollback") as rollback:
+                    self.client.post(f"/_test/raise/{kind}", json={})
+                rollback.assert_called()
+
     def test_unrelated_exceptions_still_use_the_global_handler(self) -> None:
         response = self.client.post("/_test/raise/boom", json={})
         self.assertEqual(500, response.status_code)

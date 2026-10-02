@@ -179,6 +179,7 @@ class CreateTestCase(WriteBase):
             "missing date": {k: v for k, v in VALID.items() if k != "fecha_detectada"},
             "date as text": VALID | {"fecha_detectada": "2026-10-01"},
             "unknown state": VALID | {"estado": "Archivada"},
+            "null state": VALID | {"estado": None},
             "responsable too long": VALID | {"responsable": "x" * 51},
             "unknown field": VALID | {"created_by_id": 1},
             "id is not writable": VALID | {"id": 99},
@@ -237,7 +238,8 @@ class UpdateTestCase(WriteBase):
 
     def test_update_validates_like_create_and_leaves_the_record_untouched(self) -> None:
         nc = self.create()
-        for data in ({"estado": "Archivada"}, {"descripcion": " "}, {"fecha_detectada": None},
+        for data in ({"estado": "Archivada"}, {"estado": None}, {"descripcion": " "},
+                     {"fecha_detectada": None},
                      {"responsable": "x" * 51}, {"updated_by_id": 3}):
             with self.subTest(data=data):
                 with self.assertRaises(errors().ValidationError):
