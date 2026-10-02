@@ -155,6 +155,10 @@ def record(
         stored_before = snapshot(instance) if scrubbed_before is None else scrubbed_before
         stored_after = None
     else:
+        if before is None:
+            raise ValueError(
+                "update needs the 'before' snapshot taken ahead of the change"
+            )
         stored_before, stored_after = _diff(
             scrubbed_before or {},
             snapshot(instance) if scrubbed_after is None else scrubbed_after,
@@ -200,7 +204,9 @@ def install_audit_guard(
         if session.info.get(_SUSPEND_GUARD):
             return
         recorded = {
-            obj.entity_type for obj in session.new if isinstance(obj, AuditLog)
+            (obj.entity_type, obj.entity_id)
+            for obj in session.new
+            if isinstance(obj, AuditLog)
         }
         changed = [
             *session.new,
@@ -211,10 +217,10 @@ def install_audit_guard(
             if not isinstance(obj, audited):
                 continue
             name = sa_inspect(obj).mapper.local_table.name
-            if name in table_names and name not in recorded:
+            if name in table_names and (name, _primary_key(obj)) not in recorded:
                 raise AuditGuardViolation(
                     f"{type(obj).__name__} changed without an AuditLog row "
-                    f"for {name!r} in the same flush"
+                    f"for {name!r} #{_primary_key(obj)} in the same flush"
                 )
 
     event.listen(target, "before_flush", _guard)

@@ -9,7 +9,6 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import test_auth_bootstrap as bootstrap
-from sqlalchemy import event
 
 from app.extensions import db
 from app.models import NoConformidad, RoleEnum, User
@@ -212,6 +211,12 @@ class AuditDatabaseTestCase(AuditDbBase):
         }
         self.assertEqual(domain, set(audit.AUDITED_MODELS))
 
+    def test_record_update_without_before_snapshot_is_rejected(self) -> None:
+        audit = audit_module()
+        nc = self.new_nc()
+        with self.assertRaises(ValueError):
+            audit.record(db.session, make_actor(), "update", nc)
+
     def test_audit_log_rows_cannot_be_updated(self) -> None:
         audit = audit_module()
         row = audit.record(db.session, make_actor(), "create", self.new_nc())
@@ -300,6 +305,33 @@ class FlushGuardTestCase(AuditDbBase):
             db.session.flush()
         db.session.rollback()
 
+    def test_two_changed_instances_with_one_audit_row_fail_the_guard(self) -> None:
+        audit = audit_module()
+        first, second = self.new_nc(), self.new_nc()
+        db.session.commit()
+        remove = audit.install_audit_guard(db.session, audit.AUDITED_MODELS)
+        self.addCleanup(remove)
+        before = audit.snapshot(first)
+        first.estado = "Cerrada"
+        second.estado = "Cerrada"
+        audit.record(db.session, make_actor(), "update", first, before=before)
+        with self.assertRaises(audit.AuditGuardViolation):
+            db.session.flush()
+        db.session.rollback()
+
+    def test_two_changed_instances_with_one_audit_row_each_pass(self) -> None:
+        audit = audit_module()
+        first, second = self.new_nc(), self.new_nc()
+        db.session.commit()
+        remove = audit.install_audit_guard(db.session, audit.AUDITED_MODELS)
+        self.addCleanup(remove)
+        for nc in (first, second):
+            before = audit.snapshot(nc)
+            nc.estado = "Cerrada"
+            audit.record(db.session, make_actor(), "update", nc, before=before)
+        db.session.commit()
+        self.assertEqual(2, db.session.query(audit.AuditLog).count())
+
     def test_removing_the_guard_stops_enforcement(self) -> None:
         audit = audit_module()
         remove = audit.install_audit_guard(db.session, audit.AUDITED_MODELS)
@@ -312,9 +344,16 @@ class ProductionIsolationTestCase(unittest.TestCase):
     def test_guard_is_not_installed_by_default(self) -> None:
         app = bootstrap.build_app()
         with app.app_context():
-            from sqlalchemy.orm import Session
-
-            self.assertFalse(event.contains(Session, "before_flush", lambda *a: None))
+            db.create_all()
+            try:
+                db.session.add(
+                    NoConformidad(descripcion="x", fecha_detectada=date(2026, 10, 1))
+                )
+                db.session.flush()  # no audit row: raises only if a guard is installed
+            finally:
+                db.session.rollback()
+                db.session.remove()
+                db.drop_all()
             self.assertFalse(
                 any(
                     getattr(fn, "__module__", "") == "app.services.audit"
