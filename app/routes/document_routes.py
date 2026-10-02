@@ -15,21 +15,30 @@
 
 # routes/document_routes.py
 from flask import Blueprint, render_template, redirect, url_for, flash, request
-from ..models import Document
 from ..forms import DocumentForm
 from ..extensions import db
 from flask_login import login_required
+from ..services import documents
 from ..utils.decorators import role_required
+from ..utils.web_actor import current_actor
 from ..models import RoleEnum
 
 bp = Blueprint('document', __name__, url_prefix='/documents')
+
+FORM_FIELDS = ('title', 'code', 'category', 'version', 'issued_date', 'approved_by', 'content')
+
+
+def _form_data(form):
+    """Whitelisted service payload taken from a validated form."""
+    return {name: getattr(form, name).data for name in FORM_FIELDS}
+
 
 @bp.route('/', methods=['GET'])
 @login_required
 @role_required(RoleEnum.ADMINISTRADOR)
 def list_documents():
-    documents = Document.query.order_by(Document.code).all()
-    return render_template('documents/list.html', documents=documents)
+    return render_template('documents/list.html',
+                           documents=documents.list_(db.session, current_actor()))
 
 @bp.route('/new', methods=['GET', 'POST'])
 @login_required
@@ -37,16 +46,7 @@ def list_documents():
 def new_document():
     form = DocumentForm()
     if form.validate_on_submit():
-        document = Document(
-            title=form.title.data,
-            code=form.code.data,
-            category=form.category.data,
-            version=form.version.data,
-            issued_date=form.issued_date.data,
-            approved_by=form.approved_by.data,
-            content=form.content.data
-        )
-        db.session.add(document)
+        documents.create(db.session, current_actor(), _form_data(form))
         db.session.commit()
         flash('Documento creado exitosamente', 'success')
         return redirect(url_for('document.list_documents'))
@@ -56,19 +56,14 @@ def new_document():
 @login_required
 @role_required(RoleEnum.ADMINISTRADOR)
 def edit_document(document_id):
-    document = Document.query.get_or_404(document_id)
+    actor = current_actor()
+    document = documents.get(db.session, actor, document_id)
     form = DocumentForm(obj=document)
     # The select uses enum names as values; preselect the stored category.
     if request.method == 'GET':
         form.category.data = document.category.name
     if form.validate_on_submit():
-        document.title = form.title.data
-        document.code = form.code.data
-        document.category = form.category.data
-        document.version = form.version.data
-        document.issued_date = form.issued_date.data
-        document.approved_by = form.approved_by.data
-        document.content = form.content.data
+        documents.update(db.session, actor, document_id, _form_data(form))
         db.session.commit()
         flash('Documento actualizado exitosamente', 'success')
         return redirect(url_for('document.list_documents'))
@@ -78,8 +73,7 @@ def edit_document(document_id):
 @login_required
 @role_required(RoleEnum.ADMINISTRADOR)
 def delete_document(document_id):
-    document = Document.query.get_or_404(document_id)
-    db.session.delete(document)
+    documents.delete(db.session, current_actor(), document_id)
     db.session.commit()
     flash('Documento eliminado exitosamente', 'success')
     return redirect(url_for('document.list_documents'))
