@@ -477,9 +477,12 @@ Verified against PostgreSQL (2026-09-29):
 - The test detects the flaw it guards against. Removing the `password == expected` condition made all 8 racers succeed, and both tests failed.
 - This proves the behaviour on PostgreSQL's default `READ COMMITTED` isolation, not on the production database itself.
 
-Not verified in production:
+End-to-end password reset in production (verified by the maintainer, 2026-10-02):
 
-- An end-to-end password-reset e-mail (request, delivery, single use of the link).
+- Request, e-mail delivery through the configured Gmail account, and the link on the canonical origin `https://calidad.absolutoffice.com/reset_password/…`.
+- Setting the new password and logging in with it.
+- Reopening the same link is rejected with "El enlace de recuperación es inválido o ha expirado."
+- No reset token appears in the Gunicorn access log or in the Traefik access log.
 
 ## Known limitations and blockers
 
@@ -500,4 +503,4 @@ Not verified in production:
 - Post-A3-merge CI: [run 36314382218](https://github.com/constant1n0/iso9001/actions/runs/36314382218) passed the Python 3.11 `Run tests` job on the merge commit. This is not deployment or production verification.
 - Historical mirror gate: the original A3 closure document was mirrored and read back after its tracking commit as observation `#5379`.
 - Production: deployed to `vulcano` at `main@b4c460d` on 2026-09-28; see *Production deployment*.
-- **Next step:** run one end-to-end password reset in production to verify delivery and single use. Other audit sectors remain deferred.
+- **Status:** A1–A3 are deployed and verified in production, including an end-to-end password reset; A2b is also verified under concurrency on PostgreSQL in CI. Other audit sectors remain deferred.
