@@ -28,15 +28,19 @@ Rules this module follows, and the services that copy it should too:
 
 from __future__ import annotations
 
-from datetime import date
+from collections.abc import Mapping
+from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import NoConformidad
-from . import policy
+from . import audit, policy
 from .actor import Actor
-from .errors import NotFound
+from .attribution import stamp_created, stamp_updated
+from .errors import Conflict, NotFound, ValidationError
 from .policy import Action, Resource
 
 ESTADO_ABIERTA = "Abierta"
@@ -87,3 +91,102 @@ def available_states(session: Session, actor: Actor) -> list[str]:
     policy.require(actor, Action.READ, Resource.NONCONFORMITIES)
     stored = set(session.scalars(select(NoConformidad.estado).distinct()))
     return [*ESTADOS_NO_CONFORMIDAD, *sorted(stored - set(ESTADOS_NO_CONFORMIDAD))]
+
+
+WRITABLE_FIELDS = frozenset(
+    {"descripcion", "fecha_detectada", "responsable", "estado", "accion_correctiva"}
+)
+RESPONSABLE_MAX = 50  # mirrors NoConformidad.responsable and the web form
+
+
+def _text(data: Mapping[str, Any], key: str, *, required: bool = False,
+          max_length: int | None = None, strip: bool = True) -> Any:
+    value = data[key]
+    if value is None and not required:
+        return None
+    if not isinstance(value, str):
+        raise ValidationError(f"El campo «{key}» debe ser texto.")
+    value = value.strip() if strip else value
+    if required and not value:
+        raise ValidationError(f"El campo «{key}» es obligatorio.")
+    if max_length is not None and len(value) > max_length:
+        raise ValidationError(
+            f"El campo «{key}» admite como máximo {max_length} caracteres."
+        )
+    return value
+
+
+def _clean(data: Mapping[str, Any], current_estado: str | None = None) -> dict[str, Any]:
+    """Validate the keys present in ``data`` and return the normalized values."""
+    unknown = sorted(set(data) - WRITABLE_FIELDS)
+    if unknown:
+        raise ValidationError(f"Campos no permitidos: {', '.join(unknown)}.")
+    clean: dict[str, Any] = {}
+    if "descripcion" in data:
+        clean["descripcion"] = _text(data, "descripcion", required=True)
+    if "fecha_detectada" in data:
+        value = data["fecha_detectada"]
+        if not isinstance(value, date) or isinstance(value, datetime):
+            raise ValidationError("La fecha detectada es obligatoria y debe ser una fecha.")
+        clean["fecha_detectada"] = value
+    if "responsable" in data:
+        clean["responsable"] = _text(data, "responsable", max_length=RESPONSABLE_MAX)
+    if "accion_correctiva" in data:
+        clean["accion_correctiva"] = _text(data, "accion_correctiva", strip=False)
+    if "estado" in data:
+        estado = data["estado"]
+        if estado not in ESTADOS_NO_CONFORMIDAD and estado != current_estado:
+            raise ValidationError("El estado no es válido.")
+        clean["estado"] = estado
+    return clean
+
+
+def _flush(session: Session) -> None:
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        raise Conflict() from exc
+
+
+def create(session: Session, actor: Actor, data: Mapping[str, Any]) -> NoConformidad:
+    """Create a nonconformity; ``descripcion`` and ``fecha_detectada`` are required."""
+    policy.require(actor, Action.CREATE, Resource.NONCONFORMITIES)
+    missing = {"descripcion", "fecha_detectada"} - set(data)
+    if missing:
+        raise ValidationError(f"Faltan campos obligatorios: {', '.join(sorted(missing))}.")
+    values = {"estado": ESTADO_ABIERTA} | _clean(data)
+    nc = NoConformidad(**values)
+    stamp_created(nc, actor)
+    session.add(nc)
+    try:
+        audit.record(session, actor, "create", nc)  # flushes to obtain the id
+    except IntegrityError as exc:
+        raise Conflict() from exc
+    return nc
+
+
+def update(
+    session: Session, actor: Actor, nc_id: int, data: Mapping[str, Any]
+) -> NoConformidad:
+    """Apply the given fields; a call that changes nothing writes nothing."""
+    policy.require(actor, Action.UPDATE, Resource.NONCONFORMITIES)
+    nc = _load(session, nc_id)
+    values = _clean(data, current_estado=nc.estado)
+    before = audit.snapshot(nc)
+    if all(getattr(nc, key) == value for key, value in values.items()):
+        return nc
+    for key, value in values.items():
+        setattr(nc, key, value)
+    stamp_updated(nc, actor)
+    audit.record(session, actor, "update", nc, before=before)
+    _flush(session)
+    return nc
+
+
+def delete(session: Session, actor: Actor, nc_id: int) -> None:
+    """Hard-delete a nonconformity, keeping its full snapshot in the audit log."""
+    policy.require(actor, Action.DELETE, Resource.NONCONFORMITIES)
+    nc = _load(session, nc_id)
+    audit.record(session, actor, "delete", nc)
+    session.delete(nc)
+    _flush(session)
