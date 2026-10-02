@@ -15,6 +15,9 @@
 
 from flask import current_app, flash, jsonify, redirect, request, url_for
 import logging
+from urllib.parse import urlsplit
+
+from ..extensions import db
 
 from ..services.errors import (
     Conflict,
@@ -80,19 +83,44 @@ def _wants_json() -> bool:
     )
 
 
+def _back_target() -> str:
+    """Same-origin path of the page the form was posted from, else the dashboard.
+
+    The Referer is client-controlled, so only a path on this host is followed
+    (never another origin or a scheme-relative URL).
+    """
+    parts = urlsplit(request.referrer or '')
+    same_host = parts.netloc == request.host and parts.scheme in ('http', 'https')
+    if same_host and parts.path.startswith('/') and not parts.path.startswith('//'):
+        return parts.path + (f'?{parts.query}' if parts.query else '')
+    return url_for('dashboard.dashboard')
+
+
 def handle_domain_error(e: DomainError):
     """Traduce un error de dominio en una respuesta HTTP, nunca en un 500.
 
-    JSON: ``{"error": mensaje}`` con 404/409/403/422. HTML: un
-    ``PermissionDenied`` replica a ``role_required`` (aviso y redirección al
-    panel); el resto responde igual que los demás manejadores (JSON).
+    JSON: ``{"error": mensaje}`` con 404/409/403/422. HTML:
+
+    - ``PermissionDenied`` replica a ``role_required`` (aviso y redirección al
+      panel).
+    - ``NotFound`` responde igual que un 404 de ruta (``handle_404``).
+    - ``Conflict`` y ``ValidationError`` muestran el mensaje seguro y vuelven a
+      la página de origen del formulario (o al panel).
     """
     status = next(
         (code for cls, code in _DOMAIN_STATUS.items() if isinstance(e, cls)), 400
     )
-    if isinstance(e, PermissionDenied) and not _wants_json():
+    if _wants_json():
+        return jsonify({'error': e.message}), status
+    if isinstance(e, PermissionDenied):
         flash('No tienes permiso para acceder a esta página.', 'danger')
         return redirect(url_for('dashboard.dashboard'))
+    if isinstance(e, NotFound):
+        return handle_404(e)
+    if isinstance(e, (Conflict, ValidationError)):
+        db.session.rollback()
+        flash(e.message, 'danger')
+        return redirect(_back_target())
     return jsonify({'error': e.message}), status
 
 
