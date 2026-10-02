@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import unittest
 from datetime import date
+from unittest.mock import patch
 
+from sqlalchemy.exc import IntegrityError
 
 from test_audit import AuditDbBase
 
@@ -136,3 +138,188 @@ class ReadTestCase(ServiceBase):
             ],
         )
         db.session.commit()
+
+
+class WriteBase(ServiceBase):
+    def create(self, who=None, **overrides) -> NoConformidad:
+        nc = service().create(db.session, who or actor(), VALID | overrides)
+        db.session.commit()
+        return nc
+
+
+class CreateTestCase(WriteBase):
+    def test_every_role_can_create_and_the_audit_row_holds_the_after_snapshot(self) -> None:
+        for role in RoleEnum:
+            with self.subTest(role=role.name):
+                nc = self.create(actor(role))
+                row = self.audit_rows()[-1]
+                self.assertEqual(
+                    ("no_conformidades", nc.id, "create", "web"),
+                    (row.entity_type, row.entity_id, row.action, row.channel),
+                )
+                self.assertIsNone(row.before)
+                self.assertEqual("Pieza fuera de tolerancia", row.after["descripcion"])
+                self.assertEqual("Abierta", row.after["estado"])
+                self.assertEqual("2026-10-01", row.after["fecha_detectada"])
+
+    def test_create_stamps_creation_and_update_metadata(self) -> None:
+        nc = self.create(actor(user_id=7))
+        self.assertEqual((7, 7), (nc.created_by_id, nc.updated_by_id))
+        self.assertIsNotNone(nc.created_at)
+        self.assertEqual(nc.created_at, nc.updated_at)
+
+    def test_state_defaults_to_abierta_and_text_is_trimmed(self) -> None:
+        nc = self.create(descripcion="  espacios  ", responsable="  Ana ")
+        self.assertEqual(("espacios", "Ana", "Abierta"), (nc.descripcion, nc.responsable, nc.estado))
+
+    def test_invalid_data_raises_validation_error_and_writes_nothing(self) -> None:
+        cases = {
+            "blank description": VALID | {"descripcion": "   "},
+            "missing description": {k: v for k, v in VALID.items() if k != "descripcion"},
+            "missing date": {k: v for k, v in VALID.items() if k != "fecha_detectada"},
+            "date as text": VALID | {"fecha_detectada": "2026-10-01"},
+            "unknown state": VALID | {"estado": "Archivada"},
+            "responsable too long": VALID | {"responsable": "x" * 51},
+            "unknown field": VALID | {"created_by_id": 1},
+            "id is not writable": VALID | {"id": 99},
+        }
+        for name, data in cases.items():
+            with self.subTest(case=name):
+                with self.assertRaises(errors().ValidationError):
+                    service().create(db.session, actor(), data)
+                db.session.rollback()
+        self.assertEqual(0, db.session.query(NoConformidad).count())
+        self.assertEqual([], self.audit_rows())
+
+    def test_scoped_actor_without_write_is_denied(self) -> None:
+        with self.assertRaises(errors().PermissionDenied):
+            service().create(db.session, actor(scopes={"read"}), VALID)
+        self.assertEqual(0, db.session.query(NoConformidad).count())
+
+    def test_integrity_error_becomes_conflict(self) -> None:
+        with patch.object(
+            db.session, "flush", side_effect=IntegrityError("stmt", {}, Exception("dup"))
+        ):
+            with self.assertRaises(errors().Conflict):
+                service().create(db.session, actor(), VALID)
+
+
+class UpdateTestCase(WriteBase):
+    def test_update_changes_fields_stamps_and_audits_changed_fields_only(self) -> None:
+        nc = self.create(actor(user_id=7))
+        created_at = nc.created_at
+        service().update(
+            db.session, actor(AUDITOR, user_id=8), nc.id,
+            {"estado": "En proceso", "responsable": "Luis"},
+        )
+        db.session.commit()
+        self.assertEqual(("En proceso", "Luis"), (nc.estado, nc.responsable))
+        self.assertEqual((7, 8, created_at), (nc.created_by_id, nc.updated_by_id, nc.created_at))
+        row = self.audit_rows()[-1]
+        self.assertEqual("update", row.action)
+        self.assertEqual("Abierta", row.before["estado"])
+        self.assertEqual("En proceso", row.after["estado"])
+        self.assertEqual("Luis", row.after["responsable"])
+        self.assertNotIn("descripcion", row.after)
+        self.assertEqual(8, row.after["updated_by_id"])
+
+    def test_update_without_changes_writes_no_audit_row_and_keeps_stamps(self) -> None:
+        nc = self.create(actor(user_id=7))
+        before = (nc.updated_at, nc.updated_by_id)
+        service().update(db.session, actor(user_id=8), nc.id, {"estado": "Abierta"})
+        db.session.commit()
+        self.assertEqual(1, len(self.audit_rows()))
+        self.assertEqual(before, (nc.updated_at, nc.updated_by_id))
+
+    def test_update_missing_raises_not_found(self) -> None:
+        with self.assertRaises(errors().NotFound):
+            service().update(db.session, actor(), 999, {"estado": "Cerrada"})
+
+    def test_update_validates_like_create_and_leaves_the_record_untouched(self) -> None:
+        nc = self.create()
+        for data in ({"estado": "Archivada"}, {"descripcion": " "}, {"fecha_detectada": None},
+                     {"responsable": "x" * 51}, {"updated_by_id": 3}):
+            with self.subTest(data=data):
+                with self.assertRaises(errors().ValidationError):
+                    service().update(db.session, actor(), nc.id, data)
+                db.session.rollback()
+        db.session.refresh(nc)
+        self.assertEqual("Pieza fuera de tolerancia", nc.descripcion)
+        self.assertEqual(1, len(self.audit_rows()))
+
+    def test_legacy_state_is_tolerated_only_while_unchanged(self) -> None:
+        nc = self.create()
+        db.session.execute(
+            NoConformidad.__table__.update().values(estado="Pendiente")
+        )
+        db.session.commit()
+        db.session.refresh(nc)
+        service().update(db.session, actor(), nc.id, {"estado": "Pendiente", "responsable": "Eva"})
+        db.session.commit()
+        self.assertEqual("Pendiente", nc.estado)
+        with self.assertRaises(errors().ValidationError):
+            service().update(db.session, actor(), nc.id, {"estado": "Otro heredado"})
+        db.session.rollback()
+
+    def test_scoped_actor_without_write_cannot_update(self) -> None:
+        nc = self.create()
+        with self.assertRaises(errors().PermissionDenied):
+            service().update(db.session, actor(scopes={"read"}), nc.id, {"estado": "Cerrada"})
+
+    def test_integrity_error_becomes_conflict(self) -> None:
+        nc = self.create()
+        with patch.object(
+            db.session, "flush", side_effect=IntegrityError("stmt", {}, Exception("dup"))
+        ):
+            with self.assertRaises(errors().Conflict):
+                service().update(db.session, actor(), nc.id, {"estado": "Cerrada"})
+
+
+class DeleteTestCase(WriteBase):
+    def test_admin_deletes_and_the_audit_row_holds_the_before_snapshot(self) -> None:
+        nc = self.create()
+        nc_id = nc.id
+        service().delete(db.session, actor(ADMIN), nc_id)
+        db.session.commit()
+        self.assertIsNone(db.session.get(NoConformidad, nc_id))
+        row = self.audit_rows()[-1]
+        self.assertEqual(("delete", nc_id), (row.action, row.entity_id))
+        self.assertIsNone(row.after)
+        self.assertEqual("Pieza fuera de tolerancia", row.before["descripcion"])
+        self.assertEqual("Ana", row.before["responsable"])
+
+    def test_non_admin_roles_are_denied_and_the_record_survives(self) -> None:
+        nc = self.create()
+        for role in (OPERATIVO, AUDITOR):
+            with self.subTest(role=role.name):
+                with self.assertRaises(errors().PermissionDenied):
+                    service().delete(db.session, actor(role), nc.id)
+        self.assertIsNotNone(db.session.get(NoConformidad, nc.id))
+        self.assertEqual(1, len(self.audit_rows()))
+
+    def test_mcp_channel_never_deletes_even_for_admin(self) -> None:
+        nc = self.create()
+        with self.assertRaises(errors().PermissionDenied):
+            service().delete(db.session, actor(ADMIN, channel="mcp"), nc.id)
+        self.assertIsNotNone(db.session.get(NoConformidad, nc.id))
+
+    def test_scoped_admin_without_write_is_denied(self) -> None:
+        nc = self.create()
+        with self.assertRaises(errors().PermissionDenied):
+            service().delete(db.session, actor(ADMIN, scopes={"read"}), nc.id)
+
+    def test_delete_missing_raises_not_found(self) -> None:
+        with self.assertRaises(errors().NotFound):
+            service().delete(db.session, actor(ADMIN), 999)
+
+    def test_integrity_error_becomes_conflict(self) -> None:
+        nc = self.create()
+        with patch.object(
+            db.session, "flush", side_effect=IntegrityError("stmt", {}, Exception("fk"))
+        ):
+            with self.assertRaises(errors().Conflict):
+                service().delete(db.session, actor(ADMIN), nc.id)
+
+
+if __name__ == "__main__":
+    unittest.main()
