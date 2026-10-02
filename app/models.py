@@ -24,6 +24,8 @@ from datetime import datetime
 from flask import current_app
 from flask_login import UserMixin
 from itsdangerous import BadData, URLSafeTimedSerializer as Serializer
+from sqlalchemy import BigInteger, Integer
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import SQLAlchemyError
 
 from .extensions import db
@@ -315,3 +317,45 @@ class Document(db.Model):
 
     def __repr__(self):
         return f'<Document {self.title} - {self.version}>'
+
+
+# Registro de auditoría append-only: quién cambió qué y cuándo (ISO 9001 7.5.3)
+class AuditLog(db.Model):
+    __tablename__ = 'audit_logs'
+    __table_args__ = (
+        db.PrimaryKeyConstraint('id', name='pk_audit_logs'),
+        db.ForeignKeyConstraint(
+            ['actor_user_id'],
+            ['users.id'],
+            name='fk_audit_logs_actor_user_id_users',
+            ondelete='SET NULL',
+        ),
+        db.CheckConstraint(
+            "action IN ('create', 'update', 'delete')",
+            name='ck_audit_logs_action',
+        ),
+        db.CheckConstraint(
+            "channel IN ('web', 'mcp', 'cli', 'system')",
+            name='ck_audit_logs_channel',
+        ),
+        db.Index('ix_audit_logs_entity', 'entity_type', 'entity_id', 'id'),
+        db.Index('ix_audit_logs_occurred_at', 'occurred_at'),
+        db.Index('ix_audit_logs_actor_user_id', 'actor_user_id'),
+    )
+
+    id = db.Column(BigInteger().with_variant(Integer, 'sqlite'), autoincrement=True)
+    occurred_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=db.func.now()
+    )
+    entity_type = db.Column(db.String(64), nullable=False)
+    entity_id = db.Column(db.BigInteger)
+    action = db.Column(db.String(10), nullable=False)
+    actor_user_id = db.Column(db.Integer)
+    actor_label = db.Column(db.String(150), nullable=False)
+    channel = db.Column(db.String(10), nullable=False)
+    before = db.Column(db.JSON().with_variant(JSONB, 'postgresql'))
+    after = db.Column(db.JSON().with_variant(JSONB, 'postgresql'))
+    request_id = db.Column(db.String(64))
+
+    def __repr__(self):
+        return f'<AuditLog {self.action} {self.entity_type}#{self.entity_id}>'

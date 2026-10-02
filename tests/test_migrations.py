@@ -77,6 +77,25 @@ class MigrationsTestCase(unittest.TestCase):
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 
+    def test_audit_logs_uses_jsonb_and_downgrade_drops_it(self) -> None:
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            columns = {c["name"]: c for c in inspector.get_columns("audit_logs")}
+            self.assertEqual("JSONB", type(columns["before"]["type"]).__name__)
+            self.assertEqual("JSONB", type(columns["after"]["type"]).__name__)
+            with self.assertRaises(Exception):
+                with db.engine.begin() as connection:
+                    connection.execute(
+                        text(
+                            "INSERT INTO audit_logs "
+                            "(entity_type, action, actor_label, channel) "
+                            "VALUES ('x', 'create', 'a', 'bogus')"
+                        )
+                    )
+            downgrade(directory=MIGRATIONS_DIR, revision="-1")
+            self.assertNotIn("audit_logs", inspect(db.engine).get_table_names())
+
 
 if __name__ == "__main__":
     unittest.main()
