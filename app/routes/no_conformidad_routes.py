@@ -13,44 +13,51 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
+from datetime import date
+
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required
-from ..models import NoConformidad, RoleEnum
-from ..forms import ESTADOS_NO_CONFORMIDAD, NoConformidadForm
+from ..models import RoleEnum
+from ..forms import NoConformidadForm
 from ..extensions import db
+from ..services import nonconformities
 from ..utils.decorators import role_required
 from ..utils.pdf import pdf_response, render_pdf
+from ..utils.web_actor import current_actor
 
 # Define el blueprint y la URL base
 bp = Blueprint('no_conformidad', __name__, url_prefix='/no_conformidades')
+
+FORM_FIELDS = ('descripcion', 'fecha_detectada', 'responsable', 'estado', 'accion_correctiva')
+
+
+def _form_data(form):
+    """Whitelisted service payload taken from a validated form."""
+    return {name: getattr(form, name).data for name in FORM_FIELDS}
+
+
+def _date_arg(name):
+    """Query-string date, or None when absent or malformed."""
+    try:
+        return date.fromisoformat(request.args.get(name, ''))
+    except ValueError:
+        return None
+
 
 # Ruta para listar todas las no conformidades
 @bp.route('/', methods=['GET'])
 @login_required
 def listar_no_conformidades():
-    query = NoConformidad.query
-    
-    # Filtros opcionales por descripción, estado y fecha
-    descripcion = request.args.get('descripcion')
-    if descripcion:
-        query = query.filter(NoConformidad.descripcion.ilike(f'%{descripcion}%'))
-    
-    estado = request.args.get('estado')
-    if estado:
-        query = query.filter(NoConformidad.estado == estado)
-    
-    fecha_detectada = request.args.get('fecha_detectada')
-    if fecha_detectada:
-        query = query.filter(db.func.date(NoConformidad.fecha_detectada) == fecha_detectada)
-    
-    no_conformidades = query.order_by(NoConformidad.fecha_detectada.desc()).all()
-    # Fixed states first, then any legacy free-text values still stored.
-    heredados = sorted(
-        {estado for (estado,) in db.session.query(NoConformidad.estado).distinct()}
-        - set(ESTADOS_NO_CONFORMIDAD)
+    actor = current_actor()
+    no_conformidades = nonconformities.list_(
+        db.session,
+        actor,
+        descripcion=request.args.get('descripcion'),
+        estado=request.args.get('estado'),
+        fecha_detectada=_date_arg('fecha_detectada'),
     )
     return render_template('no_conformidades/listar.html', no_conformidades=no_conformidades,
-                           estados=[*ESTADOS_NO_CONFORMIDAD, *heredados])
+                           estados=nonconformities.available_states(db.session, actor))
 
 # Ruta para registrar una nueva no conformidad
 @bp.route('/nueva', methods=['GET', 'POST'])
@@ -58,14 +65,7 @@ def listar_no_conformidades():
 def nueva_no_conformidad():
     form = NoConformidadForm()
     if form.validate_on_submit():
-        nueva_no_conformidad = NoConformidad(
-            descripcion=form.descripcion.data,
-            fecha_detectada=form.fecha_detectada.data,
-            responsable=form.responsable.data,
-            estado=form.estado.data,
-            accion_correctiva=form.accion_correctiva.data
-        )
-        db.session.add(nueva_no_conformidad)
+        nonconformities.create(db.session, current_actor(), _form_data(form))
         db.session.commit()
         flash('No conformidad registrada exitosamente', 'success')
         return redirect(url_for('no_conformidad.listar_no_conformidades'))
@@ -75,21 +75,18 @@ def nueva_no_conformidad():
 @bp.route('/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
 def editar_no_conformidad(id):
-    no_conformidad = NoConformidad.query.get_or_404(id)
+    actor = current_actor()
+    no_conformidad = nonconformities.get(db.session, actor, id)
     form = NoConformidadForm(obj=no_conformidad)
     # Records created when the state was free text keep their value
     # unless the user picks another one.
-    if no_conformidad.estado not in ESTADOS_NO_CONFORMIDAD:
+    if no_conformidad.estado not in nonconformities.ESTADOS_NO_CONFORMIDAD:
         form.estado.choices = [
             (no_conformidad.estado, f'{no_conformidad.estado} (heredado)'),
             *form.estado.choices,
         ]
     if form.validate_on_submit():
-        no_conformidad.descripcion = form.descripcion.data
-        no_conformidad.fecha_detectada = form.fecha_detectada.data
-        no_conformidad.responsable = form.responsable.data
-        no_conformidad.estado = form.estado.data
-        no_conformidad.accion_correctiva = form.accion_correctiva.data
+        nonconformities.update(db.session, actor, id, _form_data(form))
         db.session.commit()
         flash('No conformidad actualizada exitosamente', 'success')
         return redirect(url_for('no_conformidad.listar_no_conformidades'))
@@ -100,8 +97,7 @@ def editar_no_conformidad(id):
 @login_required
 @role_required(RoleEnum.ADMINISTRADOR)
 def eliminar_no_conformidad(id):
-    no_conformidad = NoConformidad.query.get_or_404(id)
-    db.session.delete(no_conformidad)
+    nonconformities.delete(db.session, current_actor(), id)
     db.session.commit()
     flash('No conformidad eliminada exitosamente', 'success')
     return redirect(url_for('no_conformidad.listar_no_conformidades'))
@@ -110,5 +106,5 @@ def eliminar_no_conformidad(id):
 @bp.route('/exportar_pdf/<int:id>', methods=['GET'])
 @login_required
 def exportar_pdf(id):
-    no_conformidad = NoConformidad.query.get_or_404(id)
+    no_conformidad = nonconformities.get(db.session, current_actor(), id)
     return pdf_response(render_pdf('no_conformidades/pdf_template.html', no_conformidad=no_conformidad), f'no_conformidad_{id}.pdf')
