@@ -110,6 +110,9 @@ def handle_domain_error(e: DomainError):
     status = next(
         (code for cls, code in _DOMAIN_STATUS.items() if isinstance(e, cls)), 400
     )
+    if isinstance(e, (Conflict, ValidationError)):
+        # Services only flush; the adapter owns the rollback, JSON included.
+        db.session.rollback()
     if _wants_json():
         return jsonify({'error': e.message}), status
     if isinstance(e, PermissionDenied):
@@ -118,7 +121,6 @@ def handle_domain_error(e: DomainError):
     if isinstance(e, NotFound):
         return handle_404(e)
     if isinstance(e, (Conflict, ValidationError)):
-        db.session.rollback()
         flash(e.message, 'danger')
         return redirect(_back_target())
     return jsonify({'error': e.message}), status

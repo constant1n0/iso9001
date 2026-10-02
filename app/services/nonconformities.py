@@ -135,7 +135,9 @@ def _clean(data: Mapping[str, Any], current_estado: str | None = None) -> dict[s
         clean["accion_correctiva"] = _text(data, "accion_correctiva", strip=False)
     if "estado" in data:
         estado = data["estado"]
-        if estado not in ESTADOS_NO_CONFORMIDAD and estado != current_estado:
+        if estado is None or (
+            estado not in ESTADOS_NO_CONFORMIDAD and estado != current_estado
+        ):
             raise ValidationError("El estado no es válido.")
         clean["estado"] = estado
     return clean
