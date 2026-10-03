@@ -98,7 +98,7 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 | AT-2 | Done | `50d9b67` (issue + authenticate, `AuthenticationFailed`, policy `API_TOKENS`), `1c065e5` (revoke + list) | RED: missing `app.services.api_tokens`, `KeyError: 'API_TOKENS'`. GREEN: 434 / 439 tests | Pending |
 | AT-3 | Done | `93426f1` (security log functions), `a79147c` (CLI commands) | RED: missing `log_api_token_*`, 12 CLI tests failing. GREEN: 442 / 454 tests | Pending |
 | AT-4 | Done | `cb7d76a` (JWT packages dropped, docs, README) | RED: 3 of 4 cleanup tests. GREEN: 458 tests | — |
-| AT-5 | Done | Review fixes in the commit that records this row | RED: shared digest not used by `authenticate`; no `status` helper; missing/empty `SECRET_KEY` gave a raw traceback; no `AuthFailure` enum. GREEN: 468 tests incl. PostgreSQL | — |
+| AT-5 | Done | `52af101` (review fixes) | RED: shared digest not used by `authenticate`; no `status` helper; missing/empty `SECRET_KEY` gave a raw traceback; no `AuthFailure` enum. GREEN: 468 tests incl. PostgreSQL | Medium, `under_budget` (188 lines); no later commit reaches the budget, so it stays unreviewed by RDD; it only applies the approved review's findings |
 
 ## Findings during implementation
 
@@ -110,6 +110,18 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 - **For the MCP adapter:** split tokens with `split("_", 2)` (secrets can contain `_`); `authenticate` only flushes `last_used_at`, so the adapter commits after a successful call.
 - **Commit size:** `50d9b67` is 515 lines (service + errors + policy + tests); one honest slicing pass found no cohesive split, so its pull request needs a maintainer `size:exception`.
 
+## Delivery
+
+| Slice | Pull request | Commits | Merged as | Note |
+|---|---|---|---|---|
+| 1 | [#53](https://github.com/constant1n0/iso9001/pull/53) | `53286de`, `8b5ea23` | `7457bfe` | |
+| 2 | [#54](https://github.com/constant1n0/iso9001/pull/54) | `50d9b67` | `6bbe0e0` | maintainer-approved `size:exception` (515) |
+| 3 | [#55](https://github.com/constant1n0/iso9001/pull/55) | `1c065e5`, `93426f1` | `728427c` | |
+| 4 | [#56](https://github.com/constant1n0/iso9001/pull/56) | `a79147c` | `52cc731` | |
+| 5 | Pending | `cb7d76a`, `a98d8a9`, `52af101`, this closing update | — | Final slice |
+
 ## Next step
 
-Review the change, then deliver it as chained pull requests.
+**Feature complete.** Tokens can be issued, listed and revoked by an administrator through the CLI, and `api_tokens.authenticate(...)` turns a bearer token into an `Actor(channel="mcp", ...)` for the next change.
+
+Next: `mcp-server` — the MCP server as a separate ASGI process (Streamable HTTP, bearer token; stdio for local use) over the service layer, following `docs/architecture/services.md`.
