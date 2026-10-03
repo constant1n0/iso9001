@@ -175,5 +175,45 @@ class MigrationsTestCase(unittest.TestCase):
             self.assertEqual((None, None), tuple(row))
 
 
+    def test_api_tokens_table_cascades_with_its_user_and_downgrades(self) -> None:
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            self.assertIn("api_tokens", inspector.get_table_names())
+            (fk,) = inspector.get_foreign_keys("api_tokens")
+            self.assertEqual("fk_api_tokens_user_id_users", fk["name"])
+            self.assertEqual("CASCADE", fk["options"]["ondelete"])
+            self.assertEqual(
+                ["uq_api_tokens_prefix"],
+                [u["name"] for u in inspector.get_unique_constraints("api_tokens")],
+            )
+            self.assertIn(
+                "ix_api_tokens_user_id",
+                {i["name"] for i in inspector.get_indexes("api_tokens")},
+            )
+            with db.engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO users (username, password, role) "
+                        "VALUES ('owner', 'x', 'OPERATIVO')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO api_tokens (user_id, name, prefix, "
+                        "token_hash, scopes, created_at, expires_at) "
+                        "SELECT id, 'n', 'a1b2c3d4', repeat('0', 64), 'read', "
+                        "now(), now() + interval '1 day' FROM users"
+                    )
+                )
+                connection.execute(text("DELETE FROM users"))
+                remaining = connection.execute(
+                    text("SELECT count(*) FROM api_tokens")
+                ).scalar_one()
+            self.assertEqual(0, remaining)
+            downgrade(directory=MIGRATIONS_DIR, revision="d5a9f3b7c1e2")
+            self.assertNotIn("api_tokens", inspect(db.engine).get_table_names())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -207,7 +207,7 @@ class AuditDatabaseTestCase(AuditDbBase):
         domain = {
             m.class_
             for m in db.Model.registry.mappers
-            if m.class_ not in (User, models.AuditLog)
+            if m.class_ not in (User, models.AuditLog, models.ApiToken)
         }
         self.assertEqual(domain, set(audit.AUDITED_MODELS))
 
