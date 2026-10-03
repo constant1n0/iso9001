@@ -197,3 +197,39 @@ def authenticate(
     return Actor.from_user(
         user, channel="mcp", scopes=frozenset(row.scopes.split()) & VALID_SCOPES
     )
+
+
+def revoke(
+    session: Session,
+    actor: Actor,
+    token_ref: int | str,
+    *,
+    now: datetime | None = None,
+) -> ApiToken:
+    """Revoke a token by id or by its 8-hex prefix; the caller commits."""
+    policy.require(actor, Action.UPDATE, Resource.API_TOKENS)
+    if isinstance(token_ref, int) and not isinstance(token_ref, bool):
+        token = session.get(ApiToken, token_ref)
+    elif isinstance(token_ref, str) and _PREFIX.fullmatch(token_ref):
+        token = session.scalar(select(ApiToken).where(ApiToken.prefix == token_ref))
+    else:
+        token = None
+    if token is None:
+        raise NotFound("Token no encontrado.")
+    if token.revoked_at is not None:
+        raise Conflict("El token ya estaba revocado.")
+    before = audit.snapshot(token)
+    token.revoked_at = now if now is not None else _now()
+    token.revoked_by_label = actor.label
+    session.flush()
+    audit.record(session, actor, "update", token, before=before)
+    return token
+
+
+def list_(session: Session, actor: Actor, user_id: int | None = None) -> list[ApiToken]:
+    """Every token (revoked and expired included), oldest first."""
+    policy.require(actor, Action.READ, Resource.API_TOKENS)
+    query = select(ApiToken).order_by(ApiToken.id)
+    if user_id is not None:
+        query = query.where(ApiToken.user_id == user_id)
+    return list(session.scalars(query))

@@ -16,7 +16,7 @@
 import logging
 from pathlib import Path
 
-from flask import Flask, request
+from flask import Flask, has_request_context, request
 
 
 security_logger = logging.getLogger("security")
@@ -113,4 +113,39 @@ def log_suspicious_activity(activity_type, details):
     ip = get_client_ip()
     security_logger.warning(
         f"SUSPICIOUS_ACTIVITY | type={activity_type} | ip={ip} | details={details}"
+    )
+
+
+def _field(value):
+    """One log field: no separators or control characters, so values cannot forge lines."""
+    text = "-" if value is None else str(value)
+    return "".join(c if c.isprintable() and c != "|" else "_" for c in text)[:150] or "-"
+
+
+def _client_ip_or_dash():
+    """Client IP inside a request, ``-`` for CLI and other non-request callers."""
+    return _field(get_client_ip()) if has_request_context() else "-"
+
+
+def log_api_token_issued(prefix, username, actor_label):
+    """Registra la emisión de un token de API (nunca el token ni su hash)."""
+    security_logger.info(
+        f"API_TOKEN_ISSUED | prefix={_field(prefix)} | user={_field(username)} "
+        f"| by={_field(actor_label)} | ip={_client_ip_or_dash()}"
+    )
+
+
+def log_api_token_revoked(prefix, actor_label):
+    """Registra la revocación de un token de API."""
+    security_logger.info(
+        f"API_TOKEN_REVOKED | prefix={_field(prefix)} | by={_field(actor_label)} "
+        f"| ip={_client_ip_or_dash()}"
+    )
+
+
+def log_api_token_auth_failed(reason, prefix=None):
+    """Registra un token rechazado; ``reason`` y ``prefix`` vienen de AuthenticationFailed."""
+    security_logger.warning(
+        f"API_TOKEN_AUTH_FAILED | reason={_field(reason)} | prefix={_field(prefix)} "
+        f"| ip={_client_ip_or_dash()}"
     )

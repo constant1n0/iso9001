@@ -208,6 +208,11 @@ class AuthenticateTestCase(TokenBase):
         self.assert_generic_failure(self.plaintext, now=expiry)
         self.assert_generic_failure(self.plaintext, now=expiry + timedelta(days=1))
 
+    def test_revoked_token_fails(self) -> None:
+        tokens().revoke(db.session, self.admin, self.row.prefix, now=NOW)
+        db.session.commit()
+        self.assert_generic_failure(self.plaintext)
+
     def test_token_of_a_deleted_user_fails(self) -> None:
         db.session.execute(db.text("DELETE FROM users"))
         db.session.commit()
@@ -268,6 +273,58 @@ class AuthenticateTestCase(TokenBase):
         self.assertIs(created, nonconformities.get(db.session, full, created.id))
         with self.assertRaises(errors().PermissionDenied):
             nonconformities.delete(db.session, full, created.id)
+
+
+class RevokeAndListTestCase(TokenBase):
+    def test_revoke_by_prefix_or_id_stamps_and_audits(self) -> None:
+        _, by_prefix = self.issue()
+        _, by_id = self.issue(name="second")
+        db.session.commit()
+        later = NOW + timedelta(hours=1)
+        tokens().revoke(db.session, self.admin, by_prefix.prefix, now=later)
+        tokens().revoke(db.session, self.admin, by_id.id, now=later)
+        db.session.commit()
+        for row in (by_prefix, by_id):
+            self.assertEqual(later, aware(row.revoked_at))
+            self.assertEqual(self.admin.label, row.revoked_by_label)
+        entries = [r for r in self.audit_rows() if r.action == "update"]
+        self.assertEqual(2, len(entries))
+        for entry in entries:
+            self.assertEqual("api_tokens", entry.entity_type)
+            self.assertEqual({"revoked_at", "revoked_by_label"}, set(entry.after))
+            self.assertNotIn("token_hash", json.dumps([entry.before, entry.after]))
+
+    def test_revoking_twice_unknown_or_without_permission_fails(self) -> None:
+        _, row = self.issue()
+        db.session.commit()
+        tokens().revoke(db.session, self.admin, row.prefix, now=NOW)
+        with self.assertRaises(errors().Conflict):
+            tokens().revoke(db.session, self.admin, row.prefix, now=NOW)
+        for ref in ("ffffffff", 9999, "x", None):
+            with self.subTest(ref=ref), self.assertRaises(errors().NotFound):
+                tokens().revoke(db.session, self.admin, ref, now=NOW)
+        for caller in (actor(AUDITOR), actor(OPERATIVO),
+                       actor(ADMIN, channel="mcp", scopes={"read", "write"})):
+            with self.subTest(channel=caller.channel, role=caller.role), \
+                    self.assertRaises(errors().PermissionDenied):
+                tokens().revoke(db.session, caller, row.prefix, now=NOW)
+
+    def test_list_returns_every_token_and_filters_by_user(self) -> None:
+        other = self.make_user("luis", AUDITOR)
+        _, first = self.issue()
+        _, second = self.issue(user_id=other.id, name="b")
+        db.session.commit()
+        tokens().revoke(db.session, self.admin, first.prefix, now=NOW)
+        self.assertEqual([first, second], tokens().list_(db.session, self.admin))
+        self.assertEqual([second], tokens().list_(db.session, self.admin, user_id=other.id))
+        self.assertEqual([], tokens().list_(db.session, self.admin, user_id=9999))
+
+    def test_list_is_for_administrators_outside_mcp_only(self) -> None:
+        for caller in (actor(AUDITOR), actor(OPERATIVO),
+                       actor(ADMIN, channel="mcp", scopes={"read"})):
+            with self.subTest(channel=caller.channel, role=caller.role), \
+                    self.assertRaises(errors().PermissionDenied):
+                tokens().list_(db.session, caller)
 
 
 if __name__ == "__main__":
