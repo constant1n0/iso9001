@@ -66,13 +66,13 @@ Give each user revocable, expiring API tokens that an agent adapter (the future 
 
 Route for every task: **delegated direct** (each touches two or more non-trivial files).
 
-- [ ] **AT-1 — `ApiToken` model and migration.** Forecast 200-300.
+- [x] **AT-1 — `ApiToken` model and migration.** Forecast 200-300.
   - Acceptance: table, constraints and indexes as designed; migration upgrades and downgrades on PostgreSQL; deleting a user deletes their tokens.
-- [ ] **AT-2 — Token service.** Forecast 300-380.
+- [x] **AT-2 — Token service.** Forecast 300-380.
   - Acceptance: issue returns a plaintext once and stores only the HMAC; authenticate accepts a valid token and rejects unknown, malformed, expired, revoked and tampered tokens with one generic error; the resulting `Actor` carries channel `mcp`, the owner's current role and the token scopes; `last_used_at` is throttled; issue and revoke are audited without the secret or hash; only ADMIN may issue, list or revoke.
-- [ ] **AT-3 — CLI commands.** Forecast 200-300.
+- [x] **AT-3 — CLI commands.** Forecast 200-300.
   - Acceptance: create, list and revoke work through `flask`; the plaintext is printed once on create; list never prints secrets or hashes; errors are clear and exit non-zero.
-- [ ] **AT-4 — Dependency cleanup and documentation.** Forecast 60-150.
+- [x] **AT-4 — Dependency cleanup and documentation.** Forecast 60-150.
   - Acceptance: `Flask-JWT-Extended` and `PyJWT` removed with nothing importing them; `docs/architecture/services.md` documents token authentication and how the MCP adapter must use it; README shows the CLI usage.
 
 **Total forecast:** about 760-1,130 authored changed lines, so delivery is chained.
@@ -93,8 +93,21 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| AT-1 | Pending | — | — | — |
+| AT-1 | Done | `8b5ea23` (table + migration `e6b1a4c8d3f7`) | RED: `ImportError: ApiToken`; migration test: `api_tokens` missing. GREEN: 409 tests incl. PostgreSQL (cascade on user delete, upgrade/downgrade) | Pending |
+| AT-2 | Done | `50d9b67` (issue + authenticate, `AuthenticationFailed`, policy `API_TOKENS`), `1c065e5` (revoke + list) | RED: missing `app.services.api_tokens`, `KeyError: 'API_TOKENS'`. GREEN: 434 / 439 tests | Pending |
+| AT-3 | Done | `93426f1` (security log functions), `a79147c` (CLI commands) | RED: missing `log_api_token_*`, 12 CLI tests failing. GREEN: 442 / 454 tests | Pending |
+| AT-4 | Done | `cb7d76a` (JWT packages dropped, docs, README) | RED: 3 of 4 cleanup tests. GREEN: 458 tests | Pending |
+
+## Findings during implementation
+
+- **Not in `AUDITED_MODELS`:** `ApiToken` has no `created_by_id`/`updated_by_id` and `last_used_at` changes on authentication without an audit row; `issue` and `revoke` call `audit.record` explicitly, and the recorder drops `token_hash` because its name contains `token`.
+- **Key derivation:** `hmac(SECRET_KEY, b"iso9001-api-token-v1", sha256)`; services receive `secret_key=` from the adapter. Unknown prefixes are compared against a dummy hash so both paths do the same work.
+- **Errors:** `AuthenticationFailed` has one generic message and carries `reason`/`token_prefix` for the adapter's security log only. A second revoke raises `Conflict`.
+- **CLI actor:** `Actor(user_id=None, label="cli:<OS user>", role=ADMINISTRADOR, channel="cli")`. CLI messages are English like `create-admin`; service validation messages are Spanish.
+- **Policy:** `API_TOKENS` read/create/update ADMIN only, delete nobody (revocation is an update); `mcp` is denied every action.
+- **For the MCP adapter:** split tokens with `split("_", 2)` (secrets can contain `_`); `authenticate` only flushes `last_used_at`, so the adapter commits after a successful call.
+- **Commit size:** `50d9b67` is 515 lines (service + errors + policy + tests); one honest slicing pass found no cohesive split, so its pull request needs a maintainer `size:exception`.
 
 ## Next step
 
-Implement AT-1 to AT-4 as independently green work units.
+Review the change, then deliver it as chained pull requests.
