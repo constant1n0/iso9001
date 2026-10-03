@@ -158,6 +158,76 @@ class IssueTestCase(TokenBase):
         self.assertEqual("00000000", second.prefix)
 
 
+class IssueFailureTestCase(TokenBase):
+    def test_every_prefix_attempt_colliding_is_a_conflict(self) -> None:
+        _, row = self.issue()
+        db.session.commit()
+        with patch("app.services.api_tokens.secrets.token_hex", return_value=row.prefix):
+            with self.assertRaises(errors().Conflict):
+                self.issue(name="second")
+        self.assertEqual(1, db.session.query(ApiToken).count())
+
+    def test_an_integrity_error_while_auditing_is_a_conflict(self) -> None:
+        from sqlalchemy.exc import IntegrityError
+
+        failure = IntegrityError("INSERT", {}, Exception("duplicate"))
+        with patch("app.services.api_tokens.audit.record", side_effect=failure):
+            with self.assertRaises(errors().Conflict) as raised:
+                self.issue()
+        self.assertIs(failure, raised.exception.__cause__)
+
+
+class SingleDigestTestCase(TokenBase):
+    def test_issue_and_authenticate_share_one_digest_function(self) -> None:
+        with patch("app.services.api_tokens._digest", return_value="f" * 64) as digest:
+            plaintext, row = self.issue()
+            db.session.commit()
+            self.assertEqual("f" * 64, row.token_hash)
+            self.assertEqual(self.owner.id, self.authenticate(plaintext).user_id)
+            self.assertEqual(2, digest.call_count)
+        with self.assertRaises(errors().AuthenticationFailed):
+            self.authenticate(plaintext)
+
+    def test_the_stored_hash_is_what_the_digest_function_returns(self) -> None:
+        plaintext, row = self.issue()
+        self.assertEqual(tokens()._digest(KEY, plaintext), row.token_hash)
+
+
+class StatusTestCase(TokenBase):
+    def test_active_expired_and_revoked(self) -> None:
+        _, row = self.issue()
+        expiry = aware(row.expires_at)
+        self.assertEqual(tokens().ACTIVE, tokens().status(row, expiry - timedelta(seconds=1)))
+        self.assertEqual(tokens().EXPIRED, tokens().status(row, expiry))
+        tokens().revoke(db.session, self.admin, row.prefix, now=NOW)
+        self.assertEqual(tokens().REVOKED, tokens().status(row, expiry - timedelta(days=1)))
+        self.assertEqual(tokens().REVOKED, tokens().status(row, expiry + timedelta(days=1)))
+
+    def test_a_naive_expiry_is_read_as_utc(self) -> None:
+        _, row = self.issue()
+        row.expires_at = NOW.replace(tzinfo=None) + timedelta(days=1)
+        self.assertEqual(tokens().ACTIVE, tokens().status(row, NOW))
+        self.assertEqual(tokens().EXPIRED, tokens().status(row, NOW + timedelta(days=1)))
+
+    def test_authenticate_uses_the_same_rule(self) -> None:
+        plaintext, _ = self.issue()
+        with patch("app.services.api_tokens.status", return_value="expired"):
+            with self.assertRaises(errors().AuthenticationFailed) as raised:
+                self.authenticate(plaintext)
+        self.assertEqual(errors().AuthFailure.EXPIRED, raised.exception.reason)
+
+
+class AuthFailureTestCase(TokenBase):
+    def test_reasons_are_named_constants_with_stable_log_values(self) -> None:
+        reasons = errors().AuthFailure
+        self.assertEqual(
+            {"malformed", "unknown_prefix", "bad_secret", "revoked", "expired",
+             "user_missing", "invalid"},
+            {str(r) for r in reasons},
+        )
+        self.assertEqual("invalid", errors().AuthenticationFailed().reason)
+
+
 class AuthenticateTestCase(TokenBase):
     def setUp(self) -> None:
         super().setUp()
@@ -222,13 +292,13 @@ class AuthenticateTestCase(TokenBase):
         with self.assertRaises(errors().AuthenticationFailed) as raised:
             self.authenticate(f"iso_{self.row.prefix}_" + "A" * 43)
         error = raised.exception
-        self.assertEqual("bad_secret", error.reason)
+        self.assertEqual(errors().AuthFailure.BAD_SECRET, error.reason)
         self.assertEqual(self.row.prefix, error.token_prefix)
         self.assertNotIn("bad_secret", str(error))
         self.assertIsInstance(error, errors().DomainError)
         with self.assertRaises(errors().AuthenticationFailed) as raised:
             self.authenticate("garbage")
-        self.assertEqual(("malformed", None), (raised.exception.reason, raised.exception.token_prefix))
+        self.assertEqual((errors().AuthFailure.MALFORMED, None), (raised.exception.reason, raised.exception.token_prefix))
 
     def test_the_hash_is_compared_in_constant_time(self) -> None:
         with patch("app.services.api_tokens.hmac.compare_digest",

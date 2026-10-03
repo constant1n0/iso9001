@@ -132,7 +132,15 @@ A client is treated as JSON when the body is JSON or it prefers
        db.session.rollback()
        security_logger.log_api_token_auth_failed(failure.reason, failure.token_prefix)
        ...                            # answer 401 with failure.message, nothing else
+   except SQLAlchemyError:
+       db.session.rollback()          # lookup, throttled flush or commit failed
+       ...                            # answer 503/500; never reuse a broken session
    ```
+
+   `failure.reason` is an `errors.AuthFailure` member (`MALFORMED`,
+   `UNKNOWN_PREFIX`, `BAD_SECRET`, `REVOKED`, `EXPIRED`, `USER_MISSING`);
+   it is for the log only. `api_tokens.status(token, now)` returns
+   `active`, `expired` or `revoked` and is the single validity rule.
 
    The actor has channel `mcp`, the owner's current role and the token scopes.
    Never widen the scopes. The `mcp` channel cannot delete, whatever the role,

@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
+
 
 class DomainError(Exception):
     """Base class for errors that adapters translate into responses."""
@@ -52,6 +54,18 @@ class ValidationError(DomainError):
     default_message = "Los datos proporcionados no son válidos."
 
 
+class AuthFailure(StrEnum):
+    """Why a bearer token was rejected; the values are the security-log vocabulary."""
+
+    INVALID = "invalid"
+    MALFORMED = "malformed"
+    UNKNOWN_PREFIX = "unknown_prefix"
+    BAD_SECRET = "bad_secret"
+    REVOKED = "revoked"
+    EXPIRED = "expired"
+    USER_MISSING = "user_missing"
+
+
 class AuthenticationFailed(DomainError):
     """A bearer token was not accepted.
 
@@ -64,7 +78,9 @@ class AuthenticationFailed(DomainError):
 
     default_message = "Credenciales no válidas."
 
-    def __init__(self, reason: str = "invalid", token_prefix: str | None = None) -> None:
+    def __init__(
+        self, reason: AuthFailure = AuthFailure.INVALID, token_prefix: str | None = None
+    ) -> None:
         super().__init__()
         self.reason = reason
         self.token_prefix = token_prefix

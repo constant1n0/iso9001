@@ -54,8 +54,8 @@ Give each user revocable, expiring API tokens that an agent adapter (the future 
 
 - **Table `api_tokens`:** `id`; `user_id` (FK `users.id`, `ON DELETE CASCADE`); `name`; `prefix` (unique, 8 hex); `token_hash` (64 hex); `scopes` (text set, e.g. `read` or `read write`); `created_at`, `created_by_label`; `expires_at`; `revoked_at`, `revoked_by_label`; `last_used_at`. Indexes on `prefix` (unique) and `user_id`.
 - **Service `app/services/api_tokens.py`** (framework-free):
-  - `issue(session, actor, user_id, name, scopes, days)` returns `(plaintext, ApiToken)`.
-  - `authenticate(session, raw, now)` returns an `Actor` or raises `AuthenticationFailed`.
+  - `issue(session, actor, *, secret_key, user_id, name, scopes=("read",), days=90, now=None)` returns `(plaintext, ApiToken)`.
+  - `authenticate(session, raw, *, secret_key, now=None)` returns an `Actor` or raises `AuthenticationFailed`.
   - `revoke(session, actor, token_id_or_prefix)`.
   - `list_(session, actor, user_id=None)`.
   - Policy resource `API_TOKENS`: ADMIN manages, nobody else.
@@ -72,6 +72,7 @@ Route for every task: **delegated direct** (each touches two or more non-trivial
   - Acceptance: issue returns a plaintext once and stores only the HMAC; authenticate accepts a valid token and rejects unknown, malformed, expired, revoked and tampered tokens with one generic error; the resulting `Actor` carries channel `mcp`, the owner's current role and the token scopes; `last_used_at` is throttled; issue and revoke are audited without the secret or hash; only ADMIN may issue, list or revoke.
 - [x] **AT-3 — CLI commands.** Forecast 200-300.
   - Acceptance: create, list and revoke work through `flask`; the plaintext is printed once on create; list never prints secrets or hashes; errors are clear and exit non-zero.
+- [x] **AT-5 — Review fixes (`review-6718387f79eedcee`).** One digest function for issue and authenticate; shared `status()` for authentication and CLI; clear CLI error without `SECRET_KEY`; `AuthFailure` enum; collision/`IntegrityError` tests; adapter rollback documented.
 - [x] **AT-4 — Dependency cleanup and documentation.** Forecast 60-150.
   - Acceptance: `Flask-JWT-Extended` and `PyJWT` removed with nothing importing them; `docs/architecture/services.md` documents token authentication and how the MCP adapter must use it; README shows the CLI usage.
 
@@ -93,10 +94,11 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| AT-1 | Done | `8b5ea23` (table + migration `e6b1a4c8d3f7`) | RED: `ImportError: ApiToken`; migration test: `api_tokens` missing. GREEN: 409 tests incl. PostgreSQL (cascade on user delete, upgrade/downgrade) | Pending |
+| AT-1 | Done | `8b5ea23` (table + migration `e6b1a4c8d3f7`) | RED: `ImportError: ApiToken`; migration test: `api_tokens` missing. GREEN: 409 tests incl. PostgreSQL (cascade on user delete, upgrade/downgrade) | Range `24a4495..a98d8a9` (AT-1..AT-4): **high** risk (auth/security hot paths); consent granted; 4-lens review `review-6718387f79eedcee` **approved** and acknowledged; risk lens no findings; 3 warnings + 5 suggestions fixed in AT-5 |
 | AT-2 | Done | `50d9b67` (issue + authenticate, `AuthenticationFailed`, policy `API_TOKENS`), `1c065e5` (revoke + list) | RED: missing `app.services.api_tokens`, `KeyError: 'API_TOKENS'`. GREEN: 434 / 439 tests | Pending |
 | AT-3 | Done | `93426f1` (security log functions), `a79147c` (CLI commands) | RED: missing `log_api_token_*`, 12 CLI tests failing. GREEN: 442 / 454 tests | Pending |
-| AT-4 | Done | `cb7d76a` (JWT packages dropped, docs, README) | RED: 3 of 4 cleanup tests. GREEN: 458 tests | Pending |
+| AT-4 | Done | `cb7d76a` (JWT packages dropped, docs, README) | RED: 3 of 4 cleanup tests. GREEN: 458 tests | — |
+| AT-5 | Done | Review fixes in the commit that records this row | RED: shared digest not used by `authenticate`; no `status` helper; missing/empty `SECRET_KEY` gave a raw traceback; no `AuthFailure` enum. GREEN: 468 tests incl. PostgreSQL | — |
 
 ## Findings during implementation
 
