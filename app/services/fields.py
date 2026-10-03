@@ -99,3 +99,12 @@ def integer(data: Mapping[str, Any], key: str, *, required: bool = False,
     if (minimum is not None and value < minimum) or (maximum is not None and value > maximum):
         raise ValidationError(f"El campo «{key}» está fuera del rango permitido.")
     return value
+
+
+def boolean(data: Mapping[str, Any], key: str) -> bool | None:
+    """A real boolean (not 0/1 or text); the nullable column also accepts ``None``."""
+    value = data[key]
+    if value is None or isinstance(value, bool):
+        return value
+    raise ValidationError(f"El campo «{key}» debe ser verdadero o falso.")
+
