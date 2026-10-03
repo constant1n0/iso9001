@@ -1,0 +1,107 @@
+# MCP Server
+
+Repository locator: `odd/tasks/mcp-server.md` · Engram mirror: `odd/mcp-server/tasks`
+
+## Objective
+
+Let AI agents (Claude Code, Codex, Pi, OpenCode, OpenClaw, and Claude Desktop through `mcp-remote`) operate the QMS through an MCP server that acts as a real user via an API token, goes through the same services, policy, audit log and attribution as the web UI, and never deletes.
+
+## Problem and why it matters
+
+- The service layer (`qms-foundations`) and API tokens (`api-tokens`) are in place; no agent-facing adapter exists yet.
+- Agents need a small, well-described tool surface: 12 modules with list, get, create and update each would be about 48 tools, which crowds the agent's context.
+
+## Authorized decisions
+
+| ID | Decision | Source |
+|---|---|---|
+| Route | ODD, delegated direct workers; branch `feat/mcp-server` in worktree `iso9001-worktrees/mcp-server` from `main@4dc2b01` | User: "sí, arranca mcp-server" (2026-10-04) |
+| M1 | Five generic tools with writes: `qms_modules`, `qms_list`, `qms_get`, `qms_create`, `qms_update`, with the module as a parameter; no delete tool (D3 of `qms-foundations`) | User (recommended option) |
+| M2 | Pin `mcp==2.3.0` (`mcp>=2.3,<3` compatible): its Streamable HTTP app serves both the 2025-era `initialize` handshake and the stateless 2026-07-28 protocol; fallback `mcp==1.30.0` if a client fails | Research (SDK release notes, client issue trackers) |
+| M3 | Remote transport: `streamable_http_app(stateless_http=True, json_response=True)` under uvicorn at `/mcp`; `TransportSecuritySettings(allowed_hosts=[...])` from configuration. Local transport: stdio | Research |
+| M4 | Authentication by our own pure-ASGI middleware: `Authorization: Bearer <token>` → `api_tokens.authenticate` (in a worker thread) → `ContextVar[Actor]`; failure is a 401 with a plain `WWW-Authenticate: Bearer` and no OAuth metadata. No SDK `AuthSettings` (it publishes OAuth discovery metadata that static-token clients would follow). Stdio authenticates the token from an environment variable at start | Research |
+| M5 | Tools are synchronous (the SDK runs them on worker threads); each call pushes a Flask app context, uses its own session, commits on successful writes and rolls back on any error | Research; `docs/architecture/services.md` |
+| M6 | Tool annotations: `qms_modules`, `qms_list`, `qms_get` read-only; `qms_create` not idempotent, not destructive; `qms_update` idempotent and destructive (it overwrites fields) | MCP tool annotation semantics |
+| M7 | Deployment artefacts (systemd unit, client configuration docs) are in scope; deploying to production needs separate authorization | Remote-operation policy |
+| Delivery | `auto-chain`, `stacked-to-main`, push/PR/merge when CI is green | User authorization (2026-10-02) |
+| RDD | On (global) | `gentle-ai review mode status` |
+
+## Scope
+
+### Included
+
+- `mcp` dependency, server package, module registry, the five tools.
+- Bearer middleware, HTTP and stdio entry points, transport security configuration.
+- Tests (in-memory client and HTTP over ASGI).
+- systemd unit, client configuration guide for the six clients.
+
+### Excluded
+
+- Delete through MCP (D3).
+- MCP resources and prompts (tools are the only portable primitive).
+- Rate limiting per token (follow-up).
+- Production deployment and editing the user's local client configurations.
+
+## Constraints
+
+- Same as previous features: Python 3.11 in CI, stdlib `unittest`, strict test-first, conventional commits without AI attribution, about 400 changed lines per work unit as a heuristic, English code and docs (data and validation messages stay Spanish).
+- `requirements.txt` stays a full pinned freeze: add `mcp==2.3.0` and its resolved transitive pins without breaking existing pins.
+- The local server package must not shadow the SDK: name it `app/mcp_server/`, never `app/mcp/`.
+- Never log, return or store a token; tool results never include password or token fields (reuse the audit sensitive-field filter).
+
+## Design
+
+- **Package `app/mcp_server/`:**
+  - `server.py` builds the `MCPServer` and registers the tools.
+  - `registry.py` maps module slugs to services, policy resources, writable fields, allowed values and list filters.
+  - `context.py` holds the actor `ContextVar`, the app-context helper and the error mapping.
+  - `http.py` holds the ASGI bearer middleware and app factory.
+  - `__main__.py` is the CLI: `python -m app.mcp_server --transport stdio|http --host --port`.
+- **Module slugs (Spanish, like the UI):** `no_conformidades`, `auditorias`, `documentos`, `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`, `roles_responsabilidades`, `riesgos_oportunidades`, `recursos_capacitacion`, `procesos`, `indicadores_auditoria`.
+- **Tools:**
+  - `qms_modules()` lists the modules with fields (type, required, allowed values), supported filters, and what the calling actor may do (from `policy.can`).
+  - `qms_list(module, filters, page, per_page)` returns bounded pages.
+  - `qms_get(module, id)` returns one record.
+  - `qms_create(module, data)` and `qms_update(module, id, data)` return the stored record.
+  - Records are serialised with `audit.snapshot` (JSON-safe, sensitive fields dropped).
+  - Domain errors become MCP tool errors (`isError`) with the safe Spanish message; unexpected errors become a generic message and are logged.
+- **Configuration (environment):**
+  - `MCP_ALLOWED_HOSTS` (comma-separated);
+  - `MCP_HOST` / `MCP_PORT` (default `127.0.0.1:8765`);
+  - `ISO9001_MCP_TOKEN` for stdio;
+  - the usual `SECRET_KEY` and `DATABASE_URI` from `.env`.
+
+## Tasks
+
+Route for every task: **delegated direct**.
+
+- [ ] **MS-1 — Dependency, server skeleton, actor context, `qms_modules`.** Forecast 300-380.
+  - Acceptance: `mcp==2.3.0` and transitive pins added without conflicts; in-memory client lists exactly the five tool names (later tasks register the rest) and `qms_modules` returns all 12 modules with fields and the caller's permissions; no `app/mcp/` package.
+- [ ] **MS-2 — Read tools `qms_list` and `qms_get`.** Forecast 300-380.
+  - Acceptance: every module lists and gets through its service; filters validated per module; paging bounded (reuse `crud.page_bounds` limits); a `read`-scoped token reads; unknown module or id gives a clean tool error.
+- [ ] **MS-3 — Write tools `qms_create` and `qms_update`.** Forecast 300-380.
+  - Acceptance: writes go through services with policy, scopes, stamping and audit (`channel="mcp"`); a `read`-only token cannot write; OPERATIVO cannot write the JSON registers (D1); commit on success, rollback on error; validation and conflict errors are clean tool errors.
+- [ ] **MS-4 — Streamable HTTP, bearer middleware, entry points.** Forecast 300-380.
+  - Acceptance: missing or invalid token gives 401 with plain `WWW-Authenticate: Bearer`, logged without the token; a valid token reaches the tools as its actor; two different tokens in consecutive requests never leak actors; disallowed `Host` is rejected; stdio authenticates `ISO9001_MCP_TOKEN` at start and refuses to start without a valid token; both legacy `initialize` (2025-06-18, 2025-11-25) and stateless 2026-07-28 requests are answered.
+- [ ] **MS-5 — Deployment and client guide.** Forecast 150-250.
+  - Acceptance: `iso9001-mcp.service` systemd unit consistent with the existing units; `docs/mcp.md` with configuration for Claude Code, Codex, Pi, OpenCode, OpenClaw and Claude Desktop (`mcp-remote --header-file`), Traefik routing notes, token issuance with the CLI, and a per-client smoke-test checklist; README pointer.
+
+## Checks
+
+```bash
+$ export TEST_POSTGRES_URI="postgresql://postgres:DB_PASSWORD@127.0.0.1:55432/iso_test"
+$ venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+- Baseline at `4dc2b01`: 468 tests.
+- After each work-unit commit: `gentle-ai review assess --cwd <worktree> --agent claude-code --base-ref <last reviewed boundary> --committed-only --json`; first boundary `4dc2b01`.
+
+## Progress
+
+| Task | Status | Commit | Checks | Review |
+|---|---|---|---|---|
+| MS-1 | Pending | — | — | — |
+
+## Next step
+
+Implement MS-1 to MS-5 as independently green work units.
