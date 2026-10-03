@@ -89,4 +89,38 @@ def build_server(app: Flask) -> MCPServer:
         with context.unit_of_work(app) as (session, actor):
             return operations.get_record(session, actor, operations.get_module(module), id)
 
+    @mcp.tool(
+        name="qms_create",
+        title="Create a record",
+        description=(
+            "Create a record in a module. `data` holds the fields qms_modules lists (required "
+            "ones must be present; dates as YYYY-MM-DD). Returns the stored record."
+        ),
+        annotations=ToolAnnotations(
+            read_only_hint=False, destructive_hint=False, idempotent_hint=False,
+            open_world_hint=False,
+        ),
+    )
+    def qms_create(module: str, data: dict[str, Any]) -> dict[str, Any]:
+        with context.unit_of_work(app, write=True) as (session, actor):
+            return operations.create_record(session, actor, operations.get_module(module), data)
+
+    @mcp.tool(
+        name="qms_update",
+        title="Update a record",
+        description=(
+            "Overwrite the given fields of a record (other fields are kept). Returns the stored "
+            "record. There is no delete tool."
+        ),
+        annotations=ToolAnnotations(
+            read_only_hint=False, destructive_hint=True, idempotent_hint=True,
+            open_world_hint=False,
+        ),
+    )
+    def qms_update(module: str, id: int, data: dict[str, Any]) -> dict[str, Any]:  # noqa: A002
+        with context.unit_of_work(app, write=True) as (session, actor):
+            return operations.update_record(
+                session, actor, operations.get_module(module), id, data
+            )
+
     return mcp
