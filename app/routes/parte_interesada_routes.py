@@ -15,16 +15,25 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
-from ..models import ParteInteresada
 from ..forms import ParteInteresadaForm  # Importar el formulario
 from ..extensions import db
+from ..services import stakeholders
+from ..utils.web_actor import current_actor
 
 bp = Blueprint('parte_interesada', __name__, url_prefix='/partes_interesadas')
+
+FORM_FIELDS = ('nombre', 'necesidades_expectativas', 'requisitos_identificados', 'objetivo_estrategico')
+
+
+def _form_data(form):
+    """Whitelisted service payload taken from a validated form."""
+    return {name: getattr(form, name).data for name in FORM_FIELDS}
+
 
 @bp.route('/', methods=['GET'])
 @login_required
 def listar_partes_interesadas():
-    partes = ParteInteresada.query.order_by(ParteInteresada.nombre).all()
+    partes = stakeholders.list_(db.session, current_actor())
     return render_template('partes_interesadas/listar.html', partes=partes)
 
 @bp.route('/nueva', methods=['GET', 'POST'])
@@ -32,13 +41,7 @@ def listar_partes_interesadas():
 def crear_parte_interesada():
     form = ParteInteresadaForm()
     if form.validate_on_submit():
-        nueva_parte = ParteInteresada(
-            nombre=form.nombre.data,
-            necesidades_expectativas=form.necesidades_expectativas.data,
-            requisitos_identificados=form.requisitos_identificados.data,
-            objetivo_estrategico=form.objetivo_estrategico.data
-        )
-        db.session.add(nueva_parte)
+        stakeholders.create(db.session, current_actor(), _form_data(form))
         db.session.commit()
         flash('Parte interesada creada exitosamente', 'success')
         return redirect(url_for('parte_interesada.listar_partes_interesadas'))
@@ -47,13 +50,11 @@ def crear_parte_interesada():
 @bp.route('/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
 def editar_parte_interesada(id):
-    parte = ParteInteresada.query.get_or_404(id)
+    actor = current_actor()
+    parte = stakeholders.get(db.session, actor, id)
     form = ParteInteresadaForm(obj=parte)
     if form.validate_on_submit():
-        parte.nombre = form.nombre.data
-        parte.necesidades_expectativas = form.necesidades_expectativas.data
-        parte.requisitos_identificados = form.requisitos_identificados.data
-        parte.objetivo_estrategico = form.objetivo_estrategico.data
+        stakeholders.update(db.session, actor, id, _form_data(form))
         db.session.commit()
         flash('Parte interesada actualizada exitosamente', 'success')
         return redirect(url_for('parte_interesada.listar_partes_interesadas'))
@@ -62,8 +63,7 @@ def editar_parte_interesada(id):
 @bp.route('/eliminar/<int:id>', methods=['POST'])
 @login_required
 def eliminar_parte_interesada(id):
-    parte = ParteInteresada.query.get_or_404(id)
-    db.session.delete(parte)
+    stakeholders.delete(db.session, current_actor(), id)
     db.session.commit()
     flash('Parte interesada eliminada correctamente', 'success')
     return redirect(url_for('parte_interesada.listar_partes_interesadas'))
