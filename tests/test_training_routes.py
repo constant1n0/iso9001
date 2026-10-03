@@ -83,6 +83,7 @@ class TrainingRoutesTestCase(RegisterRoutesBase):
         self.assertNotIn("Curso nuevo", get("tema=VIEJ"))
         self.assertNotIn("Curso viejo", get("personal=ana"))
         self.assertNotIn("Curso nuevo", get("fecha=2026-09-01"))
+        self.assertIn("Curso viejo", get("fecha=2026-09-01"))  # a record matches its own date
         self.assertIn("Curso nuevo", get("fecha=no-es-fecha"))  # invalid date ignored
 
 

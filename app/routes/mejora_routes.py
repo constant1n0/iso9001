@@ -19,6 +19,8 @@ from ..forms import MejoraForm
 from ..models import Mejora
 from ..schemas import MejoraSchema
 from ..extensions import db, cache
+from ..services import crud, improvements
+from ..utils.web_actor import current_actor
 from marshmallow import ValidationError
 
 bp = Blueprint('mejora', __name__, url_prefix='/mejoras')
@@ -26,14 +28,36 @@ bp = Blueprint('mejora', __name__, url_prefix='/mejoras')
 mejora_schema = MejoraSchema()
 mejoras_schema = MejoraSchema(many=True)
 
+
+class _Pagination:
+    """The few fields ``mejoras/listar.html`` reads from a pagination object."""
+
+    def __init__(self, page, per_page, total):
+        self.page = page
+        self.pages = -(-total // per_page)  # ceiling division; 0 when empty
+        self.has_prev = page > 1
+        self.prev_num = page - 1 if self.has_prev else None
+        self.has_next = page < self.pages
+        self.next_num = page + 1 if self.has_next else None
+
+
+FORM_FIELDS = ('no_conformidad', 'accion_correctiva', 'accion_preventiva')
+
+
+def _form_data(form):
+    """Whitelisted service payload taken from a validated form."""
+    return {name: getattr(form, name).data for name in FORM_FIELDS}
+
+
 # Listar todas las mejoras (vista HTML)
 @bp.route('/', methods=['GET'])
 @login_required
 def listar_mejoras():
-    page = request.args.get('page', 1, type=int)
+    page = max(request.args.get('page', 1, type=int), 1)
     per_page = request.args.get('per_page', 10, type=int)
-    mejoras_paginadas = Mejora.query.paginate(page=page, per_page=per_page, error_out=False)
-    return render_template('mejoras/listar.html', mejoras=mejoras_paginadas.items, pagination=mejoras_paginadas)
+    mejoras, total = improvements.list_page(db.session, current_actor(), page=page, per_page=per_page)
+    pagination = _Pagination(page, per_page if per_page >= 1 else crud.DEFAULT_PER_PAGE, total)
+    return render_template('mejoras/listar.html', mejoras=mejoras, pagination=pagination)
 
 # Crear una nueva mejora (vista HTML)
 @bp.route('/nueva', methods=['GET', 'POST'])
@@ -41,12 +65,7 @@ def listar_mejoras():
 def nueva_mejora():
     form = MejoraForm()
     if form.validate_on_submit():
-        nueva_mejora = Mejora(
-            no_conformidad=form.no_conformidad.data,
-            accion_correctiva=form.accion_correctiva.data,
-            accion_preventiva=form.accion_preventiva.data
-        )
-        db.session.add(nueva_mejora)
+        improvements.create(db.session, current_actor(), _form_data(form))
         db.session.commit()
         flash('Mejora registrada exitosamente', 'success')
         return redirect(url_for('mejora.listar_mejoras'))
@@ -56,12 +75,11 @@ def nueva_mejora():
 @bp.route('/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
 def editar_mejora(id):
-    mejora = Mejora.query.get_or_404(id)
+    actor = current_actor()
+    mejora = improvements.get(db.session, actor, id)
     form = MejoraForm(obj=mejora)
     if form.validate_on_submit():
-        mejora.no_conformidad = form.no_conformidad.data
-        mejora.accion_correctiva = form.accion_correctiva.data
-        mejora.accion_preventiva = form.accion_preventiva.data
+        improvements.update(db.session, actor, id, _form_data(form))
         db.session.commit()
         flash('Mejora actualizada exitosamente', 'success')
         return redirect(url_for('mejora.listar_mejoras'))
@@ -71,8 +89,7 @@ def editar_mejora(id):
 @bp.route('/eliminar/<int:id>', methods=['POST'])
 @login_required
 def eliminar_mejora(id):
-    mejora = Mejora.query.get_or_404(id)
-    db.session.delete(mejora)
+    improvements.delete(db.session, current_actor(), id)
     db.session.commit()
     flash('Mejora eliminada correctamente', 'success')
     return redirect(url_for('mejora.listar_mejoras'))
