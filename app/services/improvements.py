@@ -16,7 +16,7 @@
 """Improvements (``Mejora``) on the generic CRUD helper, for the HTML register.
 
 Validation mirrors ``MejoraForm``. ``fecha_implementacion`` is not writable: the
-column default sets it on create. The JSON API still bypasses this module (QF-8).
+column default sets it on create. The HTML routes and the JSON API both use it.
 """
 
 from __future__ import annotations
