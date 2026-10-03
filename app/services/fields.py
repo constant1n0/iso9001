@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import enum
 from collections.abc import Mapping
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, TypeVar
 
 from .errors import ValidationError
@@ -108,3 +108,19 @@ def boolean(data: Mapping[str, Any], key: str) -> bool | None:
         return value
     raise ValidationError(f"El campo «{key}» debe ser verdadero o falso.")
 
+
+def optional_datetime(data: Mapping[str, Any], key: str) -> datetime | None:
+    """A ``datetime`` or an ISO 8601 string, stored naive in UTC; ``None`` is allowed."""
+    value = data[key]
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            value = None
+    if not isinstance(value, datetime):
+        raise ValidationError(f"El campo «{key}» debe ser una fecha y hora válida.")
+    if value.tzinfo is not None:
+        value = value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
