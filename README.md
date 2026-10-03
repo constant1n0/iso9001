@@ -178,6 +178,25 @@ accounts. Run it once: it performs a second existence check before committing,
 but does not provide cross-process serialization for simultaneous local command
 invocations.
 
+**2b. API Tokens for Agents**
+
+An administrator issues revocable API tokens from the same trusted local shell.
+A token lets an agent adapter (the future MCP server) act as one user, with
+that user's role narrowed by the token's scopes (`read`, `write`):
+
+```bash
+venv/bin/flask --app run.py create-api-token --user ana --name "Claude Code"            # read only, 90 days
+venv/bin/flask --app run.py create-api-token --user ana --name "Bot" --scope read --scope write --days 30
+venv/bin/flask --app run.py list-api-tokens [--user ana]
+venv/bin/flask --app run.py revoke-api-token a1b2c3d4
+```
+
+`create-api-token` prints the token (`iso_<prefix>_<secret>`) once; only a keyed
+hash is stored, so a lost token cannot be recovered and must be replaced.
+Expiry is 90 days by default and at most 365. Changing `SECRET_KEY` invalidates
+every token. `list-api-tokens` shows the prefix, owner, scopes and status, never
+a secret. Issuing and revoking are written to the audit log and the security log.
+
 **3. Iniciar Redis y Celery para las Notificaciones Programadas**
 
 Celery envía tres avisos por correo; la aplicación web funciona sin él.
