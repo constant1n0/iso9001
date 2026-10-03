@@ -43,10 +43,6 @@ class Config:
     REMEMBER_COOKIE_SAMESITE = 'Lax'
     REMEMBER_COOKIE_DURATION = timedelta(days=7)
 
-    # Configuración de Caché
-    CACHE_TYPE = 'simple'
-    CACHE_DEFAULT_TIMEOUT = 300
-
     # Configuración del registro de eventos de seguridad
     SECURITY_LOG_ENABLED = os.environ.get(
         'SECURITY_LOG_ENABLED', 'True'

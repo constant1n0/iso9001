@@ -101,25 +101,12 @@ def _html(resource, base, create, update, delete):
     ]
 
 
-# KNOWN DEFECT (QF-8 fixes it register by register): the JSON create/update
-# handlers of a register not yet moved onto its service call ``Model(**data)`` /
-# ``data.items()`` on a schema declared with ``load_instance = True``, so every
-# valid write ends in the global 500 handler.  Access control still runs first,
-# so the 500 is characterized as the "allowed" outcome until the register is
-# listed in ``JSON_FIXED``, which expects the real 201 / 200.
-JSON_FIXED = {
-    "ROLES_RESPONSIBILITIES", "RISKS_OPPORTUNITIES", "TRAINING_RESOURCES",
-    "PROCESS_OPERATIONS", "AUDIT_INDICATORS",
-}
-
-
 def _json(resource, base, create, update):
     """Endpoints for a JSON register under ``base`` (trailing slash)."""
-    fixed = resource in JSON_FIXED
     return [
         Endpoint(resource, "read", "GET", base, 200),
-        Endpoint(resource, "create", "POST", base, 201 if fixed else 500, create, True),
-        Endpoint(resource, "update", "PUT", f"{base}1", 200 if fixed else 500, update, True),
+        Endpoint(resource, "create", "POST", base, 201, create, True),
+        Endpoint(resource, "update", "PUT", f"{base}1", 200, update, True),
         Endpoint(resource, "delete", "DELETE", f"{base}1", 200),
     ]
 
