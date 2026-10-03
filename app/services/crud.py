@@ -36,7 +36,7 @@ from sqlalchemy.orm import Session
 from . import audit, fields, policy
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
-from .errors import Conflict, NotFound
+from .errors import Conflict, NotFound, ValidationError
 from .policy import Action, Resource
 
 DEFAULT_PER_PAGE = 20
@@ -108,6 +108,8 @@ def list_page(spec: Spec, session: Session, actor: Actor, where: Sequence[Any] =
 
 def _clean(spec: Spec, data: Mapping[str, Any]) -> dict[str, Any]:
     """Validate the keys present in ``data`` and return the normalized values."""
+    if not isinstance(data, Mapping):
+        raise ValidationError("Los datos deben ser un objeto con campos.")
     fields.reject_unknown(data, spec.writable)
     return {f.name: f.clean(data, f.name) for f in spec.fields if f.name in data}
 
@@ -122,6 +124,8 @@ def _flush(session: Session, message: str | None = None) -> None:
 def create(spec: Spec, session: Session, actor: Actor, data: Mapping[str, Any]) -> Any:
     """Create a record; every ``required`` field must be present."""
     policy.require(actor, Action.CREATE, spec.resource)
+    if not isinstance(data, Mapping):
+        raise ValidationError("Los datos deben ser un objeto con campos.")
     fields.require_keys(data, frozenset(f.name for f in spec.fields if f.required))
     created = spec.model(**_clean(spec, data))
     stamp_created(created, actor)
