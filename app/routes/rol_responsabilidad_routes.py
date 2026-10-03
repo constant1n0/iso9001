@@ -13,70 +13,11 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from flask import Blueprint, request, jsonify
-from flask_login import login_required
-from ..models import RolResponsabilidad
+from flask import Blueprint
 from ..schemas import RolResponsabilidadSchema
-from ..extensions import db, cache
-from marshmallow import ValidationError
+from ..services import roles_responsibilities
+from .json_register import register_json_api
 
 bp = Blueprint('rol_responsabilidad', __name__, url_prefix='/rol_responsabilidad')
 
-rol_responsabilidad_schema = RolResponsabilidadSchema()
-roles_responsabilidades_schema = RolResponsabilidadSchema(many=True)
-
-# Crear un nuevo rol y responsabilidad
-@bp.route('/', methods=['POST'])
-@login_required
-def add_rol_responsabilidad():
-    json_data = request.get_json()
-    if not json_data:
-        return jsonify({'message': 'No se proporcionaron datos'}), 400
-    try:
-        data = rol_responsabilidad_schema.load(json_data)
-    except ValidationError as err:
-        return jsonify(err.messages), 422
-
-    nuevo_rol = RolResponsabilidad(**data)
-    db.session.add(nuevo_rol)
-    db.session.commit()
-
-    return rol_responsabilidad_schema.jsonify(nuevo_rol), 201
-
-# Obtener todos los roles y responsabilidades con paginación
-@bp.route('/', methods=['GET'])
-@login_required
-@cache.cached(timeout=50, query_string=True)
-def get_roles_responsabilidades():
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
-    roles_paginados = RolResponsabilidad.query.paginate(page=page, per_page=per_page, error_out=False)
-    return roles_responsabilidades_schema.jsonify(roles_paginados.items), 200
-
-# Actualizar un rol y responsabilidad
-@bp.route('/<int:id>', methods=['PUT'])
-@login_required
-def update_rol_responsabilidad(id):
-    rol = RolResponsabilidad.query.get_or_404(id)
-    json_data = request.get_json()
-    if not json_data:
-        return jsonify({'message': 'No se proporcionaron datos'}), 400
-    try:
-        data = rol_responsabilidad_schema.load(json_data, partial=True)
-    except ValidationError as err:
-        return jsonify(err.messages), 422
-
-    for key, value in data.items():
-        setattr(rol, key, value)
-
-    db.session.commit()
-    return rol_responsabilidad_schema.jsonify(rol), 200
-
-# Eliminar un rol y responsabilidad
-@bp.route('/<int:id>', methods=['DELETE'])
-@login_required
-def delete_rol_responsabilidad(id):
-    rol = RolResponsabilidad.query.get_or_404(id)
-    db.session.delete(rol)
-    db.session.commit()
-    return jsonify({'message': 'Rol y responsabilidad eliminado correctamente'}), 200
+register_json_api(bp, roles_responsibilities, RolResponsabilidadSchema, 'Rol y responsabilidad eliminado correctamente')
