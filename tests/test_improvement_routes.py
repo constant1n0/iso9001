@@ -28,6 +28,7 @@ class ImprovementRoutesTestCase(RegisterRoutesBase):
         self.assertEqual(["create"], self.actions())  # unchanged edit writes nothing
         self.client.post(f"{self.BASE}/editar/{record_id}", data=FORM | {"accion_correctiva": "Cambiar"})
         self.assertIn(("success", "Mejora actualizada exitosamente"), self.flashes())
+        self.login(RoleEnum.ADMINISTRADOR)  # only administrators delete
         self.client.post(f"{self.BASE}/eliminar/{record_id}")
         self.assertIn(("success", "Mejora eliminada correctamente"), self.flashes())
         self.assertEqual(["create", "update", "delete"], self.actions())

@@ -1,4 +1,4 @@
-"""Table-driven tests for the central permission policy (today's matrix)."""
+"""Table-driven tests for the central permission policy (the approved matrix)."""
 
 from __future__ import annotations
 
@@ -16,22 +16,26 @@ ALL_ROLES = frozenset(RoleEnum)
 ADMIN_ONLY = frozenset({ADMIN})
 ADMIN_AUDITOR = frozenset({ADMIN, AUDITOR})
 
-# resource name -> (roles allowed to read/create/update, roles allowed to delete)
-# Written by hand from the route decorators; deliberately NOT derived from
-# the policy module under test.
+NOBODY = frozenset()
+
+# resource name -> (roles that read, roles that create/update, roles that delete)
+# The approved matrix (decision D1), written by hand; deliberately NOT derived
+# from the policy module under test.
 EXPECTED = {
-    "NONCONFORMITIES": (ALL_ROLES, ADMIN_ONLY),
-    "IMPROVEMENTS": (ALL_ROLES, ALL_ROLES),
-    "CUSTOMER_SATISFACTION": (ALL_ROLES, ALL_ROLES),
-    "TRAINING": (ALL_ROLES, ALL_ROLES),
-    "AUDITS": (ADMIN_AUDITOR, ADMIN_AUDITOR),
-    "AUDIT_INDICATORS": (ALL_ROLES, ALL_ROLES),
-    "DOCUMENTS": (ADMIN_ONLY, ADMIN_ONLY),
-    "INTERESTED_PARTIES": (ALL_ROLES, ALL_ROLES),
-    "ROLES_RESPONSIBILITIES": (ALL_ROLES, ALL_ROLES),
-    "RISKS_OPPORTUNITIES": (ALL_ROLES, ALL_ROLES),
-    "TRAINING_RESOURCES": (ALL_ROLES, ALL_ROLES),
-    "PROCESS_OPERATIONS": (ALL_ROLES, ALL_ROLES),
+    "NONCONFORMITIES": (ALL_ROLES, ALL_ROLES, ADMIN_ONLY),
+    "IMPROVEMENTS": (ALL_ROLES, ALL_ROLES, ADMIN_ONLY),
+    "CUSTOMER_SATISFACTION": (ALL_ROLES, ALL_ROLES, ADMIN_ONLY),
+    "TRAINING": (ALL_ROLES, ALL_ROLES, ADMIN_ONLY),
+    "INTERESTED_PARTIES": (ALL_ROLES, ALL_ROLES, ADMIN_ONLY),
+    "AUDITS": (ADMIN_AUDITOR, ADMIN_AUDITOR, ADMIN_ONLY),
+    "DOCUMENTS": (ADMIN_ONLY, ADMIN_ONLY, ADMIN_ONLY),
+    "AUDIT_INDICATORS": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),
+    "ROLES_RESPONSIBILITIES": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),
+    "RISKS_OPPORTUNITIES": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),
+    "TRAINING_RESOURCES": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),
+    "PROCESS_OPERATIONS": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),
+    "USERS": (ADMIN_AUDITOR, ADMIN_ONLY, NOBODY),
+    "AUDIT_LOG": (ADMIN_AUDITOR, ADMIN_ONLY, NOBODY),
 }
 
 FORBIDDEN_MODULES = ("flask", "flask_login", "werkzeug.local", "app.routes")
@@ -87,14 +91,15 @@ class PolicyMatrixTestCase(unittest.TestCase):
     def test_matrix_for_every_role_resource_and_action(self) -> None:
         from app.services.policy import Action, Resource, can
 
-        for name, (write_roles, delete_roles) in EXPECTED.items():
+        for name, (read_roles, write_roles, delete_roles) in EXPECTED.items():
             resource = Resource[name]
             for role in RoleEnum:
                 actor = make_actor(role)
                 for action in Action:
-                    allowed_roles = (
-                        delete_roles if action is Action.DELETE else write_roles
-                    )
+                    allowed_roles = {
+                        Action.READ: read_roles,
+                        Action.DELETE: delete_roles,
+                    }.get(action, write_roles)
                     with self.subTest(resource=name, role=role.name, action=action):
                         self.assertEqual(
                             role in allowed_roles, can(actor, action, resource)
@@ -148,12 +153,21 @@ class PolicyMatrixTestCase(unittest.TestCase):
             (OPERATIVO, both, Action.READ, Resource.DOCUMENTS, False),
             (OPERATIVO, both, Action.DELETE, Resource.NONCONFORMITIES, False),
             (OPERATIVO, both, Action.CREATE, Resource.NONCONFORMITIES, True),
+            (OPERATIVO, both, Action.CREATE, Resource.RISKS_OPPORTUNITIES, False),
         ]
         for role, scopes, action, resource, expected in cases:
             with self.subTest(role=role.name, scopes=sorted(scopes), action=action):
                 self.assertEqual(
                     expected, can(make_actor(role, scopes=scopes), action, resource)
                 )
+
+    def test_nobody_may_delete_users_or_the_audit_log(self) -> None:
+        from app.services.policy import Action, Resource, can
+
+        for resource in (Resource.USERS, Resource.AUDIT_LOG):
+            for role in RoleEnum:
+                with self.subTest(resource=resource.name, role=role.name):
+                    self.assertFalse(can(make_actor(role, channel="system"), Action.DELETE, resource))
 
     def test_mcp_with_full_scopes_still_cannot_delete(self) -> None:
         from app.services.policy import Action, Resource, can

@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import unittest
 
-from test_nonconformity_service import ServiceBase, actor, errors
+from test_nonconformity_service import ServiceBase, actor as _actor, errors
 
 from app.extensions import db
-from app.models import RiesgoOportunidad, TipoEnum
+from app.models import RiesgoOportunidad, TipoEnum, RoleEnum
+
+
+def actor(**kwargs):
+    """Administrators may do everything, so these tests exercise the register rules."""
+    return _actor(role=RoleEnum.ADMINISTRADOR, **kwargs)
 
 
 def risks():

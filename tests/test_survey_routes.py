@@ -30,6 +30,7 @@ class SurveyRoutesTestCase(RegisterRoutesBase):
         self.assertEqual(["create"], self.actions())  # unchanged edit writes nothing
         self.client.post(f"{self.BASE}/editar/{record_id}", data=FORM | {"puntuacion": "7"})
         self.assertIn(("success", "Encuesta actualizada exitosamente"), self.flashes())
+        self.login(RoleEnum.ADMINISTRADOR)  # only administrators delete
         self.client.post(f"{self.BASE}/eliminar/{record_id}")
         self.assertIn(("success", "Encuesta eliminada exitosamente"), self.flashes())
         self.assertEqual(["create", "update", "delete"], self.actions())

@@ -28,6 +28,7 @@ class StakeholderRoutesTestCase(RegisterRoutesBase):
         self.assertEqual(["create"], self.actions())  # unchanged edit writes nothing
         self.client.post(f"{self.BASE}/editar/{record_id}", data=FORM | {"objetivo_estrategico": "Crecer"})
         self.assertIn(("success", "Parte interesada actualizada exitosamente"), self.flashes())
+        self.login(RoleEnum.ADMINISTRADOR)  # only administrators delete
         self.client.post(f"{self.BASE}/eliminar/{record_id}")
         self.assertIn(("success", "Parte interesada eliminada correctamente"), self.flashes())
         self.assertEqual(["create", "update", "delete"], self.actions())

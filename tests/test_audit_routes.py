@@ -121,22 +121,25 @@ class AuditRoutesTestCase(unittest.TestCase):
             self.assertEqual("update", self.rows()[-1][0])
 
     def test_delete_is_audited_with_a_snapshot(self) -> None:
-        for role in (RoleEnum.AUDITOR, RoleEnum.ADMINISTRADOR):
-            with self.subTest(role=role.name):
-                audit_id = self.seed()
-                self.login(role)
-                response = self.client.post(f"{BASE}/eliminar/{audit_id}")
-                self.assertEqual(302, response.status_code)
-                self.assertIn(("success", "Auditoría eliminada exitosamente"), self.flashes())
-                with self.app.app_context():
-                    self.assertIsNone(db.session.get(Auditoria, audit_id))
-                    # SQLite reuses ids, so take the latest delete row.
-                    row = (
-                        AuditLog.query.filter_by(action="delete", entity_id=audit_id)
-                        .order_by(AuditLog.id.desc())
-                        .first()
-                    )
-                    self.assertEqual("Semilla", row.before["area_auditada"])
+        audit_id = self.seed()
+        self.login(RoleEnum.ADMINISTRADOR)
+        response = self.client.post(f"{BASE}/eliminar/{audit_id}")
+        self.assertEqual(302, response.status_code)
+        self.assertIn(("success", "Auditoría eliminada exitosamente"), self.flashes())
+        with self.app.app_context():
+            self.assertIsNone(db.session.get(Auditoria, audit_id))
+            row = AuditLog.query.filter_by(action="delete", entity_id=audit_id).one()
+            self.assertEqual("Semilla", row.before["area_auditada"])
+
+    def test_an_auditor_can_edit_but_not_delete(self) -> None:
+        audit_id = self.seed()
+        self.login(RoleEnum.AUDITOR)
+        response = self.client.post(f"{BASE}/eliminar/{audit_id}")
+        self.assertTrue(response.headers["Location"].endswith("/dashboard/"))
+        self.assertIn(("danger", "No tienes permiso para acceder a esta página."), self.flashes())
+        with self.app.app_context():
+            self.assertIsNotNone(db.session.get(Auditoria, audit_id))
+            self.assertEqual(["create"], [r.action for r in AuditLog.query.all()])
 
     def test_operativo_cannot_write_and_leaves_no_audit_rows(self) -> None:
         audit_id = self.seed()

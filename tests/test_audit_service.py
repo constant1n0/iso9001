@@ -261,23 +261,23 @@ class UpdateTestCase(WriteBase):
 
 
 class DeleteTestCase(WriteBase):
-    def test_admin_and_auditor_delete_with_a_before_snapshot(self) -> None:
-        for role in (ADMIN, AUDITOR):
-            with self.subTest(role=role.name):
-                audit = self.create()
-                audit_id = audit.id
-                service().delete(db.session, actor(role), audit_id)
-                db.session.commit()
-                self.assertIsNone(db.session.get(Auditoria, audit_id))
-                row = self.audit_rows()[-1]
-                self.assertEqual(("delete", audit_id), (row.action, row.entity_id))
-                self.assertIsNone(row.after)
-                self.assertEqual("Compras", row.before["area_auditada"])
-
-    def test_operativo_is_denied_and_the_record_survives(self) -> None:
+    def test_admin_deletes_with_a_before_snapshot(self) -> None:
         audit = self.create()
-        with self.assertRaises(errors().PermissionDenied):
-            service().delete(db.session, actor(OPERATIVO), audit.id)
+        audit_id = audit.id
+        service().delete(db.session, actor(ADMIN), audit_id)
+        db.session.commit()
+        self.assertIsNone(db.session.get(Auditoria, audit_id))
+        row = self.audit_rows()[-1]
+        self.assertEqual(("delete", audit_id), (row.action, row.entity_id))
+        self.assertIsNone(row.after)
+        self.assertEqual("Compras", row.before["area_auditada"])
+
+    def test_only_administrators_delete_and_the_record_survives_otherwise(self) -> None:
+        audit = self.create()
+        for role in (AUDITOR, OPERATIVO):
+            with self.subTest(role=role.name):
+                with self.assertRaises(errors().PermissionDenied):
+                    service().delete(db.session, actor(role), audit.id)
         self.assertIsNotNone(db.session.get(Auditoria, audit.id))
         self.assertEqual(1, len(self.audit_rows()))
 
