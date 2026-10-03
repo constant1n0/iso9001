@@ -54,8 +54,8 @@ Give each user revocable, expiring API tokens that an agent adapter (the future 
 
 - **Table `api_tokens`:** `id`; `user_id` (FK `users.id`, `ON DELETE CASCADE`); `name`; `prefix` (unique, 8 hex); `token_hash` (64 hex); `scopes` (text set, e.g. `read` or `read write`); `created_at`, `created_by_label`; `expires_at`; `revoked_at`, `revoked_by_label`; `last_used_at`. Indexes on `prefix` (unique) and `user_id`.
 - **Service `app/services/api_tokens.py`** (framework-free):
-  - `issue(session, actor, user_id, name, scopes, days)` returns `(plaintext, ApiToken)`.
-  - `authenticate(session, raw, now)` returns an `Actor` or raises `AuthenticationFailed`.
+  - `issue(session, actor, *, secret_key, user_id, name, scopes=("read",), days=90, now=None)` returns `(plaintext, ApiToken)`.
+  - `authenticate(session, raw, *, secret_key, now=None)` returns an `Actor` or raises `AuthenticationFailed`.
   - `revoke(session, actor, token_id_or_prefix)`.
   - `list_(session, actor, user_id=None)`.
   - Policy resource `API_TOKENS`: ADMIN manages, nobody else.
@@ -66,13 +66,14 @@ Give each user revocable, expiring API tokens that an agent adapter (the future 
 
 Route for every task: **delegated direct** (each touches two or more non-trivial files).
 
-- [ ] **AT-1 — `ApiToken` model and migration.** Forecast 200-300.
+- [x] **AT-1 — `ApiToken` model and migration.** Forecast 200-300.
   - Acceptance: table, constraints and indexes as designed; migration upgrades and downgrades on PostgreSQL; deleting a user deletes their tokens.
-- [ ] **AT-2 — Token service.** Forecast 300-380.
+- [x] **AT-2 — Token service.** Forecast 300-380.
   - Acceptance: issue returns a plaintext once and stores only the HMAC; authenticate accepts a valid token and rejects unknown, malformed, expired, revoked and tampered tokens with one generic error; the resulting `Actor` carries channel `mcp`, the owner's current role and the token scopes; `last_used_at` is throttled; issue and revoke are audited without the secret or hash; only ADMIN may issue, list or revoke.
-- [ ] **AT-3 — CLI commands.** Forecast 200-300.
+- [x] **AT-3 — CLI commands.** Forecast 200-300.
   - Acceptance: create, list and revoke work through `flask`; the plaintext is printed once on create; list never prints secrets or hashes; errors are clear and exit non-zero.
-- [ ] **AT-4 — Dependency cleanup and documentation.** Forecast 60-150.
+- [x] **AT-5 — Review fixes (`review-6718387f79eedcee`).** One digest function for issue and authenticate; shared `status()` for authentication and CLI; clear CLI error without `SECRET_KEY`; `AuthFailure` enum; collision/`IntegrityError` tests; adapter rollback documented.
+- [x] **AT-4 — Dependency cleanup and documentation.** Forecast 60-150.
   - Acceptance: `Flask-JWT-Extended` and `PyJWT` removed with nothing importing them; `docs/architecture/services.md` documents token authentication and how the MCP adapter must use it; README shows the CLI usage.
 
 **Total forecast:** about 760-1,130 authored changed lines, so delivery is chained.
@@ -93,8 +94,34 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| AT-1 | Pending | — | — | — |
+| AT-1 | Done | `8b5ea23` (table + migration `e6b1a4c8d3f7`) | RED: `ImportError: ApiToken`; migration test: `api_tokens` missing. GREEN: 409 tests incl. PostgreSQL (cascade on user delete, upgrade/downgrade) | Range `24a4495..a98d8a9` (AT-1..AT-4): **high** risk (auth/security hot paths); consent granted; 4-lens review `review-6718387f79eedcee` **approved** and acknowledged; risk lens no findings; 3 warnings + 5 suggestions fixed in AT-5 |
+| AT-2 | Done | `50d9b67` (issue + authenticate, `AuthenticationFailed`, policy `API_TOKENS`), `1c065e5` (revoke + list) | RED: missing `app.services.api_tokens`, `KeyError: 'API_TOKENS'`. GREEN: 434 / 439 tests | Pending |
+| AT-3 | Done | `93426f1` (security log functions), `a79147c` (CLI commands) | RED: missing `log_api_token_*`, 12 CLI tests failing. GREEN: 442 / 454 tests | Pending |
+| AT-4 | Done | `cb7d76a` (JWT packages dropped, docs, README) | RED: 3 of 4 cleanup tests. GREEN: 458 tests | — |
+| AT-5 | Done | `52af101` (review fixes) | RED: shared digest not used by `authenticate`; no `status` helper; missing/empty `SECRET_KEY` gave a raw traceback; no `AuthFailure` enum. GREEN: 468 tests incl. PostgreSQL | Medium, `under_budget` (188 lines); no later commit reaches the budget, so it stays unreviewed by RDD; it only applies the approved review's findings |
+
+## Findings during implementation
+
+- **Not in `AUDITED_MODELS`:** `ApiToken` has no `created_by_id`/`updated_by_id` and `last_used_at` changes on authentication without an audit row; `issue` and `revoke` call `audit.record` explicitly, and the recorder drops `token_hash` because its name contains `token`.
+- **Key derivation:** `hmac(SECRET_KEY, b"iso9001-api-token-v1", sha256)`; services receive `secret_key=` from the adapter. Unknown prefixes are compared against a dummy hash so both paths do the same work.
+- **Errors:** `AuthenticationFailed` has one generic message and carries `reason`/`token_prefix` for the adapter's security log only. A second revoke raises `Conflict`.
+- **CLI actor:** `Actor(user_id=None, label="cli:<OS user>", role=ADMINISTRADOR, channel="cli")`. CLI messages are English like `create-admin`; service validation messages are Spanish.
+- **Policy:** `API_TOKENS` read/create/update ADMIN only, delete nobody (revocation is an update); `mcp` is denied every action.
+- **For the MCP adapter:** split tokens with `split("_", 2)` (secrets can contain `_`); `authenticate` only flushes `last_used_at`, so the adapter commits after a successful call.
+- **Commit size:** `50d9b67` is 515 lines (service + errors + policy + tests); one honest slicing pass found no cohesive split, so its pull request needs a maintainer `size:exception`.
+
+## Delivery
+
+| Slice | Pull request | Commits | Merged as | Note |
+|---|---|---|---|---|
+| 1 | [#53](https://github.com/constant1n0/iso9001/pull/53) | `53286de`, `8b5ea23` | `7457bfe` | |
+| 2 | [#54](https://github.com/constant1n0/iso9001/pull/54) | `50d9b67` | `6bbe0e0` | maintainer-approved `size:exception` (515) |
+| 3 | [#55](https://github.com/constant1n0/iso9001/pull/55) | `1c065e5`, `93426f1` | `728427c` | |
+| 4 | [#56](https://github.com/constant1n0/iso9001/pull/56) | `a79147c` | `52cc731` | |
+| 5 | Pending | `cb7d76a`, `a98d8a9`, `52af101`, this closing update | — | Final slice |
 
 ## Next step
 
-Implement AT-1 to AT-4 as independently green work units.
+**Feature complete.** Tokens can be issued, listed and revoked by an administrator through the CLI, and `api_tokens.authenticate(...)` turns a bearer token into an `Actor(channel="mcp", ...)` for the next change.
+
+Next: `mcp-server` — the MCP server as a separate ASGI process (Streamable HTTP, bearer token; stdio for local use) over the service layer, following `docs/architecture/services.md`.

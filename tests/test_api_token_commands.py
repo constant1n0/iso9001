@@ -52,6 +52,24 @@ class CommandBase(unittest.TestCase):
         return token
 
 
+class SecretKeyTestCase(CommandBase):
+    def assert_clear_failure(self) -> None:
+        result = self.create()
+        self.assertNotEqual(0, result.exit_code)
+        self.assertIsInstance(result.exception, SystemExit)
+        self.assertIn("SECRET_KEY", result.output)
+        self.assertNotIn("Traceback", result.output)
+        self.assertEqual(0, db.session.query(ApiToken).count())
+
+    def test_a_missing_secret_key_is_a_clear_error(self) -> None:
+        self.app.config.pop("SECRET_KEY", None)
+        self.assert_clear_failure()
+
+    def test_an_empty_secret_key_is_a_clear_error(self) -> None:
+        self.app.config["SECRET_KEY"] = ""
+        self.assert_clear_failure()
+
+
 class CreateTestCase(CommandBase):
     def test_prints_the_token_once_with_a_warning_and_stores_no_plaintext(self) -> None:
         result = self.create()

@@ -42,7 +42,7 @@ from sqlalchemy.orm import Session
 from ..models import ApiToken, User
 from . import audit, policy
 from .actor import Actor
-from .errors import AuthenticationFailed, Conflict, NotFound, ValidationError
+from .errors import AuthenticationFailed, AuthFailure, Conflict, NotFound, ValidationError
 from .policy import Action, Resource
 
 VALID_SCOPES = frozenset({"read", "write"})
@@ -51,6 +51,8 @@ DEFAULT_DAYS = 90
 MAX_DAYS = 365
 NAME_MAX_LENGTH = 100
 LAST_USED_INTERVAL = timedelta(minutes=5)
+
+ACTIVE, EXPIRED, REVOKED = "active", "expired", "revoked"
 
 _KEY_DOMAIN = b"iso9001-api-token-v1"
 _TOKEN = re.compile(r"iso_([0-9a-f]{8})_([A-Za-z0-9_-]{43})")
@@ -77,6 +79,19 @@ def _derive_key(secret_key: str | bytes | None) -> bytes:
 
 def _digest(secret_key: str | bytes | None, raw: str) -> str:
     return hmac.new(_derive_key(secret_key), raw.encode("ascii"), hashlib.sha256).hexdigest()
+
+
+def _require_secret_key(secret_key: str | bytes | None) -> None:
+    """Fail early on an unusable key, before anything is written or compared."""
+    _derive_key(secret_key)
+
+
+def status(token: ApiToken, now: datetime | None = None) -> str:
+    """``revoked``, ``expired`` or ``active``: the one rule for a token's validity."""
+    if token.revoked_at is not None:
+        return REVOKED
+    moment = now if now is not None else _now()
+    return EXPIRED if _utc(token.expires_at) <= moment else ACTIVE
 
 
 def _scopes(value: Iterable[str] | None) -> str:
@@ -130,7 +145,7 @@ def issue(
     token's metadata only: ``token_hash`` is dropped by the audit recorder.
     """
     policy.require(actor, Action.CREATE, Resource.API_TOKENS)
-    _derive_key(secret_key)
+    _require_secret_key(secret_key)
     name, scope_text, days = _name(name), _scopes(scopes), _days(days)
     if session.get(User, user_id) is None:
         raise NotFound("Usuario no encontrado.")
@@ -169,28 +184,29 @@ def authenticate(
     same message. The actor carries the owner's *current* role and the token's
     scopes. ``last_used_at`` is flushed at most every five minutes.
     """
-    key = _derive_key(secret_key)
+    _require_secret_key(secret_key)
     match = _TOKEN.fullmatch(raw) if isinstance(raw, str) else None
     if match is None:
-        raise AuthenticationFailed("malformed")
+        raise AuthenticationFailed(AuthFailure.MALFORMED)
     prefix = match.group(1)
     row = session.scalar(select(ApiToken).where(ApiToken.prefix == prefix))
-    candidate = hmac.new(key, raw.encode("ascii"), hashlib.sha256).hexdigest()
+    candidate = _digest(secret_key, raw)
     # Compare against a dummy when the prefix is unknown so both paths cost the same.
     stored = row.token_hash if row is not None else _DUMMY_HASH
     matches = hmac.compare_digest(candidate, stored)
     if row is None:
-        raise AuthenticationFailed("unknown_prefix", prefix)
+        raise AuthenticationFailed(AuthFailure.UNKNOWN_PREFIX, prefix)
     if not matches:
-        raise AuthenticationFailed("bad_secret", prefix)
+        raise AuthenticationFailed(AuthFailure.BAD_SECRET, prefix)
     moment = now if now is not None else _now()
-    if row.revoked_at is not None:
-        raise AuthenticationFailed("revoked", prefix)
-    if _utc(row.expires_at) <= moment:
-        raise AuthenticationFailed("expired", prefix)
+    state = status(row, moment)
+    if state == REVOKED:
+        raise AuthenticationFailed(AuthFailure.REVOKED, prefix)
+    if state == EXPIRED:
+        raise AuthenticationFailed(AuthFailure.EXPIRED, prefix)
     user = session.get(User, row.user_id)
     if user is None:
-        raise AuthenticationFailed("user_missing", prefix)
+        raise AuthenticationFailed(AuthFailure.USER_MISSING, prefix)
     if row.last_used_at is None or moment - _utc(row.last_used_at) >= LAST_USED_INTERVAL:
         row.last_used_at = moment
         session.flush()

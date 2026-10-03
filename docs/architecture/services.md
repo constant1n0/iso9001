@@ -56,6 +56,7 @@ bounded: the page is clamped to `1..crud.MAX_PAGE` and the size to
 | `crud.py` | Generic helper driven by a `Spec` (model, resource, fields, ordering) |
 | `training.py`, `satisfaction.py`, `stakeholders.py`, `improvements.py` | Plain HTML registers on `crud` |
 | `roles_responsibilities.py`, `risks_opportunities.py`, `training_resources.py`, `process_operations.py`, `audit_indicators.py` | JSON registers on `crud` |
+| `api_tokens.py` | Bearer tokens for non-browser adapters (see below) |
 | `policy.py`, `actor.py`, `errors.py`, `audit.py`, `attribution.py`, `fields.py` | The shared kernel |
 
 ## Actor and channels
@@ -79,6 +80,7 @@ checked first (`mcp` never deletes), then the role.
 | Documents | ADMIN | ADMIN | ADMIN |
 | Roles, risks and opportunities, training resources, process operations, audit indicators | all roles | ADMIN, AUDITOR | ADMIN |
 | Users, audit log (policy only, no routes yet) | ADMIN, AUDITOR | ADMIN | nobody |
+| API tokens (list, issue, revoke) | ADMIN | ADMIN | nobody |
 
 Roles are `ADMINISTRADOR`, `AUDITOR` and `OPERATIVO`. Hard deletes leave an
 `AuditLog` snapshot of the removed record.
@@ -94,6 +96,10 @@ web adapter (`app/utils/error_handlers.py`) maps them:
 | `Conflict` | 409 (session rolled back) | flash, rollback, back to the form |
 | `ValidationError` | 422 (session rolled back) | flash, rollback, back to the form |
 | `PermissionDenied` | 403 | notice and redirect to the dashboard |
+
+`AuthenticationFailed` (a bearer token was not accepted) has no web mapping
+because the web adapter never raises it; a token adapter maps it to its
+protocol's "unauthenticated" answer (see below).
 
 A client is treated as JSON when the body is JSON or it prefers
 `application/json`. Another adapter owns its own mapping.
@@ -115,15 +121,30 @@ A client is treated as JSON when the body is JSON or it prefers
 
 1. Run inside a Flask application context (the models and `db.session` need it)
    or provide your own `Session`.
-2. Authenticate the caller and load its `User`; then build the actor with the
-   channel and the token scopes:
+2. Authenticate the caller from its `Authorization: Bearer` header. The
+   service returns the actor itself (see "API tokens" below):
 
    ```python
-   actor = Actor.from_user(user, channel="mcp", scopes={"read", "write"})
+   try:
+       actor = api_tokens.authenticate(db.session, raw_token, secret_key=SECRET_KEY)
+       db.session.commit()            # persists the throttled last_used_at
+   except AuthenticationFailed as failure:
+       db.session.rollback()
+       security_logger.log_api_token_auth_failed(failure.reason, failure.token_prefix)
+       ...                            # answer 401 with failure.message, nothing else
+   except SQLAlchemyError:
+       db.session.rollback()          # lookup, throttled flush or commit failed
+       ...                            # answer 503/500; never reuse a broken session
    ```
 
-   Never pass broader scopes than the token grants. The `mcp` channel cannot
-   delete, whatever the role.
+   `failure.reason` is an `errors.AuthFailure` member (`MALFORMED`,
+   `UNKNOWN_PREFIX`, `BAD_SECRET`, `REVOKED`, `EXPIRED`, `USER_MISSING`);
+   it is for the log only. `api_tokens.status(token, now)` returns
+   `active`, `expired` or `revoked` and is the single validity rule.
+
+   The actor has channel `mcp`, the owner's current role and the token scopes.
+   Never widen the scopes. The `mcp` channel cannot delete, whatever the role,
+   and can never manage tokens.
 3. Own the transaction around each tool call:
 
    ```python
@@ -141,3 +162,35 @@ A client is treated as JSON when the body is JSON or it prefers
 5. Never write audited models through the session directly; call a service, or
    add one (copy `nonconformities.py` or declare a `crud.Spec`) together with
    a policy entry for the new resource.
+
+## API tokens
+
+`app/services/api_tokens.py` issues and verifies the credentials an agent
+adapter uses. It stays framework-free: the adapter passes `secret_key`
+(the application's `SECRET_KEY`) explicitly, owns the commit and writes the
+security log.
+
+- **Format.** `iso_<8 hex prefix>_<43-char URL-safe secret>` (256 bits). The
+  prefix identifies the row and is safe to show and log; the plaintext is
+  returned once by `issue(...)` and cannot be recovered.
+- **Storage.** Only `HMAC-SHA256(key, token)` is kept, where `key` is derived
+  from `SECRET_KEY` with a fixed domain label; it is compared with
+  `hmac.compare_digest`. Rotating `SECRET_KEY` therefore invalidates every
+  token: issue new ones afterwards.
+- **Scopes.** `read` and `write`, stored sorted (default `read`). They only
+  narrow the owner's role through the policy.
+- **Expiry and revocation.** A token expires after 90 days by default (1 to
+  365 days; a token is rejected from `expires_at` onwards). `revoke` takes effect on the next
+  call. `last_used_at` is updated at most once every five minutes.
+- **Authentication.** `authenticate(session, raw, secret_key=...)` returns the
+  `Actor(channel="mcp", ...)` with the owner's *current* role. Malformed,
+  unknown, tampered, expired and revoked tokens, and tokens whose owner was
+  deleted, all raise `AuthenticationFailed` with one generic message.
+  `failure.reason` and `failure.token_prefix` exist only for the security log
+  (`log_api_token_auth_failed`) and must never be sent to the client.
+- **Management.** Only an administrator on a non-`mcp` channel may `issue`,
+  `list_` and `revoke`; the Flask CLI (`create-api-token`, `list-api-tokens`,
+  `revoke-api-token`) acts as `Actor(channel="cli")`. Issue and revoke write
+  an audit row (never the secret or the hash) and a security-log event.
+  `ApiToken` is deliberately outside `AUDITED_MODELS`, because
+  `last_used_at` changes without an audit row.

@@ -13,7 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import generate_password_hash
 
 from .extensions import db
-from .models import ApiToken, RoleEnum, User
+from .models import RoleEnum, User
 from .services import api_tokens
 from .services.actor import Actor
 from .services.errors import Conflict, DomainError, NotFound
@@ -128,15 +128,6 @@ def _find_user(username: str) -> User:
     return user
 
 
-def _token_status(token: ApiToken, now: datetime) -> str:
-    if token.revoked_at is not None:
-        return "revoked"
-    expires = token.expires_at
-    if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
-    return "expired" if expires <= now else "active"
-
-
 def _day(value: datetime | None) -> str:
     return "-" if value is None else value.strftime("%Y-%m-%d")
 
@@ -155,11 +146,16 @@ def _day(value: datetime | None) -> str:
 @with_appcontext
 def create_api_token(username: str, name: str, scopes: tuple[str, ...], days: int) -> None:
     """Issue an API token for a user and print it once."""
+    secret_key = current_app.config.get("SECRET_KEY")
+    if not secret_key:
+        raise click.ClickException(
+            "SECRET_KEY is not configured; API tokens cannot be issued without it."
+        )
     user = _find_user(username)
     actor = _cli_actor()
     try:
         plaintext, token = api_tokens.issue(
-            db.session, actor, secret_key=current_app.config["SECRET_KEY"],
+            db.session, actor, secret_key=secret_key,
             user_id=user.id, name=name, scopes=scopes or api_tokens.DEFAULT_SCOPES,
             days=days,
         )
@@ -201,7 +197,7 @@ def list_api_tokens(username: str | None) -> None:
     for t in tokens:
         click.echo(
             f"{t.id:>4}  {t.prefix:<8}  {owners.get(t.user_id, '?'):<15.15}  {t.name:<20.20}  "
-            f"{t.scopes:<10}  {_token_status(t, now):<8}  {_day(t.expires_at):<10}  "
+            f"{t.scopes:<10}  {api_tokens.status(t, now):<8}  {_day(t.expires_at):<10}  "
             f"{_day(t.last_used_at)}"
         )
 
