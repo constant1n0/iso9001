@@ -203,6 +203,13 @@ class AuditRoutesTestCase(unittest.TestCase):
         self.assertIn("Area10", second)
         self.assertIn("Area11", second)
 
+    def test_out_of_range_pages_answer_200_instead_of_overflowing(self) -> None:
+        self.seed()
+        self.login()
+        for query in ("page=0", "page=-4", "page=abc", "page=" + "9" * 40):
+            with self.subTest(query=query):
+                self.assertEqual(200, self.client.get(f"{BASE}/?{query}").status_code)
+
     # -- empty form values --------------------------------------------------
 
     def test_unchanged_edit_writes_no_audit_row_and_keeps_stamps(self) -> None:

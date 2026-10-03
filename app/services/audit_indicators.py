@@ -15,8 +15,8 @@
 
 """Audit indicators (``AuditoriaIndicador``) on the generic CRUD helper (JSON register).
 
-``fecha_auditoria`` is optional and accepts a ``datetime`` or an ISO 8601 string;
-when absent the column default sets it on create.
+``fecha_auditoria`` accepts a ``datetime`` or an ISO 8601 string (an explicit
+``null`` is a validation error); when absent the column default sets it on create.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ SPEC = crud.Spec(
     not_found="Auditoría e indicador no encontrado.",
     fields=(
         crud.Field("area_auditoria", partial(fields.text, required=True, max_length=AREA_MAX), required=True),
-        crud.Field("fecha_auditoria", fields.optional_datetime),
+        crud.Field("fecha_auditoria", partial(fields.optional_datetime, nullable=False)),
         crud.Field("resultado", partial(fields.text, strip=False)),
         crud.Field("accion_correctiva", partial(fields.text, strip=False)),
         crud.Field("indicador_desempeno", partial(fields.text, strip=False)),

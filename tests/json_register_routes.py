@@ -123,3 +123,32 @@ class JsonRegisterContract:
         self.assertEqual(self.UPDATE[self.UPDATED_KEY], self._rows()[0][self.UPDATED_KEY])
         self.client.delete(f"{self.BASE}{self._rows()[0][self.PK]}")
         self.assertEqual(len(keys) - 1, len(self._rows()))
+
+    def test_out_of_range_paging_gives_200_with_sane_bounds(self) -> None:
+        self.login()
+        for payload in self.PAGE_VALUES:
+            self.assertEqual(201, self._post(payload).status_code)
+        total = len(self.PAGE_VALUES)
+        for query in ("page=0", "page=-3", "page=abc", "page=1.5", "page=" + "9" * 40,
+                      "per_page=0", "per_page=-1", "per_page=abc", "per_page=" + "9" * 40,
+                      "page=0&per_page=0", "page=" + "9" * 40 + "&per_page=" + "9" * 40):
+            with self.subTest(query=query):
+                response = self.client.get(f"{self.BASE}?{query}")
+                self.assertEqual(200, response.status_code)
+                self.assertLessEqual(len(response.get_json()), total)
+        # A page below 1 is the first page; a page past the end is simply empty.
+        self.assertEqual(self._rows(), self.client.get(f"{self.BASE}?page=-3").get_json())
+        self.assertEqual([], self.client.get(f"{self.BASE}?page=" + "9" * 40).get_json())
+
+    def test_page_size_is_clamped_to_the_documented_maximum(self) -> None:
+        from unittest.mock import patch
+
+        from app.services import crud
+
+        self.assertEqual(100, crud.MAX_PER_PAGE)
+        self.login()
+        for payload in self.PAGE_VALUES:
+            self.assertEqual(201, self._post(payload).status_code)
+        with patch.object(crud, "MAX_PER_PAGE", 2):
+            rows = self.client.get(f"{self.BASE}?per_page=50").get_json()
+        self.assertEqual(2, len(rows))

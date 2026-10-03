@@ -40,6 +40,17 @@ from .errors import Conflict, NotFound, ValidationError
 from .policy import Action, Resource
 
 DEFAULT_PER_PAGE = 20
+MAX_PER_PAGE = 100  # largest page a caller can request; bigger sizes are clamped
+MAX_PAGE = 100_000  # keeps the offset far below the database integer range
+
+
+def page_bounds(page: int, per_page: int, *, default_per_page: int = DEFAULT_PER_PAGE) -> tuple[int, int]:
+    """Sane ``(page, per_page)``: page within 1..MAX_PAGE, size 1..MAX_PER_PAGE.
+
+    A size below 1 falls back to ``default_per_page``; a larger one is clamped.
+    """
+    per_page = min(per_page if per_page >= 1 else default_per_page, MAX_PER_PAGE)
+    return min(max(page, 1), MAX_PAGE), per_page
 
 
 @dataclass(frozen=True)
@@ -94,10 +105,9 @@ def list_(spec: Spec, session: Session, actor: Actor,
 
 def list_page(spec: Spec, session: Session, actor: Actor, where: Sequence[Any] = (),
               *, page: int = 1, per_page: int = DEFAULT_PER_PAGE) -> tuple[list[Any], int]:
-    """One page plus the total matching; a page below 1 is 1, a size below 1 is the default."""
+    """One page plus the total matching; see ``page_bounds`` for how paging is bounded."""
     policy.require(actor, Action.READ, spec.resource)
-    page = max(page, 1)
-    per_page = per_page if per_page >= 1 else DEFAULT_PER_PAGE
+    page, per_page = page_bounds(page, per_page)
     total = session.scalar(select(func.count()).select_from(spec.model).where(*where))
     query = (
         select(spec.model).where(*where).order_by(*spec.order_by)

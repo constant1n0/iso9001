@@ -50,6 +50,25 @@ class IndicatorRoutesTestCase(JsonRegisterContract, RegisterRoutesBase):
         self.assertTrue(body["fecha_auditoria"])
         self.assertEqual("2026-10-05T09:30:00", self._post(self.CREATE).get_json()["fecha_auditoria"])
 
+    def test_an_explicit_null_date_is_a_clean_422_and_leaves_the_row_untouched(self) -> None:
+        self.login()
+        response = self._post({"area_auditoria": "Calidad", "fecha_auditoria": None})
+        self.assertEqual(422, response.status_code)
+        self.assertIn("fecha_auditoria", response.get_json()["error"])
+        self.assertEqual(0, self.count(AuditoriaIndicador))
+        record_id = self._post(self.CREATE).get_json()["id_auditoria"]
+        response = self.client.put(f"{self.BASE}{record_id}", json={"fecha_auditoria": None})
+        self.assertEqual(422, response.status_code)
+        self.assertEqual("2026-10-05T09:30:00", self._rows()[0]["fecha_auditoria"])
+
+    def test_utc_suffixes_are_stored_as_the_same_naive_utc_instant(self) -> None:
+        self.login()
+        for text in ("2026-10-05T09:30:00Z", "2026-10-05T09:30:00+00:00", "2026-10-05T11:30:00+02:00"):
+            with self.subTest(text=text):
+                response = self._post({"area_auditoria": "Calidad", "fecha_auditoria": text})
+                self.assertEqual(201, response.status_code)
+                self.assertEqual("2026-10-05T09:30:00", response.get_json()["fecha_auditoria"])
+
 
 if __name__ == "__main__":
     unittest.main()
