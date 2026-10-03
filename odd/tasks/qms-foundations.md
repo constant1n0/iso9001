@@ -105,7 +105,7 @@ Forecasts count authored additions plus deletions. Route for every task: **deleg
 - [x] **QF-7 — Generic CRUD helper and HTML registers.**
   - Also: normalise empty optional text to `None` in `app/services/fields.py` so an unchanged edit writes no audit row, and pin with a route test that an empty audit `estado` cannot pass the form (review suggestion R3-audit-form-empty-values). Training, satisfaction surveys, stakeholders and improvements (HTML). Forecast 350-400.
 - [x] **QF-8 — JSON API and JSON registers through services.** Improvements JSON API and the five JSON registers; characterization tests first; `IntegrityError` → 409; drop the JSON GET cache (D11). Forecast 350-400.
-- [ ] **QF-9 — Permission deltas (D1), `can()` in templates, guard test, docs.** Forecast 200-300.
+- [x] **QF-9 — Permission deltas (D1), `can()` in templates, guard test, docs.** Forecast 200-300.
   - Acceptance: the matrix above holds for web requests; navigation follows the policy; a guard test fails if a route writes audited models through `db.session` directly; README or docs describe the service layer and the audit log.
 
 **Total forecast:** about 2,450-3,050 authored changed lines, above the 400-line review budget, so delivery is chained.
@@ -129,7 +129,43 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 - Strategy: `auto-chain`, chain strategy `stacked-to-main`: each pull request targets the previous slice branch, the first targets `main`.
 - Slice boundaries and the commits each pull request holds are recorded here as they are created.
 - Running count: `288558e` 363 lines (documentation), `55c22a9` 93, `ada3b81` about 282, `3a74697` about 276, `89b1f31` 320.
-- Slice plan: PR 1 = `288558e` ([#20](https://github.com/constant1n0/iso9001/pull/20), merged `ea5b91b`); PR 2 = `55c22a9` + `ada3b81` ([#21](https://github.com/constant1n0/iso9001/pull/21), merged `38f7646`); PR 3 = `3a74697` ([#22](https://github.com/constant1n0/iso9001/pull/22), merged `01cb6a6`); PR 4 = `89b1f31` + `9d4f877` ([#23](https://github.com/constant1n0/iso9001/pull/23), merged `ddf9e63`); PR 5 = `9559f5d` ([#24](https://github.com/constant1n0/iso9001/pull/24)); PR 6 = `aa12c2f`; PR 5 merged `72949cf`; PR 6 = `aa12c2f` ([#25](https://github.com/constant1n0/iso9001/pull/25), merged `0cc95e6`); PR 7 = `1e385cf` + `50a177f` ([#26](https://github.com/constant1n0/iso9001/pull/26), merged `3e15991`); PR 8 = `316a90b` ([#27](https://github.com/constant1n0/iso9001/pull/27), merged `21c42bf`); PR 9 = `478b16b` + `56b792e` ([#28](https://github.com/constant1n0/iso9001/pull/28), merged `3275856`); PR 10 = `db3ffa9` ([#29](https://github.com/constant1n0/iso9001/pull/29), merged `f0133fa`); PR 11 = `ca67da2` ([#30](https://github.com/constant1n0/iso9001/pull/30), merged `f3ca09e`); PR 12 = `2bc7b38` ([#31](https://github.com/constant1n0/iso9001/pull/31), merged `56d2562`); PR 13 = `26394a0` + `bd1aee8` ([#32](https://github.com/constant1n0/iso9001/pull/32), merged `ad51f70`); PR 14 = `566c3ee` ([#33](https://github.com/constant1n0/iso9001/pull/33), merged `3b09af3`); PR 15 = `f63e98b` ([#34](https://github.com/constant1n0/iso9001/pull/34), merged `be95ef0`); PR 16 = `8e205ad` ([#35](https://github.com/constant1n0/iso9001/pull/35), merged `a28d472`); PR 17 = `6a68070` ([#36](https://github.com/constant1n0/iso9001/pull/36), merged `af22527`); PR 18 = `9d3c637` ([#37](https://github.com/constant1n0/iso9001/pull/37), merged `dd2a980`); PR 19 = `bd9d5b6`; PR 20 = `f47a638` (459 lines, see findings); PR 21 = `5ee77e0`; PR 22 = `1080733`; PR 23 = `21e62c2`; PR 24 = `9e8c835` + this tracker update. Each is opened after the previous one merges, then rebased on `main` by merging `main` into the feature branch.
+- Delivery chain (each pull request opened after the previous merged; `main` merged into each slice branch to satisfy strict protection, tree identical to the slice tip):
+
+| Slice | Pull request | Commits | Merged as | Note |
+|---|---|---|---|---|
+| 1 | [#20](https://github.com/constant1n0/iso9001/pull/20) | `288558e` | `ea5b91b` |  |
+| 2 | [#21](https://github.com/constant1n0/iso9001/pull/21) | `55c22a9`, `ada3b81` | `38f7646` |  |
+| 3 | [#22](https://github.com/constant1n0/iso9001/pull/22) | `3a74697` | `01cb6a6` |  |
+| 4 | [#23](https://github.com/constant1n0/iso9001/pull/23) | `89b1f31`, `9d4f877` | `ddf9e63` |  |
+| 5 | [#24](https://github.com/constant1n0/iso9001/pull/24) | `9559f5d` | `72949cf` |  |
+| 6 | [#25](https://github.com/constant1n0/iso9001/pull/25) | `aa12c2f` | `0cc95e6` |  |
+| 7 | [#26](https://github.com/constant1n0/iso9001/pull/26) | `1e385cf`, `50a177f` | `3e15991` |  |
+| 8 | [#27](https://github.com/constant1n0/iso9001/pull/27) | `316a90b` | `21c42bf` |  |
+| 9 | [#28](https://github.com/constant1n0/iso9001/pull/28) | `478b16b`, `56b792e` | `3275856` |  |
+| 10 | [#29](https://github.com/constant1n0/iso9001/pull/29) | `db3ffa9` | `f0133fa` |  |
+| 11 | [#30](https://github.com/constant1n0/iso9001/pull/30) | `ca67da2` | `f3ca09e` |  |
+| 12 | [#31](https://github.com/constant1n0/iso9001/pull/31) | `2bc7b38` | `56d2562` |  |
+| 13 | [#32](https://github.com/constant1n0/iso9001/pull/32) | `26394a0`, `bd1aee8` | `ad51f70` |  |
+| 14 | [#33](https://github.com/constant1n0/iso9001/pull/33) | `566c3ee` | `3b09af3` |  |
+| 15 | [#34](https://github.com/constant1n0/iso9001/pull/34) | `f63e98b` | `be95ef0` |  |
+| 16 | [#35](https://github.com/constant1n0/iso9001/pull/35) | `8e205ad` | `a28d472` |  |
+| 17 | [#36](https://github.com/constant1n0/iso9001/pull/36) | `6a68070` | `af22527` |  |
+| 18 | [#37](https://github.com/constant1n0/iso9001/pull/37) | `9d3c637` | `dd2a980` |  |
+| 19 | [#38](https://github.com/constant1n0/iso9001/pull/38) | `bd9d5b6` | `6db4bd9` |  |
+| 20 | [#39](https://github.com/constant1n0/iso9001/pull/39) | `f47a638` | `87bdc88` | size:exception (459) |
+| 21 | [#40](https://github.com/constant1n0/iso9001/pull/40) | `5ee77e0` | `dd1a642` |  |
+| 22 | [#41](https://github.com/constant1n0/iso9001/pull/41) | `1080733` | `71d4d21` |  |
+| 23 | [#42](https://github.com/constant1n0/iso9001/pull/42) | `21e62c2` | `7afb9e1` |  |
+| 24 | [#43](https://github.com/constant1n0/iso9001/pull/43) | `9e8c835`, `8b65547`, `7d5c894` | `caa9bd6` |  |
+| 25 | [#44](https://github.com/constant1n0/iso9001/pull/44) | `7f02002` | `ede357f` |  |
+| 26 | [#45](https://github.com/constant1n0/iso9001/pull/45) | `4917f07` | `dcfc36e` |  |
+| 27 | [#46](https://github.com/constant1n0/iso9001/pull/46) | `bcc71d9` | `c3572ec` |  |
+| 28 | [#47](https://github.com/constant1n0/iso9001/pull/47) | `02a47fb` | `899ca29` |  |
+| 29 | [#48](https://github.com/constant1n0/iso9001/pull/48) | `1611515`, `a1f731b` | `48fbf24` |  |
+| 30 | [#49](https://github.com/constant1n0/iso9001/pull/49) | `d41351e` | `aa7eee5` |  |
+| 31 | [#50](https://github.com/constant1n0/iso9001/pull/50) | `b6e310d` | `342f1c7` |  |
+| 32 | [#51](https://github.com/constant1n0/iso9001/pull/51) | `80c40ac` | `becf4c9` | size:exception (409) |
+| 33 | Pending | `12fc7cc`, `93348fc`, closing tracker update | — | Final slice |
 
 ## Findings during implementation
 
@@ -143,6 +179,8 @@ Recorded by QF-2 characterization; encoded as-is and fixed by the task named.
 - **Register behaviour** (QF-7): blank optional text is stored as NULL (an unchanged edit writes no audit row); invalid training date filters are ignored; a duplicate stakeholder `nombre` raises `Conflict` with a Spanish message (before: 500); the improvements list is ordered by id; Mejora HTML and JSON handlers are separate, so the JSON API stays for QF-8.
 - **JSON contract** (QF-8): POST 201 and PUT 200 return the schema `dump` (same keys as GET); DELETE keeps its status and body; unknown fields and non-object bodies give 422 (incl. `fecha_implementacion` on `/mejoras/api/`, which is not writable); duplicates 409; JSON clients get `{"error": ...}`; a bodiless DELETE 404 without `Accept: application/json` keeps `{"message": "Recurso no encontrado"}`. `AuditoriaIndicador.fecha_auditoria` accepts a datetime or ISO string, stored as naive UTC. JSON endpoint names now come from shared handlers (nothing referenced the old names).
 - **Cache removed** (QF-8, D11): `Flask-Caching` was used only by the six JSON GET routes; the extension, `CACHE_*` config and the `Flask-Caching`/`cachelib` pins are gone. Existing deployments keep the packages installed until their environment is rebuilt; nothing imports them.
+- **Permission changes delivered** (QF-9, D1): AUDITOR loses delete on audits, improvements, surveys, training, stakeholders and JSON registers; OPERATIVO loses delete on improvements, surveys, training and stakeholders, and create/update/delete on the five JSON registers. Controls the role cannot use are hidden via `can()`. Denied HTML requests flash and redirect to the dashboard; JSON requests get 403 `{"error": ...}`. Users and audit log exist in the policy (read ADMIN+AUDITOR, write ADMIN, no delete) without routes yet.
+- **Paging bounds** (QF-9): `page` is clamped to 1..100000 and `per_page` to at most 100 (below 1 falls back to the default) for JSON lists and the HTML audit list; an explicit `null` `fecha_auditoria` is a 422.
 - **CRUD helper size** (QF-7): `f47a638` is 459 lines; `training.py` binds the helper's write functions at import, so a read-only first half would not import. One honest slicing pass found no cohesive split; its pull request needs a maintainer `size:exception` or must stay a single over-budget slice.
 - **Audit and document behaviour** (QF-6): invalid audit date filters are ignored (before, SQLite compared strings and PostgreSQL could error); the paginated audit list is ordered by `id` (it had no ordering); a duplicate document `code` raises `Conflict` with a Spanish message; `Document.signature` is not writable.
 - **No routes exist for users or the audit log**, so those resources enter the policy when their adapters exist.
@@ -166,7 +204,14 @@ Recorded by QF-2 characterization; encoded as-is and fixed by the task named.
 | QF-6 | Done | `bd1aee8` (audit queries), `566c3ee` (audit commands + shared `app/services/fields.py`), `f63e98b` (audit routes), `8e205ad` (document queries), `6a68070` (document commands), then document routes in the commit that records this row | RED: `ImportError` for `app.services.audits` (26 tests) and `app.services.documents` (27); audit routes 8 failures + 2 errors and document routes 6 failures under the flush guard. GREEN: 182 / 203 / 214 / 218 / 241 tests at the five commits and 250 after document routes, incl. PostgreSQL | Range `2bc7b38..9d3c637` (QF-5 review fixes + QF-6): medium, `slice_budget_reached`; consent granted; review `review-396532a33f7e0e8d` **approved** and acknowledged; boundary advanced to `9d3c637`; one suggestion moved to QF-7 |
 | QF-7 | Done | `bd9d5b6` (blank optional text → NULL), `f47a638` (spec-driven CRUD helper + training register), `5ee77e0` (training routes + shared `web_args.date_arg`), `1080733` (surveys), `21e62c2` (stakeholders), `9e8c835` (improvements HTML) | RED: 9 failures for blank optional text and an unchanged audit edit writing an audit row; `ModuleNotFoundError` for `app.services.training` (30 errors); route tests failing under the flush guard. GREEN: 258 / 275 / 281 / 288 / 296 / 303 tests at the six commits, incl. PostgreSQL | Range `9d3c637..8b65547` (QF-7): medium, `slice_budget_reached`; consent granted; review `review-d13891dd64311f23` **approved** and acknowledged; boundary advanced to `8b65547`; its suggestion (positive date-filter assertion) added in the commit that records this note. `Capacitacion.fecha` is a `Date` column, so the direct equality filter is correct |
 | QF-8 | Done | `7f02002` (roles service), `4917f07` (roles JSON API + shared `app/routes/json_register.py`), `bcc71d9` (risks/opportunities + training resources), `02a47fb` (process operations + audit indicators), `1611515` (improvements JSON API + JSON GET cache removed) | RED: import errors for each new service; JSON route tests got 500 for create/update/conflict/validation and `{"message": ...}` 404 bodies; cache still present. GREEN: 307 / 315 / 334 / 356 / 366 tests at the five commits, incl. PostgreSQL | Pending assessment |
+| QF-9 | Done | `d41351e` (QF-8 review fixes: paging bounds, explicit null indicator date), `b6e310d` (policy route guards `require_permission` + `can()` in templates; `role_required` removed; behaviour-neutral), `80c40ac` (approved permission matrix, D1/D2/D3), `12fc7cc` (route write guard test + `docs/architecture/services.md`) | RED: `OverflowError` on huge paging (500), explicit null date silently defaulted, `ModuleNotFoundError: app.utils.permissions`, ~60 characterization subtests and 9 delete-form UI assertions failing against the new matrix, write-guard test failing on crafted samples. GREEN: 381 / 387 / 398 / 403 tests at the four commits, incl. PostgreSQL; the unchanged characterization suite proves `b6e310d` is behaviour-neutral | Range `a1f731b..12fc7cc`: medium, `slice_budget_reached`; consent granted; review `review-bff75dbf196c317a` **approved with no findings** and acknowledged; boundary advanced to `12fc7cc` |
 
 ## Next step
 
-Review QF-8, deliver PR 25-28, and implement QF-9 (permission deltas D1, `can()` in templates, guard test, docs).
+**Feature complete.** All nine tasks are done, every work unit passed the full suite on its own, and seven receipt-driven reviews were approved and acknowledged. Once slice 33 merges, every web and JSON write goes through an audited, stamped service governed by one policy.
+
+Next changes, in order:
+1. `api-tokens`: hashed, revocable per-user API tokens that build `Actor(channel="mcp", scopes=...)` (decision D7).
+2. `mcp-server`: the MCP server as a separate ASGI process over the service layer (see `docs/architecture/services.md`).
+3. `qms-people` (D4/D5) and the Wave 1 modules from `docs/iso-9001-gap-analysis.md`.
+4. Small direct fixes still open from the gap analysis: the monthly report counts all-time totals; the dashboard satisfaction chart mixes years.
