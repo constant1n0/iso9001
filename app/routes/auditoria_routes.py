@@ -13,7 +13,6 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from datetime import date
 from math import ceil
 
 from flask import Blueprint, current_app, render_template, redirect, url_for, flash, request
@@ -25,6 +24,7 @@ from ..services import audits
 from ..utils.decorators import role_required
 from ..utils.pdf import pdf_response, render_pdf
 from ..utils.web_actor import current_actor
+from ..utils.web_args import date_arg
 
 bp = Blueprint('auditoria', __name__, url_prefix='/auditorias')
 
@@ -34,14 +34,6 @@ FORM_FIELDS = ('area_auditada', 'fecha', 'auditor', 'resultado', 'accion_correct
 def _form_data(form):
     """Whitelisted service payload taken from a validated form."""
     return {name: getattr(form, name).data for name in FORM_FIELDS}
-
-
-def _date_arg(name):
-    """Query-string date, or None when absent or malformed."""
-    try:
-        return date.fromisoformat(request.args.get(name, ''))
-    except ValueError:
-        return None
 
 
 def _estado_arg():
@@ -69,8 +61,8 @@ def listar_auditorias():
         area=request.args.get('area'),
         auditor=request.args.get('auditor'),
         estado=_estado_arg(),
-        fecha_inicio=_date_arg('fecha_inicio'),
-        fecha_fin=_date_arg('fecha_fin'),
+        fecha_inicio=date_arg('fecha_inicio'),
+        fecha_fin=date_arg('fecha_fin'),
         page=page,
         per_page=per_page,
     )
