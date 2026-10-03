@@ -37,7 +37,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import NoConformidad
-from . import audit, policy
+from . import audit, fields, policy
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
 from .errors import Conflict, NotFound, ValidationError
@@ -99,23 +99,6 @@ WRITABLE_FIELDS = frozenset(
 RESPONSABLE_MAX = 50  # mirrors NoConformidad.responsable and the web form
 
 
-def _text(data: Mapping[str, Any], key: str, *, required: bool = False,
-          max_length: int | None = None, strip: bool = True) -> Any:
-    value = data[key]
-    if value is None and not required:
-        return None
-    if not isinstance(value, str):
-        raise ValidationError(f"El campo «{key}» debe ser texto.")
-    value = value.strip() if strip else value
-    if required and not value:
-        raise ValidationError(f"El campo «{key}» es obligatorio.")
-    if max_length is not None and len(value) > max_length:
-        raise ValidationError(
-            f"El campo «{key}» admite como máximo {max_length} caracteres."
-        )
-    return value
-
-
 def _clean(data: Mapping[str, Any], current_estado: str | None = None) -> dict[str, Any]:
     """Validate the keys present in ``data`` and return the normalized values."""
     unknown = sorted(set(data) - WRITABLE_FIELDS)
@@ -123,16 +106,16 @@ def _clean(data: Mapping[str, Any], current_estado: str | None = None) -> dict[s
         raise ValidationError(f"Campos no permitidos: {', '.join(unknown)}.")
     clean: dict[str, Any] = {}
     if "descripcion" in data:
-        clean["descripcion"] = _text(data, "descripcion", required=True)
+        clean["descripcion"] = fields.text(data, "descripcion", required=True)
     if "fecha_detectada" in data:
         value = data["fecha_detectada"]
         if not isinstance(value, date) or isinstance(value, datetime):
             raise ValidationError("La fecha detectada es obligatoria y debe ser una fecha.")
         clean["fecha_detectada"] = value
     if "responsable" in data:
-        clean["responsable"] = _text(data, "responsable", max_length=RESPONSABLE_MAX)
+        clean["responsable"] = fields.text(data, "responsable", max_length=RESPONSABLE_MAX)
     if "accion_correctiva" in data:
-        clean["accion_correctiva"] = _text(data, "accion_correctiva", strip=False)
+        clean["accion_correctiva"] = fields.text(data, "accion_correctiva", strip=False)
     if "estado" in data:
         estado = data["estado"]
         if estado is None or (

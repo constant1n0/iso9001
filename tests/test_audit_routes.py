@@ -203,6 +203,34 @@ class AuditRoutesTestCase(unittest.TestCase):
         self.assertIn("Area10", second)
         self.assertIn("Area11", second)
 
+    # -- empty form values --------------------------------------------------
+
+    def test_unchanged_edit_writes_no_audit_row_and_keeps_stamps(self) -> None:
+        audit_id = self.seed(area_auditada="Compras", fecha=date(2026, 10, 5),
+                             auditor="Luis", resultado="Sin hallazgos")
+        self.login(RoleEnum.ADMINISTRADOR)
+        with self.app.app_context():
+            before = db.session.get(Auditoria, audit_id).updated_at
+        response = self.client.post(f"{BASE}/editar/{audit_id}", data=FORM)
+        self.assertEqual(302, response.status_code)
+        self.assertEqual(["create"], [r[0] for r in self.rows()])
+        with self.app.app_context():
+            found = db.session.get(Auditoria, audit_id)
+            self.assertEqual(before, found.updated_at)
+            self.assertIsNone(found.accion_correctiva)
+
+    def test_an_empty_estado_cannot_pass_the_form(self) -> None:
+        audit_id = self.seed()
+        self.login()
+        for url in (f"{BASE}/nueva", f"{BASE}/editar/{audit_id}"):
+            with self.subTest(url=url):
+                response = self.client.post(url, data=FORM | {"estado": ""})
+                self.assertEqual(200, response.status_code)  # form re-rendered
+        with self.app.app_context():
+            self.assertEqual(1, Auditoria.query.count())
+            self.assertEqual(EstadoAuditoriaEnum.PENDIENTE, db.session.get(Auditoria, audit_id).estado)
+        self.assertEqual(["create"], [r[0] for r in self.rows()])
+
     # -- domain errors -----------------------------------------------------
 
     def test_missing_records_answer_404_as_before(self) -> None:
