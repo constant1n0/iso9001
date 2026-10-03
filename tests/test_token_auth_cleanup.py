@@ -21,13 +21,14 @@ def imported_modules(path: Path) -> set[str]:
 
 
 class DependencyCleanupTestCase(unittest.TestCase):
-    def test_requirements_do_not_list_the_jwt_packages(self) -> None:
+    def test_requirements_do_not_list_flask_jwt_extended(self) -> None:
+        # PyJWT stays in the freeze only as a transitive dependency of ``mcp``.
         names = {
             line.split("==")[0].strip().lower().replace("_", "-")
             for line in (ROOT / "requirements.txt").read_text().splitlines()
             if line.strip() and not line.startswith("#")
         }
-        self.assertFalse(names & {"flask-jwt-extended", "pyjwt"})
+        self.assertNotIn("flask-jwt-extended", names)
 
     def test_nothing_imports_the_jwt_packages(self) -> None:
         sources = [
