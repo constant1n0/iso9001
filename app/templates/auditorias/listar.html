@@ -26,7 +26,9 @@
         <h1>Auditorías</h1>
     </div>
     <div class="page-header__actions">
+        {% if can('create', 'audits') %}
         <a class="btn btn--primary" href="{{ url_for('auditoria.nueva_auditoria') }}">+ Nueva auditoría</a>
+        {% endif %}
     </div>
 </header>
 
@@ -79,13 +81,17 @@
                 <td>{{ auditoria.resultado | truncate(80) }}</td>
                 <td>
                     <div class="table__actions">
+                        {% if can('update', 'audits') %}
                         <a class="btn btn--sm" href="{{ url_for('auditoria.editar_auditoria', id=auditoria.id) }}">Editar</a>
+                        {% endif %}
                         <a class="btn btn--sm" href="{{ url_for('auditoria.exportar_pdf', id=auditoria.id) }}" target="_blank" rel="noopener">PDF</a>
+                        {% if can('delete', 'audits') %}
                         <form class="inline-form" action="{{ url_for('auditoria.eliminar_auditoria', id=auditoria.id) }}" method="post"
                               data-confirm="¿Eliminar la auditoría de {{ auditoria.area_auditada }}?">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn--sm btn--danger">Eliminar</button>
                         </form>
+                        {% endif %}
                     </div>
                 </td>
             </tr>

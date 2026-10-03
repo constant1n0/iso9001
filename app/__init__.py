@@ -41,6 +41,7 @@ from .routes import (
     document_routes
 )
 from .utils.error_handlers import register_error_handlers
+from .utils.permissions import can
 from .utils.security_logger import init_security_logging
 
 
@@ -98,6 +99,9 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
 
     # Registrar manejadores de errores
     register_error_handlers(app)
+
+    # ``can(action, resource)`` in templates follows the same policy as the services.
+    app.add_template_global(can)
 
     @app.context_processor
     def inject_current_year():

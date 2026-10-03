@@ -19,6 +19,7 @@ from ..extensions import db
 from ..services import satisfaction
 from flask_login import login_required
 from ..utils.pdf import pdf_response, render_pdf
+from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
 
 bp = Blueprint('satisfaccion_cliente', __name__, url_prefix='/satisfaccion_cliente')
@@ -58,6 +59,7 @@ def listar_encuestas():
 
 @bp.route('/nueva', methods=['GET', 'POST'])
 @login_required
+@require_permission('create', 'customer_satisfaction')
 def nueva_encuesta():
     """
     Muestra el formulario para crear una nueva encuesta de satisfacción y guarda el registro en la base de datos.
@@ -73,6 +75,7 @@ def nueva_encuesta():
 # Ruta para editar una encuesta de satisfacción
 @bp.route('/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
+@require_permission('update', 'customer_satisfaction')
 def editar_encuesta(id):
     """
     Carga el formulario de edición de una encuesta y guarda los cambios en la base de datos.

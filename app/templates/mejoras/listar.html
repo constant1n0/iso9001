@@ -20,7 +20,9 @@
 {% block crumb %}Calidad · Mejoras{% endblock %}
 {% block content %}
 {% call page_header('Cláusula 10.3 · Mejora continua', 'Mejoras') %}
+    {% if can('create', 'improvements') %}
     <a class="btn btn--primary" href="{{ url_for('mejora.nueva_mejora') }}">+ Nueva mejora</a>
+    {% endif %}
 {% endcall %}
 
 {% if mejoras %}
@@ -46,8 +48,12 @@
                 <td class="date">{{ mejora.fecha_implementacion.strftime('%d/%m/%Y') if mejora.fecha_implementacion else '—' }}</td>
                 <td>
                     <div class="table__actions">
+                        {% if can('update', 'improvements') %}
                         <a class="btn btn--sm" href="{{ url_for('mejora.editar_mejora', id=mejora.id_mejora) }}">Editar</a>
+                        {% endif %}
+                        {% if can('delete', 'improvements') %}
                         {{ delete_form(url_for('mejora.eliminar_mejora', id=mejora.id_mejora), '¿Eliminar esta mejora?') }}
+                        {% endif %}
                     </div>
                 </td>
             </tr>

@@ -314,7 +314,7 @@ iso9001/
 │   ├── utils
 │   │   ├── reports.py
 │   │   ├── error_handlers.py
-│   │   ├── decorators.py
+│   │   ├── permissions.py
 │   │   └── __init__.py
 │   ├── templates
 │   │   ├── satisfaccion_cliente

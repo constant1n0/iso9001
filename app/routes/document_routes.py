@@ -19,9 +19,8 @@ from ..forms import DocumentForm
 from ..extensions import db
 from flask_login import login_required
 from ..services import documents
-from ..utils.decorators import role_required
+from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
-from ..models import RoleEnum
 
 bp = Blueprint('document', __name__, url_prefix='/documents')
 
@@ -35,14 +34,14 @@ def _form_data(form):
 
 @bp.route('/', methods=['GET'])
 @login_required
-@role_required(RoleEnum.ADMINISTRADOR)
+@require_permission('read', 'documents')
 def list_documents():
     return render_template('documents/list.html',
                            documents=documents.list_(db.session, current_actor()))
 
 @bp.route('/new', methods=['GET', 'POST'])
 @login_required
-@role_required(RoleEnum.ADMINISTRADOR)
+@require_permission('create', 'documents')
 def new_document():
     form = DocumentForm()
     if form.validate_on_submit():
@@ -54,7 +53,7 @@ def new_document():
 
 @bp.route('/edit/<int:document_id>', methods=['GET', 'POST'])
 @login_required
-@role_required(RoleEnum.ADMINISTRADOR)
+@require_permission('update', 'documents')
 def edit_document(document_id):
     actor = current_actor()
     document = documents.get(db.session, actor, document_id)
@@ -71,7 +70,7 @@ def edit_document(document_id):
 
 @bp.route('/delete/<int:document_id>', methods=['POST'])
 @login_required
-@role_required(RoleEnum.ADMINISTRADOR)
+@require_permission('delete', 'documents')
 def delete_document(document_id):
     documents.delete(db.session, current_actor(), document_id)
     db.session.commit()

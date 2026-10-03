@@ -19,6 +19,7 @@ from ..forms import MejoraForm
 from ..schemas import MejoraSchema
 from ..extensions import db
 from ..services import crud, improvements
+from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
 from .json_register import register_json_api
 
@@ -58,6 +59,7 @@ def listar_mejoras():
 # Crear una nueva mejora (vista HTML)
 @bp.route('/nueva', methods=['GET', 'POST'])
 @login_required
+@require_permission('create', 'improvements')
 def nueva_mejora():
     form = MejoraForm()
     if form.validate_on_submit():
@@ -70,6 +72,7 @@ def nueva_mejora():
 # Editar una mejora
 @bp.route('/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
+@require_permission('update', 'improvements')
 def editar_mejora(id):
     actor = current_actor()
     mejora = improvements.get(db.session, actor, id)
