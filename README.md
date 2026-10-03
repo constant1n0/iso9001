@@ -11,6 +11,7 @@ Este sistema de gestión de calidad ha sido desarrollado en Flask. Utiliza Celer
 - Iniciar la Aplicación
 - Mantenimiento y Supervisión
 - Seguridad
+- Arquitectura
 - Actualizaciones y Despliegue en Producción
 -----
 **Requisitos Previos**
@@ -249,8 +250,13 @@ python -c "import celery_worker as w; w.send_upcoming_audits_alert.delay()"
 **Seguridad**
 
 - **Protección de Claves**: Asegúrate de que el archivo .env nunca se suba al repositorio, ya que contiene credenciales sensibles. Está configurado en .gitignore para evitar que se suba accidentalmente.
-- **Acceso al Dashboard**: Utiliza login\_required y controles de permisos (role\_required) para restringir el acceso a ciertas rutas y asegurar que solo usuarios autorizados puedan ver datos sensibles.
+- **Acceso al Dashboard**: Utiliza login\_required y la política central de permisos (require\_permission) para restringir el acceso a ciertas rutas y asegurar que solo usuarios autorizados puedan ver datos sensibles.
 - **Actualizaciones de Dependencias**: Ejecuta actualizaciones regulares de las dependencias y verifica si hay parches de seguridad disponibles para Flask, Celery, y demás dependencias.
+-----
+**Arquitectura**
+
+Las escrituras pasan por una capa de servicios independiente de Flask (permisos, validación, atribución y registro de auditoría). Consulta [docs/architecture/services.md](docs/architecture/services.md) para el funcionamiento, la matriz de permisos y cómo crear un adaptador nuevo, como el servidor MCP.
+
 -----
 **Actualizaciones y Despliegue en Producción**
 
