@@ -109,11 +109,17 @@ def boolean(data: Mapping[str, Any], key: str) -> bool | None:
     raise ValidationError(f"El campo «{key}» debe ser verdadero o falso.")
 
 
-def optional_datetime(data: Mapping[str, Any], key: str) -> datetime | None:
-    """A ``datetime`` or an ISO 8601 string, stored naive in UTC; ``None`` is allowed."""
+def optional_datetime(data: Mapping[str, Any], key: str, *, nullable: bool = True) -> datetime | None:
+    """A ``datetime`` or an ISO 8601 string, stored naive in UTC.
+
+    ``None`` is returned as is unless ``nullable`` is false, which rejects it.
+    ISO text may end in ``Z`` or carry an offset; both are converted to UTC.
+    """
     value = data[key]
     if value is None:
-        return None
+        if nullable:
+            return None
+        raise ValidationError(f"El campo «{key}» no puede ser nulo.")
     if isinstance(value, str):
         try:
             value = datetime.fromisoformat(value)

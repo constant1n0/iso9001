@@ -30,7 +30,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import Auditoria, EstadoAuditoriaEnum
-from . import audit, fields, policy
+from . import audit, crud, fields, policy
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
 from .errors import Conflict, NotFound
@@ -75,13 +75,14 @@ def list_page(
         conditions.append(Auditoria.fecha >= fecha_inicio)
     if fecha_fin:
         conditions.append(Auditoria.fecha <= fecha_fin)
+    page, per_page = crud.page_bounds(page, per_page, default_per_page=10)
     total = session.scalar(select(func.count()).select_from(Auditoria).where(*conditions))
     query = (
         select(Auditoria)
         .where(*conditions)
         .order_by(Auditoria.id)
         .limit(per_page)
-        .offset((max(page, 1) - 1) * per_page)
+        .offset((page - 1) * per_page)
     )
     return list(session.scalars(query)), total
 
