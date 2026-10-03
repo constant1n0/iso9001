@@ -39,14 +39,15 @@ from .actor import Actor
 ACTIONS = frozenset({"create", "update", "delete"})
 SENSITIVE_MARKERS = ("password", "token", "secret")
 
-# Every domain model is audited except the user table (credentials) and the
-# audit log itself.
+# Every domain model is audited except the user table (credentials), the audit
+# log itself and the API tokens, whose issue and revoke are audited explicitly
+# by ``services.api_tokens`` (``last_used_at`` changes without an audit row).
 AUDITED_MODELS: tuple[type, ...] = tuple(
     sorted(
         (
             mapper.class_
             for mapper in db.Model.registry.mappers
-            if mapper.class_ not in (models.User, AuditLog)
+            if mapper.class_ not in (models.User, AuditLog, models.ApiToken)
         ),
         key=lambda cls: cls.__tablename__,
     )

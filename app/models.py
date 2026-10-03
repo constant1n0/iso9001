@@ -396,3 +396,42 @@ class AuditLog(db.Model):
 
     def __repr__(self):
         return f'<AuditLog {self.action} {self.entity_type}#{self.entity_id}>'
+
+
+class ApiToken(db.Model):
+    """Revocable, expiring bearer token that lets an adapter act as a user.
+
+    Only ``HMAC-SHA256(key, token)`` is stored (``token_hash``); the plaintext
+    exists once, at issue time. The table is deliberately not in the audited
+    registry: ``last_used_at`` changes on authentication without an audit row,
+    so ``services.api_tokens`` audits issue and revoke explicitly.
+    """
+
+    __tablename__ = 'api_tokens'
+    __table_args__ = (
+        db.PrimaryKeyConstraint('id', name='pk_api_tokens'),
+        db.ForeignKeyConstraint(
+            ['user_id'],
+            ['users.id'],
+            name='fk_api_tokens_user_id_users',
+            ondelete='CASCADE',
+        ),
+        db.UniqueConstraint('prefix', name='uq_api_tokens_prefix'),
+        db.Index('ix_api_tokens_user_id', 'user_id'),
+    )
+
+    id = db.Column(db.Integer)
+    user_id = db.Column(db.Integer, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    prefix = db.Column(db.String(8), nullable=False)
+    token_hash = db.Column(db.String(64), nullable=False)
+    scopes = db.Column(db.String(32), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    created_by_label = db.Column(db.String(150), nullable=True)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    revoked_by_label = db.Column(db.String(150), nullable=True)
+    last_used_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    def __repr__(self):
+        return f'<ApiToken {self.prefix} user={self.user_id}>'
