@@ -46,7 +46,7 @@ class TrainingRoutesTestCase(RegisterRoutesBase):
 
     def test_delete_is_audited_and_missing_records_answer_404(self) -> None:
         record_id = self.seed_with(training, SEED)
-        self.login()
+        self.login(RoleEnum.ADMINISTRADOR)  # only administrators delete
         self.assertEqual(302, self.client.post(f"{self.BASE}/eliminar/{record_id}").status_code)
         self.assertIn(("success", "Capacitación eliminada exitosamente"), self.flashes())
         self.assertEqual(0, self.count(Capacitacion))

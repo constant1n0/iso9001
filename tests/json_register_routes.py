@@ -25,6 +25,10 @@ class JsonRegisterContract:
     UNIQUE = None  # (key, value) that collides with SEED, or None
     PAGE_KEY = ""  # a key whose value tells seeded rows apart (listing order)
     PAGE_VALUES = ()  # three create payloads with distinct PAGE_KEY, for pagination
+    OPERATIVO_WRITES = False  # True when every role may create and update the resource
+
+    def login(self, role: RoleEnum = RoleEnum.ADMINISTRADOR) -> None:
+        super().login(role)
 
     def _post(self, payload):
         return self.client.post(self.BASE, json=payload)
@@ -43,7 +47,7 @@ class JsonRegisterContract:
         with self.app.app_context():
             created = self.MODEL.query.one()
             self.assertEqual(getattr(created, self.PK), body[self.PK])
-            self.assertEqual(self.ids[RoleEnum.OPERATIVO], created.created_by_id)
+            self.assertEqual(self.ids[RoleEnum.ADMINISTRADOR], created.created_by_id)
             self.assertIsNotNone(created.created_at)
         self.assertEqual(["create"], self.actions())
 
@@ -58,7 +62,7 @@ class JsonRegisterContract:
         self.assertEqual(["create", "update"], self.actions())
         with self.app.app_context():
             stored = self.MODEL.query.one()
-            self.assertEqual(self.ids[RoleEnum.OPERATIVO], stored.updated_by_id)
+            self.assertEqual(self.ids[RoleEnum.ADMINISTRADOR], stored.updated_by_id)
 
     def test_delete_keeps_its_status_and_body_and_snapshots_the_row(self) -> None:
         record_id = self.seed_with(self.SERVICE, self.SEED)
@@ -152,3 +156,28 @@ class JsonRegisterContract:
         with patch.object(crud, "MAX_PER_PAGE", 2):
             rows = self.client.get(f"{self.BASE}?per_page=50").get_json()
         self.assertEqual(2, len(rows))
+
+    def test_writes_follow_the_matrix_and_leave_no_trace_when_refused(self) -> None:
+        record_id = self.seed_with(self.SERVICE, self.SEED)
+        url = f"{self.BASE}{record_id}"
+        json_accept = {"Accept": "application/json"}
+        self.login(RoleEnum.OPERATIVO)
+        self.assertEqual(200, self.client.get(self.BASE).status_code)  # everyone reads
+        if self.OPERATIVO_WRITES:
+            self.assertEqual(201, self._post(self.CREATE).status_code)
+            self.assertEqual(200, self.client.put(url, json=self.UPDATE).status_code)
+        else:
+            for response in (self._post(self.CREATE), self.client.put(url, json=self.UPDATE)):
+                self.assertEqual(403, response.status_code)
+                self.assertIn("error", response.get_json())
+        refused = self.client.delete(url, headers=json_accept)
+        self.assertEqual((403, True), (refused.status_code, "error" in refused.get_json()))
+        self.login(RoleEnum.AUDITOR)
+        self.assertEqual(403, self.client.delete(url, headers=json_accept).status_code)  # administrators delete
+        self.assertEqual(200, self.client.put(url, json=self.UPDATE).status_code)
+        self.assertEqual(201, self._post(self.CREATE).status_code)
+        self.assertEqual(3 if self.OPERATIVO_WRITES else 2, self.count(self.MODEL))
+        self.assertEqual(
+            ["create", "create", "update", "create"] if self.OPERATIVO_WRITES else ["create", "update", "create"],
+            self.actions(),
+        )

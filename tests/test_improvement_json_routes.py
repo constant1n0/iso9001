@@ -24,6 +24,7 @@ class ImprovementJsonRoutesTestCase(JsonRegisterContract, RegisterRoutesBase):
     SEED = {"no_conformidad": "Hallazgo"}
     BAD = ({"accion_correctiva": "x"}, {"no_conformidad": "  "},
            {"no_conformidad": "Ok", "fecha_implementacion": "2026-10-05T00:00:00"})  # not writable
+    OPERATIVO_WRITES = True
     PAGE_KEY = "no_conformidad"
     PAGE_VALUES = ({"no_conformidad": "Uno"}, {"no_conformidad": "Dos"}, {"no_conformidad": "Tres"})
     test_a_duplicate_answers_409_and_leaves_the_session_usable = None  # no unique column

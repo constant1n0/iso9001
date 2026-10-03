@@ -1,8 +1,8 @@
-"""Characterization of today's HTTP access rules, plus policy consistency.
+"""Characterization of the HTTP access rules, plus policy consistency.
 
-The endpoint table below locks the current behaviour of every blueprint so
-later refactors (services, policy-driven routes) cannot change who may do
-what by accident. ``test_policy_agrees_with_http`` keeps the policy module
+The endpoint table below locks the observed behaviour of every blueprint so
+refactors (services, policy-driven routes) cannot change who may do what by
+accident; the role table is the approved matrix, written by hand. ``test_policy_agrees_with_http`` keeps the policy module
 and the routes from drifting apart.
 """
 
@@ -146,18 +146,30 @@ ADMIN, AUDITOR, OPERATIVO = (
 )
 ADMIN_AUDITOR = {ADMIN, AUDITOR}
 
-# Today's observed outcome, written by hand from the HTTP behaviour:
-# roles allowed per (resource, is_delete).  Everything else is denied.
+# The approved matrix (D1) as HTTP behaviour, written by hand: roles allowed
+# per resource for (read, create/update, delete).  Everything else is denied.
+ALL = set(RoleEnum)
+JSON_REGISTER = (ALL, ADMIN_AUDITOR, {ADMIN})
 ALLOWED = {
-    "NONCONFORMITIES": (set(RoleEnum), {ADMIN}),
-    "AUDITS": (ADMIN_AUDITOR, ADMIN_AUDITOR),
-    "DOCUMENTS": ({ADMIN}, {ADMIN}),
+    "NONCONFORMITIES": (ALL, ALL, {ADMIN}),
+    "IMPROVEMENTS": (ALL, ALL, {ADMIN}),
+    "CUSTOMER_SATISFACTION": (ALL, ALL, {ADMIN}),
+    "TRAINING": (ALL, ALL, {ADMIN}),
+    "INTERESTED_PARTIES": (ALL, ALL, {ADMIN}),
+    "AUDITS": (ADMIN_AUDITOR, ADMIN_AUDITOR, {ADMIN}),
+    "DOCUMENTS": ({ADMIN}, {ADMIN}, {ADMIN}),
+    "AUDIT_INDICATORS": JSON_REGISTER,
+    "ROLES_RESPONSIBILITIES": JSON_REGISTER,
+    "RISKS_OPPORTUNITIES": JSON_REGISTER,
+    "TRAINING_RESOURCES": JSON_REGISTER,
+    "PROCESS_OPERATIONS": JSON_REGISTER,
 }
+NO_ROUTES = {"USERS", "AUDIT_LOG"}  # policy entries only until their adapters exist
 
 
 def allowed_roles(endpoint: Endpoint) -> set:
-    write, delete = ALLOWED.get(endpoint.resource, (set(RoleEnum), set(RoleEnum)))
-    return delete if endpoint.action == "delete" else write
+    read, write, delete = ALLOWED[endpoint.resource]
+    return {"read": read, "delete": delete}.get(endpoint.action, write)
 
 
 _OBSERVED: dict = {}  # (role, method, url) -> allowed; shared by two tests
@@ -232,6 +244,9 @@ class AccessCharacterizationTestCase(unittest.TestCase):
 
     @staticmethod
     def _is_denied(response) -> bool:
+        """HTML refusals redirect to the dashboard; JSON bodies get a 403."""
+        if response.status_code == 403:
+            return "error" in response.get_json()
         return response.status_code == 302 and response.headers[
             "Location"
         ].endswith(DASHBOARD)
@@ -246,11 +261,12 @@ class AccessCharacterizationTestCase(unittest.TestCase):
         client = self._fresh(role)
         response = self._request(client, endpoint)
         if self._is_denied(response):
-            with client.session_transaction() as session:
-                self.assertIn(
-                    ("danger", "No tienes permiso para acceder a esta página."),
-                    session["_flashes"],
-                )
+            if response.status_code == 302:
+                with client.session_transaction() as session:
+                    self.assertIn(
+                        ("danger", "No tienes permiso para acceder a esta página."),
+                        session["_flashes"],
+                    )
             return False
         self.assertEqual(
             endpoint.ok_status,
@@ -266,7 +282,7 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                 self.assertEqual(302, response.status_code)
                 self.assertIn("/login", response.headers["Location"])
 
-    def test_role_outcomes_match_todays_behaviour(self) -> None:
+    def test_role_outcomes_match_the_approved_matrix(self) -> None:
         for endpoint in ENDPOINTS:
             for role in RoleEnum:
                 with self.subTest(
@@ -303,7 +319,7 @@ class AccessCharacterizationTestCase(unittest.TestCase):
         from app.services.policy import Resource
 
         self.assertEqual(
-            {r.name for r in Resource}, {e.resource for e in ENDPOINTS}
+            {r.name for r in Resource} - NO_ROUTES, {e.resource for e in ENDPOINTS}
         )
 
 

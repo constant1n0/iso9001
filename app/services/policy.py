@@ -15,18 +15,25 @@
 
 """Central permission policy.
 
-Encodes the effective access matrix as of QF-2 (route decorators plus the
-audit form check), so routes and future adapters can share one source:
+The approved role-by-action matrix (decision D1). Roles may read, write
+(create/update) or delete each resource:
 
-- Nonconformities: every role, except delete (administrators only).
-- Audits and documents: administrators (audits also auditors) for everything.
-- Every other resource: every role for every action.
+- Nonconformities, improvements, surveys, training, stakeholders: every role
+  reads and writes; only administrators delete.
+- Audits: administrators and auditors read and write; administrators delete.
+- Documents: administrators only, for everything.
+- JSON registers (roles, risks and opportunities, training resources, process
+  operations, audit indicators): every role reads; administrators and auditors
+  write; administrators delete.
+- Users and the audit log: administrators and auditors read; administrators
+  write; nobody deletes (policy entries only, no routes exist yet).
 
 Seams: the ``mcp`` channel never deletes, and token scopes intersect the role.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
 
 from ..models import RoleEnum
@@ -58,19 +65,48 @@ class Resource(StrEnum):
     RISKS_OPPORTUNITIES = "risks_opportunities"
     TRAINING_RESOURCES = "training_resources"
     PROCESS_OPERATIONS = "process_operations"
+    USERS = "users"
+    AUDIT_LOG = "audit_log"
 
 
 _ALL = frozenset(RoleEnum)
 _ADMIN = frozenset({RoleEnum.ADMINISTRADOR})
 _ADMIN_AUDITOR = frozenset({RoleEnum.ADMINISTRADOR, RoleEnum.AUDITOR})
+_NOBODY: frozenset[RoleEnum] = frozenset()
 
-# resource -> (roles for read/create/update, roles for delete)
-_MATRIX: dict[Resource, tuple[frozenset[RoleEnum], frozenset[RoleEnum]]] = {
-    Resource.NONCONFORMITIES: (_ALL, _ADMIN),
-    Resource.AUDITS: (_ADMIN_AUDITOR, _ADMIN_AUDITOR),
-    Resource.DOCUMENTS: (_ADMIN, _ADMIN),
+
+@dataclass(frozen=True)
+class Grant:
+    """Roles allowed to read, to write (create/update) and to delete."""
+
+    read: frozenset[RoleEnum]
+    write: frozenset[RoleEnum]
+    delete: frozenset[RoleEnum]
+
+    def roles_for(self, action: Action) -> frozenset[RoleEnum]:
+        if action is Action.READ:
+            return self.read
+        return self.delete if action is Action.DELETE else self.write
+
+
+_OPEN_REGISTER = Grant(_ALL, _ALL, _ADMIN)  # everyone works, administrators delete
+_JSON_REGISTER = Grant(_ALL, _ADMIN_AUDITOR, _ADMIN)
+_MATRIX: dict[Resource, Grant] = {
+    Resource.NONCONFORMITIES: _OPEN_REGISTER,
+    Resource.IMPROVEMENTS: _OPEN_REGISTER,
+    Resource.CUSTOMER_SATISFACTION: _OPEN_REGISTER,
+    Resource.TRAINING: _OPEN_REGISTER,
+    Resource.INTERESTED_PARTIES: _OPEN_REGISTER,
+    Resource.AUDITS: Grant(_ADMIN_AUDITOR, _ADMIN_AUDITOR, _ADMIN),
+    Resource.DOCUMENTS: Grant(_ADMIN, _ADMIN, _ADMIN),
+    Resource.AUDIT_INDICATORS: _JSON_REGISTER,
+    Resource.ROLES_RESPONSIBILITIES: _JSON_REGISTER,
+    Resource.RISKS_OPPORTUNITIES: _JSON_REGISTER,
+    Resource.TRAINING_RESOURCES: _JSON_REGISTER,
+    Resource.PROCESS_OPERATIONS: _JSON_REGISTER,
+    Resource.USERS: Grant(_ADMIN_AUDITOR, _ADMIN, _NOBODY),
+    Resource.AUDIT_LOG: Grant(_ADMIN_AUDITOR, _ADMIN, _NOBODY),
 }
-_DEFAULT = (_ALL, _ALL)
 
 
 def can(actor: Actor, action: Action, resource: Resource) -> bool:
@@ -83,9 +119,7 @@ def can(actor: Actor, action: Action, resource: Resource) -> bool:
         needed = "read" if action is Action.READ else "write"
         if needed not in actor.scopes:
             return False
-    write_roles, delete_roles = _MATRIX.get(resource, _DEFAULT)
-    roles = delete_roles if action is Action.DELETE else write_roles
-    return actor.role in roles
+    return actor.role in _MATRIX[resource].roles_for(action)
 
 
 def require(actor: Actor, action: Action, resource: Resource) -> None:
