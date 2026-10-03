@@ -28,6 +28,9 @@ The approved role-by-action matrix (decision D1). Roles may read, write
 - Users and the audit log: administrators and auditors read; administrators
   write; nobody deletes (policy entries only, no routes exist yet).
 
+- API tokens: administrators list (read), issue (create) and revoke (update);
+  nobody deletes, and the ``mcp`` channel can never touch them.
+
 Seams: the ``mcp`` channel never deletes, and token scopes intersect the role.
 """
 
@@ -67,6 +70,7 @@ class Resource(StrEnum):
     PROCESS_OPERATIONS = "process_operations"
     USERS = "users"
     AUDIT_LOG = "audit_log"
+    API_TOKENS = "api_tokens"
 
 
 _ALL = frozenset(RoleEnum)
@@ -106,6 +110,8 @@ _MATRIX: dict[Resource, Grant] = {
     Resource.PROCESS_OPERATIONS: _JSON_REGISTER,
     Resource.USERS: Grant(_ADMIN_AUDITOR, _ADMIN, _NOBODY),
     Resource.AUDIT_LOG: Grant(_ADMIN_AUDITOR, _ADMIN, _NOBODY),
+    # Read lists, create issues, update revokes; tokens are never hard-deleted.
+    Resource.API_TOKENS: Grant(_ADMIN, _ADMIN, _NOBODY),
 }
 
 
@@ -113,8 +119,10 @@ def can(actor: Actor, action: Action, resource: Resource) -> bool:
     """Return whether ``actor`` may perform ``action`` on ``resource``."""
     action = Action(action)
     resource = Resource(resource)
-    if actor.channel == "mcp" and action is Action.DELETE:
-        return False
+    if actor.channel == "mcp" and (
+        action is Action.DELETE or resource is Resource.API_TOKENS
+    ):
+        return False  # an agent never deletes and never manages its own credentials
     if actor.scopes is not None:
         needed = "read" if action is Action.READ else "write"
         if needed not in actor.scopes:

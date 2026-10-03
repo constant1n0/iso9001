@@ -164,7 +164,7 @@ ALLOWED = {
     "TRAINING_RESOURCES": JSON_REGISTER,
     "PROCESS_OPERATIONS": JSON_REGISTER,
 }
-NO_ROUTES = {"USERS", "AUDIT_LOG"}  # policy entries only until their adapters exist
+NO_ROUTES = {"USERS", "AUDIT_LOG", "API_TOKENS"}  # policy entries only until their adapters exist
 
 
 def allowed_roles(endpoint: Endpoint) -> set:

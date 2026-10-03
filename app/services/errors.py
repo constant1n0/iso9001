@@ -50,3 +50,21 @@ class ValidationError(DomainError):
     """The submitted data is not valid."""
 
     default_message = "Los datos proporcionados no son válidos."
+
+
+class AuthenticationFailed(DomainError):
+    """A bearer token was not accepted.
+
+    Every cause (malformed, unknown, tampered, expired, revoked, owner gone)
+    shares one message so a caller learns nothing about which check failed.
+    ``reason`` and ``token_prefix`` are for the adapter's security log only and
+    must never reach the client; ``token_prefix`` is the public lookup prefix,
+    never the secret.
+    """
+
+    default_message = "Credenciales no válidas."
+
+    def __init__(self, reason: str = "invalid", token_prefix: str | None = None) -> None:
+        super().__init__()
+        self.reason = reason
+        self.token_prefix = token_prefix
