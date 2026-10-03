@@ -107,7 +107,7 @@ def _html(resource, base, create, update, delete):
 # valid write ends in the global 500 handler.  Access control still runs first,
 # so the 500 is characterized as the "allowed" outcome until the register is
 # listed in ``JSON_FIXED``, which expects the real 201 / 200.
-JSON_FIXED = {"ROLES_RESPONSIBILITIES"}
+JSON_FIXED = {"ROLES_RESPONSIBILITIES", "RISKS_OPPORTUNITIES", "TRAINING_RESOURCES"}
 
 
 def _json(resource, base, create, update):
