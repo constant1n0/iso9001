@@ -19,6 +19,7 @@ from ..extensions import db
 from ..services import training
 from flask_login import login_required
 from ..utils.pdf import pdf_response, render_pdf
+from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
 from ..utils.web_args import date_arg
 
@@ -46,6 +47,7 @@ def listar_capacitaciones():
 
 @bp.route('/nueva', methods=['GET', 'POST'])
 @login_required
+@require_permission('create', 'training')
 def nueva_capacitacion():
     form = CapacitacionForm()
     if form.validate_on_submit():
@@ -58,6 +60,7 @@ def nueva_capacitacion():
 # Ruta para editar una capacitación
 @bp.route('/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
+@require_permission('update', 'training')
 def editar_capacitacion(id):
     """
     Carga el formulario de edición de una capacitación y guarda los cambios en la base de datos.

@@ -18,6 +18,7 @@ from flask_login import login_required
 from ..forms import ParteInteresadaForm  # Importar el formulario
 from ..extensions import db
 from ..services import stakeholders
+from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
 
 bp = Blueprint('parte_interesada', __name__, url_prefix='/partes_interesadas')
@@ -38,6 +39,7 @@ def listar_partes_interesadas():
 
 @bp.route('/nueva', methods=['GET', 'POST'])
 @login_required
+@require_permission('create', 'interested_parties')
 def crear_parte_interesada():
     form = ParteInteresadaForm()
     if form.validate_on_submit():
@@ -49,6 +51,7 @@ def crear_parte_interesada():
 
 @bp.route('/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
+@require_permission('update', 'interested_parties')
 def editar_parte_interesada(id):
     actor = current_actor()
     parte = stakeholders.get(db.session, actor, id)

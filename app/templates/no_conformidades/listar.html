@@ -23,7 +23,9 @@
 {% set estilo_estado = {'Abierta': 'badge--danger', 'En proceso': 'badge--warn', 'Cerrada': 'badge--ok'} %}
 {% block content %}
 {% call page_header('Cláusula 10.2 · No conformidad y acción correctiva', 'No conformidades') %}
+    {% if can('create', 'nonconformities') %}
     <a class="btn btn--primary" href="{{ url_for('no_conformidad.nueva_no_conformidad') }}">+ Nueva no conformidad</a>
+    {% endif %}
 {% endcall %}
 
 <details class="filters"{% if filtrando %} open{% endif %}>
@@ -70,9 +72,11 @@
                 <td>{{ nc.accion_correctiva | truncate(80) if nc.accion_correctiva else '—' }}</td>
                 <td>
                     <div class="table__actions">
+                        {% if can('update', 'nonconformities') %}
                         <a class="btn btn--sm" href="{{ url_for('no_conformidad.editar_no_conformidad', id=nc.id) }}">Editar</a>
+                        {% endif %}
                         <a class="btn btn--sm" href="{{ url_for('no_conformidad.exportar_pdf', id=nc.id) }}" target="_blank" rel="noopener">PDF</a>
-                        {% if is_admin %}
+                        {% if can('delete', 'nonconformities') %}
                             {{ delete_form(url_for('no_conformidad.eliminar_no_conformidad', id=nc.id), '¿Eliminar esta no conformidad?') }}
                         {% endif %}
                     </div>

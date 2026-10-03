@@ -101,8 +101,8 @@ def handle_domain_error(e: DomainError):
 
     JSON: ``{"error": mensaje}`` con 404/409/403/422. HTML:
 
-    - ``PermissionDenied`` replica a ``role_required`` (aviso y redirección al
-      panel).
+    - ``PermissionDenied`` muestra el aviso de permiso denegado y redirige al
+      panel.
     - ``NotFound`` responde igual que un 404 de ruta (``handle_404``).
     - ``Conflict`` y ``ValidationError`` muestran el mensaje seguro y vuelven a
       la página de origen del formulario (o al panel).

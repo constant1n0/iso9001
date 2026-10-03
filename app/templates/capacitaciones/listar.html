@@ -21,7 +21,9 @@
 {% set filtrando = request.args.items() | selectattr(1) | map(attribute=0) | select('in', ['tema', 'fecha', 'personal']) | list %}
 {% block content %}
 {% call page_header('Cláusula 7.2 · Competencia', 'Capacitaciones') %}
+    {% if can('create', 'training') %}
     <a class="btn btn--primary" href="{{ url_for('capacitacion.nueva_capacitacion') }}">+ Nueva capacitación</a>
+    {% endif %}
 {% endcall %}
 
 <details class="filters"{% if filtrando %} open{% endif %}>
@@ -63,9 +65,13 @@
                 <td>{{ capacitacion.evaluacion_final or '—' }}</td>
                 <td>
                     <div class="table__actions">
+                        {% if can('update', 'training') %}
                         <a class="btn btn--sm" href="{{ url_for('capacitacion.editar_capacitacion', id=capacitacion.id) }}">Editar</a>
+                        {% endif %}
                         <a class="btn btn--sm" href="{{ url_for('capacitacion.exportar_pdf', id=capacitacion.id) }}" target="_blank" rel="noopener">PDF</a>
+                        {% if can('delete', 'training') %}
                         {{ delete_form(url_for('capacitacion.eliminar_capacitacion', id=capacitacion.id), '¿Eliminar la capacitación ' ~ capacitacion.tema ~ '?') }}
+                        {% endif %}
                     </div>
                 </td>
             </tr>

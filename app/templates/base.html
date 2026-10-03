@@ -15,13 +15,12 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
 {%- set user_role = current_user.role.value if current_user.is_authenticated else None -%}
-{%- set is_admin = user_role == 'Administrador' -%}
 {%- set nav_sections = [
   (None, [
     ('dashboard', 'dashboard.dashboard', 'Panel', 'P-00', True),
   ]),
   ('Calidad', [
-    ('auditoria', 'auditoria.listar_auditorias', 'Auditorías', '9.2', user_role in ('Administrador', 'Auditor')),
+    ('auditoria', 'auditoria.listar_auditorias', 'Auditorías', '9.2', can('read', 'audits')),
     ('no_conformidad', 'no_conformidad.listar_no_conformidades', 'No conformidades', '10.2', True),
     ('mejora', 'mejora.listar_mejoras', 'Mejoras', '10.3', True),
   ]),
@@ -33,7 +32,7 @@
     ('capacitacion', 'capacitacion.listar_capacitaciones', 'Capacitaciones', '7.2', True),
   ]),
   ('Documentación', [
-    ('document', 'document.list_documents', 'Documentos', '7.5', is_admin),
+    ('document', 'document.list_documents', 'Documentos', '7.5', can('read', 'documents')),
   ]),
 ] -%}
 <!DOCTYPE html>

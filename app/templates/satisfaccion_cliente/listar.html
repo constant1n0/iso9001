@@ -21,7 +21,9 @@
 {% set filtrando = request.args.items() | selectattr(1) | map(attribute=0) | select('in', ['cliente', 'puntuacion']) | list %}
 {% block content %}
 {% call page_header('Cláusula 9.1.2 · Satisfacción del cliente', 'Encuestas de satisfacción') %}
+    {% if can('create', 'customer_satisfaction') %}
     <a class="btn btn--primary" href="{{ url_for('satisfaccion_cliente.nueva_encuesta') }}">+ Nueva encuesta</a>
+    {% endif %}
 {% endcall %}
 
 <details class="filters"{% if filtrando %} open{% endif %}>
@@ -59,9 +61,13 @@
                 <td>{{ encuesta.comentarios | truncate(90) if encuesta.comentarios else '—' }}</td>
                 <td>
                     <div class="table__actions">
+                        {% if can('update', 'customer_satisfaction') %}
                         <a class="btn btn--sm" href="{{ url_for('satisfaccion_cliente.editar_encuesta', id=encuesta.id) }}">Editar</a>
+                        {% endif %}
                         <a class="btn btn--sm" href="{{ url_for('satisfaccion_cliente.exportar_pdf', id=encuesta.id) }}" target="_blank" rel="noopener">PDF</a>
+                        {% if can('delete', 'customer_satisfaction') %}
                         {{ delete_form(url_for('satisfaccion_cliente.eliminar_encuesta', id=encuesta.id), '¿Eliminar la encuesta de ' ~ encuesta.cliente ~ '?') }}
+                        {% endif %}
                     </div>
                 </td>
             </tr>

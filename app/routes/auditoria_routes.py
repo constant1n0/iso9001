@@ -17,11 +17,11 @@ from math import ceil
 
 from flask import Blueprint, current_app, render_template, redirect, url_for, flash, request
 from flask_login import login_required
-from ..models import RoleEnum, EstadoAuditoriaEnum
+from ..models import EstadoAuditoriaEnum
 from ..forms import AuditoriaForm
 from ..extensions import db
 from ..services import audits
-from ..utils.decorators import role_required
+from ..utils.permissions import require_permission
 from ..utils.pdf import pdf_response, render_pdf
 from ..utils.web_actor import current_actor
 from ..utils.web_args import date_arg
@@ -46,7 +46,7 @@ def _estado_arg():
 
 @bp.route('/', methods=['GET'])
 @login_required
-@role_required(RoleEnum.AUDITOR)
+@require_permission('read', 'audits')
 def listar_auditorias():
     """
     Lista todas las auditorías registradas en el sistema, con funcionalidad de búsqueda y filtrado avanzado.
@@ -77,7 +77,7 @@ def listar_auditorias():
 
 @bp.route('/nueva', methods=['GET', 'POST'])
 @login_required
-@role_required(RoleEnum.AUDITOR)
+@require_permission('create', 'audits')
 def nueva_auditoria():
     """
     Muestra el formulario para crear una nueva auditoría y guarda el registro
@@ -93,7 +93,7 @@ def nueva_auditoria():
 
 @bp.route('/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
-@role_required(RoleEnum.AUDITOR)
+@require_permission('update', 'audits')
 def editar_auditoria(id):
     """
     Carga el formulario de edición de una auditoría existente y guarda los
@@ -116,7 +116,7 @@ def editar_auditoria(id):
 
 @bp.route('/eliminar/<int:id>', methods=['POST'])
 @login_required
-@role_required(RoleEnum.AUDITOR)
+@require_permission('delete', 'audits')
 def eliminar_auditoria(id):
     """
     Elimina una auditoría existente de la base de datos.
@@ -128,7 +128,7 @@ def eliminar_auditoria(id):
 
 @bp.route('/exportar_pdf/<int:id>', methods=['GET'])
 @login_required
-@role_required(RoleEnum.AUDITOR)
+@require_permission('read', 'audits')
 def exportar_pdf(id):
     """
     Genera un PDF para una auditoría específica usando su ID.

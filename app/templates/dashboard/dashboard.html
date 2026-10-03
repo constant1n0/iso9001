@@ -17,7 +17,6 @@
 {% extends "base.html" %}
 {% block title %}Panel{% endblock %}
 {% block crumb %}Panel · {{ hoy.strftime('%d/%m/%Y') }}{% endblock %}
-{% set role = current_user.role.value %}
 {% block content %}
 <header class="page-header">
     <div>
@@ -25,12 +24,12 @@
         <h1>Panel de control</h1>
     </div>
     <div class="page-header__actions">
-        {% if role in ('Administrador', 'Auditor') %}
+        {% if can('create', 'audits') %}
             <a class="btn btn--primary" href="{{ url_for('auditoria.nueva_auditoria') }}">+ Auditoría</a>
         {% endif %}
-        <a class="btn" href="{{ url_for('no_conformidad.nueva_no_conformidad') }}">+ No conformidad</a>
-        <a class="btn" href="{{ url_for('capacitacion.nueva_capacitacion') }}">+ Capacitación</a>
-        <a class="btn" href="{{ url_for('satisfaccion_cliente.nueva_encuesta') }}">+ Encuesta</a>
+        {% if can('create', 'nonconformities') %}<a class="btn" href="{{ url_for('no_conformidad.nueva_no_conformidad') }}">+ No conformidad</a>{% endif %}
+        {% if can('create', 'training') %}<a class="btn" href="{{ url_for('capacitacion.nueva_capacitacion') }}">+ Capacitación</a>{% endif %}
+        {% if can('create', 'customer_satisfaction') %}<a class="btn" href="{{ url_for('satisfaccion_cliente.nueva_encuesta') }}">+ Encuesta</a>{% endif %}
     </div>
 </header>
 

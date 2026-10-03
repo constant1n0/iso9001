@@ -16,11 +16,10 @@
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required
-from ..models import RoleEnum
 from ..forms import NoConformidadForm
 from ..extensions import db
 from ..services import nonconformities
-from ..utils.decorators import role_required
+from ..utils.permissions import require_permission
 from ..utils.pdf import pdf_response, render_pdf
 from ..utils.web_actor import current_actor
 from ..utils.web_args import date_arg
@@ -54,6 +53,7 @@ def listar_no_conformidades():
 # Ruta para registrar una nueva no conformidad
 @bp.route('/nueva', methods=['GET', 'POST'])
 @login_required
+@require_permission('create', 'nonconformities')
 def nueva_no_conformidad():
     form = NoConformidadForm()
     if form.validate_on_submit():
@@ -66,6 +66,7 @@ def nueva_no_conformidad():
 # Ruta para editar una no conformidad
 @bp.route('/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
+@require_permission('update', 'nonconformities')
 def editar_no_conformidad(id):
     actor = current_actor()
     no_conformidad = nonconformities.get(db.session, actor, id)
@@ -87,7 +88,7 @@ def editar_no_conformidad(id):
 # Ruta para eliminar una no conformidad
 @bp.route('/eliminar/<int:id>', methods=['POST'])
 @login_required
-@role_required(RoleEnum.ADMINISTRADOR)
+@require_permission('delete', 'nonconformities')
 def eliminar_no_conformidad(id):
     nonconformities.delete(db.session, current_actor(), id)
     db.session.commit()

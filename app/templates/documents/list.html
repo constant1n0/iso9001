@@ -20,7 +20,9 @@
 {% block crumb %}Documentación · Documentos{% endblock %}
 {% block content %}
 {% call page_header('Cláusula 7.5 · Información documentada', 'Documentos') %}
+    {% if can('create', 'documents') %}
     <a class="btn btn--primary" href="{{ url_for('document.new_document') }}">+ Nuevo documento</a>
+    {% endif %}
 {% endcall %}
 
 {% if documents %}
@@ -48,8 +50,12 @@
                 <td>{{ document.approved_by or '—' }}</td>
                 <td>
                     <div class="table__actions">
+                        {% if can('update', 'documents') %}
                         <a class="btn btn--sm" href="{{ url_for('document.edit_document', document_id=document.id) }}">Editar</a>
+                        {% endif %}
+                        {% if can('delete', 'documents') %}
                         {{ delete_form(url_for('document.delete_document', document_id=document.id), '¿Eliminar el documento ' ~ document.code ~ '?') }}
+                        {% endif %}
                     </div>
                 </td>
             </tr>

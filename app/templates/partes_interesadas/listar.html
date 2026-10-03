@@ -20,7 +20,9 @@
 {% block crumb %}Clientes · Partes interesadas{% endblock %}
 {% block content %}
 {% call page_header('Cláusula 4.2 · Partes interesadas', 'Partes interesadas') %}
+    {% if can('create', 'interested_parties') %}
     <a class="btn btn--primary" href="{{ url_for('parte_interesada.crear_parte_interesada') }}">+ Nueva parte interesada</a>
+    {% endif %}
 {% endcall %}
 
 {% if partes %}
@@ -44,8 +46,12 @@
                 <td>{{ parte.objetivo_estrategico | truncate(70) if parte.objetivo_estrategico else '—' }}</td>
                 <td>
                     <div class="table__actions">
+                        {% if can('update', 'interested_parties') %}
                         <a class="btn btn--sm" href="{{ url_for('parte_interesada.editar_parte_interesada', id=parte.id_interesado) }}">Editar</a>
+                        {% endif %}
+                        {% if can('delete', 'interested_parties') %}
                         {{ delete_form(url_for('parte_interesada.eliminar_parte_interesada', id=parte.id_interesado), '¿Eliminar la parte interesada ' ~ parte.nombre ~ '?') }}
+                        {% endif %}
                     </div>
                 </td>
             </tr>
