@@ -36,6 +36,7 @@ EXPECTED = {
     "PROCESS_OPERATIONS": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),
     "USERS": (ADMIN_AUDITOR, ADMIN_ONLY, NOBODY),
     "AUDIT_LOG": (ADMIN_AUDITOR, ADMIN_ONLY, NOBODY),
+    "API_TOKENS": (ADMIN_ONLY, ADMIN_ONLY, NOBODY),
 }
 
 FORBIDDEN_MODULES = ("flask", "flask_login", "werkzeug.local", "app.routes")
@@ -168,6 +169,15 @@ class PolicyMatrixTestCase(unittest.TestCase):
             for role in RoleEnum:
                 with self.subTest(resource=resource.name, role=role.name):
                     self.assertFalse(can(make_actor(role, channel="system"), Action.DELETE, resource))
+
+    def test_the_mcp_channel_can_never_manage_api_tokens(self) -> None:
+        from app.services.policy import Action, Resource, can
+
+        actor = make_actor(ADMIN, channel="mcp", scopes=frozenset({"read", "write"}))
+        for action in Action:
+            with self.subTest(action=action):
+                self.assertFalse(can(actor, action, Resource.API_TOKENS))
+        self.assertTrue(can(make_actor(ADMIN, channel="cli"), Action.CREATE, Resource.API_TOKENS))
 
     def test_mcp_with_full_scopes_still_cannot_delete(self) -> None:
         from app.services.policy import Action, Resource, can
