@@ -14,13 +14,22 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request
-from ..models import SatisfaccionCliente
 from ..forms import SatisfaccionClienteForm
 from ..extensions import db
+from ..services import satisfaction
 from flask_login import login_required
 from ..utils.pdf import pdf_response, render_pdf
+from ..utils.web_actor import current_actor
 
 bp = Blueprint('satisfaccion_cliente', __name__, url_prefix='/satisfaccion_cliente')
+
+FORM_FIELDS = ('cliente', 'fecha_encuesta', 'puntuacion', 'comentarios')
+
+
+def _form_data(form):
+    """Whitelisted service payload taken from a validated form."""
+    return {name: getattr(form, name).data for name in FORM_FIELDS}
+
 
 @bp.route('/', methods=['GET'])
 @login_required
@@ -28,23 +37,23 @@ def listar_encuestas():
     """
     Lista todas las encuestas de satisfacción con opciones de filtrado por cliente y puntuación mínima.
     """
-    query = SatisfaccionCliente.query
-    
-    # Filtrado por cliente
-    cliente = request.args.get('cliente')
-    if cliente:
-        query = query.filter(SatisfaccionCliente.cliente.ilike(f'%{cliente}%'))
-    
     # Filtrado por puntuación mínima
     puntuacion = request.args.get('puntuacion')
     if puntuacion:
         try:
             puntuacion = int(puntuacion)
-            query = query.filter(SatisfaccionCliente.puntuacion >= puntuacion)
         except ValueError:
+            puntuacion = None
             flash('La puntuación debe ser un número entero.', 'warning')
-    
-    encuestas = query.order_by(SatisfaccionCliente.fecha_encuesta.desc()).all()
+    else:
+        puntuacion = None
+
+    encuestas = satisfaction.list_(
+        db.session,
+        current_actor(),
+        cliente=request.args.get('cliente'),
+        puntuacion_minima=puntuacion,
+    )
     return render_template('satisfaccion_cliente/listar.html', encuestas=encuestas)
 
 @bp.route('/nueva', methods=['GET', 'POST'])
@@ -55,13 +64,7 @@ def nueva_encuesta():
     """
     form = SatisfaccionClienteForm()
     if form.validate_on_submit():
-        nueva_encuesta = SatisfaccionCliente(
-            cliente=form.cliente.data,
-            fecha_encuesta=form.fecha_encuesta.data,
-            puntuacion=form.puntuacion.data,
-            comentarios=form.comentarios.data
-        )
-        db.session.add(nueva_encuesta)
+        satisfaction.create(db.session, current_actor(), _form_data(form))
         db.session.commit()
         flash('Encuesta de satisfacción registrada exitosamente', 'success')
         return redirect(url_for('satisfaccion_cliente.listar_encuestas'))
@@ -74,13 +77,11 @@ def editar_encuesta(id):
     """
     Carga el formulario de edición de una encuesta y guarda los cambios en la base de datos.
     """
-    encuesta = SatisfaccionCliente.query.get_or_404(id)
+    actor = current_actor()
+    encuesta = satisfaction.get(db.session, actor, id)
     form = SatisfaccionClienteForm(obj=encuesta)
     if form.validate_on_submit():
-        encuesta.cliente = form.cliente.data
-        encuesta.fecha_encuesta = form.fecha_encuesta.data
-        encuesta.puntuacion = form.puntuacion.data
-        encuesta.comentarios = form.comentarios.data
+        satisfaction.update(db.session, actor, id, _form_data(form))
         db.session.commit()
         flash('Encuesta actualizada exitosamente', 'success')
         return redirect(url_for('satisfaccion_cliente.listar_encuestas'))
@@ -93,8 +94,7 @@ def eliminar_encuesta(id):
     """
     Elimina una encuesta de satisfacción de la base de datos.
     """
-    encuesta = SatisfaccionCliente.query.get_or_404(id)
-    db.session.delete(encuesta)
+    satisfaction.delete(db.session, current_actor(), id)
     db.session.commit()
     flash('Encuesta eliminada exitosamente', 'success')
     return redirect(url_for('satisfaccion_cliente.listar_encuestas'))
@@ -105,5 +105,5 @@ def exportar_pdf(id):
     """
     Genera un PDF para una encuesta de satisfacción específica usando su ID.
     """
-    encuesta = SatisfaccionCliente.query.get_or_404(id)
+    encuesta = satisfaction.get(db.session, current_actor(), id)
     return pdf_response(render_pdf('satisfaccion_cliente/pdf_template.html', encuesta=encuesta), f'encuesta_{id}.pdf')
