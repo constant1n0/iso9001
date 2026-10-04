@@ -32,10 +32,10 @@ Included: F1–F4 with tests. Excluded: user management (separate feature), Flas
 
 Route: **delegated direct** (several non-trivial files with tests).
 
-- [ ] **FX-1 — ISO 9001:2026 label.** Acceptance: the sidebar footer reads "Cláusulas ISO 9001:2026"; no other "2015" reference remains in `app/`.
-- [ ] **FX-2 — Monthly report covers its month.** Acceptance: records outside the month are excluded from every figure; the satisfaction average uses only the month's surveys; the PDF/HTML render still works.
-- [ ] **FX-3 — Satisfaction chart by year and month.** Acceptance: two surveys in January of different years produce two points; at most the last 12 months; labels distinguish years.
-- [ ] **FX-4 — Token CLI accepts email.** Acceptance: `--user` matches a username or an email (case-insensitive); ambiguity is impossible because both columns are unique; the error message names what was tried without leaking other accounts.
+- [x] **FX-1 — ISO 9001:2026 label.** Acceptance: the sidebar footer reads "Cláusulas ISO 9001:2026"; no other "2015" reference remains in `app/`.
+- [x] **FX-2 — Monthly report covers its month.** Acceptance: records outside the month are excluded from every figure; the satisfaction average uses only the month's surveys; the PDF/HTML render still works.
+- [x] **FX-3 — Satisfaction chart by year and month.** Acceptance: two surveys in January of different years produce two points; at most the last 12 months; labels distinguish years.
+- [x] **FX-4 — Token CLI accepts email.** Acceptance: `--user` matches a username or an email (case-insensitive); ambiguity is impossible because both columns are unique; the error message names what was tried without leaking other accounts.
 
 ## Checks
 
@@ -49,8 +49,20 @@ Baseline at `5a39191`: 531 tests. RDD on: assess each work-unit commit.
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| FX-1..FX-4 | Pending | — | — | — |
+| FX-1 | Done | `47aa7a9` | RED: 2 `test_iso_edition_label` tests (2015 string in `base.html`). GREEN | Range `5a39191..94775fc`: **medium**, `under_budget`; standalone release, so it stays unreviewed by RDD; writer self-verification plus parent full-suite run |
+| FX-2 | Done | `3d26b48` | RED: 3 `test_report_period` tests (`2 != 5`, empty month not zero, e-mail not reporting the previous month). GREEN | Same range |
+| FX-3 | Done | `e3b5c24` | RED: 2 `test_dashboard_satisfaction_chart` tests (`[10, 11]` instead of `["2025-11", "2026-10"]`). GREEN; `test_ui_foundation` now pins `local_today` so the 12-month window cannot drift out of its seeded data | Same range |
+| FX-4 | Done | `94775fc` | RED: 2 CLI tests ("User ... not found" for an email). GREEN | Same range |
+
+Full suite after `94775fc`: `Ran 541 tests`, `OK` (531 + 10), including PostgreSQL.
+
+## Findings during implementation
+
+- The monthly e-mail runs at 08:00 on the 1st (`0 8 1 * *`), so `send_monthly_quality_report` now reports the previous calendar month, dated its last day; the PDF name follows that month. On-demand report exports cover the month of the given date.
+- The dashboard chart data contract changed: `satisfaccion.meses` holds `"YYYY-MM"` strings and the chart shows labels like "Oct 2025".
+- The monthly report copy now says the figures are those recorded in the report's month.
+- The administrator's username in production is their e-mail address; the failed attempt used a mistyped address, which the email lookup would not have fixed either.
 
 ## Next step
 
-Implement FX-1..FX-4, then review, deliver and deploy.
+Push, open the pull request, merge when CI is green, then redeploy to `vulcano` (no migrations; the user restarts web and Celery).
