@@ -1,0 +1,103 @@
+# User Management
+
+Repository locator: `odd/tasks/user-management.md` · Engram mirror: `odd/user-management/tasks`
+
+## Objective
+
+Let an administrator manage the people who use the QMS from the web, and let every user manage their own account, without ever deleting a user, so the audit trail stays attributable.
+
+## Problem and why it matters
+
+- Users can only be created with `flask create-admin`, which refuses as soon as one user exists; there is no way to add colleagues, change a role or take access away (ISO 9001 clauses 5.3 and 7.2 need assigned roles and controlled access).
+- A user cannot see their own username, change their e-mail or password, or see the API tokens issued to them; the first production administrator did not know their username.
+- `User` has no state: `UserMixin.is_active` is always true, so access cannot be withdrawn without deleting the row, which would orphan attribution (`SET NULL`) and silently drop the user's API tokens (`CASCADE`).
+
+## Authorized decisions
+
+| ID | Decision | Source |
+|---|---|---|
+| Route | ODD, delegated direct writers, one at a time; branch `feat/user-management` in worktree `iso9001-worktrees/user-management` from `main@fc8c913` | User request (2026-10-04) |
+| U0 | Scope "Completa": admin lists, creates (with role), edits e-mail and role, deactivates and reactivates, and sends a password-reset link; every user has "Mi perfil" to see their data, change their e-mail and password, and see and revoke their own API tokens. Token creation stays CLI-only (api-tokens T1) | User choice (2026-10-04), Engram #10832 |
+| U1 | New column `users.active` (not null, default true). An inactive user cannot log in, loses existing sessions and remember cookies (`user_loader`), cannot request or use a reset link, is skipped by e-mail notifications, and cannot authenticate with an API token | Assistant design |
+| U2 | Users are never deleted; `USERS` delete stays NOBODY. Deactivation also revokes the user's active API tokens, so the audit log records it | Assistant design |
+| U3 | The `USERS` grant is unchanged: ADMIN and AUDITOR read (auditors see who holds each role), only ADMIN writes | Existing policy |
+| U4 | Guard rails: nobody can deactivate or change the role of their own account, and the last active administrator can never be deactivated or demoted | Assistant design |
+| U5 | The administrator creates a user with username, e-mail, role and an initial password (at least 8 characters, confirmed); usernames cannot be edited afterwards, to keep audit labels stable | Assistant design |
+| U6 | E-mail addresses are stored trimmed and lower-cased and are unique case-insensitively; e-mail is required for new users | Assistant design |
+| U7 | Changing your own e-mail or password requires your current password; new passwords need at least 8 characters | Assistant design |
+| U8 | Password changes are audited with a non-sensitive marker (`credential_changed`) and written to the security log; the hash never appears in either | Assistant design |
+| U9 | "Send reset link" reuses the existing reset e-mail (moved out of the routes module), with wording that fits an administrator-triggered send, a rate limit, and clean Spanish errors when the user has no e-mail, is inactive, or mail fails | Assistant design |
+| U10 | "Mi perfil" lists only the signed-in user's tokens and revokes only those; another user's token answers "not found"; the `mcp` channel can never manage tokens | Assistant design |
+| U11 | Out of scope: login by e-mail, last-login tracking, full names, forced password change on first login, a `create-user` CLI | Assistant design |
+| Delivery | `auto-chain`, `stacked-to-main`; push, PR and merge when CI is green, as in the previous features. Production needs `flask db upgrade` for U1, so its deployment is a separate, explicitly authorized step | User authorization (2026-10-02) |
+| RDD | On (global); assess every work-unit commit | `gentle-ai review mode status` |
+
+## Scope
+
+### Included
+
+- Migration and model column `users.active`, and its enforcement in every authentication path.
+- `app/services/users.py` with the guard rails, audit rows and token revocation.
+- Administrator screens and navigation.
+- "Mi perfil" with e-mail, password and own-token management.
+- Tests, characterization table, and docs.
+
+### Excluded
+
+See U11. Also excluded: Flask-Limiter storage backend, `qms-people` competence records.
+
+## Constraints
+
+- Same as previous features: Python 3.11 in CI (worktree `venv` uses 3.12), stdlib `unittest`, strict test-first, Alembic migrations for PostgreSQL 17, services never import Flask, routes never write to the session directly (`tests/test_route_write_guard.py`), strict CSP (no inline scripts, handlers or styles), Spanish UI copy and English code and docs, conventional commits without AI attribution, about 400 changed lines per work unit as a planning heuristic.
+- `User` is not in `AUDITED_MODELS`, so the service calls `audit.record` explicitly; the recorder drops keys containing `password`, `token` or `secret`.
+
+## Tasks
+
+Route for every task: **delegated direct** (each touches two or more non-trivial files).
+
+- [ ] **UM-1 — Account state.** Forecast 200-320.
+  - Migration on top of `e6b1a4c8d3f7` adding `users.active` (server default true) and the model column; `is_active` returns it.
+  - Refusal for inactive users in `user_loader`, login (generic "Credenciales inválidas" message, distinct security-log reason), reset request and reset, `api_tokens.authenticate` (new failure reason), and e-mail notification recipients.
+  - Acceptance: an inactive user cannot log in, an existing session is dropped on the next request, no reset e-mail is sent, a valid token is refused, and notifications skip them; the migration upgrades and downgrades on PostgreSQL.
+- [ ] **UM-2 — Users service.** Forecast 350-450.
+  - `app/services/users.py`: `list_`, `get`, `create`, `update` (e-mail, role), `set_active` (revokes active tokens on deactivation), `change_own_email`, `change_own_password`; shared password and e-mail validators; guard rails U4; audit rows and security log U8.
+  - Move the reset e-mail helper to a shared module and add the administrator-triggered variant (U9).
+  - Acceptance: policy first; duplicate username or e-mail is a `Conflict`; the last-admin and self-change rules hold; no-op updates write nothing; deactivation revokes tokens; nothing sensitive is audited.
+- [ ] **UM-3 — Administrator screens.** Forecast 350-450.
+  - "Usuarios" list, new and edit screens; deactivate, reactivate and send-reset POST actions; an "Administración" navigation group gated with `can()`.
+  - Characterization table and policy tests extended for the new routes.
+  - Acceptance: ADMIN manages, AUDITOR only reads, OPERATIVO is refused; guard-rail errors show as Spanish flash messages; the reset action is rate limited.
+- [ ] **UM-4 — Mi perfil.** Forecast 300-400.
+  - Profile page reachable from the user chip: username, e-mail, role; forms to change e-mail and password (current password required); own API tokens with status and a revoke button.
+  - `api_tokens` gains own-token listing and revocation for the web channel (U10).
+  - Docs: README and `docs/architecture/services.md`.
+  - Acceptance: every role can use it; a user cannot see or revoke another user's token; wrong current password changes nothing.
+
+**Total forecast:** about 1,200-1,600 authored changed lines, so delivery is chained.
+
+## Checks
+
+```bash
+$ export TEST_POSTGRES_URI="postgresql://postgres:DB_PASSWORD@127.0.0.1:55432/iso_test"
+$ venv/bin/python -m unittest discover -s tests -p 'test_*.py'
+```
+
+`DB_PASSWORD` comes from the `iso-pg-test` container environment and is never printed or committed.
+
+- Baseline at `fc8c913`: 541 tests.
+- After each work-unit commit: `gentle-ai review assess --cwd <worktree> --agent claude-code --base-ref <last reviewed boundary> --committed-only --json`; the first boundary is the branch point `fc8c913`.
+
+## Progress
+
+| Task | Status | Commit | Checks | Review |
+|---|---|---|---|---|
+| UM-1..UM-4 | Pending | — | — | — |
+
+## Delivery
+
+| Slice | Pull request | Commits | Merged as | Note |
+|---|---|---|---|---|
+
+## Next step
+
+UM-1 — account state.
