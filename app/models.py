@@ -160,6 +160,19 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(255), nullable=True, unique=True, index=True)
     password = db.Column(db.String(256), nullable=False)
     role = db.Column(db.Enum(RoleEnum), nullable=False, default=RoleEnum.OPERATIVO)
+    # Users are deactivated, never deleted, so their records stay attributable.
+    active = db.Column(
+        db.Boolean, nullable=False, default=True, server_default=db.true()
+    )
+
+    @property
+    def is_active(self) -> bool:
+        """Flask-Login hook: an inactive user cannot log in or keep a session.
+
+        Fails closed: an unsaved user whose column default has not been
+        applied yet (``None``) is not active.
+        """
+        return self.active is True
 
     @staticmethod
     def _password_state_fingerprint(password_hash: str) -> str:
@@ -231,7 +244,7 @@ class User(UserMixin, db.Model):
             except SQLAlchemyError:
                 pass
             return None
-        if user is None:
+        if user is None or not user.is_active:
             return None
 
         expected_fingerprint = User._password_state_fingerprint(user.password)
@@ -249,13 +262,18 @@ class User(UserMixin, db.Model):
         expected_password_hash: str,
         new_password_hash: str,
     ) -> bool:
-        """Atomically replace a password only if its verified state is current."""
+        """Atomically replace a password only if its verified state is current.
+
+        The user must still be active, so a deactivation that lands between
+        verification and update still wins.
+        """
         try:
             result = db.session.execute(
                 db.update(User)
                 .where(
                     User.id == user_id,
                     User.password == expected_password_hash,
+                    User.active.is_(True),
                 )
                 .values(password=new_password_hash)
                 .execution_options(synchronize_session=False)

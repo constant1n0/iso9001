@@ -84,7 +84,7 @@ def log_rate_limit_exceeded(endpoint):
     )
 
 
-def log_password_reset_request(email, success):
+def log_password_reset_request(email, success, reason=None):
     """Registra solicitudes de recuperación de contraseña."""
     ip = get_client_ip()
 
@@ -93,8 +93,9 @@ def log_password_reset_request(email, success):
             f"PASSWORD_RESET_REQUEST | email={email} | ip={ip}"
         )
     else:
+        suffix = f" | reason={reason}" if reason else ""
         security_logger.warning(
-            f"PASSWORD_RESET_REQUEST_FAILED | email={email} | ip={ip}"
+            f"PASSWORD_RESET_REQUEST_FAILED | email={email} | ip={ip}{suffix}"
         )
 
 

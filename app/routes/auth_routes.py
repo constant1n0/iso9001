@@ -133,14 +133,18 @@ def login():
         password = form.password.data
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
-            login_user(user)
-            log_login_attempt(username, success=True)
-            flash('Inicio de sesión exitoso', 'success')
-            return redirect(url_for('dashboard.dashboard'))
+            # login_user() refuses an inactive user by returning False, so the
+            # result decides; the response matches wrong credentials exactly.
+            if login_user(user):
+                log_login_attempt(username, success=True)
+                flash('Inicio de sesión exitoso', 'success')
+                return redirect(url_for('dashboard.dashboard'))
+            reason = 'inactive'
         else:
-            log_login_attempt(username, success=False, reason='invalid_credentials')
-            flash('Credenciales inválidas', 'danger')
-            return redirect(url_for('auth.login'))
+            reason = 'invalid_credentials'
+        log_login_attempt(username, success=False, reason=reason)
+        flash('Credenciales inválidas', 'danger')
+        return redirect(url_for('auth.login'))
     return render_template('login.html', form=form)
 
 @bp.route('/logout')
@@ -186,7 +190,12 @@ def reset_password_request():
     form = PasswordResetRequestForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
-        if user:
+        if user and not user.is_active:
+            # Same response as an unknown address; only the log tells them apart.
+            log_password_reset_request(
+                form.email.data, success=False, reason='inactive'
+            )
+        elif user:
             try:
                 send_reset_email(user)
             except ResetEmailError:

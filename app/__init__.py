@@ -78,7 +78,9 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
     # Cargar el usuario desde la base de datos (usando Session.get() recomendado en SQLAlchemy 2.0)
     @login_manager.user_loader
     def load_user(user_id):
-        return db.session.get(User, int(user_id))
+        # An inactive user loses its session and remember cookie on the next request.
+        user = db.session.get(User, int(user_id))
+        return user if user is not None and user.is_active else None
 
     # Registrar Blueprints
     app.register_blueprint(auth_routes.bp)
