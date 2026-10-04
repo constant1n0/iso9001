@@ -115,6 +115,24 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 - **Follow-ups:** plain registers list in full and the page is sliced in memory (fine at today's sizes); per-token rate limiting (documented as a known gap); real-client smoke tests (Codex `bearer_token_env_var`, Pi, OpenCode `{env:}` and OpenClaw config shapes are marked unverified in `docs/mcp.md`).
 - **SDK notes:** raising `ToolError` returns its message with `is_error`; any other exception returns a generic message and is logged. A Starlette lifespan must wrap each async test body (anyio task groups must exit in the entering task).
 
+## Delivery
+
+| Slice | Pull request | Commits | Merged as |
+|---|---|---|---|
+| 1 | [#58](https://github.com/constant1n0/iso9001/pull/58) | `775f039` | `25a3660` |
+| 2 | [#59](https://github.com/constant1n0/iso9001/pull/59) | `23a099c` | `f1c644f` |
+| 3 | [#60](https://github.com/constant1n0/iso9001/pull/60) | `50d6919` | `62d54c8` |
+| 4 | [#61](https://github.com/constant1n0/iso9001/pull/61) | `cb9d2b5` | `d75d682` |
+| 5 | [#62](https://github.com/constant1n0/iso9001/pull/62) | `3b82ee4` | `957cd9e` |
+| 6 | [#63](https://github.com/constant1n0/iso9001/pull/63) | `93201a9` | `ae3cc8b` |
+| 7 | [#64](https://github.com/constant1n0/iso9001/pull/64) | `7438adc` | pending |
+| 8 | pending | `1e50e4f`, `5a728e7`, this closing update | — |
+
 ## Next step
 
-Review the change, then deliver it as chained pull requests.
+**Feature complete in code.** Agents can now operate the QMS through five MCP tools, as a real user, under policy, token scopes, audit and attribution, without delete.
+
+Remaining, outside this change:
+1. **Production deployment** (needs explicit authorization): `flask db upgrade`, install `requirements.txt`, issue tokens with the CLI, install `iso9001-mcp.service`, add the Traefik route and `MCP_ALLOWED_HOSTS`.
+2. **Real-client smoke tests** with Claude Code, Codex, Pi, OpenCode, OpenClaw and Claude Desktop (`docs/mcp.md` checklist), then mark the verified configuration shapes.
+3. **Follow-ups:** per-token rate limiting; service-side paging for the 4 registers that page in memory; open small fixes from the gap analysis (monthly report totals, dashboard satisfaction chart); `qms-people` and Wave 1 modules.
