@@ -13,7 +13,7 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from datetime import timedelta
+from datetime import date, timedelta
 
 from flask import Blueprint, render_template
 from flask_login import login_required
@@ -48,10 +48,17 @@ def dashboard():
     ).order_by(Capacitacion.fecha).all()
 
     # Puntuación media de satisfacción por mes
+    # (year, month) grouping, last 12 calendar months including the current one
+    indice_actual = hoy.year * 12 + hoy.month - 1
+    primer_indice = indice_actual - 11
+    desde = date(primer_indice // 12, primer_indice % 12 + 1, 1)
+    anio = db.func.extract('year', SatisfaccionCliente.fecha_encuesta).label('anio')
     mes = db.func.extract('month', SatisfaccionCliente.fecha_encuesta).label('mes')
     puntuaciones_meses = db.session.query(
-        mes, db.func.avg(SatisfaccionCliente.puntuacion)
-    ).group_by(mes).order_by(mes).all()
+        anio, mes, db.func.avg(SatisfaccionCliente.puntuacion)
+    ).filter(
+        SatisfaccionCliente.fecha_encuesta >= desde
+    ).group_by(anio, mes).order_by(anio, mes).all()
 
     chart_data = {
         "no_conformidades": {
@@ -59,8 +66,8 @@ def dashboard():
             "cerradas": no_conformidades_cerradas,
         },
         "satisfaccion": {
-            "meses": [int(m) for m, _ in puntuaciones_meses],
-            "promedios": [round(float(avg), 2) for _, avg in puntuaciones_meses],
+            "meses": [f"{int(a):04d}-{int(m):02d}" for a, m, _ in puntuaciones_meses],
+            "promedios": [round(float(avg), 2) for _, _, avg in puntuaciones_meses],
         },
     }
 
