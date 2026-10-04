@@ -57,6 +57,37 @@ class FilterTestCase(McpDbCase):
         self.assertEqual(1, await total("auditorias", {"estado": "COMPLETADA"}))
         self.assertEqual(0, await total("auditorias", {"estado": "PENDIENTE"}))
 
+    async def test_every_enum_filter_takes_exactly_the_values_its_registry_entry_allows(self) -> None:
+        from app.mcp_server.registry import MODULES
+
+        enum_filters = [(m.slug, f) for m in MODULES.values() for f in m.filters if f.type == "enum"]
+        self.assertIn(("no_conformidades", "estado"), [(s, f.name) for s, f in enum_filters])
+        for slug, field in enum_filters:
+            for value in (*field.allowed, "VALOR_INVENTADO"):
+                with self.subTest(module=slug, filter=field.name, value=value):
+                    result = await self.call(mcp_actor(ADMIN), "qms_list",
+                                             {"module": slug, "filters": {field.name: value}})
+                    self.assertEqual(value == "VALOR_INVENTADO", result.is_error, result.content)
+                    if result.is_error:
+                        self.assertIn(field.allowed[0], error_text(result))
+
+    async def test_the_nonconformity_state_filter_is_the_fixed_state_list(self) -> None:
+        self.seed("no_conformidades", estado="Cerrada")
+        self.seed("no_conformidades", descripcion="Otra")
+        ok = await self.call(mcp_actor(ADMIN), "qms_list",
+                             {"module": "no_conformidades", "filters": {"estado": "Cerrada"}})
+        self.assertEqual(1, ok.structured_content["total"])
+        # Legacy free-text states are listed but deliberately not filterable.
+        legacy = await self.call(mcp_actor(ADMIN), "qms_list",
+                                 {"module": "no_conformidades", "filters": {"estado": "Pendiente de revisar"}})
+        self.assertTrue(legacy.is_error)
+        self.assertIn("Cerrada", error_text(legacy))
+
+    def test_enum_coercion_lives_in_the_registry_not_in_operations(self) -> None:
+        from app.mcp_server import operations
+
+        self.assertFalse(hasattr(operations, "_ENUM_FILTERS"))
+
     async def test_bad_filters_give_clean_errors(self) -> None:
         cases = [
             ("no_conformidades", {"color": "rojo"}, "color"),

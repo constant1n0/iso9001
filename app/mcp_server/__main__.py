@@ -2,7 +2,9 @@
 
 Environment: ``MCP_HOST`` / ``MCP_PORT`` (default 127.0.0.1:8765),
 ``MCP_ALLOWED_HOSTS`` (comma-separated Host values the HTTP transport accepts),
-``ISO9001_MCP_TOKEN`` (the API token stdio acts as), plus the application's
+``MCP_TRUSTED_PROXIES`` (comma-separated addresses whose ``X-Forwarded-For`` the
+HTTP transport believes; default ``127.0.0.1``, never ``*``),
+``ISO9001_MCP_TOKEN`` (the API token stdio acts as, re-checked on every call), plus the application's
 ``SECRET_KEY`` and ``DATABASE_URI``.
 """
 
@@ -40,6 +42,11 @@ def parse_args(argv: Sequence[str] | None, environ: Mapping[str, str]) -> argpar
     parser.add_argument("--host", default=environ.get("MCP_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=_port, default=environ.get("MCP_PORT", "8765"))
     args = parser.parse_args(argv)
+    args.trusted_proxies = [
+        p.strip() for p in environ.get("MCP_TRUSTED_PROXIES", "127.0.0.1").split(",") if p.strip()
+    ]
+    if "*" in args.trusted_proxies:
+        parser.error("MCP_TRUSTED_PROXIES must list addresses, not '*'.")
     configured = [h.strip() for h in environ.get("MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
     args.allowed_hosts = configured or [
         f"{host}:{args.port}" for host in ("127.0.0.1", "localhost", "[::1]")
@@ -48,7 +55,7 @@ def parse_args(argv: Sequence[str] | None, environ: Mapping[str, str]) -> argpar
 
 
 def authenticate_stdio(app: Flask, environ: Mapping[str, str]):
-    """The actor for stdio, from ``ISO9001_MCP_TOKEN``, authenticated once."""
+    """Start-up check of ``ISO9001_MCP_TOKEN``; later calls re-authenticate it themselves."""
     token = environ.get("ISO9001_MCP_TOKEN", "").strip()
     if not token:
         raise StartupError("ISO9001_MCP_TOKEN is not set: stdio needs an API token.")
@@ -75,12 +82,16 @@ def main(
         except StartupError as error:
             print(f"error: {error}", file=sys.stderr)
             return 2
-        context.set_actor(actor)  # inherited by the server's tasks and worker threads
-        build_server(app).run("stdio")
+        del actor  # only proves the token is valid now; every tool call authenticates again
+        with context.stdio_identity(app, environ["ISO9001_MCP_TOKEN"].strip()):
+            build_server(app).run("stdio")
     else:
         uvicorn.run(
             create_http_app(app, settings.allowed_hosts),
             host=settings.host, port=settings.port, server_header=False,
+            # Honour X-Forwarded-For only from the local proxy (Traefik), so the
+            # security log records the real caller and nobody else can forge it.
+            proxy_headers=True, forwarded_allow_ips=",".join(settings.trusted_proxies),
         )
     return 0
 

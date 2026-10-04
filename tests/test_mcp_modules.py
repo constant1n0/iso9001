@@ -62,6 +62,17 @@ class RegistryTestCase(unittest.TestCase):
                 self.assertEqual(writable, {f.name for f in module.fields})
                 self.assertEqual(required, {f.name for f in module.fields if f.required})
 
+    def test_listing_mode_matches_the_service_it_declares(self) -> None:
+        for slug, module in registry().MODULES.items():
+            with self.subTest(module=slug):
+                self.assertEqual(hasattr(module.service, "list_page"), module.paged_in_db)
+
+    def test_nonconformity_state_filter_offers_the_fixed_states(self) -> None:
+        from app.services.nonconformities import ESTADOS_NO_CONFORMIDAD
+
+        field = {f.name: f for f in registry().MODULES["no_conformidades"].filters}["estado"]
+        self.assertEqual(("enum", ESTADOS_NO_CONFORMIDAD), (field.type, field.allowed))
+
     def test_enum_fields_list_the_values_the_services_accept(self) -> None:
         from app.models import DocumentCategory, EstadoAuditoriaEnum, TipoEnum
 

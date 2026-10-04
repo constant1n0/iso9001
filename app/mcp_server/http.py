@@ -28,7 +28,9 @@ def _bearer_token(scope: Scope) -> str | None:
     for name, value in scope["headers"]:
         if name == b"authorization":
             scheme, _, credentials = value.decode("latin-1").partition(" ")
-            return credentials.strip() or None if scheme.lower() == "bearer" else None
+            if scheme.lower() != "bearer":
+                return None
+            return credentials.strip() or None
     return None
 
 
