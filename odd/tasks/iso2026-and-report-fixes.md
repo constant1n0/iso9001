@@ -63,6 +63,18 @@ Full suite after `94775fc`: `Ran 541 tests`, `OK` (531 + 10), including PostgreS
 - The monthly report copy now says the figures are those recorded in the report's month.
 - The administrator's username in production is their e-mail address; the failed attempt used a mistyped address, which the email lookup would not have fixed either.
 
+## Delivery and deployment
+
+| Step | Result |
+|---|---|
+| Pull request | [#67](https://github.com/constant1n0/iso9001/pull/67), CI green, merged as `fc8c913` |
+| Backup | `~/work/backups/iso9001-code-20261004-pre-fc8c913.tar.gz` (mode 600); no database backup needed, no migrations |
+| Code | Incremental git bundle `6935de0..main`, fast-forward to `fc8c913` on `vulcano`; database stays at `e6b1a4c8d3f7` |
+| Restart (user, with sudo) | `iso9001`, `iso9001-celery-worker`, `iso9001-celery-beat`, `iso9001-mcp` |
+| Smoke tests | All four services active; `/login` 200 with HSTS; `/mcp` 401 with `WWW-Authenticate: Bearer` |
+
+The administrator issued their first personal API token on `vulcano` with `flask create-api-token`.
+
 ## Next step
 
-Push, open the pull request, merge when CI is green, then redeploy to `vulcano` (no migrations; the user restarts web and Celery).
+**Feature complete.** Next: `user-management` (`odd/tasks/user-management.md`).
