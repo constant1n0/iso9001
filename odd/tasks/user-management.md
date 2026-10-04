@@ -63,7 +63,7 @@ Route for every task: **delegated direct** (each touches two or more non-trivial
   - `app/services/users.py`: `list_`, `get`, `create`, `update` (e-mail, role), `set_active` (revokes active tokens on deactivation), `change_own_email`, `change_own_password`; shared password and e-mail validators; guard rails U4; audit rows and security log U8.
   - Move the reset e-mail helper to a shared module and add the administrator-triggered variant (U9).
   - Acceptance: policy first; duplicate username or e-mail is a `Conflict`; the last-admin and self-change rules hold; no-op updates write nothing; deactivation revokes tokens; nothing sensitive is audited.
-- [ ] **UM-3a — Administrator screens: list, create, edit.** Forecast 350-450.
+- [x] **UM-3a — Administrator screens: list, create, edit.** Forecast 350-450.
   - Blueprint `users` with "Usuarios" list, new and edit screens over `users.list_`, `create`, `update`; forms; an "Administración" navigation group gated with `can()`.
   - Characterization table and policy tests extended for the new routes.
   - Acceptance: ADMIN manages, AUDITOR only reads, OPERATIVO is refused; guard-rail and validation errors show as Spanish messages without losing the form.
@@ -96,7 +96,8 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 |---|---|---|---|---|
 | UM-1 | Done | `21e6221` (column, migration `f2c7a9e4b1d6`, refusals), review follow-up test in the next commit | RED: 9 `test_user_account_state` tests (`'active' is an invalid keyword argument`), then 7 for the right reasons (no security-log warning, `302 != 200`, session still valid); migration `KeyError: 'active'`; notifications `1 != 2`; token of an inactive owner not refused. GREEN: 553 tests incl. PostgreSQL | Range `fc8c913..21e6221`: **high** (authentication, security log); consent granted; 4-lens review `review-97c3950522aa2f95` **approved** and acknowledged; no blocking findings; 3 suggestions applied (raw-insert migration test, this progress row, deploy order below) |
 | UM-2 | Done | `0012c45` (validators, `api_tokens.revoke_all_for_user`), `81dbea9` (users service), review follow-up tests in the next commit | RED: 34 SQLite tests (`cannot import name 'users'`, missing `fields.email`/`new_password`, missing `revoke_all_for_user`); the PostgreSQL race test failed with the row lock removed. GREEN: 591 tests incl. PostgreSQL | Range `c767641..81dbea9`: **medium**, `slice_budget_reached` (900 lines, about 540 of them tests); consent granted; reliability review `review-7bbe74f4ae599a28` **approved** and acknowledged; 2 suggestions applied as tests (case-only e-mail change normalises a legacy address; a duplicate that slips past the pre-check hits the unique constraint and becomes a `Conflict`) |
-| UM-3a, UM-3b, UM-4 | Pending | — | — | — |
+| UM-3a | Done | `bcc196d` | RED: 15 `test_user_routes` tests (26 failures, 2 errors: missing routes `302/200 != 404`, no `user_routes` module, no CSRF form, nav link shown). GREEN: 608 tests incl. PostgreSQL; the characterization table now covers `USERS` | Range `5959d0a..bcc196d`: **medium**, `slice_budget_reached` (645 lines, about 390 tests); consent granted; reliability review `review-4d7fb0161b6b83fc` **approved** and acknowledged; its one suggestion (an `IntegrityError` only at commit) needs no change because `users.create` and `update` flush inside the write and turn constraint violations into `Conflict` (pinned by UM-2 tests) |
+| UM-3b, UM-4 | Pending | — | — | — |
 
 ## Findings during implementation
 
@@ -105,6 +106,7 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 - An inactive user's reset link is refused inside `User.verify_reset_token`, and `update_password_from_reset` also requires `active` in its `WHERE` clause. A user reactivated within the hour can still use an earlier reset link if their password has not changed.
 - `is_active` is `self.active is True`, so an unsaved user counts as inactive.
 - **Users service (UM-2):** `ValidationError` for self-changes, a wrong current password and bad fields; `Conflict` for the last active administrator and duplicates; `PermissionDenied` for policy refusals and self-service on `mcp`, without a user id or on an inactive account; `NotFound` for unknown ids. A new password equal to the current one is refused, so the security log never records a change that did not happen. Deactivation also needs the `API_TOKENS` update grant, so an `mcp` administrator can reactivate but never deactivate. Username uniqueness is exact; e-mail uniqueness ignores case, and a case-only change lower-cases a legacy address. The last-administrator check locks the active administrators' rows (`FOR UPDATE` on ids, counted in Python, since PostgreSQL refuses `FOR UPDATE` with an aggregate). A password change is audited as `{"credential_changed": true}`; writing the security log is the web adapter's job.
+- **Screens (UM-3a):** `/usuarios/` (`users.list_users`), `/usuarios/nuevo` (`users.new_user`), `/usuarios/<id>/editar` (`users.edit_user`); navigation group "Administración" › "Usuarios" (clause 5.3). The global domain-error handler flashes and redirects, which loses form input, so the user screens catch `ValidationError`/`Conflict`, roll back and re-render; passwords are never refilled. The forms leave e-mail format checks to the service, because WTForms `Email()` rejects special-use domains the service accepts. Account actions belong in the list's `table__actions` cell, gated with `can('update', 'users')`.
 - **Moved to UM-3b:** the reset e-mail helper move and its administrator-triggered wording, the security log for credential changes, and a case-insensitive e-mail lookup in the reset request (`auth_routes.py` still uses `filter_by(email=...)`).
 - **Deployment order:** the model selects `users.active` on every user load, so production must run `flask db upgrade` before the services restart on the new code (or in the same maintenance step); otherwise every authenticated request fails.
 
@@ -115,4 +117,4 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 
 ## Next step
 
-UM-3a — administrator screens.
+UM-3b — administrator account actions.
