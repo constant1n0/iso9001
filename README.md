@@ -181,7 +181,7 @@ invocations.
 **2b. API Tokens for Agents**
 
 An administrator issues revocable API tokens from the same trusted local shell.
-A token lets an agent adapter (the future MCP server) act as one user, with
+A token lets an agent adapter (the MCP server, see [`docs/mcp.md`](docs/mcp.md)) act as one user, with
 that user's role narrowed by the token's scopes (`read`, `write`):
 
 ```bash
@@ -196,6 +196,10 @@ hash is stored, so a lost token cannot be recovered and must be replaced.
 Expiry is 90 days by default and at most 365. Changing `SECRET_KEY` invalidates
 every token. `list-api-tokens` shows the prefix, owner, scopes and status, never
 a secret. Issuing and revoking are written to the audit log and the security log.
+
+AI agents (Claude Code, Codex, Pi, OpenCode, OpenClaw, Claude Desktop) reach the
+QMS through the MCP server in `app/mcp_server/`; `docs/mcp.md` explains how to run
+it, route it and configure each client.
 
 **3. Iniciar Redis y Celery para las Notificaciones Programadas**
 

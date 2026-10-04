@@ -1,0 +1,50 @@
+# Este archivo es parte de "ISO9001 QMS".
+#
+# Archivo de servicio systemd para el servidor MCP de ISO9001 QMS
+# (los agentes de IA operan el QMS con un token de API; ver docs/mcp.md)
+#
+# Instalación:
+#   sudo cp iso9001-mcp.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable iso9001-mcp
+#   sudo systemctl start iso9001-mcp
+#
+# Comandos útiles:
+#   sudo systemctl status iso9001-mcp
+#   sudo journalctl -u iso9001-mcp -f
+#
+# Escucha solo en 127.0.0.1:8765: publícalo con el proxy inverso (Traefik) y
+# añade el host público a MCP_ALLOWED_HOSTS en .env.
+
+[Unit]
+Description=ISO9001 QMS - Servidor MCP
+Documentation=https://github.com/constant1n0/iso9001
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=dcm
+Group=dcm
+WorkingDirectory=/home/dcm/work/iso9001
+Environment="PATH=/home/dcm/work/iso9001/venv/bin"
+EnvironmentFile=/home/dcm/work/iso9001/.env
+ExecStart=/home/dcm/work/iso9001/venv/bin/python -m app.mcp_server --transport http --host 127.0.0.1 --port 8765
+PrivateTmp=true
+Restart=on-failure
+RestartSec=5
+KillMode=mixed
+TimeoutStopSec=30
+
+# Seguridad
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/dcm/work/iso9001
+
+# Límites
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target
