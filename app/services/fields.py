@@ -22,6 +22,7 @@ raises ``ValidationError`` with a Spanish message suitable for flashing.
 from __future__ import annotations
 
 import enum
+import re
 from collections.abc import Mapping
 from datetime import date, datetime, timezone
 from typing import Any, TypeVar
@@ -29,6 +30,10 @@ from typing import Any, TypeVar
 from .errors import ValidationError
 
 E = TypeVar("E", bound=enum.Enum)
+
+EMAIL_MAX_LENGTH = 255  # the ``users.email`` column
+EMAIL_PATTERN = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+PASSWORD_MIN_LENGTH = 8
 
 
 def text(data: Mapping[str, Any], key: str, *, required: bool = False,
@@ -52,6 +57,26 @@ def text(data: Mapping[str, Any], key: str, *, required: bool = False,
     if max_length is not None and len(value) > max_length:
         raise ValidationError(
             f"El campo «{key}» admite como máximo {max_length} caracteres."
+        )
+    return value
+
+
+def email(data: Mapping[str, Any], key: str) -> str:
+    """A required e-mail address, trimmed and lower-cased (stored that way)."""
+    value = data[key]
+    if isinstance(value, str):
+        value = value.strip().lower()
+        if len(value) <= EMAIL_MAX_LENGTH and EMAIL_PATTERN.fullmatch(value):
+            return value
+    raise ValidationError("Introduce una dirección de correo electrónico válida.")
+
+
+def new_password(data: Mapping[str, Any], key: str) -> str:
+    """A new password of at least ``PASSWORD_MIN_LENGTH`` characters, kept verbatim."""
+    value = data[key]
+    if not isinstance(value, str) or len(value) < PASSWORD_MIN_LENGTH:
+        raise ValidationError(
+            f"La contraseña debe tener al menos {PASSWORD_MIN_LENGTH} caracteres."
         )
     return value
 
