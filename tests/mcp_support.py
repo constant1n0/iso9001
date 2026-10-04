@@ -13,7 +13,8 @@ from app.extensions import db
 from app.mcp_server import context
 from app.mcp_server.server import build_server
 from app.mcp_server.registry import MODULES
-from app.models import RoleEnum
+from app.models import RoleEnum, User
+from app.services import api_tokens
 from app.services.actor import Actor
 
 ADMIN, AUDITOR, OPERATIVO = RoleEnum.ADMINISTRADOR, RoleEnum.AUDITOR, RoleEnum.OPERATIVO
@@ -81,3 +82,18 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
         row = module.service.create(db.session, admin, data)
         db.session.commit()
         return sa_inspect(row).mapper.primary_key_from_instance(row)[0]
+
+    @staticmethod
+    def cli() -> Actor:
+        return Actor(user_id=None, label="cli", role=ADMIN, channel="cli")
+
+    def issue_token(self, role=ADMIN, scopes=("read", "write"), days=90):
+        """Issue an API token for a new user; returns ``(plaintext, row, user)``."""
+        user = User(username=f"user{User.query.count() + 1}", password="x", role=role)
+        db.session.add(user)
+        db.session.commit()
+        plaintext, row = api_tokens.issue(
+            db.session, self.cli(), secret_key=self.app.config["SECRET_KEY"], user_id=user.id,
+            name="test", scopes=scopes, days=days)
+        db.session.commit()
+        return plaintext, row, user
