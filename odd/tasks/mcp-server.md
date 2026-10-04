@@ -125,14 +125,36 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 | 4 | [#61](https://github.com/constant1n0/iso9001/pull/61) | `cb9d2b5` | `d75d682` |
 | 5 | [#62](https://github.com/constant1n0/iso9001/pull/62) | `3b82ee4` | `957cd9e` |
 | 6 | [#63](https://github.com/constant1n0/iso9001/pull/63) | `93201a9` | `ae3cc8b` |
-| 7 | [#64](https://github.com/constant1n0/iso9001/pull/64) | `7438adc` | pending |
-| 8 | pending | `1e50e4f`, `5a728e7`, this closing update | — |
+| 7 | [#64](https://github.com/constant1n0/iso9001/pull/64) | `7438adc` | `a45cbf7` |
+| 8 | [#65](https://github.com/constant1n0/iso9001/pull/65) | `1e50e4f`, `5a728e7`, `55e6636` | `6935de0` |
 
 ## Next step
 
 **Feature complete in code.** Agents can now operate the QMS through five MCP tools, as a real user, under policy, token scopes, audit and attribution, without delete.
 
 Remaining, outside this change:
-1. **Production deployment** (needs explicit authorization): `flask db upgrade`, install `requirements.txt`, issue tokens with the CLI, install `iso9001-mcp.service`, add the Traefik route and `MCP_ALLOWED_HOSTS`.
+1. ~~Production deployment~~ — done on 2026-10-04, see below.
 2. **Real-client smoke tests** with Claude Code, Codex, Pi, OpenCode, OpenClaw and Claude Desktop (`docs/mcp.md` checklist), then mark the verified configuration shapes.
 3. **Follow-ups:** per-token rate limiting; service-side paging for the 4 registers that page in memory; open small fixes from the gap analysis (monthly report totals, dashboard satisfaction chart); `qms-people` and Wave 1 modules.
+
+## Production deployment (2026-10-04)
+
+`main@6935de0` (qms-foundations, api-tokens and mcp-server) runs on `vulcano`. The user authorized this deployment to `vulcano`, over SSH as `dcm`, with no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `b794952`, migration `b7e2c9d41f03`; services active; data: 1 user, 0 domain records |
+| Backups | `~/work/backups/calidad-20261004-pre-6935de0.dump` (`pg_dump -Fc`, verified with `pg_restore -l`) and `iso9001-code-20261004-pre-6935de0.tar.gz`, both mode 600; Traefik route backup `iso9001.yml.bak-20261004` |
+| Code | Incremental git bundle `b794952..main`, fast-forward to `6935de0` |
+| Dependencies | `pip install -r requirements.txt`; `pip check` clean; `mcp 2.3.0`, `cryptography 45.0.7`, `cffi 1.17.1` |
+| Database | `flask db upgrade` to `e6b1a4c8d3f7` (`c4d8e1f2a9b7`, `d5a9f3b7c1e2`, `e6b1a4c8d3f7`); `flask db check` clean |
+| Configuration | `.env`: `MCP_ALLOWED_HOSTS=calidad.absolutoffice.com`, `MCP_TRUSTED_PROXIES=172.18.0.0/16` |
+| systemd (user, with sudo) | Restarted `iso9001`, `iso9001-celery-worker`, `iso9001-celery-beat`; installed `iso9001-mcp.service` with a drop-in binding `172.18.0.1:8765` (`After/Wants=docker.service`); enabled |
+| Firewall (user, with sudo) | UFW: `172.18.0.0/16 → 172.18.0.1:8765/tcp` |
+| Traefik | Router `iso9001-mcp`: `Host(calidad.absolutoffice.com) && PathPrefix(/mcp)` → `172.18.0.1:8765`, middlewares `vpn-only`, `sec-headers`, `ratelimit` (average 100, burst 50), access log off |
+| Smoke tests | All four services active and enabled; from the allowed LAN: `/login` 200 with HSTS; `/mcp` 401 with `WWW-Authenticate: Bearer` without a token and with an invalid token; Traefik container reaches the MCP; Celery worker ready |
+
+Pending after deployment:
+- the administrator issues personal tokens with `flask create-api-token` on `vulcano`;
+- real-client smoke tests per `docs/mcp.md`;
+- users are informed of the permission changes (only ADMIN deletes; OPERATIVO cannot write the JSON registers).
