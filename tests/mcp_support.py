@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import unittest
+from datetime import date
 
 import test_auth_bootstrap as bootstrap
 from mcp import Client
+from sqlalchemy import inspect as sa_inspect
 
 from app.extensions import db
 from app.mcp_server import context
 from app.mcp_server.server import build_server
+from app.mcp_server.registry import MODULES
 from app.models import RoleEnum
 from app.services.actor import Actor
 
@@ -19,6 +22,24 @@ ADMIN, AUDITOR, OPERATIVO = RoleEnum.ADMINISTRADOR, RoleEnum.AUDITOR, RoleEnum.O
 def mcp_actor(role=ADMIN, scopes=("read", "write"), user_id=7) -> Actor:
     return Actor(user_id=user_id, label=f"user{user_id}", role=role, channel="mcp",
                  scopes=None if scopes is None else frozenset(scopes))
+
+
+# Minimal valid payload per module, as an agent would send it (dates as ISO text).
+SEEDS = {
+    "no_conformidades": {"descripcion": "Pieza fuera de tolerancia", "fecha_detectada": "2026-10-01"},
+    "auditorias": {"area_auditada": "Calidad", "fecha": "2026-10-01", "auditor": "Ana", "resultado": "Sin hallazgos"},
+    "documentos": {"title": "Manual", "code": "MC-1", "category": "MANUAL_CALIDAD", "version": "1",
+                   "issued_date": "2026-10-01", "content": "Texto"},
+    "capacitaciones": {"tema": "Seguridad", "fecha": "2026-10-01", "personal": "Ana"},
+    "satisfaccion_clientes": {"cliente": "ACME", "fecha_encuesta": "2026-10-01", "puntuacion": 8},
+    "partes_interesadas": {"nombre": "Clientes"},
+    "mejoras": {"no_conformidad": "NC-1"},
+    "roles_responsabilidades": {"rol": "Director"},
+    "riesgos_oportunidades": {"tipo": "Riesgo", "descripcion": "Fallo de proveedor"},
+    "recursos_capacitacion": {"recurso_necesario": "Formacion"},
+    "procesos": {"proceso": "Compras"},
+    "indicadores_auditoria": {"area_auditoria": "Calidad"},
+}
 
 
 class McpDbCase(unittest.IsolatedAsyncioTestCase):
@@ -39,12 +60,24 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
         # The actor is set before the client starts so the server tasks inherit it.
         token = context.set_actor(actor) if actor is not None else None
         try:
-            async with Client(build_server()) as client:
+            async with Client(build_server(self.app)) as client:
                 return await client.call_tool(name, arguments or {})
         finally:
             if token is not None:
                 context.reset_actor(token)
 
     async def list_tools(self):
-        async with Client(build_server()) as client:
+        async with Client(build_server(self.app)) as client:
             return (await client.list_tools()).tools
+
+    def seed(self, slug: str, **overrides) -> int:
+        """Create a record through its service (as an administrator) and return its id."""
+        module = MODULES[slug]
+        data = SEEDS[slug] | overrides
+        for field in module.fields:
+            if field.type == "date" and field.name in data:
+                data[field.name] = date.fromisoformat(data[field.name])
+        admin = Actor(user_id=None, label="seed", role=ADMIN, channel="cli")
+        row = module.service.create(db.session, admin, data)
+        db.session.commit()
+        return sa_inspect(row).mapper.primary_key_from_instance(row)[0]

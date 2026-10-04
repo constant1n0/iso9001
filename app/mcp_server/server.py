@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from flask import Flask
 from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 
 from ..services import policy
 from ..services.policy import Action
-from . import context
+from . import context, operations
 from .registry import MODULES, FieldDef
 
 INSTRUCTIONS = (
@@ -29,7 +30,7 @@ def _describe(field: FieldDef) -> dict[str, Any]:
     return described
 
 
-def build_server() -> MCPServer:
+def build_server(app: Flask) -> MCPServer:
     mcp = MCPServer("iso9001-qms", instructions=INSTRUCTIONS)
 
     @mcp.tool(
@@ -60,5 +61,32 @@ def build_server() -> MCPServer:
                 for module in MODULES.values()
             ],
         }
+
+    @mcp.tool(
+        name="qms_list",
+        title="List records of a module",
+        description=(
+            "List records of one module, newest or ordered as the module defines, one page at a "
+            "time (per_page is capped by the server). `filters` accepts only the filters that "
+            "qms_modules lists for the module. Each record carries `id`."
+        ),
+        annotations=READ_ONLY,
+    )
+    def qms_list(module: str, filters: dict[str, Any] | None = None,
+                 page: int = 1, per_page: int = 20) -> dict[str, Any]:
+        with context.unit_of_work(app) as (session, actor):
+            return operations.list_records(
+                session, actor, operations.get_module(module), filters, page, per_page
+            )
+
+    @mcp.tool(
+        name="qms_get",
+        title="Get one record",
+        description="Return one record of a module by its `id`.",
+        annotations=READ_ONLY,
+    )
+    def qms_get(module: str, id: int) -> dict[str, Any]:  # noqa: A002 - the tool's public name
+        with context.unit_of_work(app) as (session, actor):
+            return operations.get_record(session, actor, operations.get_module(module), id)
 
     return mcp
