@@ -61,7 +61,8 @@ Set these in the application's `.env` (the systemd unit reads it):
 | `MCP_HOST` | `127.0.0.1` | Interface to bind |
 | `MCP_PORT` | `8765` | Port to bind |
 | `MCP_ALLOWED_HOSTS` | `127.0.0.1:<port>`, `localhost:<port>`, `[::1]:<port>` | Comma-separated `Host` values accepted; anything else gets 421. Add the public host name |
-| `ISO9001_MCP_TOKEN` | none | stdio only: the token the process acts as; it refuses to start without a valid one |
+| `MCP_TRUSTED_PROXIES` | `127.0.0.1` | Comma-separated proxy addresses whose `X-Forwarded-For` is believed (uvicorn `forwarded_allow_ips`); `*` is refused |
+| `ISO9001_MCP_TOKEN` | none | stdio only: the token the process acts as; it refuses to start without a valid one and checks it again on every tool call |
 
 Run it with the systemd unit `iso9001-mcp.service` (copy, `daemon-reload`,
 `enable --now`; see the header of the file), or by hand:
@@ -69,6 +70,18 @@ Run it with the systemd unit `iso9001-mcp.service` (copy, `daemon-reload`,
 ```bash
 venv/bin/python -m app.mcp_server --transport http --host 127.0.0.1 --port 8765
 ```
+
+stdio re-authenticates the configured token on every tool call, so revoking it,
+letting it expire or changing its owner's role takes effect on the next call
+(a rejected call returns a tool error; the server keeps running).
+
+Known gaps (follow-ups): there is no rate limiting on failed bearer tokens
+(add it at Traefik or in the app before wide exposure); `qms_list` pages in
+memory for `no_conformidades`, `documentos`, `capacitaciones`,
+`satisfaccion_clientes` and `partes_interesadas` (their services have no
+`list_page`, see `Module.paged_in_db` in the registry); the `estado` filter of
+`no_conformidades` accepts only the fixed states, so legacy free-text states
+cannot be filtered on.
 
 A missing or invalid token gets `401` with `WWW-Authenticate: Bearer`; failures
 are written to the security log (prefix and reason, never the token). Deploying
@@ -82,6 +95,12 @@ header (Traefik's default):
 
 - Path: `PathPrefix(`/mcp`)` on the QMS host, service URL `http://127.0.0.1:8765`.
 - Subdomain: `Host(`mcp.qms.example.com`)`, same service URL.
+
+Traefik runs on the same host, so its connection comes from `127.0.0.1` and the
+default `MCP_TRUSTED_PROXIES` is right: the security log then records the real
+caller from `X-Forwarded-For`. Requests from any other peer cannot set that
+header's effect. If the proxy runs elsewhere, list its address in
+`MCP_TRUSTED_PROXIES`.
 
 Then set `MCP_ALLOWED_HOSTS` to the public host name (for example
 `MCP_ALLOWED_HOSTS=qms.example.com`) and restart the unit. The client URL is

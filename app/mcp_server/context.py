@@ -1,13 +1,16 @@
 """Who is calling: the actor of the current tool call.
 
-The HTTP transport sets the ``ContextVar`` per request (bearer middleware);
-the stdio transport authenticates once at start and installs a process-wide
-actor. A tool never reads credentials; it only asks for the actor.
+The HTTP transport sets the ``ContextVar`` per request (bearer middleware).
+The stdio transport has no per-request credential: ``stdio_identity`` makes
+every ``current_actor()`` call authenticate the configured token again, so a
+revoked or expired token, or a changed role, takes effect on the next call. A
+tool never reads credentials; it only asks for the actor.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+import logging
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 
@@ -22,7 +25,10 @@ from ..services.actor import Actor
 from ..services.errors import AuthenticationFailed, DomainError
 from ..utils import security_logger
 
+logger = logging.getLogger(__name__)
+
 _current: ContextVar[Actor | None] = ContextVar("mcp_actor", default=None)
+_stdio_actor: Callable[[], Actor] | None = None  # re-authenticates the stdio token per call
 
 
 def set_actor(actor: Actor) -> Token:
@@ -33,12 +39,31 @@ def reset_actor(token: Token) -> None:
     _current.reset(token)
 
 
+@contextmanager
+def stdio_identity(app: Flask, raw: str) -> Iterator[None]:
+    """Serve stdio as the owner of ``raw``, checking the token on every call."""
+    global _stdio_actor
+    _stdio_actor = lambda: authenticate(app, raw)  # noqa: E731
+    try:
+        yield
+    finally:
+        _stdio_actor = None
+
+
 def current_actor() -> Actor:
     """The authenticated actor, or a clean tool error when there is none."""
     actor = _current.get()
-    if actor is None:
+    if actor is not None:
+        return actor
+    if _stdio_actor is None:
         raise ToolError("Sesión no autenticada.")
-    return actor
+    try:
+        return _stdio_actor()
+    except AuthenticationFailed as failure:
+        raise ToolError(failure.message) from None
+    except SQLAlchemyError as error:
+        logger.error("Token authentication failed: %s", type(error).__name__)
+        raise ToolError("Servicio no disponible.") from None
 
 
 @contextmanager

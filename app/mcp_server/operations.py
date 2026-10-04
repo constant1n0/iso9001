@@ -8,13 +8,10 @@ from typing import Any
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
-from ..models import EstadoAuditoriaEnum
 from ..services import audit, crud
 from ..services.actor import Actor
 from ..services.errors import ValidationError
 from .registry import MODULES, FieldDef, Module
-
-_ENUM_FILTERS = {("auditorias", "estado"): EstadoAuditoriaEnum}
 
 
 def get_module(slug: str) -> Module:
@@ -33,7 +30,7 @@ def serialise(row: Any) -> dict[str, Any]:
     return record
 
 
-def _filter_value(module: Module, field: FieldDef, value: Any) -> Any:
+def _filter_value(field: FieldDef, value: Any) -> Any:
     name = field.name
     if field.type == "date":
         try:
@@ -46,12 +43,11 @@ def _filter_value(module: Module, field: FieldDef, value: Any) -> Any:
         raise ValidationError(f"El filtro «{name}» debe ser un número entero.")
     if not isinstance(value, str):
         raise ValidationError(f"El filtro «{name}» debe ser texto.")
-    enum_cls = _ENUM_FILTERS.get((module.slug, name))
-    if enum_cls is None:
+    if field.type != "enum":
         return value
-    if value not in enum_cls.__members__:
-        raise ValidationError(f"El filtro «{name}» admite: {', '.join(enum_cls.__members__)}.")
-    return enum_cls[value]
+    if value not in field.allowed:
+        raise ValidationError(f"El filtro «{name}» admite: {', '.join(field.allowed)}.")
+    return field.members[value] if field.members is not None else value
 
 
 def _clean_filters(module: Module, filters: dict[str, Any]) -> dict[str, Any]:
@@ -60,7 +56,7 @@ def _clean_filters(module: Module, filters: dict[str, Any]) -> dict[str, Any]:
     if unknown:
         offered = ", ".join(known) or "ninguno"
         raise ValidationError(f"Filtros no admitidos: {', '.join(unknown)}. Admitidos: {offered}.")
-    return {name: _filter_value(module, known[name], value) for name, value in filters.items()}
+    return {name: _filter_value(known[name], value) for name, value in filters.items()}
 
 
 def list_records(session: Session, actor: Actor, module: Module,
@@ -69,9 +65,9 @@ def list_records(session: Session, actor: Actor, module: Module,
     criteria = _clean_filters(module, filters or {})
     page, per_page = crud.page_bounds(page, per_page)
     service = module.service
-    if hasattr(service, "list_page"):
+    if module.paged_in_db:
         rows, total = service.list_page(session, actor, **criteria, page=page, per_page=per_page)
-    else:  # plain registers list everything; slice here
+    else:  # plain registers list everything; slice here (see Module.paged_in_db)
         everything = service.list_(session, actor, **criteria)
         total, rows = len(everything), everything[(page - 1) * per_page: page * per_page]
     return {

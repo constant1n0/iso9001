@@ -75,15 +75,16 @@ Let AI agents (Claude Code, Codex, Pi, OpenCode, OpenClaw, and Claude Desktop th
 
 Route for every task: **delegated direct**.
 
-- [ ] **MS-1 — Dependency, server skeleton, actor context, `qms_modules`.** Forecast 300-380.
+- [x] **MS-1 — Dependency, server skeleton, actor context, `qms_modules`.** Forecast 300-380.
   - Acceptance: `mcp==2.3.0` and transitive pins added without conflicts; in-memory client lists exactly the five tool names (later tasks register the rest) and `qms_modules` returns all 12 modules with fields and the caller's permissions; no `app/mcp/` package.
-- [ ] **MS-2 — Read tools `qms_list` and `qms_get`.** Forecast 300-380.
+- [x] **MS-2 — Read tools `qms_list` and `qms_get`.** Forecast 300-380.
   - Acceptance: every module lists and gets through its service; filters validated per module; paging bounded (reuse `crud.page_bounds` limits); a `read`-scoped token reads; unknown module or id gives a clean tool error.
-- [ ] **MS-3 — Write tools `qms_create` and `qms_update`.** Forecast 300-380.
+- [x] **MS-3 — Write tools `qms_create` and `qms_update`.** Forecast 300-380.
   - Acceptance: writes go through services with policy, scopes, stamping and audit (`channel="mcp"`); a `read`-only token cannot write; OPERATIVO cannot write the JSON registers (D1); commit on success, rollback on error; validation and conflict errors are clean tool errors.
-- [ ] **MS-4 — Streamable HTTP, bearer middleware, entry points.** Forecast 300-380.
+- [x] **MS-4 — Streamable HTTP, bearer middleware, entry points.** Forecast 300-380.
   - Acceptance: missing or invalid token gives 401 with plain `WWW-Authenticate: Bearer`, logged without the token; a valid token reaches the tools as its actor; two different tokens in consecutive requests never leak actors; disallowed `Host` is rejected; stdio authenticates `ISO9001_MCP_TOKEN` at start and refuses to start without a valid token; both legacy `initialize` (2025-06-18, 2025-11-25) and stateless 2026-07-28 requests are answered.
-- [ ] **MS-5 — Deployment and client guide.** Forecast 150-250.
+- [x] **MS-6 — Review fixes (`review-461c7a5e0cfa0b69`).** Stdio re-authenticates the token on every call (revocation, expiry and role changes apply immediately); uvicorn trusts `X-Forwarded-For` only from `MCP_TRUSTED_PROXIES` (default `127.0.0.1`, wildcard refused); enum filters come from the registry (no-conformidades `estado` is now an enum filter; legacy states list but cannot be filtered); explicit token extraction; `Module.paged_in_db`.
+- [x] **MS-5 — Deployment and client guide.** Forecast 150-250.
   - Acceptance: `iso9001-mcp.service` systemd unit consistent with the existing units; `docs/mcp.md` with configuration for Claude Code, Codex, Pi, OpenCode, OpenClaw and Claude Desktop (`mcp-remote --header-file`), Traefik routing notes, token issuance with the CLI, and a per-client smoke-test checklist; README pointer.
 
 ## Checks
@@ -100,8 +101,38 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| MS-1 | Pending | — | — | — |
+| MS-1 | Done | `23a099c` | RED: `ModuleNotFoundError: app.mcp_server`. GREEN: 478 tests | Pending |
+| MS-2 | Done | `50d6919` | RED: `Unknown tool: qms_list` across 12 module subtests and filter subtests. GREEN: 487 | Covered by `review-461c7a5e0cfa0b69` |
+| MS-3 | Done | `cb9d2b5` | RED: 8 write-tool tests failing. GREEN: 495 | Covered by `review-461c7a5e0cfa0b69` |
+| MS-4 | Done | `3b82ee4` (Streamable HTTP + bearer middleware), `93201a9` (stdio/HTTP CLI) | RED: import errors for `http` and `__main__`. GREEN: 505 / 511 | Covered by `review-461c7a5e0cfa0b69` |
+| MS-5 | Done | `7438adc` (systemd unit, `docs/mcp.md`, README) | RED: guide and unit missing. GREEN: 517; `pip check` clean | Pending |
+
+## Findings during implementation
+
+- **Dependencies:** `mcp==2.3.0` pulls `cryptography` 50, which forces `cffi` 2.x and breaks `weasyprint` 63; `cryptography==45.0.7` keeps `cffi==1.17.1`. `typing_extensions` moves 4.12.2 → 4.16.0; `idna==3.20` pinned. `PyJWT==2.15.1` returns as a transitive dependency of `mcp` (the cleanup test now forbids only `flask-jwt-extended`). The 26 `requirements.txt` lines are a lockfile freeze and are not counted as authored lines.
+- **End-to-end smoke (real HTTP, SDK client, throwaway SQLite DB, token from the CLI):** five tools listed; `qms_modules` returned 12 modules for an administrator token; `qms_create` stored a nonconformity, `qms_get` read it back stamped with the owner; missing id gave a clean Spanish tool error; an unauthenticated POST got 401 `WWW-Authenticate: Bearer`; the token never appeared in the log. A real stdio subprocess resolved the token's actor and refused to start without a token.
+- **Flaky test fixed before delivery:** `test_mcp_http.py` split a tampered token with `split("_")`; secrets can contain `_`, so it now uses `split("_", 2)` (amended into `3b82ee4`, never pushed).
+- **Follow-ups:** plain registers list in full and the page is sliced in memory (fine at today's sizes); per-token rate limiting (documented as a known gap); real-client smoke tests (Codex `bearer_token_env_var`, Pi, OpenCode `{env:}` and OpenClaw config shapes are marked unverified in `docs/mcp.md`).
+- **SDK notes:** raising `ToolError` returns its message with `is_error`; any other exception returns a generic message and is logged. A Starlette lifespan must wrap each async test body (anyio task groups must exit in the entering task).
+
+## Delivery
+
+| Slice | Pull request | Commits | Merged as |
+|---|---|---|---|
+| 1 | [#58](https://github.com/constant1n0/iso9001/pull/58) | `775f039` | `25a3660` |
+| 2 | [#59](https://github.com/constant1n0/iso9001/pull/59) | `23a099c` | `f1c644f` |
+| 3 | [#60](https://github.com/constant1n0/iso9001/pull/60) | `50d6919` | `62d54c8` |
+| 4 | [#61](https://github.com/constant1n0/iso9001/pull/61) | `cb9d2b5` | `d75d682` |
+| 5 | [#62](https://github.com/constant1n0/iso9001/pull/62) | `3b82ee4` | `957cd9e` |
+| 6 | [#63](https://github.com/constant1n0/iso9001/pull/63) | `93201a9` | `ae3cc8b` |
+| 7 | [#64](https://github.com/constant1n0/iso9001/pull/64) | `7438adc` | pending |
+| 8 | pending | `1e50e4f`, `5a728e7`, this closing update | — |
 
 ## Next step
 
-Implement MS-1 to MS-5 as independently green work units.
+**Feature complete in code.** Agents can now operate the QMS through five MCP tools, as a real user, under policy, token scopes, audit and attribution, without delete.
+
+Remaining, outside this change:
+1. **Production deployment** (needs explicit authorization): `flask db upgrade`, install `requirements.txt`, issue tokens with the CLI, install `iso9001-mcp.service`, add the Traefik route and `MCP_ALLOWED_HOSTS`.
+2. **Real-client smoke tests** with Claude Code, Codex, Pi, OpenCode, OpenClaw and Claude Desktop (`docs/mcp.md` checklist), then mark the verified configuration shapes.
+3. **Follow-ups:** per-token rate limiting; service-side paging for the 4 registers that page in memory; open small fixes from the gap analysis (monthly report totals, dashboard satisfaction chart); `qms-people` and Wave 1 modules.
