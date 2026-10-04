@@ -121,10 +121,18 @@ def _cli_actor() -> Actor:
     return Actor(user_id=None, label=label, role=RoleEnum.ADMINISTRADOR, channel="cli")
 
 
-def _find_user(username: str) -> User:
-    user = db.session.query(User).filter_by(username=username.strip()).one_or_none()
+def _find_user(identifier: str) -> User:
+    """Find a user by username or by e-mail address (case-insensitive)."""
+    value = identifier.strip()
+    user = db.session.query(User).filter_by(username=value).one_or_none()
     if user is None:
-        raise click.ClickException(f"User {username!r} not found.")
+        user = (
+            db.session.query(User)
+            .filter(db.func.lower(User.email) == value.lower())
+            .one_or_none()
+        )
+    if user is None:
+        raise click.ClickException(f"User {identifier!r} not found (tried username and email).")
     return user
 
 
@@ -133,7 +141,7 @@ def _day(value: datetime | None) -> str:
 
 
 @click.command("create-api-token")
-@click.option("--user", "username", required=True, help="Owner's username.")
+@click.option("--user", "username", required=True, help="Owner's username or email.")
 @click.option("--name", required=True, help="Label, for example the client's name.")
 @click.option(
     "--scope", "scopes", multiple=True, type=click.Choice(sorted(api_tokens.VALID_SCOPES)),
@@ -177,7 +185,7 @@ def create_api_token(username: str, name: str, scopes: tuple[str, ...], days: in
 
 
 @click.command("list-api-tokens")
-@click.option("--user", "username", default=None, help="Only this user's tokens.")
+@click.option("--user", "username", default=None, help="Only this user's tokens (username or email).")
 @with_appcontext
 def list_api_tokens(username: str | None) -> None:
     """List API tokens (never their secrets)."""

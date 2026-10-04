@@ -143,6 +143,32 @@ class CreateTestCase(CommandBase):
         self.assertEqual(0, db.session.query(ApiToken).count())
 
 
+class UserLookupTestCase(CommandBase):
+    def setUp(self) -> None:
+        super().setUp()
+        db.session.get(User, 1).email = "Ana@Example.com"
+        db.session.commit()
+
+    def test_create_accepts_an_email_case_insensitively(self) -> None:
+        result = self.run_cli("create-api-token", "--user", "ANA@example.COM", "--name", "mail")
+        self.assertEqual(0, result.exit_code, result.output)
+        self.assertEqual(1, db.session.query(ApiToken).filter_by(user_id=1).count())
+
+    def test_list_accepts_an_email(self) -> None:
+        self.assertEqual(0, self.create().exit_code)
+        result = self.run_cli("list-api-tokens", "--user", "ana@example.com")
+        self.assertEqual(0, result.exit_code, result.output)
+        self.assertIn("laptop", result.output)
+
+    def test_unknown_user_error_names_the_input_and_leaks_no_account(self) -> None:
+        result = self.run_cli("create-api-token", "--user", "ghost@example.com", "--name", "x")
+        self.assertNotEqual(0, result.exit_code)
+        self.assertIn("ghost@example.com", result.output)
+        self.assertIn("not found", result.output)
+        for leaked in ("ana", "luis", "Ana@Example.com"):
+            self.assertNotIn(leaked, result.output)
+
+
 class ListAndRevokeTestCase(CommandBase):
     def test_list_shows_metadata_and_never_secrets_or_hashes(self) -> None:
         token = self.plaintext(self.create("--scope", "write"))
