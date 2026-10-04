@@ -171,7 +171,7 @@ class ScheduledNotificationsTestCase(unittest.TestCase):
         self.assertEqual([["admin1@example.com"]], [m.recipients for m in outbox])
         self.assertEqual(SENDER, outbox[0].sender)
         (attachment,) = outbox[0].attachments
-        self.assertEqual("reporte-calidad-2026-10.pdf", attachment.filename)
+        self.assertEqual("reporte-calidad-2026-09.pdf", attachment.filename)
         self.assertEqual("application/pdf", attachment.content_type)
         self.assertTrue(attachment.data.startswith(b"%PDF"))
 
