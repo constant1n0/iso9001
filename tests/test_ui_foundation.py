@@ -7,6 +7,7 @@ import re
 import subprocess
 import unittest
 from datetime import date
+from unittest.mock import patch
 
 import test_auth_bootstrap as bootstrap
 from werkzeug.security import generate_password_hash
@@ -125,13 +126,15 @@ class UiFoundationTestCase(unittest.TestCase):
             db.session.commit()
         self._login("admin")
 
-        html = self.client.get("/dashboard/").get_data(as_text=True)
+        # Pin "today" so the 12-month chart window always contains the seeded surveys.
+        with patch("app.routes.dashboard_routes.local_today", return_value=date(2026, 9, 15)):
+            html = self.client.get("/dashboard/").get_data(as_text=True)
 
         match = DATA_SCRIPT.search(html)
         self.assertIsNotNone(match, "dashboard data script is missing")
         data = json.loads(match.group(1))
         self.assertEqual({"abiertas": 2, "cerradas": 1}, data["no_conformidades"])
-        self.assertEqual([8, 9], data["satisfaccion"]["meses"])
+        self.assertEqual(["2026-08", "2026-09"], data["satisfaccion"]["meses"])
         self.assertEqual([7.0, 9.0], data["satisfaccion"]["promedios"])
         # A free-text state that is neither open nor closed is not "closed".
         self.assertIn("1 cerrada<", html)

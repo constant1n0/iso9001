@@ -106,8 +106,12 @@ def send_upcoming_audits_alert(today: date | None = None) -> int:
 
 
 def send_monthly_quality_report(today: date | None = None) -> int:
-    """E-mail administrators the monthly quality summary as a PDF."""
-    day = today or local_today()
+    """E-mail administrators the quality summary of the month that just ended.
+
+    The job runs on the 1st, so the report covers the previous calendar month
+    and is dated its last day.
+    """
+    day = (today or local_today()).replace(day=1) - timedelta(days=1)
     if not _recipients(RoleEnum.ADMINISTRADOR):
         logger.info("No administrators with e-mail for the monthly report")
         return 0

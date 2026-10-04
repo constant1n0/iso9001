@@ -24,16 +24,36 @@ from ..models import Auditoria, Capacitacion, NoConformidad, SatisfaccionCliente
 from .pdf import render_pdf
 
 
+def _month_bounds(fecha: date) -> tuple[date, date]:
+    """Return the first day of ``fecha``'s month and of the next month."""
+    start = fecha.replace(day=1)
+    end = date(start.year + start.month // 12, start.month % 12 + 1, 1)
+    return start, end
+
+
 def _monthly_report_context(fecha: date) -> dict:
+    """Count only the records dated within the calendar month of ``fecha``."""
+    start, end = _month_bounds(fecha)
+
+    def in_month(column):
+        return (column >= start) & (column < end)
+
     promedio_satisfaccion = (
-        db.session.query(db.func.avg(SatisfaccionCliente.puntuacion)).scalar() or 0
+        db.session.query(db.func.avg(SatisfaccionCliente.puntuacion))
+        .filter(in_month(SatisfaccionCliente.fecha_encuesta))
+        .scalar()
+        or 0
     )
     return dict(
         fecha=fecha,
-        total_auditorias=Auditoria.query.count(),
-        total_no_conformidades=NoConformidad.query.count(),
+        total_auditorias=Auditoria.query.filter(in_month(Auditoria.fecha)).count(),
+        total_no_conformidades=NoConformidad.query.filter(
+            in_month(NoConformidad.fecha_detectada)
+        ).count(),
         promedio_satisfaccion=promedio_satisfaccion,
-        total_capacitaciones=Capacitacion.query.count(),
+        total_capacitaciones=Capacitacion.query.filter(
+            in_month(Capacitacion.fecha)
+        ).count(),
     )
 
 

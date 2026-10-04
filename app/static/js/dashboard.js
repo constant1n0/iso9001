@@ -44,7 +44,10 @@
   new Chart(document.getElementById("chart-satisfaccion"), {
     type: "bar",
     data: {
-      labels: sat.meses.map(function (m) { return MONTHS[m - 1]; }),
+      labels: sat.meses.map(function (ym) {
+        var parts = ym.split("-");
+        return MONTHS[Number(parts[1]) - 1] + " " + parts[0];
+      }),
       datasets: [{ label: "Media", data: sat.promedios, backgroundColor: canary, maxBarThickness: 36 }]
     },
     options: {
