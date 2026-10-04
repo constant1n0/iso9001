@@ -36,6 +36,7 @@ MODULES = (
     ("/partes_interesadas/", "nueva", "/editar/", "/eliminar/", EVERYONE, EVERYONE, {ADMIN}),
     ("/auditorias/", "nueva", "/editar/", "/eliminar/", {ADMIN, AUDITOR}, {ADMIN, AUDITOR}, {ADMIN}),
     ("/documents/", "new", "/edit/", "/delete/", {ADMIN}, {ADMIN}, {ADMIN}),
+    ("/usuarios/", "nuevo", "/editar", "/eliminar", {ADMIN, AUDITOR}, {ADMIN}, set()),
 )
 
 
@@ -86,7 +87,8 @@ class UiPermissionsTestCase(unittest.TestCase):
                     self.assertEqual(role in remove, delete in html, "delete form")
 
     def test_navigation_links_follow_the_read_permission(self) -> None:
-        expected = {"/auditorias/": {ADMIN, AUDITOR}, "/documents/": {ADMIN}, "/no_conformidades/": set(RoleEnum)}
+        expected = {"/auditorias/": {ADMIN, AUDITOR}, "/documents/": {ADMIN}, "/no_conformidades/": set(RoleEnum),
+                    "/usuarios/": {ADMIN, AUDITOR}}
         for role in RoleEnum:
             html = self._page(role, "/dashboard/").get_data(as_text=True)
             for link, roles in expected.items():

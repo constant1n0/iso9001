@@ -89,15 +89,26 @@ TRAINING = dict(
     evaluacion_final="A",
 )
 PARTY = dict(nombre="Clientes new")
+NEW_USER = dict(
+    username="persona.nueva",
+    email="persona.nueva@example.com",
+    role="OPERATIVO",
+    password="ClaveNueva2026",
+    confirm_password="ClaveNueva2026",
+)
+USER_EDIT = dict(email="operativo.nuevo@example.com", role="OPERATIVO")
 
 
 def _html(resource, base, create, update, delete):
-    """Endpoints for a classic HTML register (list/new/edit/delete)."""
+    """Endpoints for a classic HTML register (list/new/edit/delete).
+
+    ``delete=None`` for a register without a delete route.
+    """
     return [
         Endpoint(resource, "read", "GET", base, 200),
         Endpoint(resource, "create", "POST", f"{base}{create[0]}", 302, create[1]),
         Endpoint(resource, "update", "POST", f"{base}{update[0]}", 302, update[1]),
-        Endpoint(resource, "delete", "POST", f"{base}{delete}", 302),
+        *([Endpoint(resource, "delete", "POST", f"{base}{delete}", 302)] if delete else []),
     ]
 
 
@@ -125,6 +136,9 @@ ENDPOINTS = [
            ("editar/1", TRAINING), "eliminar/1"),
     *_html("INTERESTED_PARTIES", "/partes_interesadas/", ("nueva", PARTY),
            ("editar/1", PARTY), "eliminar/1"),
+    # Users are deactivated, never deleted (U2): no delete route. User 3 is
+    # the seeded "operativo" account (one user per role, in RoleEnum order).
+    *_html("USERS", "/usuarios/", ("nuevo", NEW_USER), ("3/editar", USER_EDIT), None),
     *_json("IMPROVEMENTS", "/mejoras/api/", {"no_conformidad": "NC"},
            {"accion_correctiva": "x"}),
     *_json("AUDIT_INDICATORS", "/auditoria_indicador/",
@@ -158,13 +172,14 @@ ALLOWED = {
     "INTERESTED_PARTIES": (ALL, ALL, {ADMIN}),
     "AUDITS": (ADMIN_AUDITOR, ADMIN_AUDITOR, {ADMIN}),
     "DOCUMENTS": ({ADMIN}, {ADMIN}, {ADMIN}),
+    "USERS": (ADMIN_AUDITOR, {ADMIN}, set()),  # nobody deletes; test_policy pins it
     "AUDIT_INDICATORS": JSON_REGISTER,
     "ROLES_RESPONSIBILITIES": JSON_REGISTER,
     "RISKS_OPPORTUNITIES": JSON_REGISTER,
     "TRAINING_RESOURCES": JSON_REGISTER,
     "PROCESS_OPERATIONS": JSON_REGISTER,
 }
-NO_ROUTES = {"USERS", "AUDIT_LOG", "API_TOKENS"}  # policy entries only until their adapters exist
+NO_ROUTES = {"AUDIT_LOG", "API_TOKENS"}  # policy entries only until their adapters exist
 
 
 def allowed_roles(endpoint: Endpoint) -> set:
