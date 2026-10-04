@@ -13,10 +13,10 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from .models import DocumentCategory, EstadoAuditoriaEnum
+from .models import DocumentCategory, EstadoAuditoriaEnum, RoleEnum
 from .services.nonconformities import ESTADOS_NO_CONFORMIDAD
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField
+from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField
 from wtforms.validators import DataRequired, Length, NumberRange, EqualTo, Email, Optional
 class BaseForm(FlaskForm):
     """Base form: validation messages in Spanish.
@@ -114,3 +114,27 @@ class PasswordResetForm(BaseForm):
     password = PasswordField('Nueva contraseña', validators=[DataRequired(), Length(min=8)])
     confirm_password = PasswordField('Confirmar contraseña', validators=[DataRequired(), EqualTo('password')])
     submit = SubmitField('Restablecer contraseña')
+
+# Administrator forms for user accounts. The users service has the last word on
+# every value (trimmed username, e-mail format and uniqueness, guard rails).
+ROLE_CHOICES = [(role.name, role.value) for role in RoleEnum]
+
+
+class UserCreateForm(BaseForm):
+    username = StringField('Nombre de usuario', validators=[DataRequired(), Length(min=4, max=150)])
+    email = EmailField('Correo electrónico', validators=[DataRequired(), Length(max=255)])
+    role = SelectField('Rol', choices=ROLE_CHOICES, default=RoleEnum.OPERATIVO.name,
+                       validators=[DataRequired()])
+    password = PasswordField('Contraseña', validators=[DataRequired(), Length(min=8)])
+    confirm_password = PasswordField(
+        'Confirmar contraseña',
+        validators=[DataRequired(), EqualTo('password', message='Las contraseñas no coinciden.')],
+    )
+    submit = SubmitField('Crear usuario')
+
+
+# Usernames cannot change after creation (U5), so the edit form omits them.
+class UserEditForm(BaseForm):
+    email = EmailField('Correo electrónico', validators=[DataRequired(), Length(max=255)])
+    role = SelectField('Rol', choices=ROLE_CHOICES, validators=[DataRequired()])
+    submit = SubmitField('Guardar')

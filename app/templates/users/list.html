@@ -1,0 +1,62 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header %}
+{% block title %}Usuarios{% endblock %}
+{% block crumb %}Administración · Usuarios{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 5.3 · Roles, responsabilidades y autoridades', 'Usuarios') %}
+    {% if can('create', 'users') %}
+    <a class="btn btn--primary" href="{{ url_for('users.new_user') }}">+ Nuevo usuario</a>
+    {% endif %}
+{% endcall %}
+
+{# The viewer is always listed, so the table is never empty. #}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Usuario</th>
+                <th scope="col">Correo electrónico</th>
+                <th scope="col">Rol</th>
+                <th scope="col">Estado</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr>
+                <td class="mono">{{ user.username }}</td>
+                <td>{{ user.email or '—' }}</td>
+                <td>{{ user.role.value }}</td>
+                <td>
+                    {% if user.is_active %}<span class="badge badge--ok">Activo</span>
+                    {% else %}<span class="badge badge--danger">Inactivo</span>{% endif %}
+                </td>
+                <td>
+                    <div class="table__actions">
+                        {% if can('update', 'users') %}
+                        <a class="btn btn--sm" href="{{ url_for('users.edit_user', user_id=user.id) }}">Editar</a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
