@@ -227,11 +227,21 @@ class MigrationsTestCase(unittest.TestCase):
             upgrade(directory=MIGRATIONS_DIR)
             columns = {c["name"]: c for c in inspect(db.engine).get_columns("users")}
             self.assertFalse(columns["active"]["nullable"])
+            with db.engine.begin() as connection:
+                # Writers outside the ORM rely on the server default.
+                connection.execute(
+                    text(
+                        "INSERT INTO users (username, password, role) "
+                        "VALUES ('raw', 'x', 'OPERATIVO')"
+                    )
+                )
             with db.engine.connect() as connection:
-                active = connection.execute(
-                    text("SELECT active FROM users WHERE username = 'legacy'")
-                ).scalar_one()
-            self.assertIs(True, active)
+                active = dict(
+                    connection.execute(
+                        text("SELECT username, active FROM users")
+                    ).all()
+                )
+            self.assertEqual({"legacy": True, "raw": True}, active)
             downgrade(directory=MIGRATIONS_DIR, revision="e6b1a4c8d3f7")
             self.assertNotIn(
                 "active", {c["name"] for c in inspect(db.engine).get_columns("users")}
