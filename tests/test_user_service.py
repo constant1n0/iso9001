@@ -175,6 +175,14 @@ class CreateTestCase(UserServiceBase):
                 self.assertRaises(errors().Conflict):
             users().create(db.session, self.admin, NEW)
 
+    def test_a_duplicate_that_slips_past_the_check_hits_the_constraint(self) -> None:
+        # A concurrent insert can win after the pre-check; the unique index decides.
+        with patch("app.services.users._ensure_email_free"), \
+                self.assertRaises(errors().Conflict):
+            users().create(db.session, self.admin, NEW | {"email": "admin@example.com"})
+        db.session.rollback()
+        self.assertEqual(2, db.session.query(User).count())
+
     def test_only_administrators_create(self) -> None:
         for caller in (actor(AUDITOR), actor(OPERATIVO)):
             with self.subTest(role=caller.role), self.assertRaises(errors().PermissionDenied):
@@ -207,6 +215,15 @@ class UpdateTestCase(UserServiceBase):
                 users().update(db.session, self.admin, self.luis.id, data)
         db.session.commit()
         self.assertEqual([], self.audit_rows())
+
+    def test_a_case_only_difference_normalises_a_legacy_address(self) -> None:
+        legacy = self.make_user("legacy", email="Legacy@Example.com")
+        users().update(db.session, self.admin, legacy.id, {"email": "legacy@example.com"})
+        db.session.commit()
+        self.assertEqual("legacy@example.com", legacy.email)
+        (entry,) = self.user_rows()
+        self.assertEqual(({"email": "Legacy@Example.com"}, {"email": "legacy@example.com"}),
+                         (entry.before, entry.after))
 
     def test_another_users_email_is_a_conflict(self) -> None:
         with self.assertRaises(errors().Conflict):
