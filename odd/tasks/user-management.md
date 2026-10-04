@@ -55,7 +55,7 @@ See U11. Also excluded: Flask-Limiter storage backend, `qms-people` competence r
 
 Route for every task: **delegated direct** (each touches two or more non-trivial files).
 
-- [ ] **UM-1 — Account state.** Forecast 200-320.
+- [x] **UM-1 — Account state.** Forecast 200-320.
   - Migration on top of `e6b1a4c8d3f7` adding `users.active` (server default true) and the model column; `is_active` returns it.
   - Refusal for inactive users in `user_loader`, login (generic "Credenciales inválidas" message, distinct security-log reason), reset request and reset, `api_tokens.authenticate` (new failure reason), and e-mail notification recipients.
   - Acceptance: an inactive user cannot log in, an existing session is dropped on the next request, no reset e-mail is sent, a valid token is refused, and notifications skip them; the migration upgrades and downgrades on PostgreSQL.
@@ -91,7 +91,16 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| UM-1..UM-4 | Pending | — | — | — |
+| UM-1 | Done | `21e6221` (column, migration `f2c7a9e4b1d6`, refusals), review follow-up test in the next commit | RED: 9 `test_user_account_state` tests (`'active' is an invalid keyword argument`), then 7 for the right reasons (no security-log warning, `302 != 200`, session still valid); migration `KeyError: 'active'`; notifications `1 != 2`; token of an inactive owner not refused. GREEN: 553 tests incl. PostgreSQL | Range `fc8c913..21e6221`: **high** (authentication, security log); consent granted; 4-lens review `review-97c3950522aa2f95` **approved** and acknowledged; no blocking findings; 3 suggestions applied (raw-insert migration test, this progress row, deploy order below) |
+| UM-2..UM-4 | Pending | — | — | — |
+
+## Findings during implementation
+
+- `AuthFailure` lives in `app/services/errors.py`; `tests/test_api_token_service.py` pins its exact set of values. The edit surface was widened to that file with the user's approval (2026-10-04).
+- Flask-Login `login_user()` returns False for an inactive user instead of raising, so the login route branches on it and answers exactly like wrong credentials; the security log records `inactive`.
+- An inactive user's reset link is refused inside `User.verify_reset_token`, and `update_password_from_reset` also requires `active` in its `WHERE` clause. A user reactivated within the hour can still use an earlier reset link if their password has not changed.
+- `is_active` is `self.active is True`, so an unsaved user counts as inactive.
+- **Deployment order:** the model selects `users.active` on every user load, so production must run `flask db upgrade` before the services restart on the new code (or in the same maintenance step); otherwise every authenticated request fails.
 
 ## Delivery
 
@@ -100,4 +109,4 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 
 ## Next step
 
-UM-1 — account state.
+UM-2 — users service.
