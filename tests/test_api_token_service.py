@@ -406,5 +406,53 @@ class RevokeAndListTestCase(TokenBase):
                 tokens().list_(db.session, caller)
 
 
+class RevokeAllForUserTestCase(TokenBase):
+    def test_revokes_only_the_active_tokens_of_that_user(self) -> None:
+        other = self.make_user("luis", AUDITOR)
+        _, first = self.issue()
+        _, second = self.issue(name="second")
+        _, expired = self.issue(name="old", now=NOW - timedelta(days=100))
+        _, revoked = self.issue(name="gone")
+        _, foreign = self.issue(user_id=other.id, name="foreign")
+        earlier = NOW - timedelta(hours=1)
+        tokens().revoke(db.session, self.admin, revoked.id, now=earlier)
+        db.session.commit()
+        seen = len(self.audit_rows())
+        result = tokens().revoke_all_for_user(db.session, self.admin, self.owner.id, now=NOW)
+        db.session.commit()
+        self.assertEqual([first, second], result)
+        for row in (first, second):
+            self.assertEqual(NOW, aware(row.revoked_at))
+            self.assertEqual(self.admin.label, row.revoked_by_label)
+        self.assertIsNone(expired.revoked_at)
+        self.assertEqual(earlier, aware(revoked.revoked_at))
+        self.assertIsNone(foreign.revoked_at)
+        entries = self.audit_rows()[seen:]
+        self.assertEqual([("update", first.id), ("update", second.id)],
+                         [(entry.action, entry.entity_id) for entry in entries])
+        for entry in entries:
+            self.assertEqual("api_tokens", entry.entity_type)
+            self.assertEqual({"revoked_at", "revoked_by_label"}, set(entry.after))
+            self.assertNotIn("token_hash", json.dumps([entry.before, entry.after]))
+
+    def test_a_user_without_active_tokens_writes_nothing(self) -> None:
+        self.assertEqual(
+            [], tokens().revoke_all_for_user(db.session, self.admin, self.owner.id, now=NOW)
+        )
+        self.assertEqual([], self.audit_rows())
+
+    def test_unknown_user_or_callers_without_the_token_grant_fail(self) -> None:
+        _, row = self.issue()
+        db.session.commit()
+        with self.assertRaises(errors().NotFound):
+            tokens().revoke_all_for_user(db.session, self.admin, 9999, now=NOW)
+        for caller in (actor(AUDITOR), actor(OPERATIVO),
+                       actor(ADMIN, channel="mcp", scopes={"read", "write"})):
+            with self.subTest(channel=caller.channel, role=caller.role), \
+                    self.assertRaises(errors().PermissionDenied):
+                tokens().revoke_all_for_user(db.session, caller, self.owner.id, now=NOW)
+        self.assertIsNone(row.revoked_at)
+
+
 if __name__ == "__main__":
     unittest.main()

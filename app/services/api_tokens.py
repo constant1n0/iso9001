@@ -237,12 +237,43 @@ def revoke(
         raise NotFound("Token no encontrado.")
     if token.revoked_at is not None:
         raise Conflict("El token ya estaba revocado.")
+    _revoke(session, actor, token, now if now is not None else _now())
+    return token
+
+
+def revoke_all_for_user(
+    session: Session,
+    actor: Actor,
+    user_id: int,
+    *,
+    now: datetime | None = None,
+) -> list[ApiToken]:
+    """Revoke every active token of ``user_id``, oldest first; the caller commits.
+
+    Expired and already revoked tokens are left as they are. Each revocation
+    is audited like :func:`revoke`. Returns the tokens it revoked.
+    """
+    policy.require(actor, Action.UPDATE, Resource.API_TOKENS)
+    if session.get(User, user_id) is None:
+        raise NotFound("Usuario no encontrado.")
+    moment = now if now is not None else _now()
+    candidates = session.scalars(
+        select(ApiToken)
+        .where(ApiToken.user_id == user_id, ApiToken.revoked_at.is_(None))
+        .order_by(ApiToken.id)
+    )
+    revoked = [token for token in candidates if status(token, moment) == ACTIVE]
+    for token in revoked:
+        _revoke(session, actor, token, moment)
+    return revoked
+
+
+def _revoke(session: Session, actor: Actor, token: ApiToken, moment: datetime) -> None:
     before = audit.snapshot(token)
-    token.revoked_at = now if now is not None else _now()
+    token.revoked_at = moment
     token.revoked_by_label = actor.label
     session.flush()
     audit.record(session, actor, "update", token, before=before)
-    return token
 
 
 def list_(session: Session, actor: Actor, user_id: int | None = None) -> list[ApiToken]:
