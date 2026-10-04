@@ -82,3 +82,27 @@ def list_records(session: Session, actor: Actor, module: Module,
 
 def get_record(session: Session, actor: Actor, module: Module, record_id: int) -> dict[str, Any]:
     return serialise(module.service.get(session, actor, record_id))
+
+
+def _clean_data(module: Module, data: dict[str, Any]) -> dict[str, Any]:
+    """ISO text becomes ``date`` for date fields; the service validates everything else."""
+    dates = {f.name for f in module.fields if f.type == "date"}
+    clean = dict(data)
+    for name in dates & clean.keys():
+        if isinstance(clean[name], str):
+            try:
+                clean[name] = date.fromisoformat(clean[name])
+            except ValueError:
+                raise ValidationError(
+                    f"El campo «{name}» debe ser una fecha AAAA-MM-DD."
+                ) from None
+    return clean
+
+
+def create_record(session: Session, actor: Actor, module: Module, data: dict[str, Any]) -> dict[str, Any]:
+    return serialise(module.service.create(session, actor, _clean_data(module, data)))
+
+
+def update_record(session: Session, actor: Actor, module: Module, record_id: int,
+                  data: dict[str, Any]) -> dict[str, Any]:
+    return serialise(module.service.update(session, actor, record_id, _clean_data(module, data)))
