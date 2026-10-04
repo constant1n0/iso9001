@@ -85,6 +85,30 @@ class ScheduledNotificationsTestCase(unittest.TestCase):
         self.assertIn("Compras", outbox[0].body)
         self.assertNotIn("Ventas", outbox[0].body)
 
+    def test_inactive_users_get_no_mail_and_their_address_is_not_logged(self) -> None:
+        from app import audit_notifications as notifications
+
+        self._user("admin1", RoleEnum.ADMINISTRADOR, "admin1@example.com")
+        self._user("former", RoleEnum.ADMINISTRADOR, "former@example.com")
+        self._audit("Compras", TODAY, EstadoAuditoriaEnum.PENDIENTE)
+        db.session.commit()
+        User.query.filter_by(username="former").one().active = False
+        db.session.commit()
+
+        with (
+            mail.record_messages() as outbox,
+            self.assertLogs(notifications.logger, "INFO") as logs,
+        ):
+            sent = notifications.send_pending_audits_report()
+
+        self.assertEqual(1, sent)
+        self.assertEqual([["admin1@example.com"]], [m.recipients for m in outbox])
+        self.assertTrue(
+            any("former" in line and "inactive" in line for line in logs.output),
+            logs.output,
+        )
+        self.assertNotIn("former@example.com", "\n".join(logs.output))
+
     def test_pending_report_sends_nothing_without_pending_audits(self) -> None:
         from app import audit_notifications as notifications
 

@@ -130,11 +130,13 @@ def send_monthly_quality_report(today: date | None = None) -> int:
 
 
 def _recipients(role: RoleEnum) -> list[User]:
-    """Users with ``role`` that have an e-mail address."""
+    """Active users with ``role`` that have an e-mail address."""
     users: Iterable[User] = User.query.filter_by(role=role).all()
     recipients = []
     for user in users:
-        if user.email:
+        if not user.is_active:
+            logger.info("User %s is inactive; skipped", user.username)
+        elif user.email:
             recipients.append(user)
         else:
             logger.warning("User %s has no e-mail address; skipped", user.username)

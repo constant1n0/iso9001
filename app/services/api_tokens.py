@@ -180,9 +180,10 @@ def authenticate(
     """Return the ``mcp`` actor for a valid bearer token or raise.
 
     Malformed, unknown, tampered, expired and revoked tokens, and tokens whose
-    owner no longer exists, all raise :class:`AuthenticationFailed` with the
-    same message. The actor carries the owner's *current* role and the token's
-    scopes. ``last_used_at`` is flushed at most every five minutes.
+    owner no longer exists or is inactive, all raise
+    :class:`AuthenticationFailed` with the same message. The actor carries the
+    owner's *current* role and the token's scopes. ``last_used_at`` is flushed
+    at most every five minutes.
     """
     _require_secret_key(secret_key)
     match = _TOKEN.fullmatch(raw) if isinstance(raw, str) else None
@@ -207,6 +208,8 @@ def authenticate(
     user = session.get(User, row.user_id)
     if user is None:
         raise AuthenticationFailed(AuthFailure.USER_MISSING, prefix)
+    if not user.is_active:
+        raise AuthenticationFailed(AuthFailure.USER_INACTIVE, prefix)
     if row.last_used_at is None or moment - _utc(row.last_used_at) >= LAST_USED_INTERVAL:
         row.last_used_at = moment
         session.flush()

@@ -222,7 +222,7 @@ class AuthFailureTestCase(TokenBase):
         reasons = errors().AuthFailure
         self.assertEqual(
             {"malformed", "unknown_prefix", "bad_secret", "revoked", "expired",
-             "user_missing", "invalid"},
+             "user_missing", "user_inactive", "invalid"},
             {str(r) for r in reasons},
         )
         self.assertEqual("invalid", errors().AuthenticationFailed().reason)
@@ -287,6 +287,15 @@ class AuthenticateTestCase(TokenBase):
         db.session.execute(db.text("DELETE FROM users"))
         db.session.commit()
         self.assert_generic_failure(self.plaintext)
+
+    def test_valid_token_of_an_inactive_user_fails(self) -> None:
+        self.owner.active = False
+        db.session.commit()
+        self.assert_generic_failure(self.plaintext)
+        with self.assertRaises(errors().AuthenticationFailed) as raised:
+            self.authenticate(self.plaintext)
+        self.assertEqual(errors().AuthFailure.USER_INACTIVE, raised.exception.reason)
+        self.assertEqual(self.row.prefix, raised.exception.token_prefix)
 
     def test_the_failure_reason_is_internal_and_not_in_the_message(self) -> None:
         with self.assertRaises(errors().AuthenticationFailed) as raised:

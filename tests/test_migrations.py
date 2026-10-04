@@ -214,6 +214,39 @@ class MigrationsTestCase(unittest.TestCase):
             downgrade(directory=MIGRATIONS_DIR, revision="d5a9f3b7c1e2")
             self.assertNotIn("api_tokens", inspect(db.engine).get_table_names())
 
+    def test_users_active_keeps_existing_users_active_and_downgrades(self) -> None:
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision="e6b1a4c8d3f7")
+            with db.engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO users (username, password, role) "
+                        "VALUES ('legacy', 'x', 'OPERATIVO')"
+                    )
+                )
+            upgrade(directory=MIGRATIONS_DIR)
+            columns = {c["name"]: c for c in inspect(db.engine).get_columns("users")}
+            self.assertFalse(columns["active"]["nullable"])
+            with db.engine.begin() as connection:
+                # Writers outside the ORM rely on the server default.
+                connection.execute(
+                    text(
+                        "INSERT INTO users (username, password, role) "
+                        "VALUES ('raw', 'x', 'OPERATIVO')"
+                    )
+                )
+            with db.engine.connect() as connection:
+                active = dict(
+                    connection.execute(
+                        text("SELECT username, active FROM users")
+                    ).all()
+                )
+            self.assertEqual({"legacy": True, "raw": True}, active)
+            downgrade(directory=MIGRATIONS_DIR, revision="e6b1a4c8d3f7")
+            self.assertNotIn(
+                "active", {c["name"] for c in inspect(db.engine).get_columns("users")}
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

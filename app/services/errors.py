@@ -64,6 +64,7 @@ class AuthFailure(StrEnum):
     REVOKED = "revoked"
     EXPIRED = "expired"
     USER_MISSING = "user_missing"
+    USER_INACTIVE = "user_inactive"
 
 
 class AuthenticationFailed(DomainError):
