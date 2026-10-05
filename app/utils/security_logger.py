@@ -49,9 +49,11 @@ def init_security_logging(app: Flask) -> None:
 
 
 def get_client_ip():
-    """Obtiene la IP del cliente considerando proxies."""
-    if request.headers.get('X-Forwarded-For'):
-        return request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    """Resolved client IP (``request.remote_addr``), never a raw header.
+
+    Behind ``TRUSTED_PROXIES`` it is set by ``TrustedProxyMiddleware``; an
+    ``X-Forwarded-For`` from any other peer is ignored.
+    """
     return request.remote_addr
 
 

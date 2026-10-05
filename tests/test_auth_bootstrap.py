@@ -83,6 +83,7 @@ BASE_TEST_CONFIG = {
     "SECURITY_LOG_ENABLED": False,
     "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
     "TESTING": True,
+    "TRUSTED_PROXIES": "",
     "WTF_CSRF_ENABLED": False,
 }
 

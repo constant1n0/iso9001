@@ -56,6 +56,10 @@ class Config:
         ),
     )
 
+    # Reverse proxies (e.g. Traefik) whose X-Forwarded-For/-Proto are honoured:
+    # comma-separated addresses or CIDR networks; empty = none; '*' is refused
+    TRUSTED_PROXIES = os.environ.get('TRUSTED_PROXIES', '')
+
     # Configuración de correo
     MAIL_SERVER = 'smtp.gmail.com'
     MAIL_PORT = 587
