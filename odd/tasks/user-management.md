@@ -123,17 +123,21 @@ $ venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 | 3 | [#71](https://github.com/constant1n0/iso9001/pull/71) | UM-3a | `b47a490` | maintainer-approved `size:exception` (661) |
 | 4 | [#72](https://github.com/constant1n0/iso9001/pull/72) | UM-3b | `5454725` | maintainer-approved `size:exception` (1,053) |
 | — | [#73](https://github.com/constant1n0/iso9001/pull/73) | 405/429 handler fix (separate branch) | `a1307ff` | |
-| 5 | Pending | UM-4, this closing update | — | Final slice |
+| 5 | [#74](https://github.com/constant1n0/iso9001/pull/74) | UM-4, closing update | `e378bb9` | maintainer-approved `size:exception` (1,200) |
 
-## Production deployment (pending authorization)
+## Production deployment (2026-10-05)
 
-`users.active` is a new column (migration `f2c7a9e4b1d6`) and the model reads it on every user load, so the deployment must run `flask db upgrade` before the services restart on the new code:
+`main@e378bb9` runs on `vulcano`. The user authorized this deployment over SSH as `dcm`, with no `sudo` by the agent.
 
-1. Back up the database (`pg_dump -Fc`) and the code.
-2. Fast-forward the code (git bundle), `pip install -r requirements.txt` (no dependency changes expected), `flask db upgrade`, `flask db check`.
-3. The user restarts `iso9001`, `iso9001-celery-worker`, `iso9001-celery-beat` and `iso9001-mcp`.
-4. Smoke tests: login, `/usuarios/`, `/perfil/`, `/mcp` 401 without a token.
+| Step | Result |
+|---|---|
+| Preflight | Was `fc8c913`, migration `e6b1a4c8d3f7`; services active; working tree clean |
+| Backups | `~/work/backups/calidad-*-pre-e378bb9.dump` (`pg_dump -Fc` from `iso9001-db`, 164 entries listed by `pg_restore -l`) and `iso9001-code-*-pre-e378bb9.tar.gz`, both mode 600 |
+| Code | Incremental git bundle `fc8c913..main`, fast-forward to `e378bb9`; `pip check` clean, no dependency changes |
+| Database | `flask db upgrade` to `f2c7a9e4b1d6` (`users.active`) before the restart; `flask db check` clean; the one existing user is active |
+| Restart (user, with sudo) | `iso9001`, `iso9001-celery-worker`, `iso9001-celery-beat`, `iso9001-mcp` |
+| Smoke tests | All four services active, no error entries in the journal; `/login` 200 with HSTS; `/usuarios/` and `/perfil/` redirect to the login; `/mcp` 401 with `WWW-Authenticate: Bearer`; unknown path 404 |
 
 ## Next step
 
-**Feature complete** once slice 5 merges. Next: the production deployment above, after explicit authorization.
+**Feature complete and deployed.** Follow-ups: Flask-Limiter uses in-memory storage in production, so limits are per worker process (move it to the existing Redis); real-client MCP smoke tests per `docs/mcp.md`.
