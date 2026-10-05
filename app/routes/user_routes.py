@@ -28,9 +28,11 @@ a 404, a policy refusal redirects to the dashboard).
 The account actions (deactivate, reactivate, send a reset link) are POST-only
 and need the update grant; they flash the outcome or the refusal on the list
 and write one security-log line when something happened. The reset link is
-rate limited per client and never reveals why mail failed.
+rate limited per client, counting only requests that pass the grant check, and
+never shows why mail failed: the exception types go to the application log.
 """
 
+import logging
 from collections.abc import Callable, Iterable
 from typing import Any
 
@@ -46,6 +48,7 @@ from ..services.errors import Conflict, ValidationError
 from ..utils.password_reset_mail import (
     ResetEmailConfigurationError,
     ResetEmailError,
+    describe_failure,
     send_admin_reset_email,
 )
 from ..utils.permissions import require_permission
@@ -53,6 +56,7 @@ from ..utils.security_logger import log_admin_reset_link, log_user_status_change
 from ..utils.web_actor import current_actor
 
 bp = Blueprint('users', __name__, url_prefix='/usuarios')
+logger = logging.getLogger(__name__)
 
 CREATE_FIELDS = ('username', 'email', 'role', 'password')
 EDIT_FIELDS = ('email', 'role')
@@ -162,10 +166,12 @@ def _set_active(user_id: int, active: bool) -> ResponseReturnValue:
     return redirect(url_for('users.list_users'))
 
 
+# The limiter is innermost so that refused requests (anonymous, or without the
+# grant) never spend the administrators' budget.
 @bp.route('/<int:user_id>/enviar-enlace', methods=['POST'])
-@limiter.limit('10 per hour')
 @login_required
 @require_permission('update', 'users')
+@limiter.limit('10 per hour')
 def send_reset_link(user_id: int) -> ResponseReturnValue:
     """Mail the user a password-reset link with the administrator wording."""
     actor = current_actor()
@@ -184,7 +190,10 @@ def send_reset_link(user_id: int) -> ResponseReturnValue:
                 if isinstance(error, ResetEmailConfigurationError)
                 else 'delivery'
             )
-    log_admin_reset_link(user.username, actor.label, reason is None, reason)
+            logger.warning(
+                'Administrator reset e-mail not sent: %s', describe_failure(error)
+            )
+    log_admin_reset_link(user.username, actor.label, reason)
     if reason is None:
         flash(LINK_SENT, 'success')
     else:

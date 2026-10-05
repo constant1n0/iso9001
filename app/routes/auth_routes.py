@@ -13,6 +13,8 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
+import logging
+
 from flask import (
     Blueprint,
     flash,
@@ -25,15 +27,19 @@ from sqlalchemy import func
 from werkzeug.security import check_password_hash, generate_password_hash
 from ..models import User
 from ..forms import LoginForm, PasswordResetRequestForm, PasswordResetForm
-# ``mail`` stays importable here: tests patch ``auth_routes.mail.send``.
-from ..extensions import limiter, mail  # noqa: F401
-from ..utils.password_reset_mail import ResetEmailError, send_reset_email
+from ..extensions import limiter
+from ..utils.password_reset_mail import (
+    ResetEmailError,
+    describe_failure,
+    send_reset_email,
+)
 from ..utils.security_logger import (
     log_login_attempt, log_logout,
     log_password_reset_request, log_password_change
 )
 
 bp = Blueprint('auth', __name__)
+logger = logging.getLogger(__name__)
 
 GENERIC_RESET_MESSAGE = (
     'Se ha enviado un correo con instrucciones para restablecer tu contraseña.'
@@ -74,6 +80,27 @@ def logout():
     return redirect(url_for('auth.login'))
 
 
+def _reset_request_user(address: str) -> tuple[User | None, str | None]:
+    """Find the account a reset request names: ``(user, refusal reason)``.
+
+    The address as typed wins. Otherwise it is matched regardless of case,
+    unless that fits two legacy rows differing only by case: then nobody gets
+    the link and the reason is ``ambiguous``.
+    """
+    user = User.query.filter(User.email == address).first()
+    if user is not None:
+        return user, None
+    matches = (
+        User.query.filter(func.lower(User.email) == address.lower())
+        .order_by(User.id)
+        .limit(2)
+        .all()
+    )
+    if len(matches) > 1:
+        return None, 'ambiguous'
+    return (matches[0] if matches else None), None
+
+
 @bp.route('/reset_password_request', methods=['GET', 'POST'])
 @limiter.limit("3 per hour", methods=["POST"])
 def reset_password_request():
@@ -82,20 +109,21 @@ def reset_password_request():
 
     form = PasswordResetRequestForm()
     if form.validate_on_submit():
-        # Addresses are unique regardless of case (legacy rows may be mixed case).
-        email = form.email.data.strip().lower()
-        user = (
-            User.query.filter(func.lower(User.email) == email)
-            .order_by(User.id)
-            .first()
-        )
-        if user and not user.is_active:
-            # Same response as an unknown address; only the log tells them apart.
+        address = form.email.data.strip()
+        email = address.lower()
+        user, reason = _reset_request_user(address)
+        # Every outcome gets the same response; only the log tells them apart.
+        if reason is not None:
+            log_password_reset_request(email, success=False, reason=reason)
+        elif user and not user.is_active:
             log_password_reset_request(email, success=False, reason='inactive')
         elif user:
             try:
                 send_reset_email(user)
-            except ResetEmailError:
+            except ResetEmailError as error:
+                logger.warning(
+                    'Password reset e-mail not sent: %s', describe_failure(error)
+                )
                 log_password_reset_request(email, success=False)
             else:
                 log_password_reset_request(email, success=True)

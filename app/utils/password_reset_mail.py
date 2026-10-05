@@ -64,6 +64,17 @@ class ResetEmailDeliveryError(ResetEmailError):
     """Raised when the configured mail transport cannot send a reset email."""
 
 
+def describe_failure(error: ResetEmailError) -> str:
+    """Name the failure and its cause by exception type, for operators.
+
+    Only class names are reported: a transport message can carry the server,
+    credentials or the recipient address, and the link must never be logged.
+    """
+    cause = error.__cause__
+    cause_name = type(cause).__name__ if cause is not None else 'none'
+    return f'{type(error).__name__} (cause: {cause_name})'
+
+
 def _is_valid_hostname(hostname: str) -> bool:
     """Return whether a hostname is an ASCII DNS name or IP address."""
     try:

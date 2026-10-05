@@ -161,13 +161,14 @@ def log_user_status_change(username, active, actor_label):
     )
 
 
-def log_admin_reset_link(username, actor_label, success, reason=None):
+def log_admin_reset_link(username, actor_label, reason=None):
     """Registra un enlace de restablecimiento enviado por un administrador.
 
+    Sin ``reason`` el envío salió bien; con él, ``reason`` dice por qué no.
     Nunca incluye el enlace, el token ni el cuerpo del correo.
     """
     target = f"user={_field(username)} | by={_field(actor_label)}"
-    if success:
+    if reason is None:
         security_logger.info(
             f"PASSWORD_RESET_LINK_SENT | {target} | ip={_client_ip_or_dash()}"
         )

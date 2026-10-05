@@ -24,6 +24,7 @@ from app.services import users as users_service
 from app.services.actor import Actor
 from app.services.errors import Conflict
 from app.utils import password_reset_mail
+from app.utils.security_logger import log_admin_reset_link
 
 BASE = "/usuarios"
 CANONICAL_RESET_BASE = "https://qms.example.invalid"
@@ -270,6 +271,25 @@ class AccountActionsTestCase(unittest.TestCase):
         output = self.assert_link_refused(OPERATIVO, MAIL_FAILED, "delivery")
         self.assertNotIn("hunter2", output)
 
+    def test_mail_failures_name_their_cause_for_operators_only(self) -> None:
+        """The application log gets the exception types, never their text."""
+        self.mail_send.side_effect = RuntimeError("smtp.example.invalid password=hunter2")
+        with self.assertLogs("app.routes.user_routes", level="WARNING") as logs:
+            self.assert_link_refused(OPERATIVO, MAIL_FAILED, "delivery")
+        output = "\n".join(logs.output)
+        self.assertIn("ResetEmailDeliveryError", output)
+        self.assertIn("RuntimeError", output)
+        for secret in ("hunter2", "smtp.example.invalid", "operativo@example.com",
+                       "/reset_password/"):
+            self.assertNotIn(secret, output)
+
+        self.app.config["PASSWORD_RESET_BASE_URL"] = "http://insecure.example.invalid"
+        with self.assertLogs("app.routes.user_routes", level="WARNING") as logs:
+            self.assert_link_refused(OPERATIVO, MAIL_FAILED, "configuration")
+        output = "\n".join(logs.output)
+        self.assertIn("ResetEmailConfigurationError", output)
+        self.assertNotIn("insecure.example.invalid", output)
+
     # -- screens --------------------------------------------------------------
 
     def _actions(self, url: str) -> set:
@@ -337,6 +357,59 @@ class ResetLinkRateLimitTestCase(unittest.TestCase):
         # the eleventh request is refused before anything is sent.
         self.assertIn(refused.status_code, (429, 500))
         self.assertEqual(10, mail_send.call_count)
+
+    def test_refused_requests_do_not_spend_the_administrators_budget(self) -> None:
+        app = bootstrap.build_app(
+            RATELIMIT_ENABLED=True, PASSWORD_RESET_BASE_URL=CANONICAL_RESET_BASE
+        )
+        ids = _seed(app)
+
+        def drop() -> None:
+            with app.app_context():
+                db.session.remove()
+                db.drop_all()
+
+        self.addCleanup(drop)
+
+        def client_for(role=None):
+            client = app.test_client()
+            if role is not None:
+                with client.session_transaction() as session:
+                    session["_user_id"] = str(ids[role])
+                    session["_fresh"] = True
+            return client
+
+        url = f"{BASE}/{ids[OPERATIVO]}/enviar-enlace"
+        anonymous, operativo = client_for(), client_for(OPERATIVO)
+        admin = client_for(ADMIN)
+        with patch.object(password_reset_mail.mail, "send") as mail_send:
+            # All three clients share one address, so they share one budget.
+            for client, target in ((anonymous, "/login"), (operativo, "/dashboard/")):
+                for _ in range(11):
+                    response = client.post(url)
+                    self.assertEqual(302, response.status_code)
+                    self.assertIn(target, response.headers["Location"])
+            mail_send.assert_not_called()
+            allowed = admin.post(url)
+        self.assertEqual(302, allowed.status_code)
+        self.assertTrue(allowed.headers["Location"].endswith(f"{BASE}/"))
+        self.assertEqual(1, mail_send.call_count)
+
+
+class AdminResetLinkLogTestCase(unittest.TestCase):
+    """The refusal reason alone decides between the sent and the failed line."""
+
+    def test_outcome_follows_the_reason(self) -> None:
+        with self.assertLogs("security", level="INFO") as logs:
+            log_admin_reset_link("operativo", "administrador")
+            log_admin_reset_link("operativo", "administrador", "delivery")
+        sent, failed = logs.output
+        self.assertIn("INFO:security:PASSWORD_RESET_LINK_SENT | user=operativo", sent)
+        self.assertNotIn("reason=", sent)
+        self.assertIn(
+            "WARNING:security:PASSWORD_RESET_LINK_FAILED | user=operativo", failed
+        )
+        self.assertIn("| reason=delivery |", failed)
 
 
 class AccountActionsCsrfTestCase(unittest.TestCase):

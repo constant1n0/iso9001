@@ -197,6 +197,69 @@ class AuthResetTestCase(unittest.TestCase):
                 self.assertIn("Si no solicitaste este cambio", message.body)
                 self.assertNotIn("administrador", message.body)
 
+    def test_legacy_addresses_differing_only_by_case_never_cross(self) -> None:
+        """An exact match wins; a casing that fits two accounts sends nothing."""
+        with self.app.app_context():
+            db.session.get(User, self.user_id).email = "Twin@Example.com"
+            db.session.add(
+                User(
+                    username="twinuser",
+                    email="twin@example.com",
+                    password=generate_password_hash("BeforePassword123!"),
+                    role=RoleEnum.OPERATIVO,
+                )
+            )
+            db.session.commit()
+
+        for typed in ("Twin@Example.com", "twin@example.com"):
+            with self.subTest(typed=typed):
+                with patch.object(password_reset_mail.mail, "send") as mail_send:
+                    response = self.client.post(
+                        "/reset_password_request", data={"email": typed}
+                    )
+                self.assertEqual(
+                    ("info", GENERIC_RESET_MESSAGE),
+                    self._response_signature(self.client, response)[2][0],
+                )
+                (call,) = mail_send.call_args_list
+                self.assertEqual([typed], call.args[0].recipients)
+
+        with (
+            patch.object(password_reset_mail.mail, "send") as mail_send,
+            self.assertLogs("security", level="WARNING") as logs,
+        ):
+            response = self.client.post(
+                "/reset_password_request", data={"email": "TWIN@example.com"}
+            )
+        mail_send.assert_not_called()
+        self.assertEqual(302, response.status_code)
+        self.assertEqual(
+            ("info", GENERIC_RESET_MESSAGE),
+            self._response_signature(self.client, response)[2][0],
+        )
+        self.assertIn("reason=ambiguous", "\n".join(logs.output))
+
+    def test_mail_failure_names_its_cause_for_operators_only(self) -> None:
+        """The application log gets the exception types, never their text."""
+        with (
+            patch.object(
+                password_reset_mail.mail,
+                "send",
+                side_effect=RuntimeError("smtp.example.invalid password=hunter2"),
+            ),
+            self.assertLogs("app.routes.auth_routes", level="WARNING") as logs,
+        ):
+            response = self.client.post(
+                "/reset_password_request", data={"email": "reset@example.com"}
+            )
+        self.assertEqual(302, response.status_code)
+        output = "\n".join(logs.output)
+        self.assertIn("ResetEmailDeliveryError", output)
+        self.assertIn("RuntimeError", output)
+        for secret in ("hunter2", "smtp.example.invalid", "reset@example.com",
+                       "/reset_password/"):
+            self.assertNotIn(secret, output)
+
     def test_reset_failure_logs_do_not_include_token_or_reset_url(self) -> None:
         self.app.config["PASSWORD_RESET_BASE_URL"] = None
 
