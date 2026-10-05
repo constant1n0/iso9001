@@ -13,7 +13,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import db
 from app.models import RoleEnum, User
-from app.routes import auth_routes
+from app.utils import password_reset_mail
 
 
 CANONICAL_RESET_BASE = "https://qms.example.invalid"
@@ -77,7 +77,7 @@ class AuthResetTestCase(unittest.TestCase):
                     db.session.commit()
 
                 self.assertEqual(200, client.get("/login").status_code)
-                with patch.object(auth_routes.mail, "send") as mail_send:
+                with patch.object(password_reset_mail.mail, "send") as mail_send:
                     response = client.post(
                         "/reset_password_request",
                         data={"email": "operator@example.com"},
@@ -117,12 +117,12 @@ class AuthResetTestCase(unittest.TestCase):
                 with self.subTest(value=value):
                     self.app.config["PASSWORD_RESET_BASE_URL"] = value
                     with self.assertRaises(
-                        auth_routes.ResetEmailConfigurationError
+                        password_reset_mail.ResetEmailConfigurationError
                     ):
-                        auth_routes.build_password_reset_url("safe-token")
+                        password_reset_mail.build_password_reset_url("safe-token")
 
     def test_malicious_host_cannot_change_emailed_reset_origin(self) -> None:
-        with patch.object(auth_routes.mail, "send") as mail_send:
+        with patch.object(password_reset_mail.mail, "send") as mail_send:
             response = self.client.post(
                 "/reset_password_request",
                 base_url="https://attacker.example",
@@ -157,7 +157,7 @@ class AuthResetTestCase(unittest.TestCase):
             with self.subTest(label=label):
                 self.app.config["PASSWORD_RESET_BASE_URL"] = reset_base
                 with patch.object(
-                    auth_routes.mail,
+                    password_reset_mail.mail,
                     "send",
                     side_effect=mail_error,
                 ):
@@ -169,6 +169,33 @@ class AuthResetTestCase(unittest.TestCase):
 
         self.assertTrue(all(signature == signatures[0] for signature in signatures))
         self.assertEqual(("info", GENERIC_RESET_MESSAGE), signatures[0][2][0])
+
+    def test_reset_request_matches_the_address_regardless_of_case(self) -> None:
+        cases = (
+            ("reset@example.com", "Reset@EXAMPLE.com"),
+            ("Reset@Example.COM", "reset@example.com"),  # legacy mixed-case row
+        )
+        for stored, typed in cases:
+            with self.subTest(stored=stored, typed=typed):
+                with self.app.app_context():
+                    db.session.get(User, self.user_id).email = stored
+                    db.session.commit()
+                with patch.object(password_reset_mail.mail, "send") as mail_send:
+                    response = self.client.post(
+                        "/reset_password_request", data={"email": typed}
+                    )
+
+                self.assertEqual(302, response.status_code)
+                self.assertEqual(
+                    ("info", GENERIC_RESET_MESSAGE),
+                    self._response_signature(self.client, response)[2][0],
+                )
+                (call,) = mail_send.call_args_list
+                message = call.args[0]
+                self.assertEqual([stored], message.recipients)
+                # Self-service wording, not the administrator-triggered one.
+                self.assertIn("Si no solicitaste este cambio", message.body)
+                self.assertNotIn("administrador", message.body)
 
     def test_reset_failure_logs_do_not_include_token_or_reset_url(self) -> None:
         self.app.config["PASSWORD_RESET_BASE_URL"] = None
