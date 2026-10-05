@@ -183,7 +183,10 @@ ALLOWED = {
     "TRAINING_RESOURCES": JSON_REGISTER,
     "PROCESS_OPERATIONS": JSON_REGISTER,
 }
-NO_ROUTES = {"AUDIT_LOG", "API_TOKENS"}  # policy entries only until their adapters exist
+# Policy entries without routes. AUDIT_LOG has no adapter yet. The API_TOKENS
+# matrix (issue, list, revoke any token) stays CLI-only; "Mi perfil" bypasses it
+# with an ownership check, so tests/test_profile_routes.py characterizes it.
+NO_ROUTES = {"AUDIT_LOG", "API_TOKENS"}
 
 
 def allowed_roles(endpoint: Endpoint) -> set:

@@ -1,0 +1,120 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, action_form %}
+{% from "_partials/forms.html" import field %}
+{% block title %}Mi perfil{% endblock %}
+{% block crumb %}Mi perfil{% endblock %}
+{% block content %}
+{{ page_header('Cuenta de usuario', 'Mi perfil') }}
+
+<section class="grid grid--2" aria-label="Datos y credenciales">
+    <article class="card">
+        <header class="card__header">
+            <h2 class="card__title">Datos de la cuenta</h2>
+        </header>
+        <ul class="list">
+            <li class="list__item">
+                <span class="list__primary">Nombre de usuario</span>
+                <span class="list__secondary">{{ current_user.username }}</span>
+            </li>
+            <li class="list__item">
+                <span class="list__primary">Correo electrónico</span>
+                <span class="list__secondary">{{ current_user.email or '—' }}</span>
+            </li>
+            <li class="list__item">
+                <span class="list__primary">Rol</span>
+                <span class="list__secondary">{{ current_user.role.value }}</span>
+            </li>
+            <li class="list__item">
+                <span class="list__primary">Estado</span>
+                {% if current_user.is_active %}<span class="badge badge--ok">Activo</span>
+                {% else %}<span class="badge badge--danger">Inactivo</span>{% endif %}
+            </li>
+        </ul>
+    </article>
+
+    {# Each form posts to its own route; the CSRF input has no id, so the two
+       forms never repeat one. Password fields are never filled back in. #}
+    <form method="post" action="{{ url_for('profile.change_email') }}" class="form-card" novalidate>
+        <h2 class="card__title">Cambiar correo electrónico</h2>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ field(email_form.email, autocomplete='email') }}
+        {{ field(email_form.email_current_password, autocomplete='current-password') }}
+        <div class="form-actions">
+            <button type="submit" class="btn btn--primary">Cambiar correo</button>
+        </div>
+    </form>
+</section>
+
+<form method="post" action="{{ url_for('profile.change_password') }}" class="form-card" novalidate>
+    <h2 class="card__title">Cambiar contraseña</h2>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-grid">
+        {{ field(password_form.current_password, autocomplete='current-password') }}
+        {{ field(password_form.new_password, autocomplete='new-password') }}
+        {{ field(password_form.confirm_password, autocomplete='new-password') }}
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn--primary">Cambiar contraseña</button>
+    </div>
+</form>
+
+<section aria-labelledby="mis-tokens">
+<h2 id="mis-tokens">Mis tokens de API</h2>
+<p class="muted">Los tokens los emite un administrador desde la línea de comandos. Aquí puedes ver los tuyos y revocarlos; el secreto solo se muestra al emitirlo.</p>
+{% if tokens %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Nombre</th>
+                <th scope="col">Prefijo</th>
+                <th scope="col">Permisos</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Caduca</th>
+                <th scope="col">Último uso</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for token, state in tokens %}
+            {% set label, variant = token_states[state] %}
+            <tr>
+                <td>{{ token.name }}</td>
+                <td class="mono">{{ token.prefix }}</td>
+                <td class="mono">{{ token.scopes }}</td>
+                <td><span class="badge badge--{{ variant }}">{{ label }}</span></td>
+                <td class="mono">{{ token.expires_at.strftime('%Y-%m-%d') }}</td>
+                <td class="mono">{{ token.last_used_at.strftime('%Y-%m-%d') if token.last_used_at else 'Nunca' }}</td>
+                <td>
+                    <div class="table__actions">
+                        {% if state == active %}
+                        {{ action_form(url_for('profile.revoke_token', token_id=token.id), 'Revocar', '¿Revocar el token «' ~ token.name ~ '»? Dejará de funcionar de inmediato.', 'danger') }}
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card"><p class="empty">No tienes tokens de API.</p></div>
+{% endif %}
+</section>
+{% endblock %}

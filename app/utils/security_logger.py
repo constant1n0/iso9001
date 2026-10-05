@@ -99,14 +99,21 @@ def log_password_reset_request(email, success, reason=None):
         )
 
 
-def log_password_change(username, success):
-    """Registra cambios de contraseña."""
-    ip = get_client_ip()
+def log_password_change(username, success, reason=None):
+    """Registra cambios de contraseña; ``reason`` dice por qué se rechazó uno.
+
+    Nunca incluye la contraseña actual ni la nueva.
+    """
+    user, ip = _field(username), _client_ip_or_dash()
 
     if success:
-        security_logger.info(f"PASSWORD_CHANGE_SUCCESS | user={username} | ip={ip}")
+        security_logger.info(f"PASSWORD_CHANGE_SUCCESS | user={user} | ip={ip}")
+    elif reason is None:
+        security_logger.warning(f"PASSWORD_CHANGE_FAILED | user={user} | ip={ip}")
     else:
-        security_logger.warning(f"PASSWORD_CHANGE_FAILED | user={username} | ip={ip}")
+        security_logger.warning(
+            f"PASSWORD_CHANGE_FAILED | user={user} | reason={_field(reason)} | ip={ip}"
+        )
 
 
 def log_suspicious_activity(activity_type, details):
@@ -177,3 +184,25 @@ def log_admin_reset_link(username, actor_label, *, reason=None):
             f"PASSWORD_RESET_LINK_FAILED | {target} | reason={_field(reason)} "
             f"| ip={_client_ip_or_dash()}"
         )
+
+
+def _masked_email(address):
+    """``a***@example.com``: enough to recognise a change, never the full address."""
+    local, at, domain = str(address or "").partition("@")
+    return f"{local[:1]}***@{domain}" if at and local and domain else "***"
+
+
+def log_email_change(username, new_email):
+    """Registra el cambio del propio correo electrónico (con la dirección enmascarada)."""
+    security_logger.info(
+        f"EMAIL_CHANGE_SUCCESS | user={_field(username)} "
+        f"| email={_field(_masked_email(new_email))} | ip={_client_ip_or_dash()}"
+    )
+
+
+def log_email_change_failed(username, reason):
+    """Registra un cambio del propio correo rechazado (sin ninguna dirección)."""
+    security_logger.warning(
+        f"EMAIL_CHANGE_FAILED | user={_field(username)} "
+        f"| reason={_field(reason)} | ip={_client_ip_or_dash()}"
+    )
