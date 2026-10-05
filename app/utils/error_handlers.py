@@ -14,10 +14,12 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
 from flask import current_app, flash, jsonify, redirect, request, url_for
+from werkzeug.exceptions import HTTPException
 import logging
 from urllib.parse import urlsplit
 
 from ..extensions import db
+from .security_logger import log_rate_limit_exceeded
 
 from ..services.errors import (
     Conflict,
@@ -35,6 +37,13 @@ def handle_exception(e):
     Manejador global de excepciones que no expone información sensible.
     Los detalles del error se registran en el log pero no se envían al cliente.
     """
+    if isinstance(e, HTTPException):
+        # HTTP errors without a handler of their own (405, 429, ...) are not
+        # server errors: keep their status and headers (Allow, Retry-After).
+        if e.code == 429:
+            log_rate_limit_exceeded(request.endpoint)
+        return e
+
     # Registrar el error completo en los logs para debugging
     logger.error(f"Error no manejado: {str(e)}", exc_info=True)
 
