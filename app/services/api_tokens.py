@@ -24,6 +24,12 @@ Like every service this module never imports Flask: the adapter passes
 ``secret_key`` explicitly, owns the commit and writes the security log (see
 ``app.utils.security_logger``) from the data in :class:`AuthenticationFailed`.
 :func:`authenticate` flushes ``last_used_at`` but never commits.
+
+Management (``issue``, ``list_``, ``revoke``, ``revoke_all_for_user``) follows
+the ``API_TOKENS`` grant: administrators only, never on the ``mcp`` channel.
+Self-service (``list_own``, ``revoke_own``, the "Mi perfil" screen) does not
+use that grant: it is open to every role but only on the ``web`` channel, and
+only for the tokens of ``actor.user_id``. Issuing stays CLI-only.
 """
 
 from __future__ import annotations
@@ -42,7 +48,14 @@ from sqlalchemy.orm import Session
 from ..models import ApiToken, User
 from . import audit, policy
 from .actor import Actor
-from .errors import AuthenticationFailed, AuthFailure, Conflict, NotFound, ValidationError
+from .errors import (
+    AuthenticationFailed,
+    AuthFailure,
+    Conflict,
+    NotFound,
+    PermissionDenied,
+    ValidationError,
+)
 from .policy import Action, Resource
 
 VALID_SCOPES = frozenset({"read", "write"})
@@ -59,6 +72,8 @@ _TOKEN = re.compile(r"iso_([0-9a-f]{8})_([A-Za-z0-9_-]{43})")
 _PREFIX = re.compile(r"[0-9a-f]{8}")
 _PREFIX_ATTEMPTS = 5
 _DUMMY_HASH = "0" * 64
+TOKEN_NOT_FOUND = "Token no encontrado."
+ALREADY_REVOKED = "El token ya estaba revocado."
 
 
 def _now() -> datetime:
@@ -234,9 +249,9 @@ def revoke(
     else:
         token = None
     if token is None:
-        raise NotFound("Token no encontrado.")
+        raise NotFound(TOKEN_NOT_FOUND)
     if token.revoked_at is not None:
-        raise Conflict("El token ya estaba revocado.")
+        raise Conflict(ALREADY_REVOKED)
     _revoke(session, actor, token, now if now is not None else _now())
     return token
 
@@ -283,3 +298,56 @@ def list_(session: Session, actor: Actor, user_id: int | None = None) -> list[Ap
     if user_id is not None:
         query = query.where(ApiToken.user_id == user_id)
     return list(session.scalars(query))
+
+
+def list_own(session: Session, actor: Actor) -> list[ApiToken]:
+    """The signed-in user's own tokens (revoked and expired included), oldest first.
+
+    Self-service bypasses the administrator-only ``API_TOKENS`` grant with an
+    explicit ownership check instead: only a ``web`` actor with a user id, on
+    an active account, and only that user's rows. Any other actor (``mcp``,
+    ``cli``, ``system``, or no user id) gets ``PermissionDenied``.
+    """
+    owner_id = _own_web_account(session, actor)
+    query = select(ApiToken).where(ApiToken.user_id == owner_id).order_by(ApiToken.id)
+    return list(session.scalars(query))
+
+
+def revoke_own(
+    session: Session,
+    actor: Actor,
+    token_id: int,
+    *,
+    now: datetime | None = None,
+) -> ApiToken:
+    """Revoke one of the signed-in user's own tokens by id; the caller commits.
+
+    The same ownership check as :func:`list_own` replaces the ``API_TOKENS``
+    grant. Another user's token and an unknown id both raise ``NotFound`` with
+    the same message, so a token's existence is never revealed; an already
+    revoked token raises ``Conflict``. The revocation is audited like
+    :func:`revoke`.
+    """
+    owner_id = _own_web_account(session, actor)
+    is_id = isinstance(token_id, int) and not isinstance(token_id, bool)
+    token = session.get(ApiToken, token_id) if is_id else None
+    if token is None or token.user_id != owner_id:
+        raise NotFound(TOKEN_NOT_FOUND)
+    if token.revoked_at is not None:
+        raise Conflict(ALREADY_REVOKED)
+    _revoke(session, actor, token, now if now is not None else _now())
+    return token
+
+
+def _own_web_account(session: Session, actor: Actor) -> int:
+    """The id of the actor's own active account, for a ``web`` actor only.
+
+    A bearer token (``mcp``) never manages tokens, and the CLI and system
+    channels use the administrator operations instead.
+    """
+    if actor.channel != "web" or actor.user_id is None:
+        raise PermissionDenied()
+    user = session.get(User, actor.user_id)
+    if user is None or not user.is_active:
+        raise PermissionDenied()
+    return user.id

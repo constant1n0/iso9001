@@ -78,10 +78,12 @@
                 <label for="nav-toggle" class="nav-toggle-button" aria-hidden="true"><span></span></label>
                 <span class="topbar__crumb">{% block crumb %}Sistema de gestión de calidad{% endblock %}</span>
                 <div class="topbar__user">
-                    <div class="user-chip">
+                    <a class="user-chip" href="{{ url_for('profile.show') }}" title="Mi perfil"
+                       {% if request.blueprint == 'profile' %}aria-current="page"{% endif %}>
+                        <span class="visually-hidden">Mi perfil:</span>
                         <span class="user-chip__name">{{ current_user.username }}</span>
                         <span class="user-chip__role">{{ user_role }}</span>
-                    </div>
+                    </a>
                     <a class="btn btn--sm" href="{{ url_for('auth.logout') }}">Salir</a>
                 </div>
             </header>

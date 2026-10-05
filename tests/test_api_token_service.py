@@ -454,5 +454,98 @@ class RevokeAllForUserTestCase(TokenBase):
         self.assertIsNone(row.revoked_at)
 
 
+class OwnTokensTestCase(TokenBase):
+    """Self-service ("Mi perfil"): a web user lists and revokes only their own tokens."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.other = self.make_user("luis", AUDITOR)
+        self.me = actor(OPERATIVO, user_id=self.owner.id)
+
+    def test_list_own_returns_only_the_actors_tokens_oldest_first(self) -> None:
+        _, first = self.issue()
+        _, foreign = self.issue(user_id=self.other.id, name="foreign")
+        _, second = self.issue(name="second")
+        db.session.commit()
+        tokens().revoke(db.session, self.admin, first.id, now=NOW)
+        db.session.commit()
+        self.assertEqual([first, second], tokens().list_own(db.session, self.me))
+        self.assertEqual(
+            [foreign],
+            tokens().list_own(db.session, actor(AUDITOR, user_id=self.other.id)),
+        )
+        # An administrator on the web sees their own tokens, not everyone's.
+        root = self.make_user("root", ADMIN)
+        self.assertEqual([], tokens().list_own(db.session, actor(ADMIN, user_id=root.id)))
+
+    def test_revoke_own_stamps_and_audits_like_revoke(self) -> None:
+        _, row = self.issue()
+        db.session.commit()
+        later = NOW + timedelta(hours=1)
+        result = tokens().revoke_own(db.session, self.me, row.id, now=later)
+        db.session.commit()
+        self.assertIs(row, result)
+        self.assertEqual(later, aware(row.revoked_at))
+        self.assertEqual(self.me.label, row.revoked_by_label)
+        (entry,) = [r for r in self.audit_rows() if r.action == "update"]
+        self.assertEqual(("api_tokens", row.id, "web", self.owner.id),
+                         (entry.entity_type, entry.entity_id, entry.channel,
+                          entry.actor_user_id))
+        self.assertEqual({"revoked_at", "revoked_by_label"}, set(entry.after))
+        self.assertNotIn("token_hash", json.dumps([entry.before, entry.after]))
+
+    def test_another_users_or_an_unknown_token_is_not_found(self) -> None:
+        _, foreign = self.issue(user_id=self.other.id, name="foreign")
+        db.session.commit()
+        seen = len(self.audit_rows())
+        for ref in (foreign.id, 9999, True, "1", foreign.prefix, None):
+            with self.subTest(ref=ref), self.assertRaises(errors().NotFound) as raised:
+                tokens().revoke_own(db.session, self.me, ref, now=NOW)
+            # The same message as an unknown id: existence is never leaked.
+            self.assertEqual("Token no encontrado.", raised.exception.message)
+        self.assertIsNone(foreign.revoked_at)
+        self.assertEqual(seen, len(self.audit_rows()))
+
+    def test_revoking_an_already_revoked_own_token_is_a_conflict(self) -> None:
+        _, row = self.issue()
+        db.session.commit()
+        tokens().revoke_own(db.session, self.me, row.id, now=NOW)
+        db.session.commit()
+        with self.assertRaises(errors().Conflict):
+            tokens().revoke_own(db.session, self.me, row.id, now=NOW)
+
+    def test_only_a_web_actor_with_a_user_id_may_manage_own_tokens(self) -> None:
+        _, row = self.issue()
+        db.session.commit()
+        seen = len(self.audit_rows())
+        owner = self.owner.id
+        for caller in (
+            actor(OPERATIVO, channel="mcp", user_id=owner, scopes={"read", "write"}),
+            actor(ADMIN, channel="mcp", user_id=owner, scopes={"read", "write"}),
+            actor(ADMIN, channel="cli", user_id=owner),
+            actor(ADMIN, channel="system", user_id=owner),
+            actor(ADMIN, channel="web", user_id=None),
+        ):
+            with self.subTest(channel=caller.channel, user_id=caller.user_id):
+                with self.assertRaises(errors().PermissionDenied):
+                    tokens().list_own(db.session, caller)
+                with self.assertRaises(errors().PermissionDenied):
+                    tokens().revoke_own(db.session, caller, row.id, now=NOW)
+        self.assertIsNone(row.revoked_at)
+        self.assertEqual(seen, len(self.audit_rows()))
+
+    def test_a_missing_or_inactive_account_is_refused(self) -> None:
+        _, row = self.issue()
+        self.owner.active = False
+        db.session.commit()
+        for caller in (self.me, actor(OPERATIVO, user_id=9999)):
+            with self.subTest(user_id=caller.user_id):
+                with self.assertRaises(errors().PermissionDenied):
+                    tokens().list_own(db.session, caller)
+                with self.assertRaises(errors().PermissionDenied):
+                    tokens().revoke_own(db.session, caller, row.id, now=NOW)
+        self.assertIsNone(row.revoked_at)
+
+
 if __name__ == "__main__":
     unittest.main()

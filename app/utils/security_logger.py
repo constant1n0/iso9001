@@ -177,3 +177,17 @@ def log_admin_reset_link(username, actor_label, *, reason=None):
             f"PASSWORD_RESET_LINK_FAILED | {target} | reason={_field(reason)} "
             f"| ip={_client_ip_or_dash()}"
         )
+
+
+def _masked_email(address):
+    """``a***@example.com``: enough to recognise a change, never the full address."""
+    local, at, domain = str(address or "").partition("@")
+    return f"{local[:1]}***@{domain}" if at and local and domain else "***"
+
+
+def log_email_change(username, new_email):
+    """Registra el cambio del propio correo electrónico (con la dirección enmascarada)."""
+    security_logger.info(
+        f"EMAIL_CHANGE_SUCCESS | user={_field(username)} "
+        f"| email={_field(_masked_email(new_email))} | ip={_client_ip_or_dash()}"
+    )

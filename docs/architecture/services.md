@@ -56,6 +56,7 @@ bounded: the page is clamped to `1..crud.MAX_PAGE` and the size to
 | `crud.py` | Generic helper driven by a `Spec` (model, resource, fields, ordering) |
 | `training.py`, `satisfaction.py`, `stakeholders.py`, `improvements.py` | Plain HTML registers on `crud` |
 | `roles_responsibilities.py`, `risks_opportunities.py`, `training_resources.py`, `process_operations.py`, `audit_indicators.py` | JSON registers on `crud` |
+| `users.py` | User accounts: administration and self-service (see below) |
 | `api_tokens.py` | Bearer tokens for non-browser adapters (see below) |
 | `policy.py`, `actor.py`, `errors.py`, `audit.py`, `attribution.py`, `fields.py` | The shared kernel |
 
@@ -79,11 +80,17 @@ checked first (`mcp` never deletes), then the role.
 | Audits | ADMIN, AUDITOR | ADMIN, AUDITOR | ADMIN |
 | Documents | ADMIN | ADMIN | ADMIN |
 | Roles, risks and opportunities, training resources, process operations, audit indicators | all roles | ADMIN, AUDITOR | ADMIN |
-| Users, audit log (policy only, no routes yet) | ADMIN, AUDITOR | ADMIN | nobody |
+| Users; audit log (policy only, no routes yet) | ADMIN, AUDITOR | ADMIN | nobody |
 | API tokens (list, issue, revoke) | ADMIN | ADMIN | nobody |
 
 Roles are `ADMINISTRADOR`, `AUDITOR` and `OPERATIVO`. Hard deletes leave an
 `AuditLog` snapshot of the removed record.
+
+Self-service is the one deliberate exception to the matrix: changing your own
+e-mail or password (`users.change_own_*`) and listing or revoking your own API
+tokens (`api_tokens.list_own`, `revoke_own`) are open to every role, replacing
+the grant with an ownership check on `actor.user_id` (see "Users" and "API
+tokens" below).
 
 ## Error mapping
 
@@ -194,3 +201,41 @@ security log.
   an audit row (never the secret or the hash) and a security-log event.
   `ApiToken` is deliberately outside `AUDITED_MODELS`, because
   `last_used_at` changes without an audit row.
+- **Own tokens ("Mi perfil").** `list_own(session, actor)` and
+  `revoke_own(session, actor, token_id)` bypass the administrator-only grant
+  with an explicit ownership check: only a `web` actor with a user id and an
+  active account, and only that user's tokens. Every other channel (`mcp`
+  above all: a bearer token never manages tokens), or an actor without a user
+  id, gets `PermissionDenied`. Another user's token and an unknown id both
+  raise `NotFound` with the same message, so a token's existence is never
+  revealed; an already revoked token is a `Conflict`. Revocation is audited
+  like `revoke`, and the web adapter writes the same `API_TOKEN_REVOKED`
+  security-log event. Issuing stays CLI-only.
+
+## Users
+
+`app/services/users.py` manages accounts. Users are never deleted, so their
+audit attribution and tokens stay intact.
+
+- **Administration** follows the `USERS` grant (ADMIN and AUDITOR read, ADMIN
+  writes): `list_`, `get`, `create` (username, e-mail, role and an initial
+  password of at least 8 characters), `update` (e-mail and role; usernames
+  never change, to keep audit labels stable) and `set_active`. Deactivation
+  also revokes the user's active API tokens, which needs the `API_TOKENS`
+  grant too, so an `mcp` administrator can reactivate but never deactivate.
+- **Guard rails.** Nobody changes their own role or deactivates their own
+  account (`ValidationError`), and the last active administrator can never be
+  demoted or deactivated (`Conflict`; the check locks the administrators' rows
+  so concurrent requests serialize on PostgreSQL). E-mail addresses are stored
+  trimmed and lower-cased and are unique regardless of case (`Conflict`).
+- **Self-service.** `change_own_email` and `change_own_password` act only on
+  `actor.user_id`, need an active account and the current password (a wrong
+  one is a `ValidationError` and changes nothing), and are refused on the
+  `mcp` channel. A new password must have at least 8 characters and differ
+  from the current one.
+- **Audit and security log.** `User` is outside `AUDITED_MODELS`, so every
+  write records its audit row explicitly; a password change is recorded as
+  `{"credential_changed": true}` and the hash never appears. The web adapter
+  writes the security log after the commit (`USER_DEACTIVATED`,
+  `USER_REACTIVATED`, `PASSWORD_RESET_LINK_SENT`, `PASSWORD_CHANGE_SUCCESS`,
+  and `EMAIL_CHANGE_SUCCESS` with a masked address such as `a***@example.com`).

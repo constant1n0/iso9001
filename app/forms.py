@@ -138,3 +138,23 @@ class UserEditForm(BaseForm):
     email = EmailField('Correo electrónico', validators=[DataRequired(), Length(max=255)])
     role = SelectField('Rol', choices=ROLE_CHOICES, validators=[DataRequired()])
     submit = SubmitField('Guardar')
+
+
+# "Mi perfil": every user changes their own e-mail and password (the users
+# service checks the current password and has the last word on every value).
+# Field names are unique across the page's two forms, so ids and labels match.
+class EmailChangeForm(BaseForm):
+    email = EmailField('Nuevo correo electrónico', validators=[DataRequired(), Length(max=255)])
+    email_current_password = PasswordField('Contraseña actual', validators=[DataRequired()])
+    submit = SubmitField('Cambiar correo')
+
+
+class PasswordChangeForm(BaseForm):
+    current_password = PasswordField('Contraseña actual', validators=[DataRequired()])
+    new_password = PasswordField('Nueva contraseña', validators=[DataRequired(), Length(min=8)])
+    confirm_password = PasswordField(
+        'Confirmar nueva contraseña',
+        validators=[DataRequired(),
+                    EqualTo('new_password', message='Las contraseñas no coinciden.')],
+    )
+    submit = SubmitField('Cambiar contraseña')

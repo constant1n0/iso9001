@@ -201,6 +201,27 @@ AI agents (Claude Code, Codex, Pi, OpenCode, OpenClaw, Claude Desktop) reach the
 QMS through the MCP server in `app/mcp_server/`; `docs/mcp.md` explains how to run
 it, route it and configure each client.
 
+**2c. Usuarios y perfil**
+
+Once the first administrator exists, accounts are managed from the web:
+
+- **Administración › Usuarios** (`/usuarios/`): administrators create users
+  (username, e-mail, role and an initial password of at least 8 characters),
+  change their e-mail and role, deactivate and reactivate them, and e-mail them
+  a password-reset link. Auditors see the list read-only; operators cannot open
+  it. Users are deactivated, never deleted: a deactivated user cannot log in,
+  loses open sessions and has their active API tokens revoked, while the audit
+  trail keeps naming them. Nobody can change their own role or deactivate
+  themselves, and the last active administrator cannot be demoted or
+  deactivated.
+- **Mi perfil** (`/perfil/`, the user name in the top bar): every user sees
+  their username, e-mail, role and account state, changes their e-mail or
+  password (the current password is required), and lists and revokes their own
+  API tokens. Token secrets and hashes are never shown, and tokens are still
+  issued only from the command line.
+
+Account changes are written to the audit log and the security log.
+
 **3. Iniciar Redis y Celery para las Notificaciones Programadas**
 
 Celery envía tres avisos por correo; la aplicación web funciona sin él.
