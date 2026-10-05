@@ -1,0 +1,15 @@
+{# Account action buttons for one user; import "with context" (uses current_user).
+   The caller checks can('update', 'users'). #}
+{% from "_partials/ui.html" import action_form %}
+{% macro account_actions(user) %}
+{% if user.is_active %}
+    {% if user.email %}
+    {{ action_form(url_for('users.send_reset_link', user_id=user.id), 'Enviar enlace de contraseña', '¿Enviar a ' ~ user.username ~ ' un enlace para restablecer la contraseña?') }}
+    {% endif %}
+    {% if user.id != current_user.id %}
+    {{ action_form(url_for('users.deactivate_user', user_id=user.id), 'Desactivar', '¿Desactivar la cuenta de ' ~ user.username ~ '? Perderá el acceso y se revocarán sus tokens de API.', 'danger') }}
+    {% endif %}
+{% else %}
+    {{ action_form(url_for('users.reactivate_user', user_id=user.id), 'Reactivar', '¿Reactivar la cuenta de ' ~ user.username ~ '?') }}
+{% endif %}
+{% endmacro %}
