@@ -193,7 +193,7 @@ def send_reset_link(user_id: int) -> ResponseReturnValue:
             logger.warning(
                 'Administrator reset e-mail not sent: %s', describe_failure(error)
             )
-    log_admin_reset_link(user.username, actor.label, reason)
+    log_admin_reset_link(user.username, actor.label, reason=reason)
     if reason is None:
         flash(LINK_SENT, 'success')
     else:

@@ -402,7 +402,7 @@ class AdminResetLinkLogTestCase(unittest.TestCase):
     def test_outcome_follows_the_reason(self) -> None:
         with self.assertLogs("security", level="INFO") as logs:
             log_admin_reset_link("operativo", "administrador")
-            log_admin_reset_link("operativo", "administrador", "delivery")
+            log_admin_reset_link("operativo", "administrador", reason="delivery")
         sent, failed = logs.output
         self.assertIn("INFO:security:PASSWORD_RESET_LINK_SENT | user=operativo", sent)
         self.assertNotIn("reason=", sent)

@@ -161,7 +161,7 @@ def log_user_status_change(username, active, actor_label):
     )
 
 
-def log_admin_reset_link(username, actor_label, reason=None):
+def log_admin_reset_link(username, actor_label, *, reason=None):
     """Registra un enlace de restablecimiento enviado por un administrador.
 
     Sin ``reason`` el envío salió bien; con él, ``reason`` dice por qué no.

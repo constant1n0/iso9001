@@ -87,7 +87,7 @@ def _reset_request_user(address: str) -> tuple[User | None, str | None]:
     unless that fits two legacy rows differing only by case: then nobody gets
     the link and the reason is ``ambiguous``.
     """
-    user = User.query.filter(User.email == address).first()
+    user = User.query.filter(User.email == address).order_by(User.id).first()
     if user is not None:
         return user, None
     matches = (
