@@ -150,3 +150,29 @@ def log_api_token_auth_failed(reason, prefix=None):
         f"API_TOKEN_AUTH_FAILED | reason={_field(reason)} | prefix={_field(prefix)} "
         f"| ip={_client_ip_or_dash()}"
     )
+
+
+def log_user_status_change(username, active, actor_label):
+    """Registra la desactivación o reactivación de una cuenta por un administrador."""
+    event = "USER_REACTIVATED" if active else "USER_DEACTIVATED"
+    security_logger.info(
+        f"{event} | user={_field(username)} | by={_field(actor_label)} "
+        f"| ip={_client_ip_or_dash()}"
+    )
+
+
+def log_admin_reset_link(username, actor_label, success, reason=None):
+    """Registra un enlace de restablecimiento enviado por un administrador.
+
+    Nunca incluye el enlace, el token ni el cuerpo del correo.
+    """
+    target = f"user={_field(username)} | by={_field(actor_label)}"
+    if success:
+        security_logger.info(
+            f"PASSWORD_RESET_LINK_SENT | {target} | ip={_client_ip_or_dash()}"
+        )
+    else:
+        security_logger.warning(
+            f"PASSWORD_RESET_LINK_FAILED | {target} | reason={_field(reason)} "
+            f"| ip={_client_ip_or_dash()}"
+        )

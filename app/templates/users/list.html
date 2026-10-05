@@ -16,6 +16,7 @@
  -->
 {% extends "base.html" %}
 {% from "_partials/ui.html" import page_header %}
+{% from "users/_account_actions.html" import account_actions with context %}
 {% block title %}Usuarios{% endblock %}
 {% block crumb %}Administración · Usuarios{% endblock %}
 {% block content %}
@@ -51,6 +52,7 @@
                     <div class="table__actions">
                         {% if can('update', 'users') %}
                         <a class="btn btn--sm" href="{{ url_for('users.edit_user', user_id=user.id) }}">Editar</a>
+                        {{ account_actions(user) }}
                         {% endif %}
                     </div>
                 </td>

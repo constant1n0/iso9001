@@ -28,12 +28,18 @@
 </form>
 {% endmacro %}
 
+{# One-button POST form with a CSRF token; a ``message`` asks for confirmation
+   first (static/js/app.js), so no inline script is needed. #}
+{% macro action_form(action, label, message=none, variant=none) %}
+<form class="inline-form" action="{{ action }}" method="post"{% if message %} data-confirm="{{ message }}"{% endif %}>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn--sm{% if variant %} btn--{{ variant }}{% endif %}">{{ label }}</button>
+</form>
+{% endmacro %}
+
 {# POST delete button; confirmation handled by static/js/app.js. #}
 {% macro delete_form(action, message) %}
-<form class="inline-form" action="{{ action }}" method="post" data-confirm="{{ message }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="btn btn--sm btn--danger">Eliminar</button>
-</form>
+{{ action_form(action, 'Eliminar', message, 'danger') }}
 {% endmacro %}
 
 {% macro empty_state(message) %}

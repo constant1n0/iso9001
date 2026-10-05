@@ -337,7 +337,11 @@ class UserFormsCsrfTestCase(unittest.TestCase):
             db.drop_all()
 
     def _form(self, url: str) -> dict:
-        (form,) = _post_forms(self.client.get(url).get_data(as_text=True))
+        # The main form posts to its own URL (no action); account actions have one.
+        (form,) = [
+            f for f in _post_forms(self.client.get(url).get_data(as_text=True))
+            if not f["action"]
+        ]
         self.assertTrue(form["fields"].get("csrf_token"), "hidden csrf_token missing")
         return form["fields"]
 

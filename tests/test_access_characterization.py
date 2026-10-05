@@ -139,6 +139,10 @@ ENDPOINTS = [
     # Users are deactivated, never deleted (U2): no delete route. User 3 is
     # the seeded "operativo" account (one user per role, in RoleEnum order).
     *_html("USERS", "/usuarios/", ("nuevo", NEW_USER), ("3/editar", USER_EDIT), None),
+    # Account actions are updates too; without a reset base URL the link
+    # action answers with a flash on the list, so nothing is mailed.
+    *[Endpoint("USERS", "update", "POST", f"/usuarios/3/{action}", 302)
+      for action in ("desactivar", "reactivar", "enviar-enlace")],
     *_json("IMPROVEMENTS", "/mejoras/api/", {"no_conformidad": "NC"},
            {"accion_correctiva": "x"}),
     *_json("AUDIT_INDICATORS", "/auditoria_indicador/",

@@ -24,6 +24,11 @@ last administrator, a value the service rejects) is rolled back and flashed on
 the re-rendered form, which keeps what was typed; password fields are never
 filled back in. Other domain errors reach the global handlers (an unknown id is
 a 404, a policy refusal redirects to the dashboard).
+
+The account actions (deactivate, reactivate, send a reset link) are POST-only
+and need the update grant; they flash the outcome or the refusal on the list
+and write one security-log line when something happened. The reset link is
+rate limited per client and never reveals why mail failed.
 """
 
 from collections.abc import Callable, Iterable
@@ -34,17 +39,43 @@ from flask.typing import ResponseReturnValue
 from flask_login import login_required
 from flask_wtf import FlaskForm
 
-from ..extensions import db
+from ..extensions import db, limiter
 from ..forms import UserCreateForm, UserEditForm
 from ..services import users
 from ..services.errors import Conflict, ValidationError
+from ..utils.password_reset_mail import (
+    ResetEmailConfigurationError,
+    ResetEmailError,
+    send_admin_reset_email,
+)
 from ..utils.permissions import require_permission
+from ..utils.security_logger import log_admin_reset_link, log_user_status_change
 from ..utils.web_actor import current_actor
 
 bp = Blueprint('users', __name__, url_prefix='/usuarios')
 
 CREATE_FIELDS = ('username', 'email', 'role', 'password')
 EDIT_FIELDS = ('email', 'role')
+# Messages by target state: ``True`` is reactivation, ``False`` deactivation.
+STATE_CHANGED = {
+    True: 'Usuario reactivado exitosamente',
+    False: 'Usuario desactivado exitosamente',
+}
+STATE_UNCHANGED = {
+    True: 'El usuario ya estaba activo.',
+    False: 'El usuario ya estaba desactivado.',
+}
+LINK_SENT = 'Se ha enviado un enlace para restablecer la contraseña.'
+MAIL_FAILED = 'No se ha podido enviar el correo. Inténtalo de nuevo más tarde.'
+# Refusal messages by security-log reason; mail problems share one message, so
+# configuration details stay in the log and never reach the screen.
+LINK_REFUSED = {
+    'no_email': 'El usuario no tiene correo electrónico: añade uno antes de enviar '
+                'el enlace.',
+    'inactive': 'No se puede enviar un enlace a una cuenta desactivada.',
+    'configuration': MAIL_FAILED,
+    'delivery': MAIL_FAILED,
+}
 
 
 def _form_data(form: FlaskForm, names: Iterable[str]) -> dict[str, Any]:
@@ -102,3 +133,60 @@ def edit_user(user_id: int) -> ResponseReturnValue:
         flash('Usuario actualizado exitosamente', 'success')
         return redirect(url_for('users.list_users'))
     return render_template('users/edit.html', form=form, user=user)
+
+
+@bp.route('/<int:user_id>/desactivar', methods=['POST'])
+@login_required
+@require_permission('update', 'users')
+def deactivate_user(user_id: int) -> ResponseReturnValue:
+    return _set_active(user_id, False)
+
+
+@bp.route('/<int:user_id>/reactivar', methods=['POST'])
+@login_required
+@require_permission('update', 'users')
+def reactivate_user(user_id: int) -> ResponseReturnValue:
+    return _set_active(user_id, True)
+
+
+def _set_active(user_id: int, active: bool) -> ResponseReturnValue:
+    """Deactivate or reactivate; deactivation also revokes the user's API tokens."""
+    actor = current_actor()
+    user = users.get(db.session, actor, user_id)
+    username = user.username
+    if user.active == active:
+        flash(STATE_UNCHANGED[active], 'info')
+    elif _saved(lambda: users.set_active(db.session, actor, user_id, active)):
+        log_user_status_change(username, active, actor.label)
+        flash(STATE_CHANGED[active], 'success')
+    return redirect(url_for('users.list_users'))
+
+
+@bp.route('/<int:user_id>/enviar-enlace', methods=['POST'])
+@limiter.limit('10 per hour')
+@login_required
+@require_permission('update', 'users')
+def send_reset_link(user_id: int) -> ResponseReturnValue:
+    """Mail the user a password-reset link with the administrator wording."""
+    actor = current_actor()
+    user = users.get(db.session, actor, user_id)
+    reason: str | None = None
+    if not user.email:
+        reason = 'no_email'
+    elif not user.is_active:
+        reason = 'inactive'
+    else:
+        try:
+            send_admin_reset_email(user)
+        except ResetEmailError as error:
+            reason = (
+                'configuration'
+                if isinstance(error, ResetEmailConfigurationError)
+                else 'delivery'
+            )
+    log_admin_reset_link(user.username, actor.label, reason is None, reason)
+    if reason is None:
+        flash(LINK_SENT, 'success')
+    else:
+        flash(LINK_REFUSED[reason], 'danger')
+    return redirect(url_for('users.list_users'))
