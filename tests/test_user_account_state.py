@@ -18,7 +18,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import db
 from app.models import RoleEnum, User
-from app.routes import auth_routes
+from app.utils import password_reset_mail
 
 
 PASSWORD = "CorrectPassword123!"
@@ -150,7 +150,7 @@ class ResetTestCase(AccountStateTestCase):
         return self.client.post("/reset_password_request", data={"email": email})
 
     def test_reset_request_for_an_inactive_user_sends_nothing(self) -> None:
-        with patch.object(auth_routes.mail, "send") as mail_send:
+        with patch.object(password_reset_mail.mail, "send") as mail_send:
             unknown = self._signature(self._request_reset("nadie@example.com"))
             with self.assertLogs("security", level="WARNING") as logs:
                 refused = self._signature(self._request_reset("inactiva@example.com"))
