@@ -37,6 +37,9 @@
   ('Administración', [
     ('users', 'users.list_users', 'Usuarios', '5.3', can('read', 'users')),
   ]),
+  ('Cuenta', [
+    ('profile', 'profile.show', 'Mi perfil', None, True),
+  ]),
 ] -%}
 <!DOCTYPE html>
 <html lang="es">
@@ -65,7 +68,7 @@
                         {% for blueprint, endpoint, label, clause, _ in visible %}
                             <a class="nav__link" href="{{ url_for(endpoint) }}"
                                {% if request.blueprint == blueprint %}aria-current="page"{% endif %}>
-                                {{ label }}<span class="nav__code">{{ clause }}</span>
+                                {{ label }}{% if clause %}<span class="nav__code">{{ clause }}</span>{% endif %}
                             </a>
                         {% endfor %}
                     {% endif %}

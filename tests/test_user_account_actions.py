@@ -113,10 +113,7 @@ class AccountActionsTestCase(unittest.TestCase):
         for action in ACTIONS:
             with self.subTest(method="GET", action=action):
                 url = f"{BASE}/{self.ids[OPERATIVO]}/{action}"
-                # Werkzeug raises 405; the global ``Exception`` handler currently
-                # turns HTTP errors without their own handler into a 500, as on
-                # every POST-only route. Either way nothing happens.
-                self.assertIn(self.client.get(url).status_code, (405, 500))
+                self.assertEqual(405, self.client.get(url).status_code)
         self.assertTrue(self.is_active(OPERATIVO))
         self.mail_send.assert_not_called()
 
@@ -352,10 +349,7 @@ class ResetLinkRateLimitTestCase(unittest.TestCase):
             codes = [client.post(url).status_code for _ in range(10)]
             refused = client.post(url)
         self.assertEqual([302] * 10, codes)
-        # Flask-Limiter answers 429; the global ``Exception`` handler currently
-        # turns any HTTP error without its own handler into a 500. Either way
-        # the eleventh request is refused before anything is sent.
-        self.assertIn(refused.status_code, (429, 500))
+        self.assertEqual(429, refused.status_code)
         self.assertEqual(10, mail_send.call_count)
 
     def test_refused_requests_do_not_spend_the_administrators_budget(self) -> None:

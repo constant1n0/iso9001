@@ -5,8 +5,10 @@ The routes are not role-gated, so they are characterized here rather than in
 e-mail and password (the current password is required) and list and revoke
 their own API tokens. Another user's token answers 404 and nothing changes. A
 refused change re-renders the page with a Spanish message and never fills a
-password back in. Successful changes write one security-log line, which never
-holds a full e-mail address, a password, a token secret or a hash.
+password back in. Every credential change, successful or refused, writes one
+security-log line, which never holds a full e-mail address, a password, a token
+secret or a hash. The two credential forms share one rate-limit budget per
+signed-in user and client address.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from app.services.actor import Actor
 BASE = "/perfil"
 CLI_ADMIN = Actor(user_id=None, label="cli:operator", role=ADMIN, channel="cli")
 NEW_PASSWORD = "ClaveNueva2026"
+WRONG_PASSWORD = "NoEsLaMia2026"
 EMAIL_CHANGED = ("success", "Correo electrónico actualizado exitosamente")
 PASSWORD_CHANGED = ("success", "Contraseña actualizada exitosamente")
 TOKEN_REVOKED = ("success", "Token revocado exitosamente")
@@ -35,9 +38,12 @@ ALREADY_REVOKED = ("danger", "El token ya estaba revocado.")
 
 class ProfileBase(unittest.TestCase):
     csrf = False
+    rate_limit = False
 
     def setUp(self) -> None:
-        self.app = bootstrap.build_app(WTF_CSRF_ENABLED=self.csrf)
+        self.app = bootstrap.build_app(
+            WTF_CSRF_ENABLED=self.csrf, RATELIMIT_ENABLED=self.rate_limit
+        )
         self.ids = _seed(self.app)
         self.addCleanup(self._teardown)
         self.client = self.app.test_client()
@@ -102,6 +108,19 @@ class ProfileBase(unittest.TestCase):
         for secret in secrets:
             self.assertNotIn(secret, html)
         return html
+
+    def assert_refusal_logged(
+        self, logs, event: str, reason: str, *secrets: str
+    ) -> None:
+        """One ``event`` warning for operativo with ``reason`` and no ``secrets``."""
+        (line,) = logs.output
+        self.assertEqual(
+            f"WARNING:security:{event} | user=operativo | reason={reason} "
+            "| ip=127.0.0.1",
+            line,
+        )
+        for secret in secrets:
+            self.assertNotIn(secret.lower(), line.lower())
 
 
 class ProfilePageTestCase(ProfileBase):
@@ -219,29 +238,39 @@ class ChangeEmailTestCase(ProfileBase):
                 )
                 self.assertEqual({"email": f"nuevo.{name}@example.com"}, after)
 
-    def test_a_wrong_current_password_changes_nothing(self) -> None:
+    def test_a_wrong_current_password_changes_nothing_and_is_logged(self) -> None:
         self.login(OPERATIVO)
-        with self.assertNoLogs("security", level="INFO"):
-            response = self.post("otra@example.com", password="NoEsLaMia2026")
+        with self.assertLogs("security", level="INFO") as logs:
+            response = self.post("otra@example.com", password=WRONG_PASSWORD)
         html = self.assert_rerendered(
-            response, users_service.WRONG_PASSWORD, "NoEsLaMia2026"
+            response, users_service.WRONG_PASSWORD, WRONG_PASSWORD
+        )
+        self.assert_refusal_logged(
+            logs, "EMAIL_CHANGE_FAILED", "wrong_current_password",
+            WRONG_PASSWORD, "otra@example.com", "operativo@example.com",
         )
         self.assertIn('value="otra@example.com"', html)  # the e-mail is kept
         self.assertEqual("operativo@example.com", self.user(OPERATIVO).email)
         self.assertEqual([], self.audit_rows())
 
-    def test_an_e_mail_held_by_another_user_is_a_conflict(self) -> None:
+    def test_an_e_mail_held_by_another_user_is_a_logged_conflict(self) -> None:
         self.login(OPERATIVO)
-        with self.assertNoLogs("security", level="INFO"):
+        with self.assertLogs("security", level="INFO") as logs:
             response = self.post("Auditor@Example.com")
         self.assert_rerendered(response, users_service.DUPLICATE_EMAIL, PASSWORD)
+        self.assert_refusal_logged(
+            logs, "EMAIL_CHANGE_FAILED", "duplicate_email",
+            PASSWORD, "auditor@example.com",
+        )
         self.assertEqual("operativo@example.com", self.user(OPERATIVO).email)
         self.assertEqual([], self.audit_rows())
 
     def test_both_fields_are_required(self) -> None:
         self.login(OPERATIVO)
-        response = self.client.post(f"{BASE}/email", data={})
+        with self.assertLogs("security", level="INFO") as logs:
+            response = self.client.post(f"{BASE}/email", data={})
         self.assert_rerendered(response, "Este campo es obligatorio.")
+        self.assert_refusal_logged(logs, "EMAIL_CHANGE_FAILED", "invalid_form")
         self.assertEqual("operativo@example.com", self.user(OPERATIVO).email)
 
 
@@ -288,12 +317,16 @@ class ChangePasswordTestCase(ProfileBase):
                 )
                 self.assertEqual({"credential_changed": True}, after)
 
-    def test_a_wrong_current_password_changes_nothing(self) -> None:
+    def test_a_wrong_current_password_changes_nothing_and_is_logged(self) -> None:
         self.login(OPERATIVO)
-        with self.assertNoLogs("security", level="INFO"):
-            response = self.post(current="NoEsLaMia2026")
+        with self.assertLogs("security", level="INFO") as logs:
+            response = self.post(current=WRONG_PASSWORD)
         self.assert_rerendered(
-            response, users_service.WRONG_PASSWORD, "NoEsLaMia2026", NEW_PASSWORD
+            response, users_service.WRONG_PASSWORD, WRONG_PASSWORD, NEW_PASSWORD
+        )
+        self.assert_refusal_logged(
+            logs, "PASSWORD_CHANGE_FAILED", "wrong_current_password",
+            WRONG_PASSWORD, NEW_PASSWORD, PASSWORD,
         )
         self.assert_unchanged()
 
@@ -302,13 +335,20 @@ class ChangePasswordTestCase(ProfileBase):
     ) -> None:
         self.login(OPERATIVO)
         cases = (
-            ("Las contraseñas no coinciden.", dict(confirm="OtraClave2026")),
-            ("8 caracteres", dict(new="corta")),
-            (users_service.SAME_PASSWORD, dict(new=PASSWORD)),
+            ("Las contraseñas no coinciden.", "invalid_form",
+             dict(confirm="OtraClave2026")),
+            ("8 caracteres", "invalid_form", dict(new="corta")),
+            (users_service.SAME_PASSWORD, "same_password", dict(new=PASSWORD)),
         )
-        for message, values in cases:
+        for message, reason, values in cases:
             with self.subTest(message=message):
-                self.assert_rerendered(self.post(**values), message, NEW_PASSWORD)
+                with self.assertLogs("security", level="INFO") as logs:
+                    response = self.post(**values)
+                self.assert_rerendered(response, message, NEW_PASSWORD)
+                self.assert_refusal_logged(
+                    logs, "PASSWORD_CHANGE_FAILED", reason,
+                    PASSWORD, NEW_PASSWORD, "OtraClave2026", "corta",
+                )
         self.assert_unchanged()
 
 
@@ -362,6 +402,62 @@ class RevokeOwnTokenTestCase(ProfileBase):
             self.assert_back_to_profile(self.revoke(token_id), ALREADY_REVOKED)
         self.assertEqual(revoked_at, self.token(token_id).revoked_at)
         self.assertEqual(seen, self.audit_rows())
+
+
+class CredentialChangeRateLimitTestCase(ProfileBase):
+    """Both credential forms check the current password, so they share one budget.
+
+    The budget is ten requests per hour for each signed-in user from each client
+    address; anonymous requests are sent to the login page before it is counted.
+    """
+
+    rate_limit = True
+
+    def wrong_guesses(self, count: int) -> list[int]:
+        """Alternate wrong current-password guesses between both forms."""
+        email = {"email": "otra@example.com", "email_current_password": WRONG_PASSWORD}
+        password = {"current_password": WRONG_PASSWORD, "new_password": NEW_PASSWORD,
+                    "confirm_password": NEW_PASSWORD}
+        forms = ((f"{BASE}/email", email), (f"{BASE}/contrasena", password))
+        return [
+            self.client.post(url, data=data).status_code
+            for url, data in (forms[attempt % 2] for attempt in range(count))
+        ]
+
+    def test_the_eleventh_credential_change_in_an_hour_answers_429(self) -> None:
+        self.login(OPERATIVO)
+        self.assertEqual([200] * 10, self.wrong_guesses(10))
+        for url, data in (
+            (f"{BASE}/email",
+             {"email": "nueva@example.com", "email_current_password": PASSWORD}),
+            (f"{BASE}/contrasena",
+             {"current_password": PASSWORD, "new_password": NEW_PASSWORD,
+              "confirm_password": NEW_PASSWORD}),
+        ):
+            with self.subTest(url=url):
+                with self.assertLogs("security", level="WARNING") as logs:
+                    response = self.client.post(url, data=data)
+                self.assertEqual(429, response.status_code)
+                self.assertIn("RATE_LIMIT_EXCEEDED", logs.output[-1])
+        user = self.user(OPERATIVO)
+        self.assertEqual("operativo@example.com", user.email)
+        self.assertTrue(check_password_hash(user.password, PASSWORD))
+        self.assertEqual(200, self.client.get(f"{BASE}/").status_code)
+
+    def test_anonymous_requests_and_other_accounts_keep_their_own_budget(self) -> None:
+        for _ in range(11):
+            response = self.client.post(f"{BASE}/email", data={})
+            self.assertEqual(302, response.status_code)
+        self.login(OPERATIVO)
+        self.assertEqual([200] * 10, self.wrong_guesses(10))
+        self.assertEqual(429, self.client.post(f"{BASE}/email", data={}).status_code)
+        self.login(AUDITOR)
+        response = self.client.post(
+            f"{BASE}/email",
+            data={"email": "nuevo.auditor@example.com",
+                  "email_current_password": PASSWORD},
+        )
+        self.assert_back_to_profile(response, EMAIL_CHANGED)
 
 
 class ProfileFormsCsrfTestCase(ProfileBase):

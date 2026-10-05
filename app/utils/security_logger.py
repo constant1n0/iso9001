@@ -99,14 +99,22 @@ def log_password_reset_request(email, success, reason=None):
         )
 
 
-def log_password_change(username, success):
-    """Registra cambios de contraseña."""
+def log_password_change(username, success, reason=None):
+    """Registra cambios de contraseña; ``reason`` dice por qué se rechazó uno.
+
+    Nunca incluye la contraseña actual ni la nueva.
+    """
     ip = get_client_ip()
 
     if success:
         security_logger.info(f"PASSWORD_CHANGE_SUCCESS | user={username} | ip={ip}")
-    else:
+    elif reason is None:
         security_logger.warning(f"PASSWORD_CHANGE_FAILED | user={username} | ip={ip}")
+    else:
+        security_logger.warning(
+            f"PASSWORD_CHANGE_FAILED | user={_field(username)} "
+            f"| reason={_field(reason)} | ip={_client_ip_or_dash()}"
+        )
 
 
 def log_suspicious_activity(activity_type, details):
@@ -190,4 +198,12 @@ def log_email_change(username, new_email):
     security_logger.info(
         f"EMAIL_CHANGE_SUCCESS | user={_field(username)} "
         f"| email={_field(_masked_email(new_email))} | ip={_client_ip_or_dash()}"
+    )
+
+
+def log_email_change_failed(username, reason):
+    """Registra un cambio del propio correo rechazado (sin ninguna dirección)."""
+    security_logger.warning(
+        f"EMAIL_CHANGE_FAILED | user={_field(username)} "
+        f"| reason={_field(reason)} | ip={_client_ip_or_dash()}"
     )
