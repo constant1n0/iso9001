@@ -104,16 +104,15 @@ def log_password_change(username, success, reason=None):
 
     Nunca incluye la contraseña actual ni la nueva.
     """
-    ip = get_client_ip()
+    user, ip = _field(username), _client_ip_or_dash()
 
     if success:
-        security_logger.info(f"PASSWORD_CHANGE_SUCCESS | user={username} | ip={ip}")
+        security_logger.info(f"PASSWORD_CHANGE_SUCCESS | user={user} | ip={ip}")
     elif reason is None:
-        security_logger.warning(f"PASSWORD_CHANGE_FAILED | user={username} | ip={ip}")
+        security_logger.warning(f"PASSWORD_CHANGE_FAILED | user={user} | ip={ip}")
     else:
         security_logger.warning(
-            f"PASSWORD_CHANGE_FAILED | user={_field(username)} "
-            f"| reason={_field(reason)} | ip={_client_ip_or_dash()}"
+            f"PASSWORD_CHANGE_FAILED | user={user} | reason={_field(reason)} | ip={ip}"
         )
 
 

@@ -29,10 +29,11 @@ unknown one, is a 404. Each e-mail or password change writes one security-log
 line: after the commit when it succeeds, with a reason code when it is refused.
 
 Both credential forms check the current password, so they share one budget of
-``CREDENTIAL_LIMIT`` per signed-in user and client address: a stolen session
-cannot try more than that many current passwords an hour, and colleagues
-behind the same office address do not spend each other's budget. The limiter
-is innermost, so anonymous requests are sent to the login page uncounted.
+``CREDENTIAL_LIMIT`` per signed-in account, whatever the client address: a
+stolen session cannot try more than that many current passwords an hour, even
+from several addresses, and colleagues behind one office address keep their
+own budgets. The limiter is innermost, so anonymous requests are sent to the
+login page uncounted.
 """
 
 from collections.abc import Callable

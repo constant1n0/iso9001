@@ -146,7 +146,6 @@ class UserEditForm(BaseForm):
 class EmailChangeForm(BaseForm):
     email = EmailField('Nuevo correo electrónico', validators=[DataRequired(), Length(max=255)])
     email_current_password = PasswordField('Contraseña actual', validators=[DataRequired()])
-    submit = SubmitField('Cambiar correo')
 
 
 class PasswordChangeForm(BaseForm):
@@ -157,4 +156,3 @@ class PasswordChangeForm(BaseForm):
         validators=[DataRequired(),
                     EqualTo('new_password', message='Las contraseñas no coinciden.')],
     )
-    submit = SubmitField('Cambiar contraseña')

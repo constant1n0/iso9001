@@ -8,7 +8,7 @@ refused change re-renders the page with a Spanish message and never fills a
 password back in. Every credential change, successful or refused, writes one
 security-log line, which never holds a full e-mail address, a password, a token
 secret or a hash. The two credential forms share one rate-limit budget per
-signed-in user and client address.
+signed-in account.
 """
 
 from __future__ import annotations
@@ -407,8 +407,9 @@ class RevokeOwnTokenTestCase(ProfileBase):
 class CredentialChangeRateLimitTestCase(ProfileBase):
     """Both credential forms check the current password, so they share one budget.
 
-    The budget is ten requests per hour for each signed-in user from each client
-    address; anonymous requests are sent to the login page before it is counted.
+    The budget is ten requests per hour for each signed-in account, whatever the
+    client address; anonymous requests are sent to the login page before it is
+    counted.
     """
 
     rate_limit = True
