@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import unittest
 from contextlib import asynccontextmanager
 from unittest.mock import patch
@@ -128,6 +129,21 @@ class ActorTestCase(HttpCase):
         db.session.expire_all()
         (entry,) = db.session.query(AuditLog).filter_by(channel="mcp").all()  # token issuing is cli
         self.assertEqual(("no_conformidades", admin_user.id), (entry.entity_type, entry.actor_user_id))
+
+class ConcurrentActorTestCase(HttpCase):
+    """Concurrent requests run against a file database with one connection per thread.
+
+    The in-memory SQLite of the other cases shares a single connection between
+    threads, so concurrent sessions interleave on it and fail at random
+    (``StaleDataError`` on ``last_used_at``); production uses PostgreSQL.
+    """
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        uri = f"sqlite:///{directory.name}/mcp.db"
+        self.app_config = {"SQLALCHEMY_DATABASE_URI": uri, "DATABASE_URI": uri}
+        super().setUp()
 
     async def test_concurrent_requests_never_leak_actors(self) -> None:
         tokens = {"Administrador": self.issue_token(ADMIN)[0], "Operativo": self.issue_token(OPERATIVO)[0]}
