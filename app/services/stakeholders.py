@@ -54,3 +54,6 @@ delete = partial(crud.delete, SPEC)
 def list_(session: Session, actor: Actor) -> list[ParteInteresada]:
     """All interested parties in name order."""
     return crud.list_(SPEC, session, actor)
+
+
+list_page = partial(crud.list_page, SPEC)  # one page in the ``list_`` order plus the total

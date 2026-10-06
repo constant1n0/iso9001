@@ -59,9 +59,8 @@ graceful_timeout = 30
 # Preload app para compartir memoria entre workers
 preload_app = True
 
-# Forward de headers de proxy
-forwarded_allow_ips = '*'
-proxy_allow_ips = '*'
+# Proxy headers: Gunicorn keeps its default (loopback only). The app resolves the
+# client address and scheme itself, only for the networks in TRUSTED_PROXIES.
 
 # Hooks para logging
 def on_starting(server):

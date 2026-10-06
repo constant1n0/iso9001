@@ -197,7 +197,8 @@ def authenticate(
     Malformed, unknown, tampered, expired and revoked tokens, and tokens whose
     owner no longer exists or is inactive, all raise
     :class:`AuthenticationFailed` with the same message. The actor carries the
-    owner's *current* role and the token's scopes. ``last_used_at`` is flushed
+    owner's *current* role, the token's scopes and its public prefix.
+    ``last_used_at`` is flushed
     at most every five minutes.
     """
     _require_secret_key(secret_key)
@@ -229,7 +230,10 @@ def authenticate(
         row.last_used_at = moment
         session.flush()
     return Actor.from_user(
-        user, channel="mcp", scopes=frozenset(row.scopes.split()) & VALID_SCOPES
+        user,
+        channel="mcp",
+        scopes=frozenset(row.scopes.split()) & VALID_SCOPES,
+        token_prefix=prefix,
     )
 
 

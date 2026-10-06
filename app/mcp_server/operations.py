@@ -61,15 +61,12 @@ def _clean_filters(module: Module, filters: dict[str, Any]) -> dict[str, Any]:
 
 def list_records(session: Session, actor: Actor, module: Module,
                  filters: dict[str, Any] | None, page: int, per_page: int) -> dict[str, Any]:
-    """One bounded page (``crud.page_bounds``) of a module, filtered."""
+    """One bounded page (``crud.page_bounds``) of a module, filtered, paged in the database."""
     criteria = _clean_filters(module, filters or {})
     page, per_page = crud.page_bounds(page, per_page)
-    service = module.service
-    if module.paged_in_db:
-        rows, total = service.list_page(session, actor, **criteria, page=page, per_page=per_page)
-    else:  # plain registers list everything; slice here (see Module.paged_in_db)
-        everything = service.list_(session, actor, **criteria)
-        total, rows = len(everything), everything[(page - 1) * per_page: page * per_page]
+    rows, total = module.service.list_page(
+        session, actor, **criteria, page=page, per_page=per_page
+    )
     return {
         "module": module.slug, "items": [serialise(row) for row in rows], "total": total,
         "page": page, "per_page": per_page, "has_more": page * per_page < total,

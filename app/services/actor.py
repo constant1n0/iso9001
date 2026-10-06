@@ -40,6 +40,8 @@ class Actor:
         channel: One of ``web``, ``mcp``, ``cli``, ``system``.
         scopes: Token scopes (``read``, ``write``); None means unrestricted,
             as for web sessions. Scopes only narrow the role, never widen it.
+        token_prefix: Public prefix of the API token that authenticated an
+            ``mcp`` actor (never the secret or its hash); None otherwise.
     """
 
     user_id: int | None
@@ -47,6 +49,7 @@ class Actor:
     role: RoleEnum
     channel: str
     scopes: frozenset[str] | None = None
+    token_prefix: str | None = None
 
     def __post_init__(self) -> None:
         if self.channel not in CHANNELS:
@@ -58,6 +61,7 @@ class Actor:
         user: User,
         channel: str,
         scopes: Iterable[str] | None = None,
+        token_prefix: str | None = None,
     ) -> Actor:
         """Build an actor from a ``User`` row; the channel is explicit."""
         return cls(
@@ -66,4 +70,5 @@ class Actor:
             role=user.role,
             channel=channel,
             scopes=None if scopes is None else frozenset(scopes),
+            token_prefix=token_prefix,
         )

@@ -63,6 +63,9 @@ Set these in the application's `.env` (the systemd unit reads it):
 | `MCP_ALLOWED_HOSTS` | `127.0.0.1:<port>`, `localhost:<port>`, `[::1]:<port>` | Comma-separated `Host` values accepted; anything else gets 421. Add the public host name |
 | `MCP_TRUSTED_PROXIES` | `127.0.0.1` | Comma-separated proxy addresses whose `X-Forwarded-For` is believed (uvicorn `forwarded_allow_ips`); `*` is refused |
 | `ISO9001_MCP_TOKEN` | none | stdio only: the token the process acts as; it refuses to start without a valid one and checks it again on every tool call |
+| `MCP_TOKEN_RATE_LIMIT` | `120/minute` | HTTP only: requests per API token, counted after authentication |
+| `MCP_AUTH_FAILURE_RATE_LIMIT` | `20/minute` | HTTP only: failed bearer authentications per client address |
+| `RATELIMIT_STORAGE_URI` | `memory://` | Where both limits are counted, shared with the web application (Redis in production) |
 
 Run it with the systemd unit `iso9001-mcp.service` (copy, `daemon-reload`,
 `enable --now`; see the header of the file), or by hand:
@@ -75,17 +78,58 @@ stdio re-authenticates the configured token on every tool call, so revoking it,
 letting it expire or changing its owner's role takes effect on the next call
 (a rejected call returns a tool error; the server keeps running).
 
-Known gaps (follow-ups): there is no rate limiting on failed bearer tokens
-(add it at Traefik or in the app before wide exposure); `qms_list` pages in
-memory for `no_conformidades`, `documentos`, `capacitaciones`,
-`satisfaccion_clientes` and `partes_interesadas` (their services have no
-`list_page`, see `Module.paged_in_db` in the registry); the `estado` filter of
-`no_conformidades` accepts only the fixed states, so legacy free-text states
-cannot be filtered on.
+`qms_list` pages every module in the database: each service's `list_page`
+counts and fetches one page with the same filters and order as its `list_`
+(a test checks that every registered service has one).
+
+Known gap (follow-up): the `estado` filter of `no_conformidades` accepts only
+the fixed states, so legacy free-text states cannot be filtered on.
 
 A missing or invalid token gets `401` with `WWW-Authenticate: Bearer`; failures
 are written to the security log (prefix and reason, never the token). Deploying
 to production needs its own authorization.
+
+### Rate limits
+
+The HTTP transport applies two limits, written in `limits` notation (one rate
+such as `120/minute`; a value that is not exactly one rate of at least one
+request stops the server at start-up with exit code 2):
+
+- **Per token** (`MCP_TOKEN_RATE_LIMIT`, default `120/minute`): every
+  authenticated request counts against its token. Over the limit the request
+  gets `429` and the security log records
+  `API_TOKEN_RATE_LIMITED | prefix=<prefix> | ip=<address>`.
+- **Per address, failed tokens** (`MCP_AUTH_FAILURE_RATE_LIMIT`, default
+  `20/minute`): every failed bearer authentication (missing, malformed, unknown,
+  revoked, expired...) counts against the client address, after the token is
+  looked up, with one atomic hit, so parallel attempts cannot overshoot it.
+  Once an address is over the limit, its failing requests get `429` instead of
+  `401` and the security log records `MCP_AUTH_RATE_LIMITED | ip=<address>`
+  next to the usual `API_TOKEN_AUTH_FAILED` line. A valid token from the same
+  address is never refused by this limit, only by its own per-token limit.
+  Requests without a client address share one failure bucket (`-`).
+
+A refusal is `429` with a `Retry-After` header (seconds) and the body
+`{"error": "Demasiadas solicitudes. Inténtelo de nuevo más tarde."}`. Requests
+under both limits behave exactly as without them. The windows are moving
+windows when the storage supports them (memory and Redis do), otherwise fixed
+windows, counted in `RATELIMIT_STORAGE_URI` under the keys
+`iso9001:mcp:token:<prefix>` and `iso9001:mcp:auth-fail:<address>`; the address
+is the one uvicorn resolves, so behind Traefik keep `MCP_TRUSTED_PROXIES` right
+or every caller shares the proxy's budget.
+
+The limits fail open: if the storage stops answering (Redis down), requests are
+served without limits and the `app.mcp_server.rate_limit` logger writes one
+warning naming the error type (never the storage URI), plus one info line when
+the storage answers again. A `redis://` or `rediss://` storage whose
+`RATELIMIT_STORAGE_OPTIONS` lack `socket_connect_timeout` / `socket_timeout`
+gets one second for each, so a stalled Redis delays a request by about a
+second instead of the TCP timeout. An unusable
+`RATELIMIT_STORAGE_URI` (unknown scheme, malformed, driver not installed) stops
+the server at start-up with exit code 2 and a message without its credentials.
+
+stdio has no rate limits: it runs locally as one configured token, so whoever
+can start it already has access to the server itself.
 
 ## Traefik routing
 

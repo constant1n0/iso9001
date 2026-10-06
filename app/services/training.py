@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from datetime import date
 from functools import partial
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -54,6 +55,18 @@ update = partial(crud.update, SPEC)
 delete = partial(crud.delete, SPEC)
 
 
+def _conditions(tema: str | None, fecha: date | None, personal: str | None) -> list[Any]:
+    """The filters shared by ``list_`` and ``list_page``; they combine with AND."""
+    where: list[Any] = []
+    if tema:
+        where.append(Capacitacion.tema.ilike(f"%{tema}%"))
+    if fecha:
+        where.append(Capacitacion.fecha == fecha)
+    if personal:
+        where.append(Capacitacion.personal.ilike(f"%{personal}%"))
+    return where
+
+
 def list_(
     session: Session,
     actor: Actor,
@@ -63,11 +76,19 @@ def list_(
     personal: str | None = None,
 ) -> list[Capacitacion]:
     """Training records, newest first; filters combine with AND."""
-    where = []
-    if tema:
-        where.append(Capacitacion.tema.ilike(f"%{tema}%"))
-    if fecha:
-        where.append(Capacitacion.fecha == fecha)
-    if personal:
-        where.append(Capacitacion.personal.ilike(f"%{personal}%"))
-    return crud.list_(SPEC, session, actor, where)
+    return crud.list_(SPEC, session, actor, _conditions(tema, fecha, personal))
+
+
+def list_page(
+    session: Session,
+    actor: Actor,
+    *,
+    tema: str | None = None,
+    fecha: date | None = None,
+    personal: str | None = None,
+    page: int = 1,
+    per_page: int = crud.DEFAULT_PER_PAGE,
+) -> tuple[list[Capacitacion], int]:
+    """One page in the ``list_`` order plus the total matching the same filters."""
+    return crud.list_page(SPEC, session, actor, _conditions(tema, fecha, personal),
+                          page=page, per_page=per_page)

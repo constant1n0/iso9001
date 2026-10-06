@@ -106,7 +106,7 @@ class FilterTestCase(McpDbCase):
 
 
 class PagingTestCase(McpDbCase):
-    async def test_pages_are_bounded_for_both_listing_styles(self) -> None:
+    async def test_pages_are_bounded(self) -> None:
         for slug in ("no_conformidades", "auditorias"):
             for n in range(3):
                 self.seed(slug, **({"descripcion": f"NC {n}"} if slug == "no_conformidades"
@@ -124,6 +124,26 @@ class PagingTestCase(McpDbCase):
                     clamped = (await self.call(mcp_actor(ADMIN), "qms_list",
                                {"module": slug, "page": 0, "per_page": 0})).structured_content
                     self.assertEqual(1, clamped["page"])
+
+    async def test_formerly_in_memory_registers_page_in_the_database(self) -> None:
+        from app.mcp_server.registry import MODULES
+
+        unique = {"documentos": "code", "partes_interesadas": "nombre"}
+        slugs = ("no_conformidades", "documentos", "capacitaciones",
+                 "satisfaccion_clientes", "partes_interesadas")
+        for slug in slugs:
+            for n in range(3):
+                self.seed(slug, **({unique[slug]: f"X-{n}"} if slug in unique else {}))
+        for slug in slugs:
+            with (self.subTest(module=slug),
+                  patch.object(MODULES[slug].service, "list_") as list_everything):
+                result = await self.call(mcp_actor(ADMIN), "qms_list",
+                                         {"module": slug, "page": 2, "per_page": 2})
+                self.assertFalse(result.is_error, result.content)
+                page = result.structured_content
+                self.assertEqual((3, 2, 1, False), (page["total"], page["page"],
+                                                    len(page["items"]), page["has_more"]))
+                list_everything.assert_not_called()
 
 
 class ErrorTestCase(McpDbCase):
@@ -155,7 +175,7 @@ class ErrorTestCase(McpDbCase):
 
     async def test_unexpected_errors_are_generic(self) -> None:
         with (
-            patch.object(nonconformities, "list_", side_effect=RuntimeError("secret boom")),
+            patch.object(nonconformities, "list_page", side_effect=RuntimeError("secret boom")),
             self.assertLogs("mcp.server.mcpserver.server", level="ERROR") as logged,
         ):
             result = await self.call(mcp_actor(ADMIN), "qms_list", {"module": "no_conformidades"})

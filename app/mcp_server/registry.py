@@ -46,10 +46,6 @@ class Module:
     service: ModuleType
     fields: tuple[FieldDef, ...]
     filters: tuple[FieldDef, ...] = ()
-    # True when ``service.list_page`` pages in the database; otherwise ``list_``
-    # loads every row and ``qms_list`` slices in memory (follow-up: page those
-    # services in SQL too). A test keeps this in step with the service.
-    paged_in_db: bool = False
 
 
 def _f(name: str, type: str = "string", required: bool = False, allowed=(), members=None) -> FieldDef:
@@ -73,7 +69,7 @@ _MODULES = (
         _f("auditor", required=True), _f("resultado", required=True),
         _f("accion_correctiva"), _f("estado", "enum", members=EstadoAuditoriaEnum),
     ), (_f("area"), _f("auditor"), _f("estado", "enum", members=EstadoAuditoriaEnum),
-        _f("fecha_inicio", "date"), _f("fecha_fin", "date")), paged_in_db=True),
+        _f("fecha_inicio", "date"), _f("fecha_fin", "date"))),
     Module("documentos", "Documents", Resource.DOCUMENTS, documents, (
         _f("title", required=True), _f("code", required=True),
         _f("category", "enum", True, DocumentCategory.__members__),
@@ -96,32 +92,32 @@ _MODULES = (
     )),
     Module("mejoras", "Improvements", Resource.IMPROVEMENTS, improvements, (
         _f("no_conformidad", required=True), _f("accion_correctiva"), _f("accion_preventiva"),
-    ), paged_in_db=True),
+    )),
     Module("roles_responsabilidades", "Roles and responsibilities",
            Resource.ROLES_RESPONSIBILITIES, roles_responsibilities, (
         _f("rol", required=True), _f("compromiso_calidad", "boolean"),
         _f("descripcion_politica_calidad"),
-    ), paged_in_db=True),
+    )),
     Module("riesgos_oportunidades", "Risks and opportunities",
            Resource.RISKS_OPPORTUNITIES, risks_opportunities, (
         _f("tipo", "enum", True, TipoEnum.__members__), _f("descripcion", required=True),
         _f("objetivo_calidad"), _f("plan_accion"),
-    ), paged_in_db=True),
+    )),
     Module("recursos_capacitacion", "Training resources", Resource.TRAINING_RESOURCES,
            training_resources, (
         _f("recurso_necesario", required=True), _f("capacitacion_personal", "boolean"),
         _f("descripcion_documentacion"),
-    ), paged_in_db=True),
+    )),
     Module("procesos", "Process operations", Resource.PROCESS_OPERATIONS,
            process_operations, (
         _f("proceso", required=True), _f("criterio_calidad"),
         _f("control_proveedor", "boolean"), _f("no_conformidad"),
-    ), paged_in_db=True),
+    )),
     Module("indicadores_auditoria", "Audit indicators", Resource.AUDIT_INDICATORS,
            audit_indicators, (
         _f("area_auditoria", required=True), _f("fecha_auditoria", "datetime"),
         _f("resultado"), _f("accion_correctiva"), _f("indicador_desempeno"),
-    ), paged_in_db=True),
+    )),
 )
 
 MODULES: dict[str, Module] = {module.slug: module for module in _MODULES}
