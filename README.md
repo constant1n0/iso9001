@@ -118,6 +118,8 @@ blanket limit on ordinary pages. In production set two more variables:
   `X-Forwarded-Proto` are honoured, as comma-separated addresses or CIDR
   networks, e.g. the Traefik Docker network `172.18.0.0/16`. Leave it empty
   when nothing sits in front of the application; `*` is refused at start-up.
+  Gunicorn keeps its own default and trusts proxy headers only from loopback,
+  so the application alone decides which peers may set them.
 - `RATELIMIT_STORAGE_URI`: shared storage for the counters, e.g.
   `redis://localhost:6379/2` (a database index separate from Celery's), so
   every Gunicorn worker counts the same requests and counters survive
