@@ -34,7 +34,7 @@ Route for every task: **delegated direct** (two or more non-trivial files each).
 - [x] **RL-2 — Shared counters, no blanket limit.** Forecast 80-150.
   - `RATELIMIT_STORAGE_URI`, `RATELIMIT_KEY_PREFIX`, `RATELIMIT_IN_MEMORY_FALLBACK_ENABLED` in the configuration; no `default_limits`; README and deployment notes list the new variables.
   - Acceptance: the storage URI reaches Flask-Limiter; ordinary pages are never limited; every targeted limit still answers 429 when exceeded.
-- [ ] **RL-3 — Production deployment** (after authorization): `.env` gains `TRUSTED_PROXIES` (the Traefik network) and `RATELIMIT_STORAGE_URI` (the existing Redis, its own database index); restart by the user; smoke tests.
+- [x] **RL-3 — Production deployment** (after authorization): `.env` gains `TRUSTED_PROXIES` (the Traefik network) and `RATELIMIT_STORAGE_URI` (the existing Redis, its own database index); restart by the user; smoke tests.
 
 ## Checks
 
@@ -50,7 +50,7 @@ Baseline at `3fafdda`: 659 tests. RDD on: assess each work-unit commit.
 |---|---|---|---|---|
 | RL-1 | Done | `cff9b8a` | RED: missing module; then 7 integration tests (spoofed `1.2.3.4` logged, second client behind the proxy refused `302 != 429`, scheme not taken, `*` accepted). GREEN: 683 tests incl. PostgreSQL | Range `3fafdda..3172798`: **high**; consent granted; 4-lens review `review-1ed5d2375ba8e9ed` **approved** and acknowledged; risk lens no findings |
 | RL-2 | Done | `3172798`, review follow-up in the next commit | RED: missing `RATELIMIT_*` settings, no `iso9001` key prefix, ordinary page refused within 75 requests, no fallback on a refused connection. GREEN: 691 tests; the in-memory start-up warning is gone | Same review; applied: Redis connect and socket timeouts of 1 s (`RATELIMIT_STORAGE_OPTIONS` for `redis://`/`rediss://`), shared `build_app_with_schema` test helper, prefix test no longer tied to the private key layout. 694 tests |
-| RL-3 | Pending (authorization) | — | — | — |
+| RL-3 | Done | deployed `86275f9` (PR [#76](https://github.com/constant1n0/iso9001/pull/76), merged as `86275f9`) | See the deployment record below | — |
 
 ## Findings during implementation
 
@@ -59,6 +59,21 @@ Baseline at `3fafdda`: 659 tests. RDD on: assess each work-unit commit.
 - Flask-Limiter skips its storage set-up when `RATELIMIT_ENABLED` is false and keeps prefix and dead-storage state on the shared limiter across `init_app` calls; tests that need a dead storage use their own limiter.
 - With the default `memory://`, Flask-Limiter no longer warns at start-up even when production forgets `RATELIMIT_STORAGE_URI`; the README says so, and the deployment sets it explicitly.
 
+## Production deployment (2026-10-06)
+
+The user authorized this deployment to `vulcano` over SSH as `dcm`, with no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `e378bb9`, clean; no migrations or dependency changes |
+| Backups | `~/work/backups/iso9001-code-*-pre-86275f9.tar.gz` and `env-*-pre-86275f9`, both mode 600 |
+| Code | Incremental git bundle `e378bb9..main`, fast-forward to `86275f9` |
+| Configuration | `.env` gained `TRUSTED_PROXIES=172.18.0.0/16` and `RATELIMIT_STORAGE_URI` on Celery's Redis (`127.0.0.1:6380`, same password) in database index 2, which was empty and answered `PING`; the app loads both, with key prefix `iso9001` and 1 s Redis timeouts |
+| Restart (user, with sudo) | `iso9001`, `iso9001-celery-worker`, `iso9001-celery-beat`, `iso9001-mcp` |
+| Smoke tests | Services active, no error entries in the journal; `/login` 200; `/mcp` 401 with `WWW-Authenticate: Bearer`; five wrong logins for a made-up user answered 302 and the sixth 429; the security log shows the workstation's real LAN address (`192.168.101.x`) instead of the Traefik address (`172.18.x.x`) and a `RATE_LIMIT_EXCEEDED` line; Redis database 2 holds the `LIMITER/iso9001/<client>/auth.login/5/1/minute` counter |
+
+A POST over HTTPS now needs a matching `Referer`, because Flask-WTF sees the real `https` scheme; browsers send it, scripted clients must too.
+
 ## Next step
 
-Deliver the pull request, then RL-3 after explicit authorization: `.env` gains `TRUSTED_PROXIES=172.18.0.0/16` and `RATELIMIT_STORAGE_URI` (the existing Redis with its own database index), the user restarts the services, smoke tests check the security log shows real client addresses.
+**Feature complete and deployed.** Follow-up: restrict Gunicorn's `forwarded_allow_ips` (still `*`) to the Traefik network.
