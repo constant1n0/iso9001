@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
+import time
 import unittest
+from collections import Counter
 from contextlib import AsyncExitStack, asynccontextmanager, redirect_stderr
 from unittest.mock import patch
 
@@ -15,7 +18,6 @@ from test_mcp_http import ACCEPT, HOST, call_body
 
 from app.mcp_server import __main__ as cli
 from app.mcp_server import http, rate_limit
-from app.services import api_tokens
 
 BAD_TOKEN = f"iso_{'0' * 8}_{'A' * 43}"
 MESSAGE = "Demasiadas solicitudes. Inténtelo de nuevo más tarde."
@@ -98,23 +100,42 @@ class TokenLimitTestCase(RateLimitCase):
 
 
 class FailureLimitTestCase(RateLimitCase):
-    async def test_an_address_over_the_limit_is_refused_before_the_database(self) -> None:
-        good, _, _ = self.issue_token()
+    async def test_failures_over_the_limit_get_429_and_a_log_line(self) -> None:
         async with self.serve() as client:
             for _ in range(2):
                 with self.assertLogs("security", level="WARNING"):
                     self.assertEqual(401, (await self.post(client, BAD_TOKEN)).status_code)
-            with (patch.object(api_tokens, "authenticate", wraps=api_tokens.authenticate) as lookup,
-                  self.assertLogs("security", level="WARNING") as logged):
-                refused_bad = await self.post(client, BAD_TOKEN)
-                refused_good = await self.post(client, good)
-        lookup.assert_not_called()
-        self.assert_refused(refused_bad)
-        self.assert_refused(refused_good)
+            with self.assertLogs("security", level="WARNING") as logged:
+                refused = await self.post(client, BAD_TOKEN)
+        self.assert_refused(refused)
         output = "\n".join(logged.output)
         self.assertIn("MCP_AUTH_RATE_LIMITED | ip=127.0.0.1", output)
-        self.assertNotIn("API_TOKEN_AUTH_FAILED", output)
-        self.assertNotIn(good, output)
+        self.assertNotIn(BAD_TOKEN, output)
+
+    async def test_a_valid_token_from_the_same_address_is_not_refused(self) -> None:
+        good, _, _ = self.issue_token()
+        async with self.serve() as client:
+            with self.assertLogs("security", level="WARNING"):
+                for _ in range(2):
+                    await self.post(client, BAD_TOKEN)
+                self.assert_refused(await self.post(client, BAD_TOKEN))
+            self.assertEqual(200, (await self.post(client, good)).status_code)
+            with self.assertLogs("security", level="WARNING"):
+                self.assert_refused(await self.post(client, BAD_TOKEN))
+
+    async def test_parallel_failures_never_pass_the_limit(self) -> None:
+        """A slow lookup widens the race a check-then-count gate would lose."""
+        real = http.context.authenticate
+
+        def slow_authenticate(*args, **kwargs):
+            time.sleep(0.05)
+            return real(*args, **kwargs)
+
+        async with self.serve() as client:
+            with (patch.object(http.context, "authenticate", slow_authenticate),
+                  self.assertLogs("security", level="WARNING")):
+                responses = await asyncio.gather(*(self.post(client) for _ in range(8)))
+        self.assertEqual({401: 2, 429: 6}, Counter(r.status_code for r in responses))
 
     async def test_missing_tokens_count_as_failures(self) -> None:
         async with self.serve() as client:
@@ -163,6 +184,20 @@ class StorageOutageTestCase(RateLimitCase):
             self.assertIsNone(limiter.hit_token("abcd1234"))
         self.assertEqual(["INFO"], [record.levelname for record in logged.records])
 
+    def test_redis_storage_gets_short_timeouts_unless_configured(self) -> None:
+        cases = (({}, (1, 1)), ({"socket_timeout": 5}, (1, 5)))
+        for scheme in ("redis", "rediss"):
+            for options, expected in cases:
+                with self.subTest(scheme=scheme, options=options):
+                    before = dict(options)
+                    self.app.config.update(RATELIMIT_STORAGE_URI=f"{scheme}://127.0.0.1:1/0",
+                                           RATELIMIT_STORAGE_OPTIONS=options)
+                    limiter = rate_limit.McpRateLimiter.from_app(self.app)
+                    kwargs = limiter.strategy.storage.storage.connection_pool.connection_kwargs
+                    self.assertEqual(expected, (kwargs.get("socket_connect_timeout"),
+                                                kwargs.get("socket_timeout")))
+                    self.assertEqual(before, options)  # the configuration is not mutated
+
 
 class StartupTestCase(McpDbCase):
     INVALID = ("lots", "", "2/fortnight", "0/minute", "2/minute;3/hour")
@@ -186,6 +221,25 @@ class StartupTestCase(McpDbCase):
         self.assertEqual(2, code)
         run.assert_not_called()
         self.assertIn("MCP_TOKEN_RATE_LIMIT", stderr.getvalue())
+
+    def test_the_http_command_refuses_an_unusable_storage_without_its_secret(self) -> None:
+        unusable = (
+            "bogus://user:s3cr3t-pw@cache:1/0",           # unknown scheme
+            "redis://user:s3cr3t-pw@cache:notaport/0",    # malformed
+            "memcached://user:s3cr3t-pw@cache:11211",     # driver not installed
+        )
+        for uri in unusable:
+            with self.subTest(uri=uri.split(":", 1)[0]):
+                self.app.config["RATELIMIT_STORAGE_URI"] = uri
+                stderr = io.StringIO()
+                with patch.object(cli.uvicorn, "run") as run, redirect_stderr(stderr):
+                    code = cli.main(["--transport", "http"], {}, app_factory=lambda: self.app)
+                self.assertEqual(2, code)
+                run.assert_not_called()
+                self.assertIn("RATELIMIT_STORAGE_URI", stderr.getvalue())
+                self.assertIn("cache", stderr.getvalue())
+                self.assertNotIn("s3cr3t-pw", stderr.getvalue())
+                self.assertNotIn("user", stderr.getvalue())
 
     def test_the_defaults_come_from_the_configuration(self) -> None:
         self.assertEqual(("120/minute", "20/minute"), (

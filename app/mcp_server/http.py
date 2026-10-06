@@ -87,22 +87,24 @@ class BearerAuthMiddleware:
         await response(scope, receive, send)
 
     def _admit(self, token: str | None, client_ip: str | None) -> Actor:
-        """Authenticate between the two rate limits; blocking, so it runs in a worker thread.
+        """Authenticate, then count against one limit; blocking, so it runs in a worker thread.
 
-        An address over the failure limit is refused before the database lookup;
-        each failed authentication counts against it; a valid token counts
-        against its own limit.
+        A failed authentication counts against its address (one atomic hit) and
+        is refused with 429 instead of 401 once the address is over the limit,
+        so a valid token from that address is never refused by it. A valid token
+        counts against its own limit. Every refusal is logged: each failed
+        attempt already writes an ``API_TOKEN_AUTH_FAILED`` line, so throttling
+        this one would not bound the log, only add shared state.
         """
-        wait = self.limiter.auth_failures_exceeded(client_ip)
-        if wait is not None:
-            with context.client_request(self.flask_app, client_ip):
-                security_logger.log_mcp_auth_rate_limited()
-            raise _RateLimited(wait)
         try:
             actor = context.authenticate(self.flask_app, token, client_ip)
         except AuthenticationFailed:
-            self.limiter.hit_auth_failure(client_ip)
-            raise
+            wait = self.limiter.hit_auth_failure(client_ip)
+            if wait is None:
+                raise
+            with context.client_request(self.flask_app, client_ip):
+                security_logger.log_mcp_auth_rate_limited()
+            raise _RateLimited(wait) from None
         if actor.token_prefix is not None:
             wait = self.limiter.hit_token(actor.token_prefix)
             if wait is not None:
@@ -115,7 +117,7 @@ class BearerAuthMiddleware:
 def create_http_app(flask_app: Flask, allowed_hosts: list[str]) -> Starlette:
     """The ASGI app: stateless JSON responses at ``/mcp``, Host-checked, bearer-authenticated.
 
-    Raises ``RateLimitConfigError`` for an invalid limit setting, before serving.
+    Raises ``RateLimitConfigError`` for an invalid limit or storage, before serving.
     """
     limiter = McpRateLimiter.from_app(flask_app)
     app = build_server(flask_app).streamable_http_app(

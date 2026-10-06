@@ -80,7 +80,7 @@ letting it expire or changing its owner's role takes effect on the next call
 
 `qms_list` pages every module in the database: each service's `list_page`
 counts and fetches one page with the same filters and order as its `list_`
-(see `Module.paged_in_db` in the registry).
+(a test checks that every registered service has one).
 
 Known gap (follow-up): the `estado` filter of `no_conformidades` accepts only
 the fixed states, so legacy free-text states cannot be filtered on.
@@ -101,15 +101,19 @@ request stops the server at start-up with exit code 2):
   `API_TOKEN_RATE_LIMITED | prefix=<prefix> | ip=<address>`.
 - **Per address, failed tokens** (`MCP_AUTH_FAILURE_RATE_LIMIT`, default
   `20/minute`): every failed bearer authentication (missing, malformed, unknown,
-  revoked, expired...) counts against the client address. Once an address is
-  over the limit, every request from it gets `429` before the token is looked
-  up in the database, valid tokens included, until the window moves on; the
-  security log records `MCP_AUTH_RATE_LIMITED | ip=<address>`.
+  revoked, expired...) counts against the client address, after the token is
+  looked up, with one atomic hit, so parallel attempts cannot overshoot it.
+  Once an address is over the limit, its failing requests get `429` instead of
+  `401` and the security log records `MCP_AUTH_RATE_LIMITED | ip=<address>`
+  next to the usual `API_TOKEN_AUTH_FAILED` line. A valid token from the same
+  address is never refused by this limit, only by its own per-token limit.
+  Requests without a client address share one failure bucket (`-`).
 
 A refusal is `429` with a `Retry-After` header (seconds) and the body
 `{"error": "Demasiadas solicitudes. Inténtelo de nuevo más tarde."}`. Requests
 under both limits behave exactly as without them. The windows are moving
-windows counted in `RATELIMIT_STORAGE_URI` under the keys
+windows when the storage supports them (memory and Redis do), otherwise fixed
+windows, counted in `RATELIMIT_STORAGE_URI` under the keys
 `iso9001:mcp:token:<prefix>` and `iso9001:mcp:auth-fail:<address>`; the address
 is the one uvicorn resolves, so behind Traefik keep `MCP_TRUSTED_PROXIES` right
 or every caller shares the proxy's budget.
@@ -117,7 +121,12 @@ or every caller shares the proxy's budget.
 The limits fail open: if the storage stops answering (Redis down), requests are
 served without limits and the `app.mcp_server.rate_limit` logger writes one
 warning naming the error type (never the storage URI), plus one info line when
-the storage answers again.
+the storage answers again. A `redis://` or `rediss://` storage whose
+`RATELIMIT_STORAGE_OPTIONS` lack `socket_connect_timeout` / `socket_timeout`
+gets one second for each, so a stalled Redis delays a request by about a
+second instead of the TCP timeout. An unusable
+`RATELIMIT_STORAGE_URI` (unknown scheme, malformed, driver not installed) stops
+the server at start-up with exit code 2 and a message without its credentials.
 
 stdio has no rate limits: it runs locally as one configured token, so whoever
 can start it already has access to the server itself.

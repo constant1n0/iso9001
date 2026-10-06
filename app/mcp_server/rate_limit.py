@@ -6,13 +6,15 @@ otherwise, which is consistent because the MCP server is one process):
 
 - requests per API token, after authentication (``MCP_TOKEN_RATE_LIMIT``);
 - failed bearer authentications per client address
-  (``MCP_AUTH_FAILURE_RATE_LIMIT``), checked before the database lookup.
+  (``MCP_AUTH_FAILURE_RATE_LIMIT``), counted after the lookup with one atomic
+  hit, so only failing requests are refused and a valid token never is.
 
 A storage failure never blocks a request: the limiter fails open, logging one
 warning when the storage stops answering and one info line when it is back
-(the error type only, never the storage URI). The stdio transport has no
-limits: it runs locally as one configured token, so whoever can start it
-already has access to the server itself.
+(the error type only, never the storage URI). A Redis storage without its own
+socket timeouts gets one-second ones, so a stalled Redis cannot hold a request
+for the TCP timeout. The stdio transport has no limits: it runs locally as one
+configured token, so whoever can start it already has access to the server.
 """
 
 from __future__ import annotations
@@ -25,9 +27,11 @@ from collections.abc import Callable
 from typing import TypeVar
 
 from flask import Flask
+from urllib.parse import urlsplit, urlunsplit
+
 from limits import RateLimitItem, parse_many
-from limits.errors import StorageError
-from limits.storage import MovingWindowSupport, storage_from_string
+from limits.errors import ConfigurationError, StorageError
+from limits.storage import MovingWindowSupport, Storage, storage_from_string
 from limits.strategies import FixedWindowRateLimiter, MovingWindowRateLimiter, RateLimiter
 
 logger = logging.getLogger(__name__)
@@ -35,13 +39,16 @@ logger = logging.getLogger(__name__)
 TOKEN_LIMIT_SETTING = "MCP_TOKEN_RATE_LIMIT"
 FAILURE_LIMIT_SETTING = "MCP_AUTH_FAILURE_RATE_LIMIT"
 
+REDIS_SCHEMES = frozenset({"redis", "rediss"})
+REDIS_TIMEOUTS = {"socket_connect_timeout": 1, "socket_timeout": 1}
+
 T = TypeVar("T")
 
 __all__ = ["McpRateLimiter", "RateLimitConfigError", "StorageError", "parse_limit"]
 
 
 class RateLimitConfigError(ValueError):
-    """A limit setting is not a single valid rate; the message is safe to print."""
+    """A limit setting or the storage is unusable; the message is safe to print."""
 
 
 def parse_limit(setting: str, value: object) -> RateLimitItem:
@@ -60,6 +67,40 @@ def parse_limit(setting: str, value: object) -> RateLimitItem:
             f"{setting} must be one rate such as '120/minute', not {value!r}."
         )
     return items[0]
+
+
+def _redacted(uri: str) -> tuple[str, tuple[str, ...] | None]:
+    """``uri`` without credentials, query or fragment, plus the parts taken out.
+
+    An unparsable URI keeps only its scheme, and None says nothing of it is safe.
+    """
+    try:
+        parts = urlsplit(uri)
+    except ValueError:
+        return f"{uri.partition(':')[0]}:...", None
+    userinfo, _, host = parts.netloc.rpartition("@")
+    safe = urlunsplit((parts.scheme, host, parts.path, "", ""))
+    return safe, tuple(part for part in (userinfo, parts.query, parts.fragment) if part)
+
+
+def build_storage(uri: str, options: dict | None) -> Storage:
+    """The ``limits`` storage for ``uri``, with Redis socket timeouts defaulted to 1 s.
+
+    Raises:
+        RateLimitConfigError: For an unknown scheme, a malformed URI or a
+            missing driver; the message never carries the URI's credentials.
+    """
+    options = dict(options or {})
+    if uri.partition("://")[0].lower() in REDIS_SCHEMES:
+        options = REDIS_TIMEOUTS | options
+    try:
+        return storage_from_string(uri, wrap_exceptions=True, **options)
+    except (ConfigurationError, ValueError, TypeError) as error:
+        safe, secrets = _redacted(uri)
+        detail = str(error).replace(uri, safe)
+        if secrets is None or any(secret in detail for secret in secrets):
+            detail = type(error).__name__
+        raise RateLimitConfigError(f"RATELIMIT_STORAGE_URI ({safe}) is unusable: {detail}") from None
 
 
 class McpRateLimiter:
@@ -84,10 +125,9 @@ class McpRateLimiter:
         """Build the limiter from ``app.config``; invalid limits raise here, at start-up."""
         token_limit = parse_limit(TOKEN_LIMIT_SETTING, app.config.get(TOKEN_LIMIT_SETTING))
         failure_limit = parse_limit(FAILURE_LIMIT_SETTING, app.config.get(FAILURE_LIMIT_SETTING))
-        storage = storage_from_string(
+        storage = build_storage(
             app.config.get("RATELIMIT_STORAGE_URI") or "memory://",
-            wrap_exceptions=True,
-            **(app.config.get("RATELIMIT_STORAGE_OPTIONS") or {}),
+            app.config.get("RATELIMIT_STORAGE_OPTIONS"),
         )
         strategy: RateLimiter = (
             MovingWindowRateLimiter(storage)
@@ -96,22 +136,18 @@ class McpRateLimiter:
         )
         return cls(strategy, token_limit, failure_limit, app.config.get("RATELIMIT_KEY_PREFIX", ""))
 
-    def auth_failures_exceeded(self, client_ip: str | None) -> int | None:
-        """Seconds ``client_ip`` must wait when it is over the failure limit, else None.
+    def hit_auth_failure(self, client_ip: str | None) -> int | None:
+        """Count one failed bearer authentication; seconds to wait when over the limit, else None.
 
-        Only reads the counter: a refused request is not a failed authentication.
+        One atomic ``hit``, so parallel failures cannot overshoot the limit.
+        Requests without a client address share the ``-`` bucket.
         """
         key = self._key("auth-fail", client_ip or "-")
         return self._guarded(
             lambda: None
-            if self.strategy.test(self.failure_limit, key)
+            if self.strategy.hit(self.failure_limit, key)
             else self._retry_after(self.failure_limit, key)
         )
-
-    def hit_auth_failure(self, client_ip: str | None) -> None:
-        """Count one failed bearer authentication from ``client_ip``."""
-        key = self._key("auth-fail", client_ip or "-")
-        self._guarded(lambda: self.strategy.hit(self.failure_limit, key))
 
     def hit_token(self, prefix: str) -> int | None:
         """Count one request for the token; seconds to wait when it is over its limit, else None."""
