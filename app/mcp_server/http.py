@@ -2,7 +2,8 @@
 
 The SDK's own ``AuthSettings`` is not used: it publishes OAuth discovery
 metadata that static-token clients would follow. A failed credential is a
-plain 401 with ``WWW-Authenticate: Bearer`` and nothing else.
+plain 401 with ``WWW-Authenticate: Bearer`` and nothing else. Going over a rate
+limit (see ``rate_limit``) is a 429 with ``Retry-After``.
 """
 
 from __future__ import annotations
@@ -17,11 +18,24 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from ..services.actor import Actor
 from ..services.errors import AuthenticationFailed
+from ..utils import security_logger
 from . import context
+from .rate_limit import McpRateLimiter
 from .server import build_server
 
 logger = logging.getLogger(__name__)
+
+RATE_LIMITED = "Demasiadas solicitudes. Inténtelo de nuevo más tarde."
+
+
+class _RateLimited(Exception):
+    """Flow control inside the middleware: refuse with 429 after ``retry_after`` seconds."""
+
+    def __init__(self, retry_after: int) -> None:
+        super().__init__(retry_after)
+        self.retry_after = retry_after
 
 
 def _bearer_token(scope: Scope) -> str | None:
@@ -35,11 +49,12 @@ def _bearer_token(scope: Scope) -> str | None:
 
 
 class BearerAuthMiddleware:
-    """Pure-ASGI middleware: authenticate the bearer token, expose its actor to the tools."""
+    """Pure-ASGI middleware: rate-limit, authenticate the bearer token, expose its actor."""
 
-    def __init__(self, app: ASGIApp, flask_app: Flask) -> None:
+    def __init__(self, app: ASGIApp, flask_app: Flask, limiter: McpRateLimiter) -> None:
         self.app = app
         self.flask_app = flask_app
+        self.limiter = limiter
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":  # lifespan; the SDK app serves no websockets
@@ -48,7 +63,12 @@ class BearerAuthMiddleware:
         client = scope.get("client")
         try:
             actor = await anyio.to_thread.run_sync(
-                context.authenticate, self.flask_app, _bearer_token(scope), client[0] if client else None
+                self._admit, _bearer_token(scope), client[0] if client else None
+            )
+        except _RateLimited as limited:
+            response = JSONResponse(
+                {"error": RATE_LIMITED}, status_code=429,
+                headers={"Retry-After": str(limited.retry_after)},
             )
         except AuthenticationFailed as failure:
             response = JSONResponse(
@@ -66,14 +86,43 @@ class BearerAuthMiddleware:
             return
         await response(scope, receive, send)
 
+    def _admit(self, token: str | None, client_ip: str | None) -> Actor:
+        """Authenticate between the two rate limits; blocking, so it runs in a worker thread.
+
+        An address over the failure limit is refused before the database lookup;
+        each failed authentication counts against it; a valid token counts
+        against its own limit.
+        """
+        wait = self.limiter.auth_failures_exceeded(client_ip)
+        if wait is not None:
+            with context.client_request(self.flask_app, client_ip):
+                security_logger.log_mcp_auth_rate_limited()
+            raise _RateLimited(wait)
+        try:
+            actor = context.authenticate(self.flask_app, token, client_ip)
+        except AuthenticationFailed:
+            self.limiter.hit_auth_failure(client_ip)
+            raise
+        if actor.token_prefix is not None:
+            wait = self.limiter.hit_token(actor.token_prefix)
+            if wait is not None:
+                with context.client_request(self.flask_app, client_ip):
+                    security_logger.log_api_token_rate_limited(actor.token_prefix)
+                raise _RateLimited(wait)
+        return actor
+
 
 def create_http_app(flask_app: Flask, allowed_hosts: list[str]) -> Starlette:
-    """The ASGI app: stateless JSON responses at ``/mcp``, Host-checked, bearer-authenticated."""
+    """The ASGI app: stateless JSON responses at ``/mcp``, Host-checked, bearer-authenticated.
+
+    Raises ``RateLimitConfigError`` for an invalid limit setting, before serving.
+    """
+    limiter = McpRateLimiter.from_app(flask_app)
     app = build_server(flask_app).streamable_http_app(
         streamable_http_path="/mcp",
         json_response=True,
         stateless_http=True,
         transport_security=TransportSecuritySettings(allowed_hosts=allowed_hosts),
     )
-    app.add_middleware(BearerAuthMiddleware, flask_app=flask_app)
+    app.add_middleware(BearerAuthMiddleware, flask_app=flask_app, limiter=limiter)
     return app

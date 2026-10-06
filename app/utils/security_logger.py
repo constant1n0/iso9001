@@ -161,6 +161,18 @@ def log_api_token_auth_failed(reason, prefix=None):
     )
 
 
+def log_api_token_rate_limited(prefix):
+    """Record a valid API token refused for going over its request limit."""
+    security_logger.warning(
+        f"API_TOKEN_RATE_LIMITED | prefix={_field(prefix)} | ip={_client_ip_or_dash()}"
+    )
+
+
+def log_mcp_auth_rate_limited():
+    """Record an address refused for too many failed MCP bearer tokens."""
+    security_logger.warning(f"MCP_AUTH_RATE_LIMITED | ip={_client_ip_or_dash()}")
+
+
 def log_user_status_change(username, active, actor_label):
     """Registra la desactivación o reactivación de una cuenta por un administrador."""
     event = "USER_REACTIVATED" if active else "USER_DEACTIVATED"

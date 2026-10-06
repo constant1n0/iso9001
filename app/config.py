@@ -76,6 +76,16 @@ class Config:
     )
     RATELIMIT_IN_MEMORY_FALLBACK_ENABLED = True
 
+    # MCP HTTP transport limits (``limits`` notation, one rate each), counted
+    # on the storage above: requests per API token after authentication, and
+    # failed bearer authentications per client address. Checked at start-up.
+    MCP_TOKEN_RATE_LIMIT = (
+        os.environ.get('MCP_TOKEN_RATE_LIMIT', '').strip() or '120/minute'
+    )
+    MCP_AUTH_FAILURE_RATE_LIMIT = (
+        os.environ.get('MCP_AUTH_FAILURE_RATE_LIMIT', '').strip() or '20/minute'
+    )
+
     # Configuración de correo
     MAIL_SERVER = 'smtp.gmail.com'
     MAIL_PORT = 587

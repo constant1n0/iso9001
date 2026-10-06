@@ -248,6 +248,13 @@ class AuthenticateTestCase(TokenBase):
             (result.user_id, result.label, result.role, result.channel, result.scopes),
         )
 
+    def test_the_actor_carries_the_token_prefix_and_nothing_secret(self) -> None:
+        result = self.authenticate(self.plaintext)
+        self.assertEqual(self.row.prefix, result.token_prefix)
+        self.assertNotIn(self.plaintext.split("_", 2)[2], repr(result))
+        self.assertNotIn(self.row.token_hash, repr(result))
+        self.assertIsNone(actor(ADMIN).token_prefix)
+
     def test_the_owners_current_role_is_used(self) -> None:
         self.owner.role = AUDITOR
         db.session.commit()

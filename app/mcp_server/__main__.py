@@ -4,8 +4,10 @@ Environment: ``MCP_HOST`` / ``MCP_PORT`` (default 127.0.0.1:8765),
 ``MCP_ALLOWED_HOSTS`` (comma-separated Host values the HTTP transport accepts),
 ``MCP_TRUSTED_PROXIES`` (comma-separated addresses whose ``X-Forwarded-For`` the
 HTTP transport believes; default ``127.0.0.1``, never ``*``),
-``ISO9001_MCP_TOKEN`` (the API token stdio acts as, re-checked on every call), plus the application's
-``SECRET_KEY`` and ``DATABASE_URI``.
+``ISO9001_MCP_TOKEN`` (the API token stdio acts as, re-checked on every call),
+``MCP_TOKEN_RATE_LIMIT`` / ``MCP_AUTH_FAILURE_RATE_LIMIT`` (HTTP only; default
+``120/minute`` per token and ``20/minute`` failed tokens per address), plus the
+application's ``SECRET_KEY``, ``DATABASE_URI`` and ``RATELIMIT_STORAGE_URI``.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from .. import create_app
 from ..services.errors import AuthenticationFailed
 from . import context
 from .http import create_http_app
+from .rate_limit import RateLimitConfigError
 from .server import build_server
 
 
@@ -77,6 +80,7 @@ def main(
     settings = parse_args(argv, environ)
     app = app_factory()
     if settings.transport == "stdio":
+        # No rate limits: stdio is local, so whoever starts it already has server access.
         try:
             actor = authenticate_stdio(app, environ)
         except StartupError as error:
@@ -86,8 +90,13 @@ def main(
         with context.stdio_identity(app, environ["ISO9001_MCP_TOKEN"].strip()):
             build_server(app).run("stdio")
     else:
+        try:
+            asgi = create_http_app(app, settings.allowed_hosts)
+        except RateLimitConfigError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 2
         uvicorn.run(
-            create_http_app(app, settings.allowed_hosts),
+            asgi,
             host=settings.host, port=settings.port, server_header=False,
             # Honour X-Forwarded-For only from the local proxy (Traefik), so the
             # security log records the real caller and nobody else can forge it.

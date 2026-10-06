@@ -88,6 +88,14 @@ def unit_of_work(app: Flask, *, write: bool = False) -> Iterator[tuple[Session, 
             raise
 
 
+@contextmanager
+def client_request(app: Flask, client_ip: str | None) -> Iterator[None]:
+    """A request context whose remote address is ``client_ip``, for the security log."""
+    environ = {"REMOTE_ADDR": client_ip} if client_ip else {}
+    with app.test_request_context(environ_base=environ):
+        yield
+
+
 def authenticate(app: Flask, raw: str | None, client_ip: str | None = None) -> Actor:
     """Turn a bearer token into its actor, committing the throttled ``last_used_at``.
 
@@ -102,8 +110,7 @@ def authenticate(app: Flask, raw: str | None, client_ip: str | None = None) -> A
             return actor
         except AuthenticationFailed as failure:
             db.session.rollback()
-            environ = {"REMOTE_ADDR": client_ip} if client_ip else {}
-            with app.test_request_context(environ_base=environ):
+            with client_request(app, client_ip):
                 security_logger.log_api_token_auth_failed(failure.reason, failure.token_prefix)
             raise
         except SQLAlchemyError:
