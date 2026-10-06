@@ -60,6 +60,15 @@ class Config:
     # comma-separated addresses or CIDR networks; empty = none; '*' is refused
     TRUSTED_PROXIES = os.environ.get('TRUSTED_PROXIES', '')
 
+    # Rate-limit counters (Flask-Limiter): shared storage such as
+    # redis://host:6379/2 in production, so every worker counts the same
+    # requests; in-memory counters stand in while that storage is unreachable
+    RATELIMIT_STORAGE_URI = (
+        os.environ.get('RATELIMIT_STORAGE_URI', '').strip() or 'memory://'
+    )
+    RATELIMIT_KEY_PREFIX = 'iso9001'
+    RATELIMIT_IN_MEMORY_FALLBACK_ENABLED = True
+
     # Configuración de correo
     MAIL_SERVER = 'smtp.gmail.com'
     MAIL_PORT = 587

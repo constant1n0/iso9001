@@ -79,6 +79,7 @@ BASE_TEST_CONFIG = {
     "CELERY_BROKER_URL": None,
     "MAIL_SUPPRESS_SEND": True,
     "RATELIMIT_ENABLED": False,
+    "RATELIMIT_STORAGE_URI": "memory://",
     "SECRET_KEY": "test-only-secret",
     "SECURITY_LOG_ENABLED": False,
     "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",

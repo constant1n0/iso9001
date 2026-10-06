@@ -28,7 +28,9 @@ migrate = Migrate()
 csrf = CSRFProtect()
 login_manager = LoginManager()
 mail = Mail()
-limiter = Limiter(key_func=get_remote_address, default_limits=["200 per day", "50 per hour"])
+# No default limit: only the routes that need one declare it (login, password
+# reset requests, administrator reset links and credential changes).
+limiter = Limiter(key_func=get_remote_address)
 
 def init_app(app):
     mail.init_app(app)
