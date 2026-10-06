@@ -155,6 +155,6 @@ Remaining, outside this change:
 | Smoke tests | All four services active and enabled; from the allowed LAN: `/login` 200 with HSTS; `/mcp` 401 with `WWW-Authenticate: Bearer` without a token and with an invalid token; Traefik container reaches the MCP; Celery worker ready |
 
 Pending after deployment:
-- the administrator issues personal tokens with `flask create-api-token` on `vulcano`;
-- real-client smoke tests per `docs/mcp.md`;
+- ~~the administrator issues personal tokens with `flask create-api-token` on `vulcano`~~ done (2026-10-04);
+- real-client smoke tests per `docs/mcp.md`: **Claude Code works** against production over Streamable HTTP with a personal read/write token (`claude mcp add --transport http --scope user`, reported by the user on 2026-10-06); Codex, Pi, OpenCode, OpenClaw and Claude Desktop remain untested;
 - users are informed of the permission changes (only ADMIN deletes; OPERATIVO cannot write the JSON registers).
