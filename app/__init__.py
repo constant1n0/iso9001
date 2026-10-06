@@ -45,6 +45,7 @@ from .routes import (
 from .utils.error_handlers import register_error_handlers
 from .utils.permissions import can
 from .utils.security_logger import init_security_logging
+from .utils.trusted_proxies import TrustedProxyMiddleware, parse_trusted_proxies
 
 
 def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
@@ -60,6 +61,11 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
 
     if not app.config.get('SQLALCHEMY_DATABASE_URI'):
         raise RuntimeError("DATABASE_URI no está configurada. Configure la variable de entorno DATABASE_URI.")
+
+    # Real client behind trusted proxies; '*' or an invalid entry stops start-up
+    trusted_proxies = parse_trusted_proxies(app.config.get('TRUSTED_PROXIES'))
+    if trusted_proxies:
+        app.wsgi_app = TrustedProxyMiddleware(app.wsgi_app, trusted_proxies)
 
     # Inicializar extensiones
     db.init_app(app)

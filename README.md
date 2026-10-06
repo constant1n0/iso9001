@@ -109,6 +109,23 @@ replayed. Invalid, expired, unknown-user, stale, and database-failure cases use
 the same invalid-link response. Tokens issued before this password-state
 binding was introduced are rejected, so users must request a new link.
 
+Rate limits apply only to the routes that need them: login (5 POSTs per
+minute), password reset requests (3 per hour), administrator reset links (10
+per hour) and credential changes (10 per hour per account); there is no
+blanket limit on ordinary pages. In production set two more variables:
+
+- `TRUSTED_PROXIES`: the reverse proxies whose `X-Forwarded-For` and
+  `X-Forwarded-Proto` are honoured, as comma-separated addresses or CIDR
+  networks, e.g. the Traefik Docker network `172.18.0.0/16`. Leave it empty
+  when nothing sits in front of the application; `*` is refused at start-up.
+- `RATELIMIT_STORAGE_URI`: shared storage for the counters, e.g.
+  `redis://localhost:6379/2` (a database index separate from Celery's), so
+  every Gunicorn worker counts the same requests and counters survive
+  restarts. It defaults to `memory://` (one counter per process). Because a
+  storage is now always configured, Flask-Limiter no longer warns about
+  in-memory storage at start-up. If Redis is unreachable, the limits keep
+  working with in-memory counters until it recovers.
+
 This protection requires no schema migration or additional token dependency
 and does not revoke existing authenticated sessions. The isolated SQLite tests
 exercise the compare-and-swap contract but are not proof of PostgreSQL

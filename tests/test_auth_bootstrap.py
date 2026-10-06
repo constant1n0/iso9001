@@ -79,10 +79,12 @@ BASE_TEST_CONFIG = {
     "CELERY_BROKER_URL": None,
     "MAIL_SUPPRESS_SEND": True,
     "RATELIMIT_ENABLED": False,
+    "RATELIMIT_STORAGE_URI": "memory://",
     "SECRET_KEY": "test-only-secret",
     "SECURITY_LOG_ENABLED": False,
     "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
     "TESTING": True,
+    "TRUSTED_PROXIES": "",
     "WTF_CSRF_ENABLED": False,
 }
 
@@ -96,6 +98,21 @@ def build_app(**overrides: object):
         for key, value in config.items():
             stack.enter_context(patch.object(Config, key, value, create=True))
         return create_app()
+
+
+def build_app_with_schema(testcase: unittest.TestCase, **overrides: object):
+    """``build_app`` plus the schema, dropped again when ``testcase`` ends."""
+    app = build_app(**overrides)
+    with app.app_context():
+        db.create_all()
+
+    def drop() -> None:
+        with app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    testcase.addCleanup(drop)
+    return app
 
 
 class AuthBootstrapTestCase(unittest.TestCase):
