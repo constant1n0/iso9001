@@ -241,6 +241,16 @@ class StartupTestCase(McpDbCase):
                 self.assertNotIn("s3cr3t-pw", stderr.getvalue())
                 self.assertNotIn("user", stderr.getvalue())
 
+    def test_a_driver_echoing_only_the_decoded_password_is_redacted(self) -> None:
+        uri = "redis://user:p%40ss-w0rd@cache:6379/0"
+        echo = ValueError("authentication with p@ss-w0rd refused")
+        with patch.object(rate_limit, "storage_from_string", side_effect=echo), \
+                self.assertRaises(rate_limit.RateLimitConfigError) as raised:
+            rate_limit.build_storage(uri, {})
+        self.assertNotIn("p@ss-w0rd", str(raised.exception))
+        self.assertNotIn("p%40ss-w0rd", str(raised.exception))
+        self.assertIn("ValueError", str(raised.exception))
+
     def test_the_defaults_come_from_the_configuration(self) -> None:
         self.assertEqual(("120/minute", "20/minute"), (
             self.app.config["MCP_TOKEN_RATE_LIMIT"], self.app.config["MCP_AUTH_FAILURE_RATE_LIMIT"]))

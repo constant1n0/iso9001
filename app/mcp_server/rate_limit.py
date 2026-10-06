@@ -27,7 +27,7 @@ from collections.abc import Callable
 from typing import TypeVar
 
 from flask import Flask
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 from limits import RateLimitItem, parse_many
 from limits.errors import ConfigurationError, StorageError
@@ -80,7 +80,10 @@ def _redacted(uri: str) -> tuple[str, tuple[str, ...] | None]:
         return f"{uri.partition(':')[0]}:...", None
     userinfo, _, host = parts.netloc.rpartition("@")
     safe = urlunsplit((parts.scheme, host, parts.path, "", ""))
-    return safe, tuple(part for part in (userinfo, parts.query, parts.fragment) if part)
+    # A driver may echo the password alone or percent-decoded, so look for every form.
+    taken = (userinfo, parts.password or "", parts.query, parts.fragment)
+    forms = {form for part in taken if part for form in (part, unquote(part))}
+    return safe, tuple(sorted(forms))
 
 
 def build_storage(uri: str, options: dict | None) -> Storage:
