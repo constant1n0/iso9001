@@ -28,10 +28,10 @@ Make rate limits count real clients across every web worker: identify the client
 
 Route for every task: **delegated direct** (two or more non-trivial files each).
 
-- [ ] **RL-1 — Real client address.** Forecast 150-250.
+- [x] **RL-1 — Real client address.** Forecast 150-250.
   - WSGI middleware applied in `create_app`, configured from `TRUSTED_PROXIES`; `security_logger.get_client_ip()` returns `request.remote_addr`.
   - Acceptance: a trusted peer's `X-Forwarded-For` sets the client address (right-most untrusted hop) and `X-Forwarded-Proto` sets the scheme; an untrusted peer's headers are ignored; `*` is refused at start-up; the rate-limit key and the security log see the resolved address.
-- [ ] **RL-2 — Shared counters, no blanket limit.** Forecast 80-150.
+- [x] **RL-2 — Shared counters, no blanket limit.** Forecast 80-150.
   - `RATELIMIT_STORAGE_URI`, `RATELIMIT_KEY_PREFIX`, `RATELIMIT_IN_MEMORY_FALLBACK_ENABLED` in the configuration; no `default_limits`; README and deployment notes list the new variables.
   - Acceptance: the storage URI reaches Flask-Limiter; ordinary pages are never limited; every targeted limit still answers 429 when exceeded.
 - [ ] **RL-3 — Production deployment** (after authorization): `.env` gains `TRUSTED_PROXIES` (the Traefik network) and `RATELIMIT_STORAGE_URI` (the existing Redis, its own database index); restart by the user; smoke tests.
@@ -48,8 +48,17 @@ Baseline at `3fafdda`: 659 tests. RDD on: assess each work-unit commit.
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| RL-1..RL-3 | Pending | — | — | — |
+| RL-1 | Done | `cff9b8a` | RED: missing module; then 7 integration tests (spoofed `1.2.3.4` logged, second client behind the proxy refused `302 != 429`, scheme not taken, `*` accepted). GREEN: 683 tests incl. PostgreSQL | Range `3fafdda..3172798`: **high**; consent granted; 4-lens review `review-1ed5d2375ba8e9ed` **approved** and acknowledged; risk lens no findings |
+| RL-2 | Done | `3172798`, review follow-up in the next commit | RED: missing `RATELIMIT_*` settings, no `iso9001` key prefix, ordinary page refused within 75 requests, no fallback on a refused connection. GREEN: 691 tests; the in-memory start-up warning is gone | Same review; applied: Redis connect and socket timeouts of 1 s (`RATELIMIT_STORAGE_OPTIONS` for `redis://`/`rediss://`), shared `build_app_with_schema` test helper, prefix test no longer tied to the private key layout. 694 tests |
+| RL-3 | Pending (authorization) | — | — | — |
+
+## Findings during implementation
+
+- Gunicorn's `forwarded_allow_ips` only sets the scheme; it never rewrites `REMOTE_ADDR`. `gunicorn.conf.py` still trusts `*` for that header, so a peer that reaches Gunicorn directly can claim `https`; limiting it to the Traefik network is a follow-up.
+- `TRUSTED_PROXIES` also refuses `0.0.0.0/0`, `::/0` and networks written with host bits; a malformed `X-Forwarded-For` hop stops the walk, so the request stays attributed to the proxy rather than to a value the client wrote.
+- Flask-Limiter skips its storage set-up when `RATELIMIT_ENABLED` is false and keeps prefix and dead-storage state on the shared limiter across `init_app` calls; tests that need a dead storage use their own limiter.
+- With the default `memory://`, Flask-Limiter no longer warns at start-up even when production forgets `RATELIMIT_STORAGE_URI`; the README says so, and the deployment sets it explicitly.
 
 ## Next step
 
-RL-1.
+Deliver the pull request, then RL-3 after explicit authorization: `.env` gains `TRUSTED_PROXIES=172.18.0.0/16` and `RATELIMIT_STORAGE_URI` (the existing Redis with its own database index), the user restarts the services, smoke tests check the security log shows real client addresses.
