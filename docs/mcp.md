@@ -165,10 +165,16 @@ claude mcp add-json --scope user iso9001 \
 
 The single quotes keep `${ISO9001_TOKEN}` literal: Claude Code stores the
 placeholder and expands it from the environment when it connects, so the token
-never lands in `~/.claude.json`. `claude mcp add --header "Authorization: Bearer
-${ISO9001_TOKEN}"` also works, but the shell expands the variable first and the
-token is stored in plain text. Avoid `--scope project`: it writes `.mcp.json`
-into the repository (and needs per-project approval).
+never lands in `~/.claude.json`. This also works, but the shell expands the
+variable first and the token is stored in plain text:
+
+```bash
+claude mcp add --transport http iso9001 https://qms.example.com/mcp \
+  --header "Authorization: Bearer ${ISO9001_TOKEN}"
+```
+
+Avoid `--scope project`: it writes `.mcp.json` into the repository (and needs
+per-project approval).
 
 Local stdio instead (the token is read once at start):
 
