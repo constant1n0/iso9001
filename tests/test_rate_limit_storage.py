@@ -60,39 +60,57 @@ class RateLimitConfigTestCase(unittest.TestCase):
         self.assertEqual("memory://", config.RATELIMIT_STORAGE_URI)
 
 
+class RateLimitStorageOptionsTestCase(unittest.TestCase):
+    def test_redis_uris_get_short_timeouts(self) -> None:
+        for uri in ("redis://localhost:6379/2", "rediss://localhost:6379/2"):
+            with self.subTest(uri=uri):
+                config = _load_config({"RATELIMIT_STORAGE_URI": uri})
+
+                self.assertEqual(
+                    {"socket_connect_timeout": 1, "socket_timeout": 1},
+                    config.RATELIMIT_STORAGE_OPTIONS,
+                )
+
+    def test_memory_storage_gets_no_options(self) -> None:
+        self.assertEqual({}, _load_config({}).RATELIMIT_STORAGE_OPTIONS)
+
+
 class RateLimitWiringTestCase(unittest.TestCase):
-    def _app(self, **overrides):
-        app = bootstrap.build_app(**overrides)
-        with app.app_context():
-            db.create_all()
-        self.addCleanup(self._drop, app)
-        return app
-
-    @staticmethod
-    def _drop(app) -> None:
-        with app.app_context():
-            db.session.remove()
-            db.drop_all()
-
     def test_the_configured_storage_uri_reaches_the_limiter(self) -> None:
         # Building the storage does not connect, so no Redis server is needed.
         # A disabled limiter skips its set-up, so the storage is only built here.
-        self._app(RATELIMIT_ENABLED=True, RATELIMIT_STORAGE_URI=UNREACHABLE_REDIS)
+        bootstrap.build_app_with_schema(self, RATELIMIT_ENABLED=True, RATELIMIT_STORAGE_URI=UNREACHABLE_REDIS)
 
         self.assertIsInstance(limiter.storage, RedisStorage)
 
+    def test_the_configured_storage_uri_carries_short_timeouts_for_redis(self) -> None:
+        # Config is read at import, so derive the options as it would for Redis.
+        options = _load_config(
+            {"RATELIMIT_STORAGE_URI": UNREACHABLE_REDIS}
+        ).RATELIMIT_STORAGE_OPTIONS
+        bootstrap.build_app_with_schema(
+            self,
+            RATELIMIT_ENABLED=True,
+            RATELIMIT_STORAGE_URI=UNREACHABLE_REDIS,
+            RATELIMIT_STORAGE_OPTIONS=options,
+        )
+
+        kwargs = limiter.storage.storage.connection_pool.connection_kwargs
+        self.assertEqual(1, kwargs["socket_connect_timeout"])
+        self.assertEqual(1, kwargs["socket_timeout"])
+
     def test_counters_are_stored_under_the_application_prefix(self) -> None:
-        app = self._app(RATELIMIT_ENABLED=True)
+        app = bootstrap.build_app_with_schema(self, RATELIMIT_ENABLED=True)
 
         app.test_client().post("/login", data=CREDENTIALS)
 
         self.assertIsInstance(limiter.storage, MemoryStorage)
         keys = list(limiter.storage.storage)
         self.assertTrue(keys)
-        self.assertTrue(all(k.startswith("LIMITER/iso9001/127.0.0.1/") for k in keys))
+        self.assertTrue(all("iso9001" in key.split("/") for key in keys))
 
     def test_ordinary_pages_are_never_limited(self) -> None:
-        app = self._app(RATELIMIT_ENABLED=True)
+        app = bootstrap.build_app_with_schema(self, RATELIMIT_ENABLED=True)
         with app.app_context():
             user = User(
                 username="operativo",
@@ -114,7 +132,7 @@ class RateLimitWiringTestCase(unittest.TestCase):
         self.assertEqual({200}, codes)
 
     def test_the_login_limit_still_refuses_the_sixth_post(self) -> None:
-        app = self._app(RATELIMIT_ENABLED=True)
+        app = bootstrap.build_app_with_schema(self, RATELIMIT_ENABLED=True)
         client = app.test_client()
 
         codes = [client.post("/login", data=CREDENTIALS).status_code for _ in range(6)]

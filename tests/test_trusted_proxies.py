@@ -176,19 +176,6 @@ class TrustedProxyMiddlewareTestCase(unittest.TestCase):
 
 
 class ClientAddressIntegrationTestCase(unittest.TestCase):
-    def _app(self, **overrides):
-        app = bootstrap.build_app(**overrides)
-        with app.app_context():
-            db.create_all()
-        self.addCleanup(self._drop, app)
-        return app
-
-    @staticmethod
-    def _drop(app) -> None:
-        with app.app_context():
-            db.session.remove()
-            db.drop_all()
-
     @staticmethod
     def _login(client, peer: str, forwarded_for: str | None = None):
         headers = {"X-Forwarded-For": forwarded_for} if forwarded_for else {}
@@ -200,7 +187,7 @@ class ClientAddressIntegrationTestCase(unittest.TestCase):
         )
 
     def test_the_request_sees_the_resolved_client_and_scheme(self) -> None:
-        app = self._app(TRUSTED_PROXIES=TRAEFIK_NETWORK)
+        app = bootstrap.build_app_with_schema(self, TRUSTED_PROXIES=TRAEFIK_NETWORK)
         app.add_url_rule(
             "/_whoami", "whoami", lambda: f"{request.remote_addr} {request.scheme}"
         )
@@ -217,7 +204,7 @@ class ClientAddressIntegrationTestCase(unittest.TestCase):
         self.assertEqual("203.0.113.7 https", response.get_data(as_text=True))
 
     def test_no_trusted_proxies_leaves_the_application_unwrapped(self) -> None:
-        app = self._app()
+        app = bootstrap.build_app_with_schema(self)
 
         self.assertNotIsInstance(app.wsgi_app, TrustedProxyMiddleware)
 
@@ -226,7 +213,7 @@ class ClientAddressIntegrationTestCase(unittest.TestCase):
             bootstrap.build_app(TRUSTED_PROXIES="*")
 
     def test_the_security_log_records_the_resolved_client(self) -> None:
-        app = self._app(TRUSTED_PROXIES=TRAEFIK_NETWORK)
+        app = bootstrap.build_app_with_schema(self, TRUSTED_PROXIES=TRAEFIK_NETWORK)
 
         with self.assertLogs("security", level="WARNING") as logs:
             self._login(app.test_client(), TRAEFIK, "1.2.3.4, 203.0.113.7")
@@ -236,7 +223,7 @@ class ClientAddressIntegrationTestCase(unittest.TestCase):
         self.assertIn("ip=203.0.113.7 ", failed[0])
 
     def test_clients_behind_the_same_proxy_keep_separate_login_budgets(self) -> None:
-        app = self._app(TRUSTED_PROXIES=TRAEFIK_NETWORK, RATELIMIT_ENABLED=True)
+        app = bootstrap.build_app_with_schema(self, TRUSTED_PROXIES=TRAEFIK_NETWORK, RATELIMIT_ENABLED=True)
         client = app.test_client()
 
         first = [
@@ -257,7 +244,7 @@ class ClientAddressIntegrationTestCase(unittest.TestCase):
     def test_a_spoofed_header_from_an_untrusted_peer_is_ignored(self) -> None:
         for trusted in ("", TRAEFIK_NETWORK):
             with self.subTest(trusted=trusted):
-                app = self._app(TRUSTED_PROXIES=trusted, RATELIMIT_ENABLED=True)
+                app = bootstrap.build_app_with_schema(self, TRUSTED_PROXIES=trusted, RATELIMIT_ENABLED=True)
                 client = app.test_client()
 
                 with self.assertLogs("security", level="WARNING") as logs:

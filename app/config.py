@@ -67,6 +67,13 @@ class Config:
         os.environ.get('RATELIMIT_STORAGE_URI', '').strip() or 'memory://'
     )
     RATELIMIT_KEY_PREFIX = 'iso9001'
+    # short timeouts so a stalled Redis fails fast and the in-memory fallback
+    # takes over instead of blocking login until the TCP timeout
+    RATELIMIT_STORAGE_OPTIONS = (
+        {'socket_connect_timeout': 1, 'socket_timeout': 1}
+        if RATELIMIT_STORAGE_URI.startswith(('redis://', 'rediss://'))
+        else {}
+    )
     RATELIMIT_IN_MEMORY_FALLBACK_ENABLED = True
 
     # Configuración de correo

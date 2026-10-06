@@ -100,6 +100,21 @@ def build_app(**overrides: object):
         return create_app()
 
 
+def build_app_with_schema(testcase: unittest.TestCase, **overrides: object):
+    """``build_app`` plus the schema, dropped again when ``testcase`` ends."""
+    app = build_app(**overrides)
+    with app.app_context():
+        db.create_all()
+
+    def drop() -> None:
+        with app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    testcase.addCleanup(drop)
+    return app
+
+
 class AuthBootstrapTestCase(unittest.TestCase):
     """Exercise bootstrap behavior through real Flask and SQLAlchemy boundaries."""
 
