@@ -46,8 +46,11 @@ SEEDS = {
 class McpDbCase(unittest.IsolatedAsyncioTestCase):
     """In-memory app plus ``call``, which talks to a fresh in-memory MCP server."""
 
+    #: Extra ``build_app`` configuration, e.g. a file database for concurrency tests.
+    app_config: dict = {}
+
     def setUp(self) -> None:
-        self.app = bootstrap.build_app()
+        self.app = bootstrap.build_app(**self.app_config)
         self.ctx = self.app.app_context()
         self.ctx.push()
         db.create_all()

@@ -156,5 +156,5 @@ Remaining, outside this change:
 
 Pending after deployment:
 - ~~the administrator issues personal tokens with `flask create-api-token` on `vulcano`~~ done (2026-10-04);
-- real-client smoke tests per `docs/mcp.md`: **Claude Code works** against production over Streamable HTTP with a personal read/write token (`claude mcp add --transport http --scope user`, reported by the user on 2026-10-06); Codex, Pi, OpenCode, OpenClaw and Claude Desktop remain untested;
+- real-client smoke tests per `docs/mcp.md`: **Claude Code works** against production over Streamable HTTP with a personal read/write token (`claude mcp add --transport http --scope user`, reported by the user on 2026-10-06); Codex, OpenCode, Pi and OpenClaw verified against a local server built from `main@69bcfa7` (2026-10-06, see `docs/mcp.md`); Claude Desktop remains untested;
 - users are informed of the permission changes (only ADMIN deletes; OPERATIVO cannot write the JSON registers).

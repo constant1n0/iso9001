@@ -54,7 +54,7 @@ class GuideTestCase(unittest.TestCase):
             "~/.codex/config.toml", "bearer_token_env_var", "~/.pi/agent/mcp.json",
             "opencode.json", '"type": "remote"', "OpenClaw", '"transport": "streamable-http"',
             "claude_desktop_config.json", "mcp-remote", "--header-file",
-            "Smoke test", "Unverified",
+            "Smoke test", "Verification status",
         ):
             self.assertIn(expected, self.text)
 

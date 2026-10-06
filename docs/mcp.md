@@ -159,9 +159,22 @@ Replace `https://qms.example.com/mcp` with your URL. Every remote client sends
 ### Claude Code
 
 ```bash
+claude mcp add-json --scope user iso9001 \
+  '{"type":"http","url":"https://qms.example.com/mcp","headers":{"Authorization":"Bearer ${ISO9001_TOKEN}"}}'
+```
+
+The single quotes keep `${ISO9001_TOKEN}` literal: Claude Code stores the
+placeholder and expands it from the environment when it connects, so the token
+never lands in `~/.claude.json`. This also works, but the shell expands the
+variable first and the token is stored in plain text:
+
+```bash
 claude mcp add --transport http iso9001 https://qms.example.com/mcp \
   --header "Authorization: Bearer ${ISO9001_TOKEN}"
 ```
+
+Avoid `--scope project`: it writes `.mcp.json` into the repository (and needs
+per-project approval).
 
 Local stdio instead (the token is read once at start):
 
@@ -182,7 +195,7 @@ bearer_token_env_var = "ISO9001_TOKEN"
 
 ### Pi
 
-`~/.pi/agent/mcp.json`:
+`~/.pi/agent/mcp.json` (or a project `.pi/mcp.json`):
 
 ```json
 {
@@ -194,6 +207,10 @@ bearer_token_env_var = "ISO9001_TOKEN"
   }
 }
 ```
+
+Pi calls MCP tools from its code mode by default (`mcp__iso9001__qms_modules`).
+A project `.pi/mcp.json` is read by `pi -p`, but `pi mcp list` ignores it until
+the project is trusted.
 
 ### OpenCode
 
@@ -213,6 +230,10 @@ bearer_token_env_var = "ISO9001_TOKEN"
 }
 ```
 
+`opencode mcp list` shows whether it connected. For one-shot runs
+(`opencode run`) close standard input (`< /dev/null`); a run left waiting on it
+never reached the server.
+
 ### OpenClaw
 
 ```json
@@ -228,6 +249,10 @@ bearer_token_env_var = "ISO9001_TOKEN"
   }
 }
 ```
+
+`openclaw mcp probe iso9001` lists the tools. `openclaw agent` runs through the
+gateway, which reads the gateway's own configuration; add `--local` to use the
+configuration above directly.
 
 ### Claude Desktop
 
@@ -274,14 +299,19 @@ printf 'Authorization: Bearer %s\n' "$ISO9001_TOKEN" > ~/.iso9001-mcp-headers
 
 ### Verification status
 
-Verified here: the server over Streamable HTTP with the Python SDK client and
-raw JSON-RPC requests for the three protocol revisions, and the `mcp-remote`
-`--header` / `--header-file` options (v0.14.3 documentation). Unverified: no
-real client from the list has connected yet, so every snippet above awaits its
-smoke test. Least certain are Codex `bearer_token_env_var`, the Pi `mcp.json`
-shape and its `${ENV}` expansion, the OpenCode `{env:...}` expansion, the
-OpenClaw `mcp.servers` shape, and which protocol revision Pi, OpenClaw and
-OpenCode negotiate. Check the client's documentation if a step fails.
+- **Claude Code**: connected to production over Streamable HTTP with a
+  personal token, reported by the maintainer (2026-10-06).
+- **Codex 0.157, OpenCode 1.18, Pi 1.0, OpenClaw 2026.7 and Claude Code**: the
+  snippets above (with a local URL) connected to a local server built from
+  `main@69bcfa7` and called `qms_modules` with a read-only token, each through
+  its normal one-shot command; the server log recorded the calls (2026-10-06).
+  Each client's `${...}` or `{env:...}` placeholder was expanded from the
+  environment.
+- **Claude Desktop through `mcp-remote`**: not tested (no Linux build); the
+  `--header` / `--header-file` options follow the `mcp-remote` v0.14.3
+  documentation.
+
+The server is stateless: it sends no `Mcp-Session-Id` and answers with JSON.
 
 ## Smoke test
 
