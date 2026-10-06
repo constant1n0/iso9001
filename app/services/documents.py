@@ -25,12 +25,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import Document, DocumentCategory
-from . import audit, fields, policy
+from . import audit, crud, fields, policy
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
 from .errors import Conflict, NotFound
@@ -50,10 +50,25 @@ def _load(session: Session, document_id: int) -> Document:
     return found
 
 
+# ``code`` is unique; the id only keeps the order total should that ever change.
+_ORDER = (Document.code, Document.id)
+
+
 def list_(session: Session, actor: Actor) -> list[Document]:
     """All documents ordered by code."""
     policy.require(actor, Action.READ, Resource.DOCUMENTS)
-    return list(session.scalars(select(Document).order_by(Document.code)))
+    return list(session.scalars(select(Document).order_by(*_ORDER)))
+
+
+def list_page(
+    session: Session, actor: Actor, *, page: int = 1, per_page: int = crud.DEFAULT_PER_PAGE
+) -> tuple[list[Document], int]:
+    """One page in the ``list_`` order plus the total number of documents."""
+    policy.require(actor, Action.READ, Resource.DOCUMENTS)
+    page, per_page = crud.page_bounds(page, per_page)
+    total = session.scalar(select(func.count()).select_from(Document))
+    query = select(Document).order_by(*_ORDER).limit(per_page).offset((page - 1) * per_page)
+    return list(session.scalars(query)), total
 
 
 # Length limits mirror the Document columns and the web form.

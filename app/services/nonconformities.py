@@ -32,12 +32,12 @@ from collections.abc import Mapping
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import NoConformidad
-from . import audit, fields, policy
+from . import audit, crud, fields, policy
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
 from .errors import Conflict, NotFound, ValidationError
@@ -65,6 +65,24 @@ def _load(session: Session, nc_id: int) -> NoConformidad:
     return nc
 
 
+# Newest first; the id breaks ties between rows detected on the same day.
+_ORDER = (NoConformidad.fecha_detectada.desc(), NoConformidad.id.desc())
+
+
+def _conditions(
+    descripcion: str | None, estado: str | None, fecha_detectada: date | None
+) -> list[Any]:
+    """The filters shared by ``list_`` and ``list_page``; they combine with AND."""
+    where: list[Any] = []
+    if descripcion:
+        where.append(NoConformidad.descripcion.ilike(f"%{descripcion}%"))
+    if estado:
+        where.append(NoConformidad.estado == estado)
+    if fecha_detectada:
+        where.append(NoConformidad.fecha_detectada == fecha_detectada)
+    return where
+
+
 def list_(
     session: Session,
     actor: Actor,
@@ -75,15 +93,30 @@ def list_(
 ) -> list[NoConformidad]:
     """List nonconformities, newest first; filters combine with AND."""
     policy.require(actor, Action.READ, Resource.NONCONFORMITIES)
-    query = select(NoConformidad)
-    if descripcion:
-        query = query.where(NoConformidad.descripcion.ilike(f"%{descripcion}%"))
-    if estado:
-        query = query.where(NoConformidad.estado == estado)
-    if fecha_detectada:
-        query = query.where(NoConformidad.fecha_detectada == fecha_detectada)
-    query = query.order_by(NoConformidad.fecha_detectada.desc(), NoConformidad.id.desc())
-    return list(session.scalars(query))
+    where = _conditions(descripcion, estado, fecha_detectada)
+    return list(session.scalars(select(NoConformidad).where(*where).order_by(*_ORDER)))
+
+
+def list_page(
+    session: Session,
+    actor: Actor,
+    *,
+    descripcion: str | None = None,
+    estado: str | None = None,
+    fecha_detectada: date | None = None,
+    page: int = 1,
+    per_page: int = crud.DEFAULT_PER_PAGE,
+) -> tuple[list[NoConformidad], int]:
+    """One page in the ``list_`` order plus the total matching the same filters."""
+    policy.require(actor, Action.READ, Resource.NONCONFORMITIES)
+    page, per_page = crud.page_bounds(page, per_page)
+    where = _conditions(descripcion, estado, fecha_detectada)
+    total = session.scalar(select(func.count()).select_from(NoConformidad).where(*where))
+    query = (
+        select(NoConformidad).where(*where).order_by(*_ORDER)
+        .limit(per_page).offset((page - 1) * per_page)
+    )
+    return list(session.scalars(query)), total
 
 
 def available_states(session: Session, actor: Actor) -> list[str]:

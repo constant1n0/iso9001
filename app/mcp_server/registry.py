@@ -47,8 +47,8 @@ class Module:
     fields: tuple[FieldDef, ...]
     filters: tuple[FieldDef, ...] = ()
     # True when ``service.list_page`` pages in the database; otherwise ``list_``
-    # loads every row and ``qms_list`` slices in memory (follow-up: page those
-    # services in SQL too). A test keeps this in step with the service.
+    # loads every row and ``qms_list`` slices in memory. Every module now pages
+    # in the database; a test keeps this in step with the service.
     paged_in_db: bool = False
 
 
@@ -67,7 +67,7 @@ _MODULES = (
     # are still listed but cannot be filtered on (writes keep a record's current
     # legacy state); nonconformities.available_states shows them to humans.
     ), (_f("descripcion"), _f("estado", "enum", allowed=ESTADOS_NO_CONFORMIDAD),
-        _f("fecha_detectada", "date"))),
+        _f("fecha_detectada", "date")), paged_in_db=True),
     Module("auditorias", "Audits", Resource.AUDITS, audits, (
         _f("area_auditada", required=True), _f("fecha", "date", True),
         _f("auditor", required=True), _f("resultado", required=True),
@@ -79,21 +79,21 @@ _MODULES = (
         _f("category", "enum", True, DocumentCategory.__members__),
         _f("version", required=True), _f("issued_date", "date", True),
         _f("approved_by"), _f("content", required=True),
-    )),
+    ), paged_in_db=True),
     Module("capacitaciones", "Training", Resource.TRAINING, training, (
         _f("tema", required=True), _f("fecha", "date", True), _f("personal", required=True),
         _f("duracion_horas", "integer"), _f("evaluacion_final"),
-    ), (_f("tema"), _f("fecha", "date"), _f("personal"))),
+    ), (_f("tema"), _f("fecha", "date"), _f("personal")), paged_in_db=True),
     Module("satisfaccion_clientes", "Customer satisfaction", Resource.CUSTOMER_SATISFACTION,
            satisfaction, (
         _f("cliente", required=True), _f("fecha_encuesta", "date", True),
         _f("puntuacion", "integer", True), _f("comentarios"),
-    ), (_f("cliente"), _f("puntuacion_minima", "integer"))),
+    ), (_f("cliente"), _f("puntuacion_minima", "integer")), paged_in_db=True),
     Module("partes_interesadas", "Interested parties", Resource.INTERESTED_PARTIES,
            stakeholders, (
         _f("nombre", required=True), _f("necesidades_expectativas"),
         _f("requisitos_identificados"), _f("objetivo_estrategico"),
-    )),
+    ), paged_in_db=True),
     Module("mejoras", "Improvements", Resource.IMPROVEMENTS, improvements, (
         _f("no_conformidad", required=True), _f("accion_correctiva"), _f("accion_preventiva"),
     ), paged_in_db=True),

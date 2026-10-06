@@ -21,6 +21,7 @@ Validation mirrors ``SatisfaccionClienteForm``; every role may use the register.
 from __future__ import annotations
 
 from functools import partial
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -52,6 +53,16 @@ update = partial(crud.update, SPEC)
 delete = partial(crud.delete, SPEC)
 
 
+def _conditions(cliente: str | None, puntuacion_minima: int | None) -> list[Any]:
+    """The filters shared by ``list_`` and ``list_page``; they combine with AND."""
+    where: list[Any] = []
+    if cliente:
+        where.append(SatisfaccionCliente.cliente.ilike(f"%{cliente}%"))
+    if puntuacion_minima is not None:
+        where.append(SatisfaccionCliente.puntuacion >= puntuacion_minima)
+    return where
+
+
 def list_(
     session: Session,
     actor: Actor,
@@ -60,9 +71,18 @@ def list_(
     puntuacion_minima: int | None = None,
 ) -> list[SatisfaccionCliente]:
     """Surveys, newest first; filters combine with AND."""
-    where = []
-    if cliente:
-        where.append(SatisfaccionCliente.cliente.ilike(f"%{cliente}%"))
-    if puntuacion_minima is not None:
-        where.append(SatisfaccionCliente.puntuacion >= puntuacion_minima)
-    return crud.list_(SPEC, session, actor, where)
+    return crud.list_(SPEC, session, actor, _conditions(cliente, puntuacion_minima))
+
+
+def list_page(
+    session: Session,
+    actor: Actor,
+    *,
+    cliente: str | None = None,
+    puntuacion_minima: int | None = None,
+    page: int = 1,
+    per_page: int = crud.DEFAULT_PER_PAGE,
+) -> tuple[list[SatisfaccionCliente], int]:
+    """One page in the ``list_`` order plus the total matching the same filters."""
+    return crud.list_page(SPEC, session, actor, _conditions(cliente, puntuacion_minima),
+                          page=page, per_page=per_page)

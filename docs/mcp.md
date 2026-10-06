@@ -78,12 +78,12 @@ stdio re-authenticates the configured token on every tool call, so revoking it,
 letting it expire or changing its owner's role takes effect on the next call
 (a rejected call returns a tool error; the server keeps running).
 
-Known gaps (follow-ups): `qms_list` pages in memory for `no_conformidades`,
-`documentos`, `capacitaciones`, `satisfaccion_clientes` and
-`partes_interesadas` (their services have no
-`list_page`, see `Module.paged_in_db` in the registry); the `estado` filter of
-`no_conformidades` accepts only the fixed states, so legacy free-text states
-cannot be filtered on.
+`qms_list` pages every module in the database: each service's `list_page`
+counts and fetches one page with the same filters and order as its `list_`
+(see `Module.paged_in_db` in the registry).
+
+Known gap (follow-up): the `estado` filter of `no_conformidades` accepts only
+the fixed states, so legacy free-text states cannot be filtered on.
 
 A missing or invalid token gets `401` with `WWW-Authenticate: Bearer`; failures
 are written to the security log (prefix and reason, never the token). Deploying
