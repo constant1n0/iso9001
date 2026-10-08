@@ -14,7 +14,7 @@ can never delete.
 
   | Tool | Purpose |
   |---|---|
-  | `qms_modules` | The 12 modules with fields, allowed values, filters and what the caller may do |
+  | `qms_modules` | The 13 modules with fields, allowed values, filters and what the caller may do |
   | `qms_list` | One bounded page of a module, with the filters `qms_modules` lists |
   | `qms_get` | One record by `id` |
   | `qms_create` | Create a record |

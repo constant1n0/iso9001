@@ -13,7 +13,7 @@ from mcp_support import ADMIN, AUDITOR, OPERATIVO, SEEDS, McpDbCase, mcp_actor
 from app.extensions import db
 from app.mcp_server import operations
 from app.mcp_server.registry import MODULES
-from app.models import AuditLog, NoConformidad
+from app.models import AuditLog, NoConformidad, User
 from app.services import audit
 
 JSON_REGISTERS = ("roles_responsabilidades", "riesgos_oportunidades", "recursos_capacitacion",
@@ -96,6 +96,60 @@ class AuthorizationTestCase(McpDbCase):
         auditor = await self.call(mcp_actor(AUDITOR), "qms_create",
                                   {"module": "procesos", "data": SEEDS["procesos"]})
         self.assertFalse(auditor.is_error)
+
+
+class PeopleTestCase(McpDbCase):
+    def user(self) -> User:
+        user = User(username="ana.user", password="x", role=OPERATIVO)
+        db.session.add(user)
+        db.session.commit()
+        return user
+
+    async def test_a_person_takes_roles_and_a_user_link(self) -> None:
+        from app.models import Person
+
+        role_ids = [self.seed("roles_responsabilidades", rol=name)
+                    for name in ("Calidad", "Compras")]
+        user_id = self.user().id
+        created = await self.call(mcp_actor(AUDITOR), "qms_create", {"module": "personas", "data": {
+            "nombre": "Ana", "email": "Ana@Example.com", "user_id": user_id, "rol_ids": role_ids}})
+        self.assertFalse(created.is_error, created.content)
+        record = created.structured_content
+        self.assertEqual(("ana@example.com", user_id, True, role_ids),
+                         (record["email"], record["user_id"], record["activo"], record["rol_ids"]))
+        got = await self.call(mcp_actor(AUDITOR), "qms_get",
+                              {"module": "personas", "id": record["id"]})
+        stamps = {"created_at", "updated_at"}  # SQLite reloads them without a time zone
+        self.assertEqual({k: v for k, v in record.items() if k not in stamps},
+                         {k: v for k, v in got.structured_content.items() if k not in stamps})
+        updated = await self.call(mcp_actor(AUDITOR), "qms_update", {
+            "module": "personas", "id": record["id"],
+            "data": {"rol_ids": role_ids[1:], "activo": False}})
+        self.assertFalse(updated.is_error, updated.content)
+        self.assertEqual((False, role_ids[1:]), (updated.structured_content["activo"],
+                                                 updated.structured_content["rol_ids"]))
+        db.session.expire_all()
+        self.assertEqual(role_ids[1:], db.session.get(Person, record["id"]).rol_ids)
+        rows = audit_rows()
+        self.assertEqual([role_ids, role_ids[1:]],
+                         [rows[-2].after["rol_ids"], rows[-1].after["rol_ids"]])
+
+    async def test_people_errors_are_clean(self) -> None:
+        user_id = self.user().id
+        self.seed("personas", user_id=user_id)
+        cases = [
+            (mcp_actor(OPERATIVO), SEEDS["personas"], "No tienes permiso"),
+            (mcp_actor(ADMIN), {"nombre": "Eva", "rol_ids": [999]}, "Roles desconocidos: 999."),
+            (mcp_actor(ADMIN), {"nombre": "Eva", "user_id": 999}, "El usuario indicado no existe."),
+            (mcp_actor(ADMIN), {"nombre": "Eva", "user_id": user_id},
+             "Ese usuario ya está vinculado a otra persona."),
+        ]
+        for who, data, expected in cases:
+            with self.subTest(expected=expected):
+                result = await self.call(who, "qms_create", {"module": "personas", "data": data})
+                self.assertTrue(result.is_error)
+                self.assertIn(expected, error_text(result))
+                self.assertNotIn("Traceback", error_text(result))
 
 
 class ErrorTestCase(McpDbCase):

@@ -198,7 +198,7 @@ class TransportTestCase(HttpCase):
             called = await self.post(client, body, token=good, **modern,
                                      **{"Mcp-Method": "tools/call", "Mcp-Name": "qms_modules"})
             self.assertEqual(200, called.status_code)
-            self.assertEqual(12, len(called.json()["result"]["structuredContent"]["modules"]))
+            self.assertEqual(13, len(called.json()["result"]["structuredContent"]["modules"]))
 
 
 if __name__ == "__main__":

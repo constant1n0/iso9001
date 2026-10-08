@@ -57,6 +57,41 @@ class FilterTestCase(McpDbCase):
         self.assertEqual(1, await total("auditorias", {"estado": "COMPLETADA"}))
         self.assertEqual(0, await total("auditorias", {"estado": "PENDIENTE"}))
 
+    async def test_people_filter_by_name_role_and_active_flag(self) -> None:
+        quality = self.seed("roles_responsabilidades", rol="Calidad")
+        ana = self.seed("personas", nombre="Ana Pérez", rol_ids=[quality])
+        eva = self.seed("personas", nombre="Eva Gómez", activo=False)
+
+        async def ids(filters):
+            result = await self.call(mcp_actor(OPERATIVO), "qms_list",
+                                     {"module": "personas", "filters": filters})
+            self.assertFalse(result.is_error, result.content)
+            return [item["id"] for item in result.structured_content["items"]]
+
+        self.assertEqual([ana], await ids({"nombre": "pérez"}))
+        self.assertEqual([ana], await ids({"rol_id": quality}))
+        self.assertEqual([ana], await ids({"activo": True}))
+        self.assertEqual([eva], await ids({"activo": False}))
+        for filters in ({"rol_id": "Calidad"}, {"activo": "true"}, {"activo": 1}):
+            with self.subTest(filters=filters):
+                bad = await self.call(mcp_actor(ADMIN), "qms_list",
+                                      {"module": "personas", "filters": filters})
+                self.assertTrue(bad.is_error)
+                self.assertIn(next(iter(filters)), error_text(bad))
+
+    async def test_people_records_carry_their_role_ids(self) -> None:
+        quality = self.seed("roles_responsabilidades", rol="Calidad")
+        purchasing = self.seed("roles_responsabilidades", rol="Compras")
+        ana = self.seed("personas", rol_ids=[purchasing, quality])
+        listed = await self.call(mcp_actor(OPERATIVO), "qms_list", {"module": "personas"})
+        got = await self.call(mcp_actor(OPERATIVO), "qms_get", {"module": "personas", "id": ana})
+        self.assertEqual([quality, purchasing], listed.structured_content["items"][0]["rol_ids"])
+        self.assertEqual(listed.structured_content["items"][0], got.structured_content)
+        # Other modules keep their plain column output.
+        nc = await self.call(mcp_actor(ADMIN), "qms_get",
+                             {"module": "no_conformidades", "id": self.seed("no_conformidades")})
+        self.assertNotIn("rol_ids", nc.structured_content)
+
     async def test_every_enum_filter_takes_exactly_the_values_its_registry_entry_allows(self) -> None:
         from app.mcp_server.registry import MODULES
 

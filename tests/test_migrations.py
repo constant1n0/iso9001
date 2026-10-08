@@ -22,6 +22,8 @@ from app.extensions import db
 
 POSTGRES_URI = os.environ.get("TEST_POSTGRES_URI")
 MIGRATIONS_DIR = str(bootstrap.PROJECT_ROOT / "migrations")
+# Audited tables created after the record-metadata migration (c4d8e1f2a9b7).
+LATER_AUDITED_TABLES = frozenset({"personas"})
 
 
 # In CI a missing database must fail loudly instead of skipping silently.
@@ -139,7 +141,10 @@ class MigrationsTestCase(unittest.TestCase):
                 )
             downgrade(directory=MIGRATIONS_DIR, revision="c4d8e1f2a9b7")
             inspector = inspect(db.engine)
+            self.assertFalse(LATER_AUDITED_TABLES & set(inspector.get_table_names()))
             for model in AUDITED_MODELS:
+                if model.__tablename__ in LATER_AUDITED_TABLES:
+                    continue
                 names = {c["name"] for c in inspector.get_columns(model.__tablename__)}
                 self.assertFalse(
                     names & {"created_at", "created_by_id", "updated_at", "updated_by_id"},
@@ -246,6 +251,57 @@ class MigrationsTestCase(unittest.TestCase):
             self.assertNotIn(
                 "active", {c["name"] for c in inspect(db.engine).get_columns("users")}
             )
+
+    def test_people_tables_link_users_and_roles_and_downgrade(self) -> None:
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            foreign_keys = {
+                fk["name"]: (fk["referred_table"], fk["options"].get("ondelete"))
+                for table in ("personas", "persona_roles")
+                for fk in inspector.get_foreign_keys(table)
+            }
+            self.assertEqual(("users", "SET NULL"), foreign_keys["fk_personas_user_id_users"])
+            self.assertEqual(("personas", "CASCADE"),
+                             foreign_keys["fk_persona_roles_persona_id_personas"])
+            self.assertEqual(("roles_responsabilidades", "CASCADE"),
+                             foreign_keys["fk_persona_roles_rol_id_roles_responsabilidades"])
+            self.assertEqual(
+                ["persona_id", "rol_id"],
+                inspector.get_pk_constraint("persona_roles")["constrained_columns"],
+            )
+            with db.engine.begin() as connection:
+                connection.execute(text(
+                    "INSERT INTO users (username, password, role) VALUES ('ana', 'x', 'OPERATIVO')"
+                ))
+                connection.execute(text(
+                    "INSERT INTO roles_responsabilidades (rol) VALUES ('Calidad')"
+                ))
+                # Writers outside the ORM rely on the server default for ``activo``.
+                connection.execute(text(
+                    "INSERT INTO personas (nombre, user_id) SELECT 'Ana', id FROM users"
+                ))
+                connection.execute(text(
+                    "INSERT INTO persona_roles (persona_id, rol_id) "
+                    "SELECT p.id, r.id_rol FROM personas p, roles_responsabilidades r"
+                ))
+                self.assertIs(True, connection.execute(
+                    text("SELECT activo FROM personas")).scalar_one())
+            with self.assertRaises(IntegrityError):
+                with db.engine.begin() as connection:
+                    connection.execute(text(
+                        "INSERT INTO personas (nombre, user_id) SELECT 'Otra', id FROM users"
+                    ))
+            with db.engine.begin() as connection:
+                connection.execute(text("DELETE FROM users"))
+                connection.execute(text("DELETE FROM roles_responsabilidades"))
+                row = connection.execute(text(
+                    "SELECT user_id, (SELECT count(*) FROM persona_roles) FROM personas"
+                )).one()
+            self.assertEqual((None, 0), tuple(row))
+            downgrade(directory=MIGRATIONS_DIR, revision="f2c7a9e4b1d6")
+            remaining = set(inspect(db.engine).get_table_names())
+            self.assertFalse({"personas", "persona_roles"} & remaining)
 
 
 if __name__ == "__main__":
