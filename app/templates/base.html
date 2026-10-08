@@ -28,7 +28,9 @@
     ('satisfaccion_cliente', 'satisfaccion_cliente.listar_encuestas', 'Satisfacción', '9.1.2', True),
     ('parte_interesada', 'parte_interesada.listar_partes_interesadas', 'Partes interesadas', '4.2', True),
   ]),
-  ('Personas', [
+  ('Personas y competencia', [
+    ('people', 'people.list_people', 'Personas', '7.2', can('read', 'people')),
+    ('competence', 'competence.list_requirements', 'Competencias requeridas', '7.2', can('read', 'competence')),
     ('capacitacion', 'capacitacion.listar_capacitaciones', 'Capacitaciones', '7.2', True),
   ]),
   ('Documentación', [

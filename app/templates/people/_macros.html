@@ -1,0 +1,11 @@
+{# Shared pieces of the people pages. #}
+
+{# The linked account: its name for those who may read users, else only that a link exists. #}
+{% macro linked_user(person, usernames) -%}
+{%- if person.user_id is none %}—{% else %}{{ usernames.get(person.user_id) or 'Vinculado' }}{% endif -%}
+{%- endmacro %}
+
+{% macro state_badge(person) -%}
+{%- if person.activo %}<span class="badge badge--ok">Activo</span>
+{%- else %}<span class="badge badge--danger">Inactivo</span>{% endif -%}
+{%- endmacro %}

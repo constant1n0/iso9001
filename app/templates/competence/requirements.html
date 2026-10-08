@@ -1,0 +1,82 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form, empty_state %}
+{% block title %}Competencias requeridas{% endblock %}
+{% block crumb %}Personas y competencia · Competencias requeridas{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 7.2 · Competencia', 'Competencias requeridas') %}
+    {% if can('create', 'competence') %}
+    <a class="btn btn--primary" href="{{ url_for('competence.new_requirement') }}">+ Nuevo requisito</a>
+    {% endif %}
+{% endcall %}
+
+<details class="filters"{% if rol_id is not none %} open{% endif %}>
+    <summary>Filtros{% if rol_id is not none %} <span class="badge badge--warn">1 activo</span>{% endif %}</summary>
+    <form method="get" action="{{ url_for('competence.list_requirements') }}" class="filters__body">
+        <div class="field"><label for="rol_id">Rol</label>
+            <select name="rol_id" id="rol_id">
+                <option {% if rol_id is none %}selected {% endif %}value="">Todos</option>
+                {% for role in roles %}
+                <option {% if role.id_rol == rol_id %}selected {% endif %}value="{{ role.id_rol }}">{{ role.rol }}</option>
+                {% endfor %}
+            </select></div>
+        <div class="filters__actions">
+            <button type="submit" class="btn btn--primary">Buscar</button>
+            <a class="btn btn--ghost" href="{{ url_for('competence.list_requirements') }}">Limpiar</a>
+        </div>
+    </form>
+</details>
+
+{% if requirements %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Rol</th>
+                <th scope="col">Tipo</th>
+                <th scope="col">Descripción</th>
+                <th scope="col">Criterio</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for requirement in requirements %}
+            <tr>
+                <td>{{ role_names.get(requirement.rol_id, '—') }}</td>
+                <td>{{ requirement.tipo.value }}</td>
+                <td>{{ requirement.descripcion }}</td>
+                <td>{{ requirement.criterio or '—' }}</td>
+                <td>
+                    <div class="table__actions">
+                        {% if can('update', 'competence') %}
+                        <a class="btn btn--sm" href="{{ url_for('competence.edit_requirement', requirement_id=requirement.id) }}">Editar</a>
+                        {% endif %}
+                        {% if can('delete', 'competence') %}
+                        {{ delete_form(url_for('competence.delete_requirement', requirement_id=requirement.id), '¿Eliminar el requisito «' ~ requirement.descripcion ~ '»?') }}
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    {{ empty_state('Ningún requisito coincide con el filtro.' if rol_id is not none else 'Todavía no hay competencias requeridas.') }}
+{% endif %}
+{% endblock %}

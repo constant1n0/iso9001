@@ -13,12 +13,16 @@ from app.extensions import db
 from app.models import (
     Auditoria,
     Capacitacion,
+    CompetenceRequirement,
+    CompetenceType,
     Document,
     DocumentCategory,
     Mejora,
     NoConformidad,
     ParteInteresada,
+    Person,
     RoleEnum,
+    RolResponsabilidad,
     SatisfaccionCliente,
     User,
 )
@@ -37,6 +41,9 @@ MODULES = (
     ("/auditorias/", "nueva", "/editar/", "/eliminar/", {ADMIN, AUDITOR}, {ADMIN, AUDITOR}, {ADMIN}),
     ("/documents/", "new", "/edit/", "/delete/", {ADMIN}, {ADMIN}, {ADMIN}),
     ("/usuarios/", "nuevo", "/editar", "/eliminar", {ADMIN, AUDITOR}, {ADMIN}, set()),
+    ("/personas/", "nueva", "/editar", "/eliminar", EVERYONE, {ADMIN, AUDITOR}, {ADMIN}),
+    ("/competencias/requisitos/", "nuevo", "/editar", "/eliminar", EVERYONE, {ADMIN, AUDITOR},
+     {ADMIN}),
 )
 
 
@@ -56,7 +63,12 @@ class UiPermissionsTestCase(unittest.TestCase):
                 ParteInteresada(nombre="Parte"),
                 Auditoria(area_auditada="A", fecha=DAY, auditor="x", resultado="r"),
                 Document(title="T", code="DOC-1", category=DocumentCategory.OTRO, content="c"),
+                RolResponsabilidad(rol="Rol"),
+                Person(nombre="Persona"),
             ])
+            db.session.flush()
+            db.session.add(CompetenceRequirement(rol_id=1, tipo=CompetenceType.formacion,
+                                                 descripcion="Requisito"))
             db.session.commit()
             self.ids = {u.role: u.id for u in User.query.all()}
         self.addCleanup(self._teardown)
@@ -88,9 +100,11 @@ class UiPermissionsTestCase(unittest.TestCase):
 
     def test_navigation_links_follow_the_read_permission(self) -> None:
         expected = {"/auditorias/": {ADMIN, AUDITOR}, "/documents/": {ADMIN}, "/no_conformidades/": set(RoleEnum),
-                    "/usuarios/": {ADMIN, AUDITOR}, "/perfil/": set(RoleEnum)}
+                    "/usuarios/": {ADMIN, AUDITOR}, "/perfil/": set(RoleEnum),
+                    "/personas/": set(RoleEnum), "/competencias/requisitos/": set(RoleEnum)}
         for role in RoleEnum:
             html = self._page(role, "/dashboard/").get_data(as_text=True)
+            self.assertIn('class="nav__group">Personas y competencia<', html)
             for link, roles in expected.items():
                 with self.subTest(role=role.name, link=link):
                     self.assertEqual(role in roles, f'class="nav__link" href="{link}"' in html)

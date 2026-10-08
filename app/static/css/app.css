@@ -398,6 +398,12 @@ td.date { font-family: var(--font-mono); color: var(--bone-dim); white-space: no
 .form-card { max-width: 880px; padding: var(--space-5); border: 1px solid var(--ink-3); background: var(--ink-1); }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); column-gap: var(--space-4); }
 .form-grid .field--wide { grid-column: 1 / -1; }
+select[multiple] { min-height: 128px; }
+
+/* A heading with its actions above a table inside a page (people's competence records). */
+.section-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin: var(--space-5) 0 var(--space-3); }
+.section-header h2 { margin: 0; }
+.card__text { margin: 0; white-space: pre-line; }
 
 .pagination { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-4); color: var(--bone-mute); font: 400 13px/1 var(--font-mono); }
 

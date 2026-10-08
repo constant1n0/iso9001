@@ -1,0 +1,117 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form, empty_state %}
+{% from "people/_macros.html" import linked_user, state_badge %}
+{% set evaluation_badge = {'pendiente': 'warn', 'eficaz': 'ok', 'no_eficaz': 'danger'} %}
+{% block title %}{{ person.nombre }}{% endblock %}
+{% block crumb %}Personas y competencia · Personas{% endblock %}
+{% block content %}
+{% call page_header('Cláusulas 5.3 y 7.2 · Persona', person.nombre) %}
+    {% if can('update', 'people') %}
+    <a class="btn" href="{{ url_for('people.edit_person', person_id=person.id) }}">Editar</a>
+    {% endif %}
+    {% if can('delete', 'people') %}
+    {{ delete_form(url_for('people.delete_person', person_id=person.id), '¿Eliminar a ' ~ person.nombre ~ '?') }}
+    {% endif %}
+{% endcall %}
+
+<section class="grid grid--2" aria-label="Datos y roles">
+    <article class="card">
+        <header class="card__header">
+            <h2 class="card__title">Datos</h2>
+        </header>
+        <ul class="list">
+            <li class="list__item">
+                <span class="list__primary">Correo electrónico</span>
+                <span class="list__secondary">{{ person.email or '—' }}</span>
+            </li>
+            <li class="list__item">
+                <span class="list__primary">Usuario vinculado</span>
+                <span class="list__secondary">{{ linked_user(person, usernames) }}</span>
+            </li>
+            <li class="list__item">
+                <span class="list__primary">Estado</span>
+                {{ state_badge(person) }}
+            </li>
+        </ul>
+        {% if person.notas %}<p class="card__body card__text">{{ person.notas }}</p>{% endif %}
+    </article>
+    <article class="card">
+        <header class="card__header">
+            <h2 class="card__title">Roles</h2>
+        </header>
+        {% if person.roles %}
+        <ul class="list">
+            {% for role in person.roles %}
+            <li class="list__item"><span class="list__primary">{{ role.rol }}</span></li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty">Sin roles asignados.</p>
+        {% endif %}
+    </article>
+</section>
+
+<section aria-labelledby="competencias">
+    <div class="section-header">
+        <h2 id="competencias">Competencias acreditadas</h2>
+        {% if can('create', 'competence') %}
+        <a class="btn btn--primary btn--sm" href="{{ url_for('competence.new_record', person_id=person.id) }}">+ Añadir competencia</a>
+        {% endif %}
+    </div>
+    {% if records %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Requisito</th>
+                    <th scope="col">Evidencia</th>
+                    <th scope="col">Obtención</th>
+                    <th scope="col">Caducidad</th>
+                    <th scope="col">Evaluación</th>
+                    <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in records %}
+                <tr>
+                    <td>{{ requirements.get(record.requisito_id, '—') }}</td>
+                    <td>{{ record.evidencia }}</td>
+                    <td class="date">{{ record.fecha_obtencion.strftime('%d/%m/%Y') }}</td>
+                    <td class="date">{{ record.fecha_caducidad.strftime('%d/%m/%Y') if record.fecha_caducidad else '—' }}</td>
+                    <td><span class="badge badge--{{ evaluation_badge[record.evaluacion_eficacia.name] }}">{{ record.evaluacion_eficacia.value }}</span></td>
+                    <td>
+                        <div class="table__actions">
+                            {% if can('update', 'competence') %}
+                            <a class="btn btn--sm" href="{{ url_for('competence.edit_record', record_id=record.id) }}">Editar</a>
+                            {% endif %}
+                            {% if can('delete', 'competence') %}
+                            {{ delete_form(url_for('competence.delete_record', record_id=record.id), '¿Eliminar la competencia «' ~ record.evidencia ~ '»?') }}
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        {{ empty_state('Sin competencias acreditadas.') }}
+    {% endif %}
+</section>
+{% endblock %}

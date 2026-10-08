@@ -13,10 +13,12 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-from .models import DocumentCategory, EstadoAuditoriaEnum, RoleEnum
+from .models import (
+    CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAuditoriaEnum, RoleEnum,
+)
 from .services.nonconformities import ESTADOS_NO_CONFORMIDAD
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField
+from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
 from wtforms.validators import DataRequired, Length, NumberRange, EqualTo, Email, Optional
 # Person pickers (``persona_id``, ``responsable_id``, ``auditor_id``): the
 # routes fill the choices with ``person_choices``; the empty choice means no
@@ -183,3 +185,68 @@ class PasswordChangeForm(BaseForm):
         validators=[DataRequired(),
                     EqualTo('new_password', message='Las contraseñas no coinciden.')],
     )
+
+
+# People and competence (ISO 9001 clauses 5.3 and 7.2). The routes fill the
+# choices from the services, which have the last word on every value; an
+# empty choice means "none" (``optional_id``). Enum selects use member names.
+NO_USER = ('', '— Sin usuario —')
+NO_REQUIREMENT = ('', '— Sin requisito —')
+NO_TRAINING = ('', '— Sin capacitación —')
+NO_ROLE = ('', '— Elige un rol —')
+
+
+def user_choices(users):
+    """User-link choices: the empty one, then each account; inactive ones are marked."""
+    return [NO_USER, *((u.id, u.username if u.active else f'{u.username} (desactivado)')
+                       for u in users)]
+
+
+def role_choices(roles):
+    """Role choices (``RolResponsabilidad``) in the given order."""
+    return [(role.id_rol, role.rol) for role in roles]
+
+
+def requirement_choices(labels):
+    """The empty choice, then each requirement (``labels``: id to text) by its text."""
+    return [NO_REQUIREMENT, *sorted(labels.items(), key=lambda item: item[1].casefold())]
+
+
+def training_choices(trainings):
+    """The empty choice, then each training as «date · topic»."""
+    return [NO_TRAINING, *((t.id, f'{t.fecha:%d/%m/%Y} · {t.tema}') for t in trainings)]
+
+
+class PersonForm(BaseForm):
+    nombre = StringField('Nombre completo', validators=[DataRequired(), Length(max=150)])
+    email = EmailField('Correo electrónico', validators=[Optional(), Length(max=255)])
+    rol_ids = SelectMultipleField('Roles', coerce=int, choices=[])
+    user_id = SelectField('Usuario vinculado', coerce=optional_id, choices=[NO_USER])
+    activo = BooleanField('Activa', default=True)
+    notas = TextAreaField('Notas')
+
+
+class CompetenceRequirementForm(BaseForm):
+    rol_id = SelectField('Rol', coerce=optional_id, choices=[NO_ROLE],
+                         validators=[DataRequired()])
+    tipo = SelectField('Tipo', choices=[(t.name, t.value) for t in CompetenceType],
+                       validators=[DataRequired()])
+    descripcion = StringField('Descripción', validators=[DataRequired(), Length(max=500)])
+    criterio = TextAreaField('Criterio para evidenciarla')
+
+
+class CompetenceRecordForm(BaseForm):
+    requisito_id = SelectField('Requisito de competencia', coerce=optional_id,
+                               choices=[NO_REQUIREMENT])
+    evidencia = StringField('Evidencia', validators=[DataRequired(), Length(max=500)])
+    capacitacion_id = SelectField('Capacitación', coerce=optional_id, choices=[NO_TRAINING])
+    fecha_obtencion = DateField('Fecha de obtención', validators=[DataRequired()])
+    fecha_caducidad = DateField('Fecha de caducidad', validators=[Optional()])
+    evaluacion_eficacia = SelectField(
+        'Evaluación de la eficacia',
+        choices=[(e.name, e.value) for e in CompetenceEvaluation],
+        default=CompetenceEvaluation.pendiente.name,
+        validators=[DataRequired()],
+    )
+    fecha_evaluacion = DateField('Fecha de evaluación', validators=[Optional()])
+    evaluador_id = person_field('Evaluador')
