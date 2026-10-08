@@ -293,6 +293,77 @@ class User(UserMixin, db.Model):
     def __repr__(self):
         return f'<User {self.username}>'
 
+# Roles (``RolResponsabilidad``) held by each person; a plain table, not audited
+# itself: role changes are recorded on the person's audit row.
+persona_roles = db.Table(
+    'persona_roles',
+    db.Column('persona_id', db.Integer, nullable=False),
+    db.Column('rol_id', db.Integer, nullable=False),
+    db.PrimaryKeyConstraint('persona_id', 'rol_id', name='pk_persona_roles'),
+    db.ForeignKeyConstraint(
+        ['persona_id'],
+        ['personas.id'],
+        name='fk_persona_roles_persona_id_personas',
+        ondelete='CASCADE',
+    ),
+    db.ForeignKeyConstraint(
+        ['rol_id'],
+        ['roles_responsabilidades.id_rol'],
+        name='fk_persona_roles_rol_id_roles_responsabilidades',
+        ondelete='CASCADE',
+    ),
+    db.Index('ix_persona_roles_rol_id', 'rol_id'),
+)
+
+
+class Person(RecordMetadataMixin, db.Model):
+    """Someone who does work under the QMS (ISO 9001 clauses 5.3 and 7.2).
+
+    Separate from login accounts: a person may be linked to at most one user
+    (``user_id``, unique) and holds any number of QMS roles. People are
+    deactivated (``activo``) rather than deleted once other records cite them.
+    """
+
+    __tablename__ = 'personas'
+    __table_args__ = (
+        db.ForeignKeyConstraint(
+            ['user_id'],
+            ['users.id'],
+            name='fk_personas_user_id_users',
+            ondelete='SET NULL',
+        ),
+        db.UniqueConstraint('user_id', name='uq_personas_user_id'),
+        db.UniqueConstraint('email', name='uq_personas_email'),
+        db.Index('ix_personas_nombre', 'nombre'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(150), nullable=False)
+    email = db.Column(db.String(255), nullable=True)  # stored lower-cased
+    user_id = db.Column(db.Integer, nullable=True)
+    activo = db.Column(
+        db.Boolean, nullable=False, default=True, server_default=db.true()
+    )
+    notas = db.Column(db.Text)
+
+    # One-way on purpose: a back-reference would mark roles as changed (and
+    # unaudited) whenever a person's roles change.
+    roles = db.relationship(
+        'RolResponsabilidad',
+        secondary=persona_roles,
+        order_by='RolResponsabilidad.rol',
+        lazy='selectin',
+    )
+
+    @property
+    def rol_ids(self) -> list[int]:
+        """Ids of the roles held, ascending."""
+        return sorted(role.id_rol for role in self.roles)
+
+    def __repr__(self):
+        return f'<Person {self.id} {self.nombre}>'
+
+
 # Modelo para registrar No Conformidades dentro del SGC
 class NoConformidad(RecordMetadataMixin, db.Model):
     __tablename__ = 'no_conformidades'

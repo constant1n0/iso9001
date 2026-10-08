@@ -37,7 +37,7 @@ def make_actor(user_id=7, channel="web"):
 
 class MixinColumnsTestCase(unittest.TestCase):
     def test_every_audited_model_has_nullable_metadata_columns(self) -> None:
-        self.assertEqual(12, len(audited_models()))
+        self.assertEqual(13, len(audited_models()))
         for model in audited_models():
             table = model.__table__
             for name in METADATA_COLUMNS:
