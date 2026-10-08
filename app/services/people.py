@@ -26,12 +26,17 @@ association table has no audit row of its own, so every audit row of a person
 carries ``rol_ids`` next to the columns. Like every service this module
 flushes and never commits, and an update that changes nothing writes nothing.
 
+Trainings, nonconformities and audits cite a person through the columns in
+``REFERENCES`` (decision Q4); their services validate such a link with
+``reference``, and a person they still cite cannot be deleted.
+
 Errors:
 
 - ``PermissionDenied``: the policy refuses the actor.
 - ``NotFound``: unknown person id.
 - ``ValidationError``: unknown or missing keys, invalid values, unknown role
-  ids or an unknown user.
+  ids or an unknown user; for ``reference``, an unknown person or a newly
+  chosen inactive one.
 - ``Conflict``: an e-mail already used by another person (ignoring case), a
   user already linked to another person, or deleting a person that other
   records still cite (deactivate it instead).
@@ -43,11 +48,13 @@ from collections.abc import Mapping
 from functools import partial
 from typing import Any
 
-from sqlalchemy import false, func, select
+from sqlalchemy import exists, false, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..models import Person, RolResponsabilidad, User
+from ..models import (
+    Auditoria, Capacitacion, NoConformidad, Person, RolResponsabilidad, User,
+)
 from . import audit, crud, fields, policy
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
@@ -70,6 +77,10 @@ DUPLICATE = "Ya existe una persona con ese usuario o correo electrónico."
 STILL_REFERENCED = (
     "No se puede eliminar una persona citada en otros registros; desactívala en su lugar."
 )
+
+# Columns that cite a person. Their foreign keys are ``ON DELETE RESTRICT``,
+# which SQLite only enforces on request, so ``delete`` also checks them.
+REFERENCES = (Capacitacion.persona_id, NoConformidad.responsable_id, Auditoria.auditor_id)
 
 _READS = crud.Spec(
     model=Person,
@@ -169,12 +180,47 @@ def update(
 
 
 def delete(session: Session, actor: Actor, person_id: int) -> None:
-    """Hard-delete a person and its role assignments, keeping a full audit snapshot."""
+    """Hard-delete a person and its role assignments, keeping a full audit snapshot.
+
+    A person cited by any column in ``REFERENCES`` is refused with ``Conflict``;
+    a reference committed after the check meets the foreign key at the flush.
+    """
     policy.require(actor, Action.DELETE, Resource.PEOPLE)
     found = _load(session, person_id)
+    if _is_referenced(session, found.id):
+        raise Conflict(STILL_REFERENCED)
     audit.record(session, actor, "delete", found, before=_snapshot(found))
     session.delete(found)
     _flush(session, STILL_REFERENCED)
+
+
+def reference(
+    session: Session, data: Mapping[str, Any], key: str, current: int | None = None
+) -> int | None:
+    """Read ``data[key]`` as an optional person id and check it (``check_reference``)."""
+    value = fields.integer(data, key)
+    check_reference(session, key, value, current)
+    return value
+
+
+def check_reference(
+    session: Session, key: str, value: int | None, current: int | None = None
+) -> None:
+    """Refuse an unknown person, or an inactive one the record does not cite yet.
+
+    ``value`` is the person id to store (``None`` clears the link) and
+    ``current`` the id the record holds now, so a record citing someone who
+    was deactivated later stays editable in its other fields.
+    """
+    if value is None or value == current:
+        return
+    found = session.get(Person, value) if _is_db_id(value) else None
+    if found is None:
+        raise ValidationError(f"El campo «{key}» no corresponde a ninguna persona.")
+    if not found.activo:
+        raise ValidationError(
+            f"La persona del campo «{key}» está desactivada; elige una persona activa."
+        )
 
 
 def _load(session: Session, person_id: int) -> Person:
@@ -182,6 +228,12 @@ def _load(session: Session, person_id: int) -> Person:
     if found is None:
         raise NotFound(NOT_FOUND)
     return found
+
+
+def _is_referenced(session: Session, person_id: int) -> bool:
+    return any(
+        session.scalar(select(exists().where(column == person_id))) for column in REFERENCES
+    )
 
 
 def _snapshot(person: Person) -> dict[str, Any]:

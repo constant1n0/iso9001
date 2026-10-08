@@ -16,7 +16,9 @@
 """Audit (``Auditoria``) service, following ``nonconformities``.
 
 Authorization comes from ``policy`` (resource ``AUDITS``); validation mirrors
-``AuditoriaForm``. Services flush and never commit.
+``AuditoriaForm``. Services flush and never commit. ``auditor_id`` cites the
+auditor (``personas``, see ``people.check_reference``); ``auditor`` keeps the
+legacy free-text name.
 """
 
 from __future__ import annotations
@@ -30,7 +32,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import Auditoria, EstadoAuditoriaEnum
-from . import audit, crud, fields, policy
+from . import audit, crud, fields, people, policy
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
 from .errors import Conflict, NotFound
@@ -89,14 +91,20 @@ def list_page(
 
 AREA_MAX = 50  # mirrors Auditoria.area_auditada and the web form
 AUDITOR_MAX = 50  # mirrors Auditoria.auditor and the web form
-WRITABLE_FIELDS = frozenset(
-    {"area_auditada", "fecha", "auditor", "resultado", "accion_correctiva", "estado"}
-)
+WRITABLE_FIELDS = frozenset({
+    "area_auditada", "fecha", "auditor", "auditor_id", "resultado", "accion_correctiva",
+    "estado",
+})
 REQUIRED_ON_CREATE = frozenset({"area_auditada", "fecha", "auditor", "resultado"})
 
 
-def _clean(data: Mapping[str, Any]) -> dict[str, Any]:
-    """Validate the keys present in ``data`` and return the normalized values."""
+def _clean(
+    session: Session, data: Mapping[str, Any], current: Auditoria | None = None
+) -> dict[str, Any]:
+    """Validate the keys present in ``data`` and return the normalized values.
+
+    ``current`` is the audit being updated (``None`` when creating).
+    """
     fields.reject_unknown(data, WRITABLE_FIELDS)
     clean: dict[str, Any] = {}
     if "area_auditada" in data:
@@ -113,6 +121,10 @@ def _clean(data: Mapping[str, Any]) -> dict[str, Any]:
         clean["accion_correctiva"] = fields.text(data, "accion_correctiva", strip=False)
     if "estado" in data:
         clean["estado"] = fields.enum_member(data, "estado", EstadoAuditoriaEnum)
+    if "auditor_id" in data:  # last: it queries the database
+        clean["auditor_id"] = people.reference(
+            session, data, "auditor_id", current.auditor_id if current is not None else None
+        )
     return clean
 
 
@@ -127,7 +139,7 @@ def create(session: Session, actor: Actor, data: Mapping[str, Any]) -> Auditoria
     """Create an audit; area, date, auditor and result are required."""
     policy.require(actor, Action.CREATE, Resource.AUDITS)
     fields.require_keys(data, REQUIRED_ON_CREATE)
-    values = {"estado": EstadoAuditoriaEnum.PENDIENTE} | _clean(data)
+    values = {"estado": EstadoAuditoriaEnum.PENDIENTE} | _clean(session, data)
     created = Auditoria(**values)
     stamp_created(created, actor)
     session.add(created)
@@ -144,7 +156,7 @@ def update(
     """Apply the given fields; a call that changes nothing writes nothing."""
     policy.require(actor, Action.UPDATE, Resource.AUDITS)
     found = _load(session, audit_id)
-    values = _clean(data)
+    values = _clean(session, data, current=found)
     before = audit.snapshot(found)
     if all(getattr(found, key) == value for key, value in values.items()):
         return found

@@ -325,13 +325,8 @@ class DeleteTestCase(PeopleBase):
         self.assertEqual(("delete", record_id, None), (row.action, row.entity_id, row.after))
         self.assertEqual(([quality], "Ana Pérez"), (row.before["rol_ids"], row.before["nombre"]))
 
-    def test_a_person_still_referenced_cannot_be_deleted(self) -> None:
-        record_id = self.create().id
-        refused = IntegrityError("DELETE FROM personas", {}, Exception("foreign key"))
-        with patch.object(db.session, "flush", side_effect=refused):
-            with self.assertRaises(errors().Conflict) as caught:
-                people().delete(db.session, admin(), record_id)
-        self.assertIn("desactívala", caught.exception.message)
+    # Deleting a person still cited by a training, nonconformity or audit is
+    # covered with real rows and foreign keys in ``test_person_links``.
 
 
 class AuditTestCase(PeopleBase):

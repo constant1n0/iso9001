@@ -16,6 +16,8 @@
 """Training records (``Capacitacion``) on the generic CRUD helper.
 
 Validation mirrors ``CapacitacionForm``; every role may use the register.
+``persona_id`` cites the person trained (``personas``, see
+``people.check_reference``); ``personal`` keeps the legacy free-text name.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from ..models import Capacitacion
-from . import crud, fields
+from . import crud, fields, people
 from .actor import Actor
 from .policy import Resource
 
@@ -45,6 +47,7 @@ SPEC = crud.Spec(
         crud.Field("personal", partial(fields.text, required=True, max_length=PERSONAL_MAX), required=True),
         crud.Field("duracion_horas", partial(fields.integer, minimum=0)),
         crud.Field("evaluacion_final", partial(fields.text, max_length=EVALUACION_MAX)),
+        crud.Field("persona_id", fields.integer, check=people.check_reference),
     ),
     order_by=(Capacitacion.fecha.desc(), Capacitacion.id.desc()),
 )

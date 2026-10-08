@@ -68,11 +68,15 @@ def _f(name: str, type: str = "string", required: bool = False, allowed=(), memb
     return FieldDef(name, type, required, tuple(allowed), members)
 
 
+# ``responsable_id``, ``auditor_id`` and ``persona_id`` are ids of ``personas``
+# records (an existing person, active when newly chosen; ``null`` clears the
+# link). The free-text ``responsable``, ``auditor`` and ``personal`` stay as
+# legacy names and are never matched to a person.
 _MODULES = (
     Module("no_conformidades", "Non-conformities", Resource.NONCONFORMITIES, nonconformities, (
         _f("descripcion", required=True), _f("fecha_detectada", "date", True),
-        _f("responsable"), _f("estado", "enum", allowed=ESTADOS_NO_CONFORMIDAD),
-        _f("accion_correctiva"),
+        _f("responsable"), _f("responsable_id", "integer"),
+        _f("estado", "enum", allowed=ESTADOS_NO_CONFORMIDAD), _f("accion_correctiva"),
     # The state filter takes the fixed states only: stored legacy free-text states
     # are still listed but cannot be filtered on (writes keep a record's current
     # legacy state); nonconformities.available_states shows them to humans.
@@ -80,8 +84,9 @@ _MODULES = (
         _f("fecha_detectada", "date"))),
     Module("auditorias", "Audits", Resource.AUDITS, audits, (
         _f("area_auditada", required=True), _f("fecha", "date", True),
-        _f("auditor", required=True), _f("resultado", required=True),
-        _f("accion_correctiva"), _f("estado", "enum", members=EstadoAuditoriaEnum),
+        _f("auditor", required=True), _f("auditor_id", "integer"),
+        _f("resultado", required=True), _f("accion_correctiva"),
+        _f("estado", "enum", members=EstadoAuditoriaEnum),
     ), (_f("area"), _f("auditor"), _f("estado", "enum", members=EstadoAuditoriaEnum),
         _f("fecha_inicio", "date"), _f("fecha_fin", "date"))),
     Module("documentos", "Documents", Resource.DOCUMENTS, documents, (
@@ -92,7 +97,7 @@ _MODULES = (
     )),
     Module("capacitaciones", "Training", Resource.TRAINING, training, (
         _f("tema", required=True), _f("fecha", "date", True), _f("personal", required=True),
-        _f("duracion_horas", "integer"), _f("evaluacion_final"),
+        _f("duracion_horas", "integer"), _f("evaluacion_final"), _f("persona_id", "integer"),
     ), (_f("tema"), _f("fecha", "date"), _f("personal"))),
     Module("satisfaccion_clientes", "Customer satisfaction", Resource.CUSTOMER_SATISFACTION,
            satisfaction, (

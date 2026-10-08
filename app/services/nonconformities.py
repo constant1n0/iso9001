@@ -24,6 +24,9 @@ Rules this module follows, and the services that copy it should too:
   ``ValidationError``, so a caller can never set ``id`` or attribution columns.
 - ``IntegrityError`` becomes ``Conflict`` (the session then needs a rollback,
   which the adapter performs).
+
+``responsable_id`` cites the person responsible (``personas``, see
+``people.check_reference``); ``responsable`` keeps the legacy free-text name.
 """
 
 from __future__ import annotations
@@ -37,7 +40,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import NoConformidad
-from . import audit, crud, fields, policy
+from . import audit, crud, fields, people, policy
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
 from .errors import Conflict, NotFound, ValidationError
@@ -126,14 +129,21 @@ def available_states(session: Session, actor: Actor) -> list[str]:
     return [*ESTADOS_NO_CONFORMIDAD, *sorted(stored - set(ESTADOS_NO_CONFORMIDAD))]
 
 
-WRITABLE_FIELDS = frozenset(
-    {"descripcion", "fecha_detectada", "responsable", "estado", "accion_correctiva"}
-)
+WRITABLE_FIELDS = frozenset({
+    "descripcion", "fecha_detectada", "responsable", "responsable_id", "estado",
+    "accion_correctiva",
+})
 RESPONSABLE_MAX = 50  # mirrors NoConformidad.responsable and the web form
 
 
-def _clean(data: Mapping[str, Any], current_estado: str | None = None) -> dict[str, Any]:
-    """Validate the keys present in ``data`` and return the normalized values."""
+def _clean(
+    session: Session, data: Mapping[str, Any], current: NoConformidad | None = None
+) -> dict[str, Any]:
+    """Validate the keys present in ``data`` and return the normalized values.
+
+    ``current`` is the nonconformity being updated (``None`` when creating).
+    """
+    current_estado = current.estado if current is not None else None
     unknown = sorted(set(data) - WRITABLE_FIELDS)
     if unknown:
         raise ValidationError(f"Campos no permitidos: {', '.join(unknown)}.")
@@ -156,6 +166,11 @@ def _clean(data: Mapping[str, Any], current_estado: str | None = None) -> dict[s
         ):
             raise ValidationError("El estado no es válido.")
         clean["estado"] = estado
+    if "responsable_id" in data:  # last: it queries the database
+        clean["responsable_id"] = people.reference(
+            session, data, "responsable_id",
+            current.responsable_id if current is not None else None,
+        )
     return clean
 
 
@@ -172,7 +187,7 @@ def create(session: Session, actor: Actor, data: Mapping[str, Any]) -> NoConform
     missing = {"descripcion", "fecha_detectada"} - set(data)
     if missing:
         raise ValidationError(f"Faltan campos obligatorios: {', '.join(sorted(missing))}.")
-    values = {"estado": ESTADO_ABIERTA} | _clean(data)
+    values = {"estado": ESTADO_ABIERTA} | _clean(session, data)
     nc = NoConformidad(**values)
     stamp_created(nc, actor)
     session.add(nc)
@@ -189,7 +204,7 @@ def update(
     """Apply the given fields; a call that changes nothing writes nothing."""
     policy.require(actor, Action.UPDATE, Resource.NONCONFORMITIES)
     nc = _load(session, nc_id)
-    values = _clean(data, current_estado=nc.estado)
+    values = _clean(session, data, current=nc)
     before = audit.snapshot(nc)
     if all(getattr(nc, key) == value for key, value in values.items()):
         return nc
