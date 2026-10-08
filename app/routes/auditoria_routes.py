@@ -18,9 +18,10 @@ from math import ceil
 from flask import Blueprint, current_app, render_template, redirect, url_for, flash, request
 from flask_login import login_required
 from ..models import EstadoAuditoriaEnum
-from ..forms import AuditoriaForm
+from ..forms import AuditoriaForm, person_choices
 from ..extensions import db
-from ..services import audits
+from ..services import audits, people
+from ..services.errors import ValidationError
 from ..utils.permissions import require_permission
 from ..utils.pdf import pdf_response, render_pdf
 from ..utils.web_actor import current_actor
@@ -28,12 +29,28 @@ from ..utils.web_args import date_arg
 
 bp = Blueprint('auditoria', __name__, url_prefix='/auditorias')
 
-FORM_FIELDS = ('area_auditada', 'fecha', 'auditor', 'resultado', 'accion_correctiva', 'estado')
+FORM_FIELDS = ('area_auditada', 'fecha', 'auditor', 'auditor_id', 'resultado',
+               'accion_correctiva', 'estado')
 
 
 def _form_data(form):
     """Whitelisted service payload taken from a validated form."""
     return {name: getattr(form, name).data for name in FORM_FIELDS}
+
+
+def _saved(write):
+    """Run a service write and commit it; on a refusal roll back and flash why.
+
+    The route then shows the form again, keeping what the user typed.
+    """
+    try:
+        write()
+        db.session.commit()
+    except ValidationError as error:
+        db.session.rollback()
+        flash(error.message, 'danger')
+        return False
+    return True
 
 
 def _estado_arg():
@@ -55,9 +72,10 @@ def listar_auditorias():
     page = request.args.get('page', 1, type=int)
     per_page = 10  # Número de auditorías por página
 
+    actor = current_actor()
     auditorias, total_auditorias = audits.list_page(
         db.session,
-        current_actor(),
+        actor,
         area=request.args.get('area'),
         auditor=request.args.get('auditor'),
         estado=_estado_arg(),
@@ -72,7 +90,8 @@ def listar_auditorias():
         auditorias=auditorias, 
         page=page, 
         total_pages=ceil(total_auditorias / per_page),
-        total_auditorias=total_auditorias
+        total_auditorias=total_auditorias,
+        personas=people.names(db.session, actor, (a.auditor_id for a in auditorias)),
     )
 
 @bp.route('/nueva', methods=['GET', 'POST'])
@@ -83,10 +102,12 @@ def nueva_auditoria():
     Muestra el formulario para crear una nueva auditoría y guarda el registro
     en la base de datos al enviarlo.
     """
+    actor = current_actor()
     form = AuditoriaForm()
-    if form.validate_on_submit():
-        audits.create(db.session, current_actor(), _form_data(form))
-        db.session.commit()
+    form.auditor_id.choices = person_choices(people.choices(db.session, actor))
+    if form.validate_on_submit() and _saved(
+        lambda: audits.create(db.session, actor, _form_data(form))
+    ):
         flash('Auditoría creada exitosamente', 'success')
         return redirect(url_for('auditoria.listar_auditorias'))
     return render_template('auditorias/nueva.html', form=form)
@@ -107,9 +128,11 @@ def editar_auditoria(id):
     if request.method == 'GET' and auditoria.estado:
         form.estado.data = auditoria.estado.name
 
-    if form.validate_on_submit():
-        audits.update(db.session, actor, id, _form_data(form))
-        db.session.commit()
+    form.auditor_id.choices = person_choices(
+        people.choices(db.session, actor, include=auditoria.auditor_id))
+    if form.validate_on_submit() and _saved(
+        lambda: audits.update(db.session, actor, id, _form_data(form))
+    ):
         flash('Auditoría actualizada exitosamente', 'success')
         return redirect(url_for('auditoria.listar_auditorias'))
     return render_template('auditorias/editar.html', form=form, auditoria=auditoria)

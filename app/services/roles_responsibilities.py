@@ -16,17 +16,28 @@
 """Roles and responsibilities (``RolResponsabilidad``) on the generic CRUD helper.
 
 Serves the JSON register. ``rol`` is unique: a duplicate raises ``Conflict``.
+A role that competence requirements cite cannot be deleted (``Conflict``);
+the people holding it simply lose it.
 """
 
 from __future__ import annotations
 
 from functools import partial
 
-from ..models import RolResponsabilidad
-from . import crud, fields
-from .policy import Resource
+from sqlalchemy import exists, select
+from sqlalchemy.orm import Session
+
+from ..models import CompetenceRequirement, RolResponsabilidad
+from . import crud, fields, people, policy
+from .actor import Actor
+from .errors import Conflict, NotFound
+from .policy import Action, Resource
 
 ROL_MAX = 50  # mirrors RolResponsabilidad.rol
+IN_USE = (
+    "No se puede eliminar un rol que citan requisitos de competencia; "
+    "elimínalos o asígnalos a otro rol antes."
+)
 
 SPEC = crud.Spec(
     model=RolResponsabilidad,
@@ -44,5 +55,31 @@ SPEC = crud.Spec(
 get = partial(crud.get, SPEC)
 create = partial(crud.create, SPEC)
 update = partial(crud.update, SPEC)
-delete = partial(crud.delete, SPEC)
 list_page = partial(crud.list_page, SPEC)
+
+
+def _in_use(session: Session, rol_id: int) -> bool:
+    """Whether a competence requirement cites the role."""
+    if not people.is_db_id(rol_id):  # no stored id can match
+        return False
+    return bool(session.scalar(
+        select(exists().where(CompetenceRequirement.rol_id == rol_id))
+    ))
+
+
+def delete(session: Session, actor: Actor, rol_id: int) -> None:
+    """Hard-delete a role; one that competence requirements cite raises ``Conflict``.
+
+    The foreign key is ``ON DELETE RESTRICT``, which SQLite only enforces on
+    request, hence the explicit check; a requirement citing the role after
+    the check meets the foreign key at the flush, with the same message.
+    """
+    policy.require(actor, Action.DELETE, Resource.ROLES_RESPONSIBILITIES)
+    if not people.is_db_id(rol_id):  # same answer as an id nothing stores
+        raise NotFound(SPEC.not_found)
+    if _in_use(session, rol_id):
+        raise Conflict(IN_USE)
+    try:
+        crud.delete(SPEC, session, actor, rol_id)
+    except Conflict as exc:
+        raise Conflict(IN_USE) from exc.__cause__

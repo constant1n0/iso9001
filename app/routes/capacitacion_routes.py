@@ -14,9 +14,10 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request
-from ..forms import CapacitacionForm
+from ..forms import CapacitacionForm, person_choices
 from ..extensions import db
-from ..services import training
+from ..services import people, training
+from ..services.errors import ValidationError
 from flask_login import login_required
 from ..utils.pdf import pdf_response, render_pdf
 from ..utils.permissions import require_permission
@@ -25,7 +26,7 @@ from ..utils.web_args import date_arg
 
 bp = Blueprint('capacitacion', __name__, url_prefix='/capacitaciones')
 
-FORM_FIELDS = ('tema', 'fecha', 'personal', 'duracion_horas', 'evaluacion_final')
+FORM_FIELDS = ('tema', 'fecha', 'personal', 'persona_id', 'duracion_horas', 'evaluacion_final')
 
 
 def _form_data(form):
@@ -33,26 +34,46 @@ def _form_data(form):
     return {name: getattr(form, name).data for name in FORM_FIELDS}
 
 
+def _saved(write):
+    """Run a service write and commit it; on a refusal roll back and flash why.
+
+    The route then shows the form again, keeping what the user typed.
+    """
+    try:
+        write()
+        db.session.commit()
+    except ValidationError as error:
+        db.session.rollback()
+        flash(error.message, 'danger')
+        return False
+    return True
+
+
 @bp.route('/', methods=['GET'])
 @login_required
 def listar_capacitaciones():
+    actor = current_actor()
     capacitaciones = training.list_(
         db.session,
-        current_actor(),
+        actor,
         tema=request.args.get('tema'),
         fecha=date_arg('fecha'),
         personal=request.args.get('personal'),
     )
-    return render_template('capacitaciones/listar.html', capacitaciones=capacitaciones)
+    personas = people.names(db.session, actor, (c.persona_id for c in capacitaciones))
+    return render_template('capacitaciones/listar.html', capacitaciones=capacitaciones,
+                           personas=personas)
 
 @bp.route('/nueva', methods=['GET', 'POST'])
 @login_required
 @require_permission('create', 'training')
 def nueva_capacitacion():
+    actor = current_actor()
     form = CapacitacionForm()
-    if form.validate_on_submit():
-        training.create(db.session, current_actor(), _form_data(form))
-        db.session.commit()
+    form.persona_id.choices = person_choices(people.choices(db.session, actor))
+    if form.validate_on_submit() and _saved(
+        lambda: training.create(db.session, actor, _form_data(form))
+    ):
         flash('Capacitación registrada exitosamente', 'success')
         return redirect(url_for('capacitacion.listar_capacitaciones'))
     return render_template('capacitaciones/nueva.html', form=form)
@@ -68,9 +89,11 @@ def editar_capacitacion(id):
     actor = current_actor()
     capacitacion = training.get(db.session, actor, id)
     form = CapacitacionForm(obj=capacitacion)
-    if form.validate_on_submit():
-        training.update(db.session, actor, id, _form_data(form))
-        db.session.commit()
+    form.persona_id.choices = person_choices(
+        people.choices(db.session, actor, include=capacitacion.persona_id))
+    if form.validate_on_submit() and _saved(
+        lambda: training.update(db.session, actor, id, _form_data(form))
+    ):
         flash('Capacitación actualizada exitosamente', 'success')
         return redirect(url_for('capacitacion.listar_capacitaciones'))
     return render_template('capacitaciones/editar.html', form=form, capacitacion=capacitacion)

@@ -76,7 +76,8 @@
             <tr>
                 <td class="date">{{ auditoria.fecha.strftime('%d/%m/%Y') }}</td>
                 <td>{{ auditoria.area_auditada }}</td>
-                <td>{{ auditoria.auditor }}</td>
+                {% set persona = personas.get(auditoria.auditor_id) %}
+                <td>{{ auditoria.auditor }}{% if persona %}<br><span class="muted">Persona: {{ persona }}</span>{% endif %}</td>
                 <td><span class="badge {{ {'Pendiente': 'badge--warn', 'En Proceso': 'badge--solid', 'Completada': 'badge--ok', 'Cancelada': ''}.get(estado, '') }}">{{ estado or '—' }}</span></td>
                 <td>{{ auditoria.resultado | truncate(80) }}</td>
                 <td>

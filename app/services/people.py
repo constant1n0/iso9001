@@ -29,7 +29,10 @@ flushes and never commits, and an update that changes nothing writes nothing.
 Trainings, nonconformities, audits and competence records cite a person
 through the columns in ``REFERENCES`` (decision Q4); their services validate
 such a link with ``reference`` or ``check_reference``, and a person they still
-cite cannot be deleted.
+cite cannot be deleted. Trainings, nonconformities and audits also keep a
+legacy free-text name, which ``fill_name`` takes from the linked person when a
+write would leave it blank. ``choices`` and ``names`` serve the web pickers
+and lists.
 
 Errors:
 
@@ -45,11 +48,11 @@ Errors:
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from functools import partial
 from typing import Any
 
-from sqlalchemy import exists, false, func, select
+from sqlalchemy import exists, false, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -208,6 +211,57 @@ def reference(
     return value
 
 
+def fill_name(
+    session: Session, data: Any, found: Any, *, link: str, text: str, max_length: int
+) -> Any:
+    """``data`` with the legacy free-text name taken from the linked person.
+
+    When a write would leave ``text`` blank (absent or blank on create, given
+    blank on update, or still empty on an update that sets ``link``) and the
+    record cites a person through ``link``, a copy of ``data`` gets that
+    person's ``nombre``, cut to ``max_length``. A typed or stored text is kept
+    as it is (decision Q4), and an update touching neither key is left alone.
+    ``found`` is the record being updated (``None`` when creating). The link
+    is validated here (``reference``) so a bad id is reported as such; the
+    callers' own validation then runs on the result as usual.
+    """
+    if not isinstance(data, Mapping) or (found is not None and link not in data
+                                         and text not in data):
+        return data
+    typed = data[text] if text in data else getattr(found, text, None)
+    if not (typed is None or (isinstance(typed, str) and not typed.strip())):
+        return data
+    current = getattr(found, link, None)
+    person_id = reference(session, data, link, current) if link in data else current
+    person = session.get(Person, person_id) if person_id is not None else None
+    if person is None:
+        return data
+    return {**data, text: person.nombre[:max_length].rstrip()}
+
+
+def choices(session: Session, actor: Actor, include: int | None = None) -> list[Person]:
+    """Active people for a picker, by name, plus ``include`` even when inactive.
+
+    ``include`` is the person a record cites already, so editing that record
+    still offers it.
+    """
+    policy.require(actor, Action.READ, Resource.PEOPLE)
+    offered = Person.activo.is_(True)
+    if include is not None and _is_db_id(include):
+        offered = or_(offered, Person.id == include)
+    return list(session.scalars(select(Person).where(offered).order_by(Person.nombre, Person.id)))
+
+
+def names(session: Session, actor: Actor, ids: Iterable[int | None]) -> dict[int, str]:
+    """``nombre`` by id for the people in ``ids`` that exist; ``None`` ids are skipped."""
+    policy.require(actor, Action.READ, Resource.PEOPLE)
+    wanted = {value for value in ids if value is not None and _is_db_id(value)}
+    if not wanted:
+        return {}
+    rows = session.execute(select(Person.id, Person.nombre).where(Person.id.in_(wanted)))
+    return {person_id: nombre for person_id, nombre in rows}
+
+
 def check_reference(
     session: Session, key: str, value: int | None, current: int | None = None
 ) -> None:
@@ -329,5 +383,9 @@ def _is_int(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def _is_db_id(value: int) -> bool:
-    return 1 <= value <= DB_INT_MAX
+def _is_db_id(value: object) -> bool:
+    """Whether ``value`` can be a stored id: a real ``int`` (not ``bool``) in range."""
+    return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= DB_INT_MAX
+
+
+is_db_id = _is_db_id  # public name for other services

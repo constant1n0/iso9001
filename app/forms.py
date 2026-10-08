@@ -18,6 +18,30 @@ from .services.nonconformities import ESTADOS_NO_CONFORMIDAD
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField
 from wtforms.validators import DataRequired, Length, NumberRange, EqualTo, Email, Optional
+# Person pickers (``persona_id``, ``responsable_id``, ``auditor_id``): the
+# routes fill the choices with ``person_choices``; the empty choice means no
+# person. The legacy free-text name next to each picker is optional here: the
+# service requires it only when no person is picked.
+NO_PERSON = ('', '— Sin persona —')
+
+
+def optional_id(value):
+    """Select value to a person id; the empty choice means no person (``None``)."""
+    if value is None or value == '':
+        return None
+    return int(value)
+
+
+def person_choices(people):
+    """Picker choices: the empty one, then each person; inactive ones are marked."""
+    return [NO_PERSON, *((p.id, p.nombre if p.activo else f'{p.nombre} (desactivada)')
+                         for p in people)]
+
+
+def person_field(label):
+    return SelectField(label, coerce=optional_id, choices=[NO_PERSON])
+
+
 class BaseForm(FlaskForm):
     """Base form: validation messages in Spanish.
 
@@ -47,7 +71,8 @@ class ParteInteresadaForm(BaseForm):
 class AuditoriaForm(BaseForm):
     area_auditada = StringField('Área Auditada', validators=[DataRequired(), Length(max=50)])
     fecha = DateField('Fecha', validators=[DataRequired()])
-    auditor = StringField('Auditor', validators=[DataRequired(), Length(max=50)])
+    auditor = StringField('Auditor', validators=[Length(max=50)])
+    auditor_id = person_field('Auditor (persona)')
     resultado = TextAreaField('Resultado', validators=[DataRequired()])
     accion_correctiva = TextAreaField('Acción Correctiva')
     estado = SelectField(
@@ -63,6 +88,7 @@ class NoConformidadForm(BaseForm):
     descripcion = TextAreaField('Descripción', validators=[DataRequired()])
     fecha_detectada = DateField('Fecha Detectada', validators=[DataRequired()])
     responsable = StringField('Responsable', validators=[Length(max=50)])
+    responsable_id = person_field('Responsable (persona)')
     estado = SelectField('Estado', choices=[(e, e) for e in ESTADOS_NO_CONFORMIDAD],
                          default='Abierta', validators=[DataRequired()])
     accion_correctiva = TextAreaField('Acción Correctiva')
@@ -88,7 +114,8 @@ class SatisfaccionClienteForm(BaseForm):
 class CapacitacionForm(BaseForm):
     tema = StringField('Tema', validators=[DataRequired(), Length(max=100)])
     fecha = DateField('Fecha', validators=[DataRequired()])
-    personal = StringField('Personal', validators=[DataRequired(), Length(max=100)])
+    personal = StringField('Personal', validators=[Length(max=100)])
+    persona_id = person_field('Persona')
     duracion_horas = IntegerField('Duración en Horas', validators=[Optional(), NumberRange(min=0)])
     evaluacion_final = StringField('Evaluación Final', validators=[Length(max=20)])
     submit = SubmitField('Guardar')

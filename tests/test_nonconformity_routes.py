@@ -209,7 +209,7 @@ class NonconformityRoutesTestCase(unittest.TestCase):
                 self.assertEqual(404, response.status_code)
                 self.assertEqual({"message": "Recurso no encontrado"}, response.get_json())
 
-    def test_service_validation_error_flashes_and_returns_to_the_form(self) -> None:
+    def test_service_validation_error_shows_the_form_again_with_the_input(self) -> None:
         nc_id = self.seed()
         self.login()
         for url in (f"{BASE}/nueva", f"{BASE}/editar/{nc_id}"):
@@ -220,11 +220,13 @@ class NonconformityRoutesTestCase(unittest.TestCase):
                     side_effect=errors.ValidationError("Dato rechazado."),
                 ):
                     response = self.client.post(
-                        url, data=FORM, headers={"Referer": f"http://localhost{url}"}
+                        url, data=FORM | {"descripcion": "Texto conservado"}
                     )
-                self.assertEqual(302, response.status_code)
-                self.assertEqual(url, response.headers["Location"])
-                self.assertIn(("danger", "Dato rechazado."), self.flashes())
+                self.assertEqual(200, response.status_code)
+                html = response.get_data(as_text=True)
+                self.assertIn("Dato rechazado.", html)
+                self.assertIn("Texto conservado", html)
+        self.assertEqual(["create"], [row[0] for row in self.rows()])
 
     def test_service_conflict_flashes_and_returns_to_the_list(self) -> None:
         nc_id = self.seed()
@@ -255,3 +257,10 @@ class NonconformityRoutesTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_an_operativo_user_can_open_the_list_and_the_create_form(self) -> None:
+        """The person picker reads PEOPLE, which every role may read."""
+        self.login(RoleEnum.OPERATIVO)
+        for url in ("/no_conformidades/", "/no_conformidades/nueva"):
+            with self.subTest(url=url):
+                self.assertEqual(200, self.client.get(url).status_code)

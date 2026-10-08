@@ -62,13 +62,20 @@ class TrainingRoutesTestCase(RegisterRoutesBase):
             self.assertEqual(200, self.client.post(f"{self.BASE}/nueva", data=data).status_code)
         self.assertEqual(0, self.count(Capacitacion))
 
-    def test_service_validation_error_flashes_and_returns_to_the_form(self) -> None:
+    def test_service_validation_error_shows_the_form_again_with_the_input(self) -> None:
+        record_id = self.seed_with(training, SEED)
         self.login()
-        with patch("app.services.training.create", side_effect=errors.ValidationError("Dato rechazado.")):
-            response = self.client.post(f"{self.BASE}/nueva", data=FORM,
-                                        headers={"Referer": f"http://localhost{self.BASE}/nueva"})
-        self.assertEqual((302, f"{self.BASE}/nueva"), (response.status_code, response.headers["Location"]))
-        self.assertIn(("danger", "Dato rechazado."), self.flashes())
+        for url, target in (("/nueva", "create"), (f"/editar/{record_id}", "update")):
+            with self.subTest(url=url):
+                with patch(f"app.services.training.{target}",
+                           side_effect=errors.ValidationError("Dato rechazado.")):
+                    response = self.client.post(self.BASE + url,
+                                                data=FORM | {"tema": "Tema conservado"})
+                self.assertEqual(200, response.status_code)
+                html = response.get_data(as_text=True)
+                self.assertIn("Dato rechazado.", html)
+                self.assertIn('value="Tema conservado"', html)
+        self.assertEqual(["create"], self.actions())
 
     def test_list_filters_and_ordering_are_unchanged(self) -> None:
         self.seed_with(training, SEED | {"tema": "Curso viejo", "fecha": date(2026, 9, 1), "personal": "Eva"})
@@ -89,3 +96,10 @@ class TrainingRoutesTestCase(RegisterRoutesBase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_an_operativo_user_can_open_the_list_and_the_create_form(self) -> None:
+        """The person picker reads PEOPLE, which every role may read."""
+        self.login(RoleEnum.OPERATIVO)
+        for url in ("/capacitaciones/", "/capacitaciones/nueva"):
+            with self.subTest(url=url):
+                self.assertEqual(200, self.client.get(url).status_code)
