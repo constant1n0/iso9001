@@ -26,7 +26,8 @@ Rules this module follows, and the services that copy it should too:
   which the adapter performs).
 
 ``responsable_id`` cites the person responsible (``personas``, see
-``people.check_reference``); ``responsable`` keeps the legacy free-text name.
+``people.check_reference``); ``responsable`` keeps the legacy free-text name,
+which a write that leaves it blank takes from that person (``people.fill_name``).
 """
 
 from __future__ import annotations
@@ -174,6 +175,14 @@ def _clean(
     return clean
 
 
+def _fill_responsable(
+    session: Session, data: Mapping[str, Any], current: NoConformidad | None = None
+) -> Mapping[str, Any]:
+    """``data`` with a blank ``responsable`` taken from the linked person."""
+    return people.fill_name(session, data, current, link="responsable_id",
+                            text="responsable", max_length=RESPONSABLE_MAX)
+
+
 def _flush(session: Session) -> None:
     try:
         session.flush()
@@ -184,6 +193,7 @@ def _flush(session: Session) -> None:
 def create(session: Session, actor: Actor, data: Mapping[str, Any]) -> NoConformidad:
     """Create a nonconformity; ``descripcion`` and ``fecha_detectada`` are required."""
     policy.require(actor, Action.CREATE, Resource.NONCONFORMITIES)
+    data = _fill_responsable(session, data)
     missing = {"descripcion", "fecha_detectada"} - set(data)
     if missing:
         raise ValidationError(f"Faltan campos obligatorios: {', '.join(sorted(missing))}.")
@@ -204,7 +214,7 @@ def update(
     """Apply the given fields; a call that changes nothing writes nothing."""
     policy.require(actor, Action.UPDATE, Resource.NONCONFORMITIES)
     nc = _load(session, nc_id)
-    values = _clean(session, data, current=nc)
+    values = _clean(session, _fill_responsable(session, data, nc), current=nc)
     before = audit.snapshot(nc)
     if all(getattr(nc, key) == value for key, value in values.items()):
         return nc

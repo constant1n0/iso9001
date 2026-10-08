@@ -18,7 +18,8 @@
 Authorization comes from ``policy`` (resource ``AUDITS``); validation mirrors
 ``AuditoriaForm``. Services flush and never commit. ``auditor_id`` cites the
 auditor (``personas``, see ``people.check_reference``); ``auditor`` keeps the
-legacy free-text name.
+legacy free-text name. ``auditor`` is required unless a person is cited: a
+write that leaves it blank takes the person's name (``people.fill_name``).
 """
 
 from __future__ import annotations
@@ -128,6 +129,14 @@ def _clean(
     return clean
 
 
+def _fill_auditor(
+    session: Session, data: Mapping[str, Any], current: Auditoria | None = None
+) -> Mapping[str, Any]:
+    """``data`` with a blank ``auditor`` taken from the linked person."""
+    return people.fill_name(session, data, current, link="auditor_id", text="auditor",
+                            max_length=AUDITOR_MAX)
+
+
 def _flush(session: Session) -> None:
     try:
         session.flush()
@@ -136,8 +145,9 @@ def _flush(session: Session) -> None:
 
 
 def create(session: Session, actor: Actor, data: Mapping[str, Any]) -> Auditoria:
-    """Create an audit; area, date, auditor and result are required."""
+    """Create an audit; area, date, result and the auditor (name or person) are required."""
     policy.require(actor, Action.CREATE, Resource.AUDITS)
+    data = _fill_auditor(session, data)
     fields.require_keys(data, REQUIRED_ON_CREATE)
     values = {"estado": EstadoAuditoriaEnum.PENDIENTE} | _clean(session, data)
     created = Auditoria(**values)
@@ -156,7 +166,7 @@ def update(
     """Apply the given fields; a call that changes nothing writes nothing."""
     policy.require(actor, Action.UPDATE, Resource.AUDITS)
     found = _load(session, audit_id)
-    values = _clean(session, data, current=found)
+    values = _clean(session, _fill_auditor(session, data, found), current=found)
     before = audit.snapshot(found)
     if all(getattr(found, key) == value for key, value in values.items()):
         return found

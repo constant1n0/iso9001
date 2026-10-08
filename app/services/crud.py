@@ -80,6 +80,10 @@ class Spec:
     fields: tuple[Field, ...]
     order_by: tuple[Any, ...]  # SQL expressions; end with the primary key
     conflict: str | None = None  # message when a unique constraint is hit
+    # ``prepare(session, data, found)`` runs on the raw input before any
+    # validation and returns it, or a copy with derived values filled in;
+    # ``found`` is the record being updated, ``None`` when creating.
+    prepare: Callable[[Session, Any, Any], Any] | None = None
 
     @property
     def writable(self) -> frozenset[str]:
@@ -137,6 +141,11 @@ def _clean(spec: Spec, session: Session, data: Mapping[str, Any],
     return values
 
 
+def _prepare(spec: Spec, session: Session, data: Any, found: Any = None) -> Any:
+    """The input after the spec's ``prepare`` hook, or unchanged without one."""
+    return data if spec.prepare is None else spec.prepare(session, data, found)
+
+
 def _flush(session: Session, message: str | None = None) -> None:
     try:
         session.flush()
@@ -149,6 +158,7 @@ def create(spec: Spec, session: Session, actor: Actor, data: Mapping[str, Any]) 
     policy.require(actor, Action.CREATE, spec.resource)
     if not isinstance(data, Mapping):
         raise ValidationError("Los datos deben ser un objeto con campos.")
+    data = _prepare(spec, session, data)
     fields.require_keys(data, frozenset(f.name for f in spec.fields if f.required))
     created = spec.model(**_clean(spec, session, data))
     stamp_created(created, actor)
@@ -165,7 +175,7 @@ def update(spec: Spec, session: Session, actor: Actor, record_id: int,
     """Apply the given fields; a call that changes nothing writes nothing."""
     policy.require(actor, Action.UPDATE, spec.resource)
     found = _load(spec, session, record_id)
-    values = _clean(spec, session, data, found)
+    values = _clean(spec, session, _prepare(spec, session, data, found), found)
     before = audit.snapshot(found)
     if all(getattr(found, key) == value for key, value in values.items()):
         return found

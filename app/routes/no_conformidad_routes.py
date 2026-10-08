@@ -16,9 +16,10 @@
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required
-from ..forms import NoConformidadForm
+from ..forms import NoConformidadForm, person_choices
 from ..extensions import db
-from ..services import nonconformities
+from ..services import nonconformities, people
+from ..services.errors import ValidationError
 from ..utils.permissions import require_permission
 from ..utils.pdf import pdf_response, render_pdf
 from ..utils.web_actor import current_actor
@@ -27,12 +28,28 @@ from ..utils.web_args import date_arg
 # Define el blueprint y la URL base
 bp = Blueprint('no_conformidad', __name__, url_prefix='/no_conformidades')
 
-FORM_FIELDS = ('descripcion', 'fecha_detectada', 'responsable', 'estado', 'accion_correctiva')
+FORM_FIELDS = ('descripcion', 'fecha_detectada', 'responsable', 'responsable_id', 'estado',
+               'accion_correctiva')
 
 
 def _form_data(form):
     """Whitelisted service payload taken from a validated form."""
     return {name: getattr(form, name).data for name in FORM_FIELDS}
+
+
+def _saved(write):
+    """Run a service write and commit it; on a refusal roll back and flash why.
+
+    The route then shows the form again, keeping what the user typed.
+    """
+    try:
+        write()
+        db.session.commit()
+    except ValidationError as error:
+        db.session.rollback()
+        flash(error.message, 'danger')
+        return False
+    return True
 
 
 # Ruta para listar todas las no conformidades
@@ -47,18 +64,22 @@ def listar_no_conformidades():
         estado=request.args.get('estado'),
         fecha_detectada=date_arg('fecha_detectada'),
     )
+    personas = people.names(db.session, actor, (nc.responsable_id for nc in no_conformidades))
     return render_template('no_conformidades/listar.html', no_conformidades=no_conformidades,
-                           estados=nonconformities.available_states(db.session, actor))
+                           estados=nonconformities.available_states(db.session, actor),
+                           personas=personas)
 
 # Ruta para registrar una nueva no conformidad
 @bp.route('/nueva', methods=['GET', 'POST'])
 @login_required
 @require_permission('create', 'nonconformities')
 def nueva_no_conformidad():
+    actor = current_actor()
     form = NoConformidadForm()
-    if form.validate_on_submit():
-        nonconformities.create(db.session, current_actor(), _form_data(form))
-        db.session.commit()
+    form.responsable_id.choices = person_choices(people.choices(db.session, actor))
+    if form.validate_on_submit() and _saved(
+        lambda: nonconformities.create(db.session, actor, _form_data(form))
+    ):
         flash('No conformidad registrada exitosamente', 'success')
         return redirect(url_for('no_conformidad.listar_no_conformidades'))
     return render_template('no_conformidades/nueva.html', form=form)
@@ -78,9 +99,11 @@ def editar_no_conformidad(id):
             (no_conformidad.estado, f'{no_conformidad.estado} (heredado)'),
             *form.estado.choices,
         ]
-    if form.validate_on_submit():
-        nonconformities.update(db.session, actor, id, _form_data(form))
-        db.session.commit()
+    form.responsable_id.choices = person_choices(
+        people.choices(db.session, actor, include=no_conformidad.responsable_id))
+    if form.validate_on_submit() and _saved(
+        lambda: nonconformities.update(db.session, actor, id, _form_data(form))
+    ):
         flash('No conformidad actualizada exitosamente', 'success')
         return redirect(url_for('no_conformidad.listar_no_conformidades'))
     return render_template('no_conformidades/editar.html', form=form, no_conformidad=no_conformidad)

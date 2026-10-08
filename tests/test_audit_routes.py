@@ -255,7 +255,7 @@ class AuditRoutesTestCase(unittest.TestCase):
                 response = getattr(self.client, method)(url, data=FORM)
                 self.assertEqual(404, response.status_code)
 
-    def test_service_validation_error_flashes_and_returns_to_the_form(self) -> None:
+    def test_service_validation_error_shows_the_form_again_with_the_input(self) -> None:
         audit_id = self.seed()
         self.login()
         for url in (f"{BASE}/nueva", f"{BASE}/editar/{audit_id}"):
@@ -266,11 +266,13 @@ class AuditRoutesTestCase(unittest.TestCase):
                     side_effect=errors.ValidationError("Dato rechazado."),
                 ):
                     response = self.client.post(
-                        url, data=FORM, headers={"Referer": f"http://localhost{url}"}
+                        url, data=FORM | {"area_auditada": "Texto conservado"}
                     )
-                self.assertEqual(302, response.status_code)
-                self.assertEqual(url, response.headers["Location"])
-                self.assertIn(("danger", "Dato rechazado."), self.flashes())
+                self.assertEqual(200, response.status_code)
+                html = response.get_data(as_text=True)
+                self.assertIn("Dato rechazado.", html)
+                self.assertIn("Texto conservado", html)
+        self.assertEqual(["create"], [row[0] for row in self.rows()])
 
 
 if __name__ == "__main__":

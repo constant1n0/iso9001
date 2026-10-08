@@ -8,7 +8,7 @@ migration tests cover them on PostgreSQL.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import patch
 
 from sqlalchemy import text
@@ -331,6 +331,31 @@ class RecordTestCase(CompetenceBase):
         back = self.update("records", record.id, {"evaluacion_eficacia": "pendiente",
                                                   "fecha_evaluacion": None, "evaluador_id": None})
         self.assertEqual("pendiente", back.evaluacion_eficacia.name)
+
+    def test_a_datetime_is_refused_for_the_optional_dates(self) -> None:
+        moment = datetime(2026, 3, 10, 9, 30)  # a ``datetime`` is also a ``date``
+        record_id = self.create("records", self.record_data()).id
+        for key in ("fecha_caducidad", "fecha_evaluacion"):
+            with self.subTest(key=key):
+                expected = f"El campo «{key}» debe ser una fecha."
+                self.assertEqual(expected, self.refused(
+                    competence().records.create, self.record_data(**{key: moment})))
+                self.assertEqual(expected, self.refused(
+                    competence().records.update, record_id, {key: moment}))
+
+    def test_one_update_keeps_an_unchanged_reference_and_refuses_a_changed_unknown_one(
+            self) -> None:
+        record_id = self.create("records", self.record_data()).id
+        # The person was deactivated later: citing it again is fine, choosing it anew is not.
+        self.set_values(models().Person, self.ana, activo=False)
+        self.assertEqual(
+            "El campo «capacitacion_id» no corresponde a ninguna capacitación.",
+            self.refused(competence().records.update, record_id,
+                         {"persona_id": self.ana, "capacitacion_id": 999}))
+        training_id = self.training()
+        updated = self.update("records", record_id,
+                              {"persona_id": self.ana, "capacitacion_id": training_id})
+        self.assertEqual((self.ana, training_id), (updated.persona_id, updated.capacitacion_id))
 
     def test_the_evaluation_cannot_precede_the_obtained_date(self) -> None:
         expected = "La fecha de evaluación no puede ser anterior a la fecha de obtención."

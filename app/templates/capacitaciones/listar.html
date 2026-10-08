@@ -60,7 +60,8 @@
             <tr>
                 <td class="date">{{ capacitacion.fecha.strftime('%d/%m/%Y') }}</td>
                 <td>{{ capacitacion.tema }}</td>
-                <td>{{ capacitacion.personal }}</td>
+                {% set persona = personas.get(capacitacion.persona_id) %}
+                <td>{{ capacitacion.personal }}{% if persona %}<br><span class="muted">Persona: {{ persona }}</span>{% endif %}</td>
                 <td class="num">{{ capacitacion.duracion_horas if capacitacion.duracion_horas is not none else '—' }}</td>
                 <td>{{ capacitacion.evaluacion_final or '—' }}</td>
                 <td>

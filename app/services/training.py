@@ -18,6 +18,8 @@
 Validation mirrors ``CapacitacionForm``; every role may use the register.
 ``persona_id`` cites the person trained (``personas``, see
 ``people.check_reference``); ``personal`` keeps the legacy free-text name.
+``personal`` is required unless a person is cited: a write that leaves it
+blank takes the person's name (``people.fill_name``).
 """
 
 from __future__ import annotations
@@ -50,6 +52,8 @@ SPEC = crud.Spec(
         crud.Field("persona_id", fields.integer, check=people.check_reference),
     ),
     order_by=(Capacitacion.fecha.desc(), Capacitacion.id.desc()),
+    prepare=partial(people.fill_name, link="persona_id", text="personal",
+                    max_length=PERSONAL_MAX),
 )
 
 get = partial(crud.get, SPEC)

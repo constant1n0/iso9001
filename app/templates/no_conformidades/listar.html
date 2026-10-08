@@ -67,7 +67,8 @@
             <tr>
                 <td class="date">{{ nc.fecha_detectada.strftime('%d/%m/%Y') }}</td>
                 <td>{{ nc.descripcion | truncate(90) }}</td>
-                <td>{{ nc.responsable or '—' }}</td>
+                {% set persona = personas.get(nc.responsable_id) %}
+                <td>{{ nc.responsable or '—' }}{% if persona %}<br><span class="muted">Persona: {{ persona }}</span>{% endif %}</td>
                 <td><span class="badge {{ estilo_estado.get(nc.estado, '') }}">{{ nc.estado }}</span></td>
                 <td>{{ nc.accion_correctiva | truncate(80) if nc.accion_correctiva else '—' }}</td>
                 <td>
