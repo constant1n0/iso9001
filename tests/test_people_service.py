@@ -202,6 +202,15 @@ class CreateTestCase(PeopleBase):
 
 
 class UpdateTestCase(PeopleBase):
+    def test_a_unique_violation_while_auditing_an_update_is_a_conflict(self) -> None:
+        # A concurrent insert can win after the pre-check; the audit flush meets it.
+        record = self.create(email="ana@example.com")
+        race = IntegrityError("UPDATE personas", {}, Exception("unique"))
+        with patch("app.services.people.audit.record", side_effect=race), \
+                self.assertRaises(errors().Conflict):
+            people().update(db.session, admin(), record.id, {"email": "otra@example.com"})
+        db.session.rollback()
+
     def test_roles_are_replaced_and_the_change_is_audited(self) -> None:
         quality, direction, purchasing = (
             self.role("Calidad"), self.role("Dirección"), self.role("Compras")

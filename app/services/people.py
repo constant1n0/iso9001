@@ -160,7 +160,10 @@ def update(
     if roles is not None:
         found.roles = roles
     stamp_updated(found, actor)
-    audit.record(session, actor, "update", found, before=before, after=_snapshot(found))
+    try:
+        audit.record(session, actor, "update", found, before=before, after=_snapshot(found))
+    except IntegrityError as exc:  # its flush can meet a concurrent duplicate
+        raise Conflict(DUPLICATE) from exc
     _flush(session, DUPLICATE)
     return found
 
