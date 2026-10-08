@@ -23,10 +23,16 @@ def get_module(slug: str) -> Module:
         ) from None
 
 
-def serialise(row: Any) -> dict[str, Any]:
-    """JSON-safe columns (credentials excluded) plus ``id``, whatever the key column is."""
+def serialise(row: Any, module: Module | None = None) -> dict[str, Any]:
+    """JSON-safe columns (credentials excluded) plus ``id``, whatever the key column is.
+
+    A module's ``extras`` (values that are not columns, such as ``rol_ids``)
+    are added after the columns.
+    """
     record = audit.snapshot(row)
     record["id"] = sa_inspect(row).mapper.primary_key_from_instance(row)[0]
+    if module is not None and module.extras is not None:
+        record.update(audit.json_safe(module.extras(row)))
     return record
 
 
@@ -41,6 +47,10 @@ def _filter_value(field: FieldDef, value: Any) -> Any:
         if isinstance(value, int) and not isinstance(value, bool):
             return value
         raise ValidationError(f"El filtro «{name}» debe ser un número entero.")
+    if field.type == "boolean":
+        if isinstance(value, bool):
+            return value
+        raise ValidationError(f"El filtro «{name}» debe ser verdadero o falso.")
     if not isinstance(value, str):
         raise ValidationError(f"El filtro «{name}» debe ser texto.")
     if field.type != "enum":
@@ -68,13 +78,13 @@ def list_records(session: Session, actor: Actor, module: Module,
         session, actor, **criteria, page=page, per_page=per_page
     )
     return {
-        "module": module.slug, "items": [serialise(row) for row in rows], "total": total,
+        "module": module.slug, "items": [serialise(row, module) for row in rows], "total": total,
         "page": page, "per_page": per_page, "has_more": page * per_page < total,
     }
 
 
 def get_record(session: Session, actor: Actor, module: Module, record_id: int) -> dict[str, Any]:
-    return serialise(module.service.get(session, actor, record_id))
+    return serialise(module.service.get(session, actor, record_id), module)
 
 
 def _clean_data(module: Module, data: dict[str, Any]) -> dict[str, Any]:
@@ -93,9 +103,10 @@ def _clean_data(module: Module, data: dict[str, Any]) -> dict[str, Any]:
 
 
 def create_record(session: Session, actor: Actor, module: Module, data: dict[str, Any]) -> dict[str, Any]:
-    return serialise(module.service.create(session, actor, _clean_data(module, data)))
+    return serialise(module.service.create(session, actor, _clean_data(module, data)), module)
 
 
 def update_record(session: Session, actor: Actor, module: Module, record_id: int,
                   data: dict[str, Any]) -> dict[str, Any]:
-    return serialise(module.service.update(session, actor, record_id, _clean_data(module, data)))
+    record = module.service.update(session, actor, record_id, _clean_data(module, data))
+    return serialise(record, module)

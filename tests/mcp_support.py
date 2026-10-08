@@ -40,6 +40,7 @@ SEEDS = {
     "recursos_capacitacion": {"recurso_necesario": "Formacion"},
     "procesos": {"proceso": "Compras"},
     "indicadores_auditoria": {"area_auditoria": "Calidad"},
+    "personas": {"nombre": "Ana Pérez"},
 }
 
 

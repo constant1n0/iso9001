@@ -7,13 +7,15 @@ module has. Tests keep the declared fields in step with the services.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from types import ModuleType
+from typing import Any
 
 from ..models import DocumentCategory, EstadoAuditoriaEnum, TipoEnum
 from ..services import (
-    audit_indicators, audits, documents, improvements, nonconformities,
+    audit_indicators, audits, documents, improvements, nonconformities, people,
     process_operations, risks_opportunities, roles_responsibilities,
     satisfaction, stakeholders, training, training_resources,
 )
@@ -26,9 +28,10 @@ class FieldDef:
     """One writable field or list filter, as described to an agent.
 
     ``type`` is ``string``, ``date`` (YYYY-MM-DD), ``datetime`` (ISO 8601),
-    ``integer``, ``boolean`` or ``enum`` (one of ``allowed``). ``members`` names
-    the Python enum a filter must be turned into before the service sees it;
-    without it an enum filter is passed on as the plain string.
+    ``integer``, ``integer_list`` (a JSON array of integers), ``boolean`` or
+    ``enum`` (one of ``allowed``). ``members`` names the Python enum a filter
+    must be turned into before the service sees it; without it an enum filter
+    is passed on as the plain string.
     """
 
     name: str
@@ -40,12 +43,23 @@ class FieldDef:
 
 @dataclass(frozen=True)
 class Module:
+    """One register as the tools expose it.
+
+    ``extras`` adds values that are not columns of the record (for example the
+    ids of a many-to-many relation) to what the tools return.
+    """
+
     slug: str
     label: str
     resource: Resource
     service: ModuleType
     fields: tuple[FieldDef, ...]
     filters: tuple[FieldDef, ...] = ()
+    extras: Callable[[Any], dict[str, Any]] | None = None
+
+
+def _person_extras(person: Any) -> dict[str, Any]:
+    return {"rol_ids": person.rol_ids}
 
 
 def _f(name: str, type: str = "string", required: bool = False, allowed=(), members=None) -> FieldDef:
@@ -118,6 +132,12 @@ _MODULES = (
         _f("area_auditoria", required=True), _f("fecha_auditoria", "datetime"),
         _f("resultado"), _f("accion_correctiva"), _f("indicador_desempeno"),
     )),
+    # ``rol_ids`` replaces the roles held; ``user_id`` links at most one user account.
+    Module("personas", "People", Resource.PEOPLE, people, (
+        _f("nombre", required=True), _f("email"), _f("user_id", "integer"),
+        _f("activo", "boolean"), _f("notas"), _f("rol_ids", "integer_list"),
+    ), (_f("nombre"), _f("rol_id", "integer"), _f("activo", "boolean")),
+        extras=_person_extras),
 )
 
 MODULES: dict[str, Module] = {module.slug: module for module in _MODULES}

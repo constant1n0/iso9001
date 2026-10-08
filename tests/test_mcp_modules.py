@@ -14,7 +14,7 @@ SLUGS = {
     "no_conformidades", "auditorias", "documentos", "capacitaciones",
     "satisfaccion_clientes", "partes_interesadas", "mejoras",
     "roles_responsabilidades", "riesgos_oportunidades", "recursos_capacitacion",
-    "procesos", "indicadores_auditoria",
+    "procesos", "indicadores_auditoria", "personas",
 }
 
 
@@ -35,7 +35,7 @@ class LayoutTestCase(unittest.TestCase):
 
 
 class RegistryTestCase(unittest.TestCase):
-    def test_registry_holds_the_twelve_modules(self) -> None:
+    def test_registry_holds_the_thirteen_modules(self) -> None:
         self.assertEqual(SLUGS, set(registry().MODULES))
 
     def test_each_module_maps_to_its_own_policy_resource(self) -> None:
@@ -43,9 +43,10 @@ class RegistryTestCase(unittest.TestCase):
         self.assertEqual(len(SLUGS), len(set(resources)))
 
     def test_declared_fields_match_what_each_service_requires(self) -> None:
-        from app.services import audits, documents, nonconformities
+        from app.services import audits, documents, nonconformities, people
 
         bespoke = {
+            "personas": (people.WRITABLE_FIELDS, people.REQUIRED_ON_CREATE),
             "no_conformidades": (nonconformities.WRITABLE_FIELDS,
                                  frozenset({"descripcion", "fecha_detectada"})),
             "auditorias": (audits.WRITABLE_FIELDS, audits.REQUIRED_ON_CREATE),
@@ -86,6 +87,17 @@ class RegistryTestCase(unittest.TestCase):
             field = {f.name: f for f in modules[slug].fields}[name]
             self.assertEqual(tuple(enum_cls.__members__), field.allowed, (slug, name))
 
+    def test_people_describe_roles_as_a_list_and_the_user_link_as_an_id(self) -> None:
+        module = registry().MODULES["personas"]
+        types = {f.name: f.type for f in module.fields}
+        self.assertEqual(
+            {"nombre": "string", "email": "string", "user_id": "integer",
+             "activo": "boolean", "notas": "string", "rol_ids": "integer_list"},
+            types,
+        )
+        self.assertEqual({"nombre": "string", "rol_id": "integer", "activo": "boolean"},
+                         {f.name: f.type for f in module.filters})
+
 
 class ModulesToolTestCase(McpDbCase):
     async def test_the_tool_is_registered_read_only(self) -> None:
@@ -113,6 +125,8 @@ class ModulesToolTestCase(McpDbCase):
             (mcp_actor(OPERATIVO), "documentos", dict(read=False, create=False, update=False)),
             (mcp_actor(OPERATIVO), "no_conformidades", dict(read=True, create=True, update=True)),
             (mcp_actor(OPERATIVO), "procesos", dict(read=True, create=False, update=False)),
+            (mcp_actor(OPERATIVO), "personas", dict(read=True, create=False, update=False)),
+            (mcp_actor(AUDITOR), "personas", dict(read=True, create=True, update=True)),
             (mcp_actor(AUDITOR, scopes=("read",)), "auditorias",
              dict(read=True, create=False, update=False)),
         ]
