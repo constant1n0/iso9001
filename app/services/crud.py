@@ -58,12 +58,16 @@ class Field:
     """One writable column: ``clean(data, name)`` validates and normalizes it.
 
     ``required`` means the key must be present when creating; it is separate
-    from the validator, which decides what a present value may be.
+    from the validator, which decides what a present value may be. ``check``,
+    for rules that need the database, runs once every field is clean as
+    ``check(session, name, value, current)``; ``current`` is the record's
+    value, ``None`` when creating.
     """
 
     name: str
     clean: Callable[[Mapping[str, Any], str], Any]
     required: bool = False
+    check: Callable[[Session, str, Any, Any], None] | None = None
 
 
 @dataclass(frozen=True)
@@ -116,12 +120,21 @@ def list_page(spec: Spec, session: Session, actor: Actor, where: Sequence[Any] =
     return list(session.scalars(query)), total
 
 
-def _clean(spec: Spec, data: Mapping[str, Any]) -> dict[str, Any]:
-    """Validate the keys present in ``data`` and return the normalized values."""
+def _clean(spec: Spec, session: Session, data: Mapping[str, Any],
+           found: Any = None) -> dict[str, Any]:
+    """Validate the keys present in ``data`` and return the normalized values.
+
+    ``found`` is the record being updated (``None`` when creating).
+    """
     if not isinstance(data, Mapping):
         raise ValidationError("Los datos deben ser un objeto con campos.")
     fields.reject_unknown(data, spec.writable)
-    return {f.name: f.clean(data, f.name) for f in spec.fields if f.name in data}
+    values = {f.name: f.clean(data, f.name) for f in spec.fields if f.name in data}
+    for f in spec.fields:
+        if f.check is not None and f.name in values:
+            current = None if found is None else getattr(found, f.name)
+            f.check(session, f.name, values[f.name], current)
+    return values
 
 
 def _flush(session: Session, message: str | None = None) -> None:
@@ -137,7 +150,7 @@ def create(spec: Spec, session: Session, actor: Actor, data: Mapping[str, Any]) 
     if not isinstance(data, Mapping):
         raise ValidationError("Los datos deben ser un objeto con campos.")
     fields.require_keys(data, frozenset(f.name for f in spec.fields if f.required))
-    created = spec.model(**_clean(spec, data))
+    created = spec.model(**_clean(spec, session, data))
     stamp_created(created, actor)
     session.add(created)
     try:
@@ -152,7 +165,7 @@ def update(spec: Spec, session: Session, actor: Actor, record_id: int,
     """Apply the given fields; a call that changes nothing writes nothing."""
     policy.require(actor, Action.UPDATE, spec.resource)
     found = _load(spec, session, record_id)
-    values = _clean(spec, data)
+    values = _clean(spec, session, data, found)
     before = audit.snapshot(found)
     if all(getattr(found, key) == value for key, value in values.items()):
         return found

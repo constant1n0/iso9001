@@ -303,6 +303,60 @@ class MigrationsTestCase(unittest.TestCase):
             remaining = set(inspect(db.engine).get_table_names())
             self.assertFalse({"personas", "persona_roles"} & remaining)
 
+    def test_person_links_restrict_deleting_a_cited_person_and_downgrade(self) -> None:
+        links = {"capacitaciones": "persona_id", "no_conformidades": "responsable_id",
+                 "auditorias": "auditor_id"}
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            for table, column in links.items():
+                with self.subTest(table=table):
+                    columns = {c["name"]: c for c in inspector.get_columns(table)}
+                    self.assertTrue(columns[column]["nullable"])
+                    fk = {fk["name"]: fk for fk in inspector.get_foreign_keys(table)}[
+                        f"fk_{table}_{column}_personas"]
+                    self.assertEqual(
+                        ("personas", [column], ["id"], "RESTRICT"),
+                        (fk["referred_table"], fk["constrained_columns"],
+                         fk["referred_columns"], fk["options"].get("ondelete")),
+                    )
+                    self.assertIn(f"ix_{table}_{column}",
+                                  {i["name"] for i in inspector.get_indexes(table)})
+            with db.engine.begin() as connection:
+                connection.execute(text("INSERT INTO personas (nombre) VALUES ('Ana')"))
+                connection.execute(text(
+                    "INSERT INTO capacitaciones (tema, fecha, personal, persona_id) "
+                    "SELECT 'Seguridad', '2026-10-01', 'Ana', id FROM personas"
+                ))
+                connection.execute(text(
+                    "INSERT INTO no_conformidades "
+                    "(descripcion, fecha_detectada, estado, responsable_id) "
+                    "SELECT 'Fallo', '2026-10-01', 'Abierta', id FROM personas"
+                ))
+                connection.execute(text(
+                    "INSERT INTO auditorias "
+                    "(area_auditada, fecha, auditor, resultado, estado, auditor_id) "
+                    "SELECT 'Compras', '2026-10-01', 'Ana', 'OK', 'PENDIENTE', id FROM personas"
+                ))
+            # Each table on its own keeps the person: release them one at a time.
+            for release in ("DELETE FROM capacitaciones", "DELETE FROM no_conformidades",
+                            "DELETE FROM auditorias"):
+                with self.subTest(still_cited_before=release):
+                    with self.assertRaises(IntegrityError):
+                        with db.engine.begin() as connection:
+                            connection.execute(text("DELETE FROM personas"))
+                with db.engine.begin() as connection:
+                    connection.execute(text(release))
+            with db.engine.begin() as connection:
+                connection.execute(text("DELETE FROM personas"))
+            downgrade(directory=MIGRATIONS_DIR, revision="a3c5e7f9b2d4")
+            inspector = inspect(db.engine)
+            for table, column in links.items():
+                self.assertNotIn(column, {c["name"] for c in inspector.get_columns(table)})
+            self.assertIn("personas", inspector.get_table_names())
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
 
 if __name__ == "__main__":
     unittest.main()

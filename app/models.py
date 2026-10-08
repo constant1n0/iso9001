@@ -364,13 +364,32 @@ class Person(RecordMetadataMixin, db.Model):
         return f'<Person {self.id} {self.nombre}>'
 
 
+def person_link(table: str, column: str):
+    """A nullable reference to ``personas`` that keeps a cited person from being deleted.
+
+    Used where a record also keeps its legacy free-text name (decision Q4 of
+    ``qms-people``); people are deactivated instead of deleted once cited.
+    """
+    return db.Column(
+        db.Integer,
+        db.ForeignKey(
+            'personas.id',
+            name=f'fk_{table}_{column}_personas',
+            ondelete='RESTRICT',
+        ),
+        nullable=True,
+        index=True,
+    )
+
+
 # Modelo para registrar No Conformidades dentro del SGC
 class NoConformidad(RecordMetadataMixin, db.Model):
     __tablename__ = 'no_conformidades'
     id = db.Column(db.Integer, primary_key=True)
     descripcion = db.Column(db.Text, nullable=False)
     fecha_detectada = db.Column(db.Date, nullable=False, default=datetime.utcnow)
-    responsable = db.Column(db.String(50))
+    responsable = db.Column(db.String(50))  # legacy free text, kept as written
+    responsable_id = person_link('no_conformidades', 'responsable_id')
     estado = db.Column(db.String(20), nullable=False, default="Abierta")
     accion_correctiva = db.Column(db.Text)
     fecha_cierre = db.Column(db.Date)
@@ -390,7 +409,8 @@ class Capacitacion(RecordMetadataMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tema = db.Column(db.String(100), nullable=False)
     fecha = db.Column(db.Date, nullable=False, default=datetime.utcnow)
-    personal = db.Column(db.String(100), nullable=False)
+    personal = db.Column(db.String(100), nullable=False)  # legacy free text
+    persona_id = person_link('capacitaciones', 'persona_id')
     duracion_horas = db.Column(db.Integer)
     evaluacion_final = db.Column(db.String(20))
 
@@ -407,7 +427,8 @@ class Auditoria(RecordMetadataMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     area_auditada = db.Column(db.String(50), nullable=False)
     fecha = db.Column(db.Date, nullable=False, default=datetime.utcnow)
-    auditor = db.Column(db.String(50), nullable=False)
+    auditor = db.Column(db.String(50), nullable=False)  # legacy free text
+    auditor_id = person_link('auditorias', 'auditor_id')
     resultado = db.Column(db.Text, nullable=False)
     accion_correctiva = db.Column(db.Text)
     estado = db.Column(db.Enum(EstadoAuditoriaEnum), nullable=False, default=EstadoAuditoriaEnum.PENDIENTE)

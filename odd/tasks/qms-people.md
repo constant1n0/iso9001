@@ -34,7 +34,7 @@ Route for every task: **delegated direct** (two or more non-trivial files each).
 - [x] **QP-1 — People and their roles.** Forecast 300-400.
   - `Person` (`personas`): full name, optional e-mail, optional unique link to a user, active flag, notes, record metadata; many-to-many with `RolResponsabilidad`; migration; `people` service (`crud`-style, policy resource `PEOPLE`); MCP module `personas`.
   - Acceptance: CRUD with policy Q1; duplicate user link refused; roles assigned and listed; a referenced person cannot be deleted (deactivate instead); migration upgrades and downgrades on PostgreSQL.
-- [ ] **QP-2 — Links from trainings, nonconformities and audits.** Forecast 250-350.
+- [x] **QP-2 — Links from trainings, nonconformities and audits.** Forecast 250-350.
   - Nullable `persona_id` on `capacitaciones`, `responsable_id` on `no_conformidades`, `auditor_id` on `auditorias`; services validate an existing active person; MCP fields; legacy text kept (Q4).
   - Acceptance: records accept and return the person; an unknown or inactive person is refused; old records keep their text; deleting a referenced person is refused with a real foreign key (not only a mocked flush), as the QP-1 review asked.
 - [ ] **QP-3 — Competence requirements and records.** Forecast 300-400.
@@ -42,7 +42,7 @@ Route for every task: **delegated direct** (two or more non-trivial files each).
   - Acceptance: CRUD with policy Q1; expiry before obtained date refused; evaluation needs a date and an evaluator; the training link must exist.
 - [ ] **QP-4 — Screens.** Forecast 350-450.
   - People list, create and edit with roles; a person's competence page; requirements per role; person pickers in the training, nonconformity and audit forms.
-  - Acceptance: role-based access per Q1; forms keep input on errors; CSP-clean templates.
+  - Acceptance: role-based access per Q1; forms keep input on errors; CSP-clean templates; when a person is picked and the legacy text (`personal`, `responsable`, `auditor`) is empty, the text is filled with the person's name so lists, PDFs and reports keep working, and the text is no longer required when a person is given (service rule, so the MCP behaves the same).
 - [ ] **QP-5 — Competence matrix and docs.** Forecast 200-300.
   - Required-versus-actual matrix per role and person (met, expired, missing, pending evaluation); README and `docs/mcp.md` updates.
   - Acceptance: the matrix reflects expiry against today; access per Q1.
@@ -62,7 +62,8 @@ Baseline at `69bcfa7`: 734 tests. Migrations are tested on PostgreSQL (`TEST_POS
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
 | QP-1 | Done | `46588e6` (model, migration `a3c5e7f9b2d4`, service, policy `PEOPLE`), `a015c58` (MCP module `personas`, `rol_ids` in output, boolean filters), review follow-up in the next commit | RED: `ImportError` (`people`, `Person`), `KeyError: 'PEOPLE'`, `NoSuchTableError: personas`, `13 != 12`; MCP: `KeyError: 'rol_ids'`, `Filtros no admitidos: activo`; follow-up: an `IntegrityError` while auditing an update escaped. GREEN: 760 tests incl. PostgreSQL; `46588e6` alone passed 755 | Range `fd7ccfa..a015c58`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-dd395cbc85c7341e` **approved** and acknowledged; its warning fixed (update now turns that race into `Conflict`); its suggestion (a real foreign-key delete test) moved into QP-2's acceptance |
-| QP-2..QP-5 | Pending | — | — | — |
+| QP-2 | Done | `14ead66` (columns `persona_id`, `responsable_id`, `auditor_id` with `ON DELETE RESTRICT`, migration `b8d2f4a6c1e3`, shared `people.reference` check, `crud.Field.check` hook, explicit "still referenced" delete check, MCP fields) | RED: 26 tests (21 failures, 29 errors: fields not allowed, missing attributes, `UndefinedColumn` on PostgreSQL). GREEN: 773 tests incl. PostgreSQL; real foreign-key tests on SQLite (`PRAGMA foreign_keys=ON`) and PostgreSQL replace the mocked one | Range `891edb0..14ead66`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-562ec7f4e448deba` **approved** and acknowledged; its warning (constraint changes outside `batch_alter_table` fail on SQLite) does not apply: migrations run only on PostgreSQL, which CI enforces |
+| QP-3..QP-5 | Pending | — | — | — |
 
 ## Findings during implementation
 
@@ -71,8 +72,9 @@ Baseline at `69bcfa7`: 734 tests. Migrations are tested on PostgreSQL (`TEST_POS
 - The audit snapshot only covers columns, so the people service adds `rol_ids` to every audit row itself.
 - MCP output and filters: modules can name an optional extra-values function (used for `rol_ids`), and filters accept JSON booleans (`activo`).
 - QP-2 references a person through `personas.id` with `ON DELETE RESTRICT`; SQLite tests do not enforce foreign keys, so `people.delete` also needs an explicit "still referenced" check.
+- `qms_modules` shows only a field's name, type, required flag and allowed values; describing that the new fields reference `personas` would need `app/mcp_server/server.py` (`_describe`).
 - The edit surface was widened for QP-1 with the user's approval (2026-10-08): `tests/test_attribution.py`, `tests/test_mcp_http.py`, `app/mcp_server/operations.py`.
 
 ## Next step
 
-QP-2.
+QP-3.

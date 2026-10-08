@@ -152,6 +152,42 @@ class PeopleTestCase(McpDbCase):
                 self.assertNotIn("Traceback", error_text(result))
 
 
+PERSON_LINKS = (("capacitaciones", "persona_id"), ("no_conformidades", "responsable_id"),
+                ("auditorias", "auditor_id"))
+
+
+class PersonLinksTestCase(McpDbCase):
+    async def test_records_round_trip_the_person_they_cite(self) -> None:
+        person_id = self.seed("personas")
+        actor = mcp_actor(ADMIN)
+        for slug, key in PERSON_LINKS:
+            with self.subTest(module=slug):
+                created = await self.call(actor, "qms_create", {
+                    "module": slug, "data": SEEDS[slug] | {key: person_id}})
+                self.assertFalse(created.is_error, created.content)
+                record_id = created.structured_content["id"]
+                self.assertEqual(person_id, created.structured_content[key])
+                fetched = await self.call(actor, "qms_get", {"module": slug, "id": record_id})
+                self.assertEqual(person_id, fetched.structured_content[key])
+                cleared = await self.call(actor, "qms_update", {
+                    "module": slug, "id": record_id, "data": {key: None}})
+                self.assertFalse(cleared.is_error, cleared.content)
+                self.assertIsNone(cleared.structured_content[key])
+                refused = await self.call(actor, "qms_create", {
+                    "module": slug, "data": SEEDS[slug] | {key: 999}})
+                self.assertTrue(refused.is_error)
+                self.assertIn("no corresponde a ninguna persona", error_text(refused))
+
+    async def test_qms_modules_describes_each_link_as_an_optional_integer(self) -> None:
+        result = await self.call(mcp_actor(ADMIN), "qms_modules")
+        modules = {m["slug"]: m for m in result.structured_content["modules"]}
+        for slug, key in PERSON_LINKS:
+            with self.subTest(module=slug):
+                described = {f["name"]: f for f in modules[slug]["fields"]}
+                self.assertEqual({"name": key, "type": "integer", "required": False},
+                                 described[key])
+
+
 class ErrorTestCase(McpDbCase):
     async def test_validation_and_conflict_errors_are_clean(self) -> None:
         self.seed("documentos")
