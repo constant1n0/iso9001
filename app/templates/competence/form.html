@@ -1,0 +1,35 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{# A requirement form, or a record form when the route passes the record's person. #}
+{% if person %}
+    {% set heading = 'Editar competencia acreditada' if record else 'Nueva competencia acreditada' %}
+    {% set cancel_url = url_for('people.show_person', person_id=person.id) %}
+{% else %}
+    {% set heading = 'Editar requisito de competencia' if requirement else 'Nuevo requisito de competencia' %}
+    {% set cancel_url = url_for('competence.list_requirements') %}
+{% endif %}
+{% block title %}{{ heading }}{% endblock %}
+{% block crumb %}Personas y competencia · {{ 'Personas' if person else 'Competencias requeridas' }}{% endblock %}
+{% block content %}
+{{ page_header('Cláusula 7.2 · Competencia', heading) }}
+{% if person %}
+<p class="muted">Persona: <strong>{{ person.nombre }}</strong>. Una evaluación distinta de «Pendiente» necesita la fecha de evaluación y el evaluador.</p>
+{% endif %}
+{{ form_card(form, cancel_url, 'Guardar cambios' if requirement or record else 'Registrar competencia' if person else 'Crear requisito') }}
+{% endblock %}

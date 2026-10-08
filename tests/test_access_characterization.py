@@ -20,11 +20,15 @@ from app.models import (
     Auditoria,
     AuditoriaIndicador,
     Capacitacion,
+    CompetenceRecord,
+    CompetenceRequirement,
+    CompetenceType,
     Document,
     DocumentCategory,
     Mejora,
     NoConformidad,
     ParteInteresada,
+    Person,
     ProcesoOperacion,
     RecursoCapacitacion,
     RiesgoOportunidad,
@@ -97,6 +101,19 @@ NEW_USER = dict(
     confirm_password="ClaveNueva2026",
 )
 USER_EDIT = dict(email="operativo.nuevo@example.com", role="OPERATIVO")
+PERSON = dict(nombre="Persona nueva", email="", rol_ids="1", user_id="", activo="y",
+              notas="")
+REQUIREMENT = dict(rol_id="1", tipo="formacion", descripcion="Curso", criterio="")
+RECORD = dict(
+    requisito_id="",
+    evidencia="Certificado",
+    capacitacion_id="",
+    fecha_obtencion="2026-10-05",
+    fecha_caducidad="",
+    evaluacion_eficacia="pendiente",
+    fecha_evaluacion="",
+    evaluador_id="",
+)
 
 
 def _html(resource, base, create, update, delete):
@@ -143,6 +160,15 @@ ENDPOINTS = [
     # action answers with a flash on the list, so nothing is mailed.
     *[Endpoint("USERS", "update", "POST", f"/usuarios/3/{action}", 302)
       for action in ("desactivar", "reactivar", "enviar-enlace")],
+    # Person 1 and competence record 1 are seeded; nothing cites requirement 1
+    # or person 2, so the deletes succeed.
+    *_html("PEOPLE", "/personas/", ("nueva", PERSON), ("1/editar", PERSON), "2/eliminar"),
+    Endpoint("PEOPLE", "read", "GET", "/personas/1", 200),
+    *_html("COMPETENCE", "/competencias/requisitos/", ("nuevo", REQUIREMENT),
+           ("1/editar", REQUIREMENT), "1/eliminar"),
+    Endpoint("COMPETENCE", "create", "POST", "/competencias/personas/1/nueva", 302, RECORD),
+    Endpoint("COMPETENCE", "update", "POST", "/competencias/1/editar", 302, RECORD),
+    Endpoint("COMPETENCE", "delete", "POST", "/competencias/1/eliminar", 302),
     *_json("IMPROVEMENTS", "/mejoras/api/", {"no_conformidad": "NC"},
            {"accion_correctiva": "x"}),
     *_json("AUDIT_INDICATORS", "/auditoria_indicador/",
@@ -182,12 +208,13 @@ ALLOWED = {
     "RISKS_OPPORTUNITIES": JSON_REGISTER,
     "TRAINING_RESOURCES": JSON_REGISTER,
     "PROCESS_OPERATIONS": JSON_REGISTER,
+    "PEOPLE": JSON_REGISTER,  # decision Q1 of qms-people
+    "COMPETENCE": JSON_REGISTER,
 }
 # Policy entries without routes. AUDIT_LOG has no adapter yet. The API_TOKENS
 # matrix (issue, list, revoke any token) stays CLI-only; "Mi perfil" bypasses it
 # with an ownership check, so tests/test_profile_routes.py characterizes it.
-# People and competence screens arrive in QP-4.
-NO_ROUTES = {"AUDIT_LOG", "API_TOKENS", "PEOPLE", "COMPETENCE"}
+NO_ROUTES = {"AUDIT_LOG", "API_TOKENS"}
 
 
 def allowed_roles(endpoint: Endpoint) -> set:
@@ -244,6 +271,20 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                     RiesgoOportunidad(tipo=TipoEnum.Riesgo, descripcion="d"),
                     RecursoCapacitacion(recurso_necesario="Seed"),
                     ProcesoOperacion(proceso="Seed"),
+                    RolResponsabilidad(rol="Seed 2"),  # role 1 stays deletable
+                    Person(nombre="Seed"),
+                    Person(nombre="Unreferenced"),
+                ]
+            )
+            db.session.flush()  # the competence rows cite role 2 and person 1
+            db.session.add_all(
+                [
+                    CompetenceRequirement(
+                        rol_id=2, tipo=CompetenceType.formacion, descripcion="Seed"
+                    ),
+                    CompetenceRecord(
+                        persona_id=1, evidencia="Seed", fecha_obtencion=date(2026, 10, 5)
+                    ),
                 ]
             )
             db.session.commit()
