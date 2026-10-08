@@ -19,7 +19,9 @@ Authorization comes from ``policy`` (resource ``AUDITS``); validation mirrors
 ``AuditoriaForm``. Services flush and never commit. ``auditor_id`` cites the
 auditor (``personas``, see ``people.check_reference``); ``auditor`` keeps the
 legacy free-text name. ``auditor`` is required unless a person is cited: a
-write that leaves it blank takes the person's name (``people.fill_name``).
+write that leaves it blank takes the person's name (``people.fill_name``), so
+it is not in ``REQUIRED_ON_CREATE`` (which the MCP registry mirrors) but
+``create`` requires it once that name is filled in.
 """
 
 from __future__ import annotations
@@ -96,7 +98,8 @@ WRITABLE_FIELDS = frozenset({
     "area_auditada", "fecha", "auditor", "auditor_id", "resultado", "accion_correctiva",
     "estado",
 })
-REQUIRED_ON_CREATE = frozenset({"area_auditada", "fecha", "auditor", "resultado"})
+REQUIRED_ON_CREATE = frozenset({"area_auditada", "fecha", "resultado"})
+NAME_OR_PERSON = "auditor"  # required on create unless ``auditor_id`` fills it
 
 
 def _clean(
@@ -148,7 +151,7 @@ def create(session: Session, actor: Actor, data: Mapping[str, Any]) -> Auditoria
     """Create an audit; area, date, result and the auditor (name or person) are required."""
     policy.require(actor, Action.CREATE, Resource.AUDITS)
     data = _fill_auditor(session, data)
-    fields.require_keys(data, REQUIRED_ON_CREATE)
+    fields.require_keys(data, REQUIRED_ON_CREATE | {NAME_OR_PERSON})
     values = {"estado": EstadoAuditoriaEnum.PENDIENTE} | _clean(session, data)
     created = Auditoria(**values)
     stamp_created(created, actor)

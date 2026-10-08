@@ -241,6 +241,50 @@ Once the first administrator exists, accounts are managed from the web:
 
 Account changes are written to the audit log and the security log.
 
+**2d. Personas y competencia**
+
+The **Personas y competencia** navigation group records who does the work
+under the QMS and whether they are competent for it (ISO 9001 clauses 5.3 and
+7.2):
+
+- **Personas** (`/personas/`): people who work under the QMS, separate from
+  login accounts. A person has a name, an optional e-mail, notes, an active
+  flag, any number of QMS roles (*Roles y responsabilidades*) and at most one
+  linked user account. The list filters by name, state and role. A person
+  that other records cite cannot be deleted: deactivate them instead. A
+  person's page lists the competence they have demonstrated.
+- **Competencias requeridas** (`/competencias/requisitos/`): the competence
+  each role requires (education, training, skill or experience), with a
+  description and how it is evidenced. A role that a requirement cites cannot
+  be deleted.
+- **Demonstrated competence** (from a person's page): the evidence (text or a
+  reference), an optional training as evidence, the date obtained, an optional
+  expiry date and the effectiveness evaluation (*Pendiente*, *Eficaz* or *No
+  eficaz*; anything but pending needs the evaluation date and the evaluating
+  person).
+- **Matriz de competencias** (`/competencias/matriz`, optional role filter):
+  for every role with requirements, its active people against each
+  requirement, judged on today's date in the application's time zone. A
+  record without an expiry date never expires, and one expiring today is
+  still valid. Each cell links to the person's page:
+  - *Cumplida*: an unexpired record evaluated effective (even if a newer
+    attempt was not);
+  - *Pendiente de evaluación* or *No eficaz*: otherwise, the newest unexpired
+    record is pending or not effective;
+  - *Caducada*: every record has expired;
+  - *Falta*: there is no record.
+- **Person pickers**: the training, nonconformity and audit forms pick a
+  person. The free-text name (*personal*, *responsable*, *auditor*) stays as
+  the legacy value: existing records keep their text, which is never matched
+  to a person, and a name left blank takes the picked person's name. The text
+  is required only when no person is picked. Only active people are offered,
+  and a record keeps a person deactivated later.
+
+Access is the same on the web and through the MCP server: every role reads
+people, requirements, demonstrated competence and the matrix; administrators
+and auditors create and edit; only administrators delete; the MCP server never
+deletes. Every change is written to the audit log.
+
 **3. Iniciar Redis y Celery para las Notificaciones Programadas**
 
 Celery envía tres avisos por correo; la aplicación web funciona sin él.

@@ -19,6 +19,10 @@ SLUGS = {
 }
 # The two competence registers share one policy resource (decision Q1 of qms-people).
 SHARED_RESOURCE = ("competencias_requeridas", "competencias_acreditadas")
+# (module, legacy free-text name, person link that can fill it)
+LEGACY_NAMES = (("capacitaciones", "personal", "persona_id"),
+                ("auditorias", "auditor", "auditor_id"),
+                ("no_conformidades", "responsable", "responsable_id"))
 
 
 def registry():
@@ -70,6 +74,18 @@ class RegistryTestCase(unittest.TestCase):
                     required = frozenset(f.name for f in spec.fields if f.required)
                 self.assertEqual(writable, {f.name for f in module.fields})
                 self.assertEqual(required, {f.name for f in module.fields if f.required})
+
+    def test_legacy_names_are_optional_and_say_which_person_fills_them(self) -> None:
+        # The services require the name only when no person is given (QP-4), so
+        # qms_modules must not list it as always required.
+        modules = registry().MODULES
+        for slug, legacy, link in LEGACY_NAMES:
+            with self.subTest(module=slug):
+                described = {f.name: f for f in modules[slug].fields}
+                self.assertFalse(described[legacy].required)
+                self.assertIn(f"«{link}»", described[legacy].note)
+                self.assertIn("personas", described[legacy].note)
+                self.assertEqual("", described[link].note)
 
     def test_every_module_pages_in_the_database(self) -> None:
         unpaged = [slug for slug, module in registry().MODULES.items()
@@ -150,6 +166,10 @@ class ModulesToolTestCase(McpDbCase):
         self.assertEqual(["Abierta", "En proceso", "Cerrada"], fields["estado"]["allowed"])
         self.assertEqual({"descripcion", "estado", "fecha_detectada"},
                          {f["name"] for f in nc["filters"]})
+        training = {f["name"]: f for f in modules["capacitaciones"]["fields"]}
+        self.assertEqual({"name", "type", "required", "note"}, set(training["personal"]))
+        self.assertFalse(training["personal"]["required"])
+        self.assertNotIn("note", training["tema"])
 
     async def test_reports_what_the_caller_may_do(self) -> None:
         cases = [

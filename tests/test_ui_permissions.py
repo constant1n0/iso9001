@@ -101,7 +101,8 @@ class UiPermissionsTestCase(unittest.TestCase):
     def test_navigation_links_follow_the_read_permission(self) -> None:
         expected = {"/auditorias/": {ADMIN, AUDITOR}, "/documents/": {ADMIN}, "/no_conformidades/": set(RoleEnum),
                     "/usuarios/": {ADMIN, AUDITOR}, "/perfil/": set(RoleEnum),
-                    "/personas/": set(RoleEnum), "/competencias/requisitos/": set(RoleEnum)}
+                    "/personas/": set(RoleEnum), "/competencias/requisitos/": set(RoleEnum),
+                    "/competencias/matriz": set(RoleEnum)}
         for role in RoleEnum:
             html = self._page(role, "/dashboard/").get_data(as_text=True)
             self.assertIn('class="nav__group">Personas y competencia<', html)

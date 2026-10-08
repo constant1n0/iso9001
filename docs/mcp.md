@@ -33,6 +33,39 @@ can never delete.
   clients, and stdio for a local process. The HTTP app answers the 2025-06-18
   and 2025-11-25 `initialize` handshake and stateless 2026-07-28 requests.
 
+## Modules
+
+`qms_modules` lists 15 modules: `no_conformidades`, `auditorias`,
+`documentos`, `capacitaciones`, `satisfaccion_clientes`,
+`partes_interesadas`, `mejoras`, `roles_responsabilidades`,
+`riesgos_oportunidades`, `recursos_capacitacion`, `procesos`,
+`indicadores_auditoria`, `personas`, `competencias_requeridas` and
+`competencias_acreditadas`. Each field has a `type`, a `required` flag,
+`allowed` values for enums and, where the flags do not say enough, a short
+`note`.
+
+People and competence (ISO 9001 clauses 5.3 and 7.2):
+
+- `personas`: people who work under the QMS, separate from login users.
+  `rol_ids` (a list of role ids) replaces the roles held, `user_id` links at
+  most one user, `activo` deactivates; the record also returns `rol_ids`.
+- `competencias_requeridas`: competence a role (`rol_id`) requires; `tipo` is
+  `educacion`, `formacion`, `habilidad` or `experiencia`.
+- `competencias_acreditadas`: competence a person (`persona_id`) has
+  demonstrated, optionally for a requirement (`requisito_id`) and with a
+  training as evidence (`capacitacion_id`). `evaluacion_eficacia` other than
+  `pendiente` needs `fecha_evaluacion` and `evaluador_id` (a person).
+- Person fields elsewhere: `persona_id` in `capacitaciones`, `responsable_id`
+  in `no_conformidades` and `auditor_id` in `auditorias` are ids of
+  `personas` records (an existing person, active when newly chosen; `null`
+  clears the link). The free-text `personal`, `responsable` and `auditor` stay
+  as legacy names and are never matched to a person. `personal` and `auditor`
+  are not flagged required: a create needs them only when no person is cited,
+  and a blank name takes the cited person's name (their `note` says so).
+
+The required-versus-demonstrated matrix is a web page
+(`/competencias/matriz`); agents read the same data from these modules.
+
 ## Issue a token
 
 From a trusted shell on the server (see the README for all options):

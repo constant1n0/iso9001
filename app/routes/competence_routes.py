@@ -18,19 +18,23 @@
 Two registers under ``/competencias``: the competence each role requires
 (``/requisitos/``, filtered by role) and the competence each person has
 demonstrated, whose forms are reached from the person's page and return there.
-Every role reads; administrators and auditors create and edit; administrators
-delete (policy ``COMPETENCE``, decision Q1 of ``qms-people``).
+``/matriz`` compares both for every role and its active holders, against
+today in the application's time zone. Every role reads; administrators and
+auditors create and edit; administrators delete (policy ``COMPETENCE``,
+decision Q1 of ``qms-people``).
 
 A service ``ValidationError`` or ``Conflict`` is rolled back and flashed on the
-re-rendered form, which keeps what was typed. Deleting a requirement that
-records cite is refused with a flash. Other domain errors reach the global
-handlers (an unknown id is a 404, a policy refusal redirects to the dashboard).
+re-rendered form, which keeps what was typed. A refused delete (a requirement
+that records cite, or any other ``Conflict``) is rolled back and flashed. Other
+domain errors reach the global handlers (an unknown id is a 404, a policy
+refusal redirects to the dashboard).
 """
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from flask_login import login_required
 
+from ..audit_notifications import local_today
 from ..extensions import db
 from ..forms import (
     NO_ROLE, CompetenceRecordForm, CompetenceRequirementForm, person_choices,
@@ -131,6 +135,18 @@ def delete_requirement(requirement_id: int) -> ResponseReturnValue:
     return redirect(url_for('competence.list_requirements'))
 
 
+@bp.route('/matriz', methods=['GET'])
+@login_required
+@require_permission('read', 'competence')
+def matrix() -> ResponseReturnValue:
+    """Required versus demonstrated competence, optionally for one role."""
+    actor = current_actor()
+    rol_id = request.args.get('rol_id', type=int)
+    groups = competence.matrix(db.session, actor, rol_id=rol_id, today=local_today())
+    return render_template('competence/matrix.html', groups=groups, roles=all_roles(actor),
+                           rol_id=rol_id)
+
+
 # -- records of a person ----------------------------------------------------------
 
 
@@ -186,9 +202,15 @@ def edit_record(record_id: int) -> ResponseReturnValue:
 @login_required
 @require_permission('delete', 'competence')
 def delete_record(record_id: int) -> ResponseReturnValue:
+    """Delete a record; a refused delete is flashed on the person's page."""
     actor = current_actor()
     person_id = competence.records.get(db.session, actor, record_id).persona_id
-    competence.records.delete(db.session, actor, record_id)
-    db.session.commit()
-    flash('Competencia eliminada exitosamente', 'success')
+    try:
+        competence.records.delete(db.session, actor, record_id)
+        db.session.commit()
+    except Conflict as error:
+        db.session.rollback()
+        flash(error.message, 'danger')
+    else:
+        flash('Competencia eliminada exitosamente', 'success')
     return redirect(url_for('people.show_person', person_id=person_id))

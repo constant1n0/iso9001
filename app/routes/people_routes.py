@@ -122,17 +122,22 @@ def _form(actor: Actor, person: Person | None = None) -> PersonForm:
 @login_required
 @require_permission('read', 'people')
 def list_people() -> ResponseReturnValue:
+    """People matching the filters; ``applied`` counts only the filters that apply.
+
+    A blank ``nombre``, an ``activo`` outside ``ACTIVE_FILTER`` or a ``rol_id``
+    that is not a number is ignored, so it neither filters nor counts.
+    """
     actor = current_actor()
+    nombre = request.args.get('nombre', '').strip()
+    activo = request.args.get('activo', '')
+    activo = activo if activo in ACTIVE_FILTER else ''
     rol_id = request.args.get('rol_id', type=int)
-    found = people.list_(
-        db.session,
-        actor,
-        nombre=request.args.get('nombre', '').strip() or None,
-        activo=ACTIVE_FILTER.get(request.args.get('activo', '')),
-        rol_id=rol_id,
-    )
+    found = people.list_(db.session, actor, nombre=nombre or None,
+                         activo=ACTIVE_FILTER.get(activo), rol_id=rol_id)
+    applied = sum((bool(nombre), bool(activo), rol_id is not None))
     return render_template('people/list.html', people=found, roles=all_roles(actor),
-                           rol_id=rol_id, usernames=_usernames(actor))
+                           rol_id=rol_id, activo=activo, applied=applied,
+                           usernames=_usernames(actor))
 
 
 @bp.route('/<int:person_id>', methods=['GET'])

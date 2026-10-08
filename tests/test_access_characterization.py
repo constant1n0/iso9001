@@ -169,6 +169,7 @@ ENDPOINTS = [
     Endpoint("COMPETENCE", "create", "POST", "/competencias/personas/1/nueva", 302, RECORD),
     Endpoint("COMPETENCE", "update", "POST", "/competencias/1/editar", 302, RECORD),
     Endpoint("COMPETENCE", "delete", "POST", "/competencias/1/eliminar", 302),
+    Endpoint("COMPETENCE", "read", "GET", "/competencias/matriz", 200),
     *_json("IMPROVEMENTS", "/mejoras/api/", {"no_conformidad": "NC"},
            {"accion_correctiva": "x"}),
     *_json("AUDIT_INDICATORS", "/auditoria_indicador/",

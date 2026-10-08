@@ -27,6 +27,8 @@ def _describe(field: FieldDef) -> dict[str, Any]:
     described: dict[str, Any] = {"name": field.name, "type": field.type, "required": field.required}
     if field.allowed:
         described["allowed"] = list(field.allowed)
+    if field.note:
+        described["note"] = field.note
     return described
 
 
@@ -37,8 +39,9 @@ def build_server(app: Flask) -> MCPServer:
         name="qms_modules",
         title="List QMS modules",
         description=(
-            "List the QMS modules with their fields (type, required, allowed values), the "
-            "filters qms_list supports and what the calling user may do in each."
+            "List the QMS modules with their fields (type, required, allowed values and an "
+            "optional note), the filters qms_list supports and what the calling user may do "
+            "in each."
         ),
         annotations=READ_ONLY,
     )
