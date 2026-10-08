@@ -277,3 +277,10 @@ class AuditRoutesTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_an_operativo_user_can_open_the_list_and_the_create_form(self) -> None:
+        """The person picker reads PEOPLE, which every role may read."""
+        self.login(RoleEnum.OPERATIVO)
+        for url in ("/auditorias/", "/auditorias/nueva"):
+            with self.subTest(url=url):
+                self.assertEqual(200, self.client.get(url).status_code)

@@ -261,6 +261,17 @@ class LegacyNameTestCase(LinkHelpers, ServiceBase):
                 message = self.refused(service(name).create, without(valid, legacy) | {key: 999})
                 self.assertIn(f"«{key}» no corresponde a ninguna persona", message)
 
+    def test_resending_an_inactive_person_with_a_blank_text_fills_the_name(self) -> None:
+        ana = self.person()
+        for name, key, legacy, valid in LINKS:
+            with self.subTest(service=name):
+                record_id = self.create(name, valid | {key: ana}).id
+                self.deactivate(ana)
+                record = self.update(name, record_id, {key: ana, legacy: ""})
+                self.assertEqual((ana, "Ana Pérez"), (getattr(record, key), getattr(record, legacy)))
+                db.session.execute(person_model().__table__.update().values(activo=True))
+                db.session.commit()
+
 
 class McpLegacyNameTestCase(McpDbCase):
     """The same rule reaches the MCP, which writes through the services."""
@@ -481,6 +492,15 @@ class DeleteCases:
         self.assertIsInstance(caught.exception.__cause__, IntegrityError)
         db.session.rollback()
         self.assertIsNotNone(db.session.get(RolResponsabilidad, rol))
+
+    def test_a_role_delete_with_a_malformed_id_ends_in_a_domain_error(self) -> None:
+        from app.services import roles_responsibilities as roles
+
+        for bad in ("abc", None, 0, -1, 2**40, True):
+            with self.subTest(rol_id=bad):
+                with self.assertRaises((errors().ValidationError, errors().NotFound)):
+                    roles.delete(db.session, ADMIN, bad)
+                db.session.rollback()
 
 
 class SqliteDeleteTestCase(LinkHelpers, DeleteCases, ServiceBase):

@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session
 from ..models import CompetenceRequirement, RolResponsabilidad
 from . import crud, fields, people, policy
 from .actor import Actor
-from .errors import Conflict
+from .errors import Conflict, NotFound
 from .policy import Action, Resource
 
 ROL_MAX = 50  # mirrors RolResponsabilidad.rol
@@ -60,7 +60,7 @@ list_page = partial(crud.list_page, SPEC)
 
 def _in_use(session: Session, rol_id: int) -> bool:
     """Whether a competence requirement cites the role."""
-    if not 1 <= rol_id <= people.DB_INT_MAX:  # no stored id can match
+    if not people.is_db_id(rol_id):  # no stored id can match
         return False
     return bool(session.scalar(
         select(exists().where(CompetenceRequirement.rol_id == rol_id))
@@ -75,6 +75,8 @@ def delete(session: Session, actor: Actor, rol_id: int) -> None:
     the check meets the foreign key at the flush, with the same message.
     """
     policy.require(actor, Action.DELETE, Resource.ROLES_RESPONSIBILITIES)
+    if not people.is_db_id(rol_id):  # same answer as an id nothing stores
+        raise NotFound(SPEC.not_found)
     if _in_use(session, rol_id):
         raise Conflict(IN_USE)
     try:

@@ -383,5 +383,9 @@ def _is_int(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def _is_db_id(value: int) -> bool:
-    return 1 <= value <= DB_INT_MAX
+def _is_db_id(value: object) -> bool:
+    """Whether ``value`` can be a stored id: a real ``int`` (not ``bool``) in range."""
+    return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= DB_INT_MAX
+
+
+is_db_id = _is_db_id  # public name for other services
