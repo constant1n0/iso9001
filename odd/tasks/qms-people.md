@@ -24,7 +24,7 @@ Record the people who do work under the QMS, the roles they hold, the competence
 | Q3 | A person is deactivated rather than deleted once referenced; at most one person per user account | Assistant design |
 | Q4 | Existing free-text names stay as they are; new and edited records pick a person, and the text field remains as the legacy value (no automatic matching) | Assistant design |
 | Q5 | A demonstrated competence may cite a training as evidence; its effectiveness evaluation is `pendiente`, `eficaz` or `no eficaz` with date and evaluator (a person) | Assistant design |
-| Delivery | `auto-chain`, `stacked-to-main`; push, PR and merge when CI is green; production deployment needs migrations and explicit authorization | User authorization (2026-10-02) |
+| Delivery | `auto-chain`, `stacked-to-main`; push, PR and merge when CI is green; production deployment needs migrations and explicit authorization. Standing `size:exception` for every qms-people pull request that passes its review; ask again only above 1,500 changed lines | User authorization (2026-10-02); size exception (2026-10-08) |
 | RDD | On (global); assess every work-unit commit | `gentle-ai review mode status` |
 
 ## Tasks
