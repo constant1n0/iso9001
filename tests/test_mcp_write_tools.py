@@ -188,6 +188,76 @@ class PersonLinksTestCase(McpDbCase):
                                  described[key])
 
 
+class CompetenceTestCase(McpDbCase):
+    async def test_requirements_and_records_round_trip(self) -> None:
+        rol_id, training_id = self.seed("roles_responsabilidades"), self.seed("capacitaciones")
+        ana, eva = self.seed("personas"), self.seed("personas", nombre="Eva")
+        actor = mcp_actor(AUDITOR)
+        created = await self.call(actor, "qms_create", {"module": "competencias_requeridas", "data": {
+            "rol_id": rol_id, "tipo": "habilidad", "descripcion": "Manejo de carretilla",
+            "criterio": "Carné vigente"}})
+        self.assertFalse(created.is_error, created.content)
+        requirement = created.structured_content
+        self.assertEqual((rol_id, "Habilidad", "Carné vigente"),
+                         (requirement["rol_id"], requirement["tipo"], requirement["criterio"]))
+        created = await self.call(actor, "qms_create", {"module": "competencias_acreditadas", "data": {
+            "persona_id": ana, "requisito_id": requirement["id"], "evidencia": "Carné 42",
+            "capacitacion_id": training_id, "fecha_obtencion": "2026-03-10",
+            "fecha_caducidad": "2031-03-10"}})
+        self.assertFalse(created.is_error, created.content)
+        record = created.structured_content
+        self.assertEqual(("2026-03-10", "2031-03-10", "Pendiente", training_id),
+                         (record["fecha_obtencion"], record["fecha_caducidad"],
+                          record["evaluacion_eficacia"], record["capacitacion_id"]))
+        evaluated = await self.call(actor, "qms_update", {
+            "module": "competencias_acreditadas", "id": record["id"], "data": {
+                "evaluacion_eficacia": "eficaz", "fecha_evaluacion": "2026-06-01",
+                "evaluador_id": eva}})
+        self.assertFalse(evaluated.is_error, evaluated.content)
+        record = evaluated.structured_content
+        self.assertEqual(("Eficaz", "2026-06-01", eva), (
+            record["evaluacion_eficacia"], record["fecha_evaluacion"], record["evaluador_id"]))
+        fetched = await self.call(actor, "qms_get",
+                                  {"module": "competencias_acreditadas", "id": record["id"]})
+        stamps = {"created_at", "updated_at"}  # SQLite reloads them without a time zone
+        self.assertEqual({k: v for k, v in record.items() if k not in stamps},
+                         {k: v for k, v in fetched.structured_content.items() if k not in stamps})
+        for slug, filters in (
+            ("competencias_requeridas", {"rol_id": rol_id, "tipo": "habilidad"}),
+            ("competencias_acreditadas", {"persona_id": ana, "requisito_id": requirement["id"],
+                                          "evaluacion_eficacia": "eficaz"}),
+        ):
+            with self.subTest(module=slug):
+                listed = await self.call(actor, "qms_list", {"module": slug, "filters": filters})
+                self.assertFalse(listed.is_error, listed.content)
+                self.assertEqual(1, listed.structured_content["total"])
+        self.assertEqual(["create", "create", "update"], [row.action for row in audit_rows()
+                                                         if row.channel == "mcp"])
+
+    async def test_competence_errors_are_clean(self) -> None:
+        ana = self.seed("personas")
+        record = {"persona_id": ana, "evidencia": "Certificado", "fecha_obtencion": "2026-03-10"}
+        cases = [
+            (mcp_actor(OPERATIVO), "competencias_requeridas", SEEDS["competencias_requeridas"],
+             "No tienes permiso"),
+            (mcp_actor(ADMIN), "competencias_requeridas",
+             {"rol_id": 999, "tipo": "formacion", "descripcion": "Curso"},
+             "El campo «rol_id» no corresponde a ningún rol."),
+            (mcp_actor(ADMIN), "competencias_acreditadas", record | {"fecha_caducidad": "2026-03-01"},
+             "La fecha de caducidad no puede ser anterior a la fecha de obtención."),
+            (mcp_actor(ADMIN), "competencias_acreditadas", record | {"evaluacion_eficacia": "eficaz"},
+             "necesita la fecha de evaluación y el evaluador"),
+            (mcp_actor(ADMIN), "competencias_acreditadas", record | {"capacitacion_id": 999},
+             "El campo «capacitacion_id» no corresponde a ninguna capacitación."),
+        ]
+        for who, slug, data, expected in cases:
+            with self.subTest(expected=expected):
+                result = await self.call(who, "qms_create", {"module": slug, "data": data})
+                self.assertTrue(result.is_error)
+                self.assertIn(expected, error_text(result))
+                self.assertNotIn("Traceback", error_text(result))
+        self.assertEqual([], [row for row in audit_rows() if row.channel == "mcp"])
+
 class ErrorTestCase(McpDbCase):
     async def test_validation_and_conflict_errors_are_clean(self) -> None:
         self.seed("documentos")

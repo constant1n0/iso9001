@@ -382,6 +382,111 @@ def person_link(table: str, column: str):
     )
 
 
+class CompetenceType(enum.Enum):
+    """What a role requires (ISO 9001 clause 7.2): stored by name, shown by value."""
+
+    educacion = 'Educación'
+    formacion = 'Formación'
+    habilidad = 'Habilidad'
+    experiencia = 'Experiencia'
+
+
+class CompetenceEvaluation(enum.Enum):
+    """Effectiveness of the action taken to acquire a competence (decision Q5)."""
+
+    pendiente = 'Pendiente'
+    eficaz = 'Eficaz'
+    no_eficaz = 'No eficaz'
+
+
+def text_enum(enum_cls: type[enum.Enum], constraint: str) -> db.Enum:
+    """An enum stored as its member names in a text column, checked by ``constraint``."""
+    return db.Enum(
+        enum_cls, native_enum=False, length=20, create_constraint=True, name=constraint
+    )
+
+
+class CompetenceRequirement(RecordMetadataMixin, db.Model):
+    """Competence a role (``RolResponsabilidad``) requires (ISO 9001 clause 7.2)."""
+
+    __tablename__ = 'competencias_requeridas'
+    __table_args__ = (
+        db.ForeignKeyConstraint(
+            ['rol_id'],
+            ['roles_responsabilidades.id_rol'],
+            name='fk_competencias_requeridas_rol_id_roles_responsabilidades',
+            ondelete='RESTRICT',
+        ),
+        db.Index('ix_competencias_requeridas_rol_id', 'rol_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    rol_id = db.Column(db.Integer, nullable=False)
+    tipo = db.Column(
+        text_enum(CompetenceType, 'ck_competencias_requeridas_tipo'), nullable=False
+    )
+    descripcion = db.Column(db.String(500), nullable=False)
+    criterio = db.Column(db.Text)  # how the competence is evidenced
+
+
+class CompetenceRecord(RecordMetadataMixin, db.Model):
+    """Competence a person has demonstrated, with its evidence (ISO 9001 clause 7.2).
+
+    It may meet a requirement and cite a training as evidence (decision Q5);
+    deleting the training only clears the link. ``evaluacion_eficacia`` other
+    than ``pendiente`` needs ``fecha_evaluacion`` and ``evaluador_id`` (a rule
+    of ``services.competence``).
+    """
+
+    __tablename__ = 'competencias_acreditadas'
+    __table_args__ = (
+        db.ForeignKeyConstraint(
+            ['persona_id'],
+            ['personas.id'],
+            name='fk_competencias_acreditadas_persona_id_personas',
+            ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['requisito_id'],
+            ['competencias_requeridas.id'],
+            name='fk_competencias_acreditadas_requisito_id',  # the long form exceeds 63
+            ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['capacitacion_id'],
+            ['capacitaciones.id'],
+            name='fk_competencias_acreditadas_capacitacion_id_capacitaciones',
+            ondelete='SET NULL',
+        ),
+        db.ForeignKeyConstraint(
+            ['evaluador_id'],
+            ['personas.id'],
+            name='fk_competencias_acreditadas_evaluador_id_personas',
+            ondelete='RESTRICT',
+        ),
+        db.Index('ix_competencias_acreditadas_persona_id', 'persona_id'),
+        db.Index('ix_competencias_acreditadas_requisito_id', 'requisito_id'),
+        db.Index('ix_competencias_acreditadas_capacitacion_id', 'capacitacion_id'),
+        db.Index('ix_competencias_acreditadas_evaluador_id', 'evaluador_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    persona_id = db.Column(db.Integer, nullable=False)
+    requisito_id = db.Column(db.Integer, nullable=True)
+    evidencia = db.Column(db.String(500), nullable=False)  # text or a reference
+    capacitacion_id = db.Column(db.Integer, nullable=True)
+    fecha_obtencion = db.Column(db.Date, nullable=False)
+    fecha_caducidad = db.Column(db.Date)
+    evaluacion_eficacia = db.Column(
+        text_enum(CompetenceEvaluation, 'ck_competencias_acreditadas_evaluacion_eficacia'),
+        nullable=False,
+        default=CompetenceEvaluation.pendiente,
+        server_default=CompetenceEvaluation.pendiente.name,
+    )
+    fecha_evaluacion = db.Column(db.Date)
+    evaluador_id = db.Column(db.Integer, nullable=True)
+
+
 # Modelo para registrar No Conformidades dentro del SGC
 class NoConformidad(RecordMetadataMixin, db.Model):
     __tablename__ = 'no_conformidades'

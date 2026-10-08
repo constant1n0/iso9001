@@ -15,7 +15,10 @@ SLUGS = {
     "satisfaccion_clientes", "partes_interesadas", "mejoras",
     "roles_responsabilidades", "riesgos_oportunidades", "recursos_capacitacion",
     "procesos", "indicadores_auditoria", "personas",
+    "competencias_requeridas", "competencias_acreditadas",
 }
+# The two competence registers share one policy resource (decision Q1 of qms-people).
+SHARED_RESOURCE = ("competencias_requeridas", "competencias_acreditadas")
 
 
 def registry():
@@ -35,12 +38,17 @@ class LayoutTestCase(unittest.TestCase):
 
 
 class RegistryTestCase(unittest.TestCase):
-    def test_registry_holds_the_thirteen_modules(self) -> None:
+    def test_registry_holds_the_fifteen_modules(self) -> None:
         self.assertEqual(SLUGS, set(registry().MODULES))
 
     def test_each_module_maps_to_its_own_policy_resource(self) -> None:
-        resources = [m.resource for m in registry().MODULES.values()]
-        self.assertEqual(len(SLUGS), len(set(resources)))
+        from app.services.policy import Resource
+
+        modules = registry().MODULES
+        resources = [m.resource for slug, m in modules.items() if slug not in SHARED_RESOURCE]
+        self.assertEqual(len(resources), len(set(resources)))
+        self.assertEqual({Resource.COMPETENCE}, {modules[s].resource for s in SHARED_RESOURCE})
+        self.assertNotIn(Resource.COMPETENCE, resources)
 
     def test_declared_fields_match_what_each_service_requires(self) -> None:
         from app.services import audits, documents, nonconformities, people
@@ -75,13 +83,17 @@ class RegistryTestCase(unittest.TestCase):
         self.assertEqual(("enum", ESTADOS_NO_CONFORMIDAD), (field.type, field.allowed))
 
     def test_enum_fields_list_the_values_the_services_accept(self) -> None:
-        from app.models import DocumentCategory, EstadoAuditoriaEnum, TipoEnum
+        from app.models import (
+            CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAuditoriaEnum, TipoEnum,
+        )
 
         modules = registry().MODULES
         expected = {
             ("auditorias", "estado"): EstadoAuditoriaEnum,
             ("documentos", "category"): DocumentCategory,
             ("riesgos_oportunidades", "tipo"): TipoEnum,
+            ("competencias_requeridas", "tipo"): CompetenceType,
+            ("competencias_acreditadas", "evaluacion_eficacia"): CompetenceEvaluation,
         }
         for (slug, name), enum_cls in expected.items():
             field = {f.name: f for f in modules[slug].fields}[name]
@@ -97,6 +109,26 @@ class RegistryTestCase(unittest.TestCase):
         )
         self.assertEqual({"nombre": "string", "rol_id": "integer", "activo": "boolean"},
                          {f.name: f.type for f in module.filters})
+
+    def test_competence_modules_describe_their_links_dates_and_filters(self) -> None:
+        modules = registry().MODULES
+        requirements, records = (modules[slug] for slug in SHARED_RESOURCE)
+        self.assertEqual(
+            {"rol_id": ("integer", True), "tipo": ("enum", True),
+             "descripcion": ("string", True), "criterio": ("string", False)},
+            {f.name: (f.type, f.required) for f in requirements.fields})
+        self.assertEqual({"rol_id": "integer", "tipo": "enum"},
+                         {f.name: f.type for f in requirements.filters})
+        self.assertEqual(
+            {"persona_id": ("integer", True), "requisito_id": ("integer", False),
+             "evidencia": ("string", True), "capacitacion_id": ("integer", False),
+             "fecha_obtencion": ("date", True), "fecha_caducidad": ("date", False),
+             "evaluacion_eficacia": ("enum", False), "fecha_evaluacion": ("date", False),
+             "evaluador_id": ("integer", False)},
+            {f.name: (f.type, f.required) for f in records.fields})
+        self.assertEqual(
+            {"persona_id": "integer", "requisito_id": "integer", "evaluacion_eficacia": "enum"},
+            {f.name: f.type for f in records.filters})
 
 
 class ModulesToolTestCase(McpDbCase):
@@ -127,6 +159,10 @@ class ModulesToolTestCase(McpDbCase):
             (mcp_actor(OPERATIVO), "procesos", dict(read=True, create=False, update=False)),
             (mcp_actor(OPERATIVO), "personas", dict(read=True, create=False, update=False)),
             (mcp_actor(AUDITOR), "personas", dict(read=True, create=True, update=True)),
+            (mcp_actor(OPERATIVO), "competencias_acreditadas",
+             dict(read=True, create=False, update=False)),
+            (mcp_actor(AUDITOR), "competencias_requeridas",
+             dict(read=True, create=True, update=True)),
             (mcp_actor(AUDITOR, scopes=("read",)), "auditorias",
              dict(read=True, create=False, update=False)),
         ]

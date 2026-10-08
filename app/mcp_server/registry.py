@@ -10,12 +10,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from types import ModuleType
 from typing import Any
 
-from ..models import DocumentCategory, EstadoAuditoriaEnum, TipoEnum
+from ..models import (
+    CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAuditoriaEnum, TipoEnum,
+)
 from ..services import (
-    audit_indicators, audits, documents, improvements, nonconformities, people,
+    audit_indicators, audits, competence, documents, improvements, nonconformities, people,
     process_operations, risks_opportunities, roles_responsibilities,
     satisfaction, stakeholders, training, training_resources,
 )
@@ -46,13 +47,14 @@ class Module:
     """One register as the tools expose it.
 
     ``extras`` adds values that are not columns of the record (for example the
-    ids of a many-to-many relation) to what the tools return.
+    ids of a many-to-many relation) to what the tools return. ``service`` is a
+    service module, or an object with the same functions (``competence``).
     """
 
     slug: str
     label: str
     resource: Resource
-    service: ModuleType
+    service: Any
     fields: tuple[FieldDef, ...]
     filters: tuple[FieldDef, ...] = ()
     extras: Callable[[Any], dict[str, Any]] | None = None
@@ -143,6 +145,24 @@ _MODULES = (
         _f("activo", "boolean"), _f("notas"), _f("rol_ids", "integer_list"),
     ), (_f("nombre"), _f("rol_id", "integer"), _f("activo", "boolean")),
         extras=_person_extras),
+    # Both competence registers share the ``COMPETENCE`` resource. ``rol_id`` names a
+    # role, ``persona_id`` and ``evaluador_id`` people, ``requisito_id`` a required
+    # competence and ``capacitacion_id`` a training. An evaluation other than
+    # ``pendiente`` needs ``fecha_evaluacion`` and ``evaluador_id``.
+    Module("competencias_requeridas", "Competence requirements", Resource.COMPETENCE,
+           competence.requirements, (
+        _f("rol_id", "integer", True), _f("tipo", "enum", True, members=CompetenceType),
+        _f("descripcion", required=True), _f("criterio"),
+    ), (_f("rol_id", "integer"), _f("tipo", "enum", members=CompetenceType))),
+    Module("competencias_acreditadas", "Competence records", Resource.COMPETENCE,
+           competence.records, (
+        _f("persona_id", "integer", True), _f("requisito_id", "integer"),
+        _f("evidencia", required=True), _f("capacitacion_id", "integer"),
+        _f("fecha_obtencion", "date", True), _f("fecha_caducidad", "date"),
+        _f("evaluacion_eficacia", "enum", members=CompetenceEvaluation),
+        _f("fecha_evaluacion", "date"), _f("evaluador_id", "integer"),
+    ), (_f("persona_id", "integer"), _f("requisito_id", "integer"),
+        _f("evaluacion_eficacia", "enum", members=CompetenceEvaluation))),
 )
 
 MODULES: dict[str, Module] = {module.slug: module for module in _MODULES}
