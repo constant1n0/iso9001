@@ -23,7 +23,9 @@ from app.extensions import db
 POSTGRES_URI = os.environ.get("TEST_POSTGRES_URI")
 MIGRATIONS_DIR = str(bootstrap.PROJECT_ROOT / "migrations")
 # Audited tables created after the record-metadata migration (c4d8e1f2a9b7).
-LATER_AUDITED_TABLES = frozenset({"personas"})
+LATER_AUDITED_TABLES = frozenset(
+    {"personas", "competencias_requeridas", "competencias_acreditadas"}
+)
 
 
 # In CI a missing database must fail loudly instead of skipping silently.
@@ -354,6 +356,68 @@ class MigrationsTestCase(unittest.TestCase):
             for table, column in links.items():
                 self.assertNotIn(column, {c["name"] for c in inspector.get_columns(table)})
             self.assertIn("personas", inspector.get_table_names())
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+    def test_competence_tables_guard_their_links_and_downgrade(self) -> None:
+        expected = {
+            "fk_competencias_requeridas_rol_id_roles_responsabilidades":
+                ("roles_responsabilidades", "RESTRICT"),
+            "fk_competencias_acreditadas_persona_id_personas": ("personas", "RESTRICT"),
+            "fk_competencias_acreditadas_requisito_id": ("competencias_requeridas", "RESTRICT"),
+            "fk_competencias_acreditadas_capacitacion_id_capacitaciones":
+                ("capacitaciones", "SET NULL"),
+            "fk_competencias_acreditadas_evaluador_id_personas": ("personas", "RESTRICT"),
+        }
+        indexed = {"competencias_requeridas": {"rol_id"},
+                   "competencias_acreditadas": {"persona_id", "requisito_id",
+                                                "capacitacion_id", "evaluador_id"}}
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            foreign_keys = {
+                fk["name"]: (fk["referred_table"], fk["options"].get("ondelete"))
+                for table in indexed for fk in inspector.get_foreign_keys(table)
+            }
+            self.assertLessEqual(expected.items(), foreign_keys.items())
+            for table, columns in indexed.items():
+                self.assertEqual({f"ix_{table}_{column}" for column in columns},
+                                 {i["name"] for i in inspector.get_indexes(table)})
+            with db.engine.begin() as connection:
+                for statement in (
+                    "INSERT INTO roles_responsabilidades (rol) VALUES ('Calidad')",
+                    "INSERT INTO personas (nombre) VALUES ('Ana')",
+                    "INSERT INTO capacitaciones (tema, fecha, personal) "
+                    "VALUES ('Seguridad', '2026-03-01', 'Ana')",
+                    "INSERT INTO competencias_requeridas (rol_id, tipo, descripcion) "
+                    "SELECT id_rol, 'formacion', 'Curso' FROM roles_responsabilidades",
+                    # Writers outside the ORM rely on the server default for the evaluation.
+                    "INSERT INTO competencias_acreditadas (persona_id, requisito_id, evidencia, "
+                    "capacitacion_id, fecha_obtencion, evaluador_id) "
+                    "SELECT p.id, r.id, 'Certificado', c.id, '2026-03-10', p.id "
+                    "FROM personas p, competencias_requeridas r, capacitaciones c",
+                ):
+                    connection.execute(text(statement))
+                self.assertEqual("pendiente", connection.execute(text(
+                    "SELECT evaluacion_eficacia FROM competencias_acreditadas")).scalar_one())
+            refused = (
+                "UPDATE competencias_requeridas SET tipo = 'Formación'",
+                "UPDATE competencias_acreditadas SET evaluacion_eficacia = 'otra'",
+                "DELETE FROM roles_responsabilidades",
+                "DELETE FROM competencias_requeridas",
+                "DELETE FROM personas",
+            )
+            for statement in refused:
+                with self.subTest(refused=statement):
+                    with self.assertRaises(IntegrityError):
+                        with db.engine.begin() as connection:
+                            connection.execute(text(statement))
+            with db.engine.begin() as connection:
+                connection.execute(text("DELETE FROM capacitaciones"))
+                self.assertIsNone(connection.execute(text(
+                    "SELECT capacitacion_id FROM competencias_acreditadas")).scalar_one())
+            downgrade(directory=MIGRATIONS_DIR, revision="b8d2f4a6c1e3")
+            self.assertFalse(set(indexed) & set(inspect(db.engine).get_table_names()))
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 

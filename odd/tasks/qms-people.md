@@ -37,11 +37,12 @@ Route for every task: **delegated direct** (two or more non-trivial files each).
 - [x] **QP-2 — Links from trainings, nonconformities and audits.** Forecast 250-350.
   - Nullable `persona_id` on `capacitaciones`, `responsable_id` on `no_conformidades`, `auditor_id` on `auditorias`; services validate an existing active person; MCP fields; legacy text kept (Q4).
   - Acceptance: records accept and return the person; an unknown or inactive person is refused; old records keep their text; deleting a referenced person is refused with a real foreign key (not only a mocked flush), as the QP-1 review asked.
-- [ ] **QP-3 — Competence requirements and records.** Forecast 300-400.
+- [x] **QP-3 — Competence requirements and records.** Forecast 300-400.
   - `CompetenceRequirement` per role (type: education, training, skill, experience; description); `CompetenceRecord` per person (requirement, evidence, optional training, obtained date, expiry, effectiveness evaluation Q5); services, policy resource `COMPETENCE`, MCP modules.
   - Acceptance: CRUD with policy Q1; expiry before obtained date refused; evaluation needs a date and an evaluator; the training link must exist.
 - [ ] **QP-4 — Screens.** Forecast 350-450.
   - People list, create and edit with roles; a person's competence page; requirements per role; person pickers in the training, nonconformity and audit forms.
+  - Also: deleting a role that a competence requirement cites is refused with a clear Spanish `Conflict` on every database (today PostgreSQL gives the generic conflict and SQLite allows it; `roles_responsabilidades.py`); QP-3 review suggestions as tests (a `datetime` refused for the optional dates; an unchanged reference passes while a changed unknown one is refused in the same update).
   - Acceptance: role-based access per Q1; forms keep input on errors; CSP-clean templates; when a person is picked and the legacy text (`personal`, `responsable`, `auditor`) is empty, the text is filled with the person's name so lists, PDFs and reports keep working, and the text is no longer required when a person is given (service rule, so the MCP behaves the same).
 - [ ] **QP-5 — Competence matrix and docs.** Forecast 200-300.
   - Required-versus-actual matrix per role and person (met, expired, missing, pending evaluation); README and `docs/mcp.md` updates.
@@ -63,7 +64,8 @@ Baseline at `69bcfa7`: 734 tests. Migrations are tested on PostgreSQL (`TEST_POS
 |---|---|---|---|---|
 | QP-1 | Done | `46588e6` (model, migration `a3c5e7f9b2d4`, service, policy `PEOPLE`), `a015c58` (MCP module `personas`, `rol_ids` in output, boolean filters), review follow-up in the next commit | RED: `ImportError` (`people`, `Person`), `KeyError: 'PEOPLE'`, `NoSuchTableError: personas`, `13 != 12`; MCP: `KeyError: 'rol_ids'`, `Filtros no admitidos: activo`; follow-up: an `IntegrityError` while auditing an update escaped. GREEN: 760 tests incl. PostgreSQL; `46588e6` alone passed 755 | Range `fd7ccfa..a015c58`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-dd395cbc85c7341e` **approved** and acknowledged; its warning fixed (update now turns that race into `Conflict`); its suggestion (a real foreign-key delete test) moved into QP-2's acceptance |
 | QP-2 | Done | `14ead66` (columns `persona_id`, `responsable_id`, `auditor_id` with `ON DELETE RESTRICT`, migration `b8d2f4a6c1e3`, shared `people.reference` check, `crud.Field.check` hook, explicit "still referenced" delete check, MCP fields) | RED: 26 tests (21 failures, 29 errors: fields not allowed, missing attributes, `UndefinedColumn` on PostgreSQL). GREEN: 773 tests incl. PostgreSQL; real foreign-key tests on SQLite (`PRAGMA foreign_keys=ON`) and PostgreSQL replace the mocked one | Range `891edb0..14ead66`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-562ec7f4e448deba` **approved** and acknowledged; its warning (constraint changes outside `batch_alter_table` fail on SQLite) does not apply: migrations run only on PostgreSQL, which CI enforces |
-| QP-3..QP-5 | Pending | — | — | — |
+| QP-3 | Done | `fc25833` (`competencias_requeridas`, `competencias_acreditadas`, migration `c9e3a5b7d1f4`, `app/services/competence.py`, policy `COMPETENCE`, two MCP modules, people delete protection extended) | RED: 113 targeted tests (10 failures, 42 errors: missing `competence`, `CompetenceEvaluation`, `KeyError: 'COMPETENCE'`, `NoSuchTableError`, unknown module, `15 != 13`). GREEN: 798 tests incl. PostgreSQL | Range `f9b2b65..fc25833`: **medium**, `slice_budget_reached` (1,218 lines, two thirds tests; standing size exception); consent granted; reliability review `review-7121a7fbda85395f` **approved** and acknowledged with three test suggestions, two moved into QP-4; the third (seeds rely on registry order) is noted |
+| QP-4..QP-5 | Pending | — | — | — |
 
 ## Findings during implementation
 
@@ -72,9 +74,10 @@ Baseline at `69bcfa7`: 734 tests. Migrations are tested on PostgreSQL (`TEST_POS
 - The audit snapshot only covers columns, so the people service adds `rol_ids` to every audit row itself.
 - MCP output and filters: modules can name an optional extra-values function (used for `rol_ids`), and filters accept JSON booleans (`activo`).
 - QP-2 references a person through `personas.id` with `ON DELETE RESTRICT`; SQLite tests do not enforce foreign keys, so `people.delete` also needs an explicit "still referenced" check.
+- Competence enums are stored by member name with a CHECK constraint (`native_enum=False`); MCP output shows the display value and input takes the name. Cross-field rules run in wrappers before `crud` because `crud.Spec` has no hook for them. The competence MCP seeds use role and person id 1, created by earlier seeds in registry order.
 - `qms_modules` shows only a field's name, type, required flag and allowed values; describing that the new fields reference `personas` would need `app/mcp_server/server.py` (`_describe`).
 - The edit surface was widened for QP-1 with the user's approval (2026-10-08): `tests/test_attribution.py`, `tests/test_mcp_http.py`, `app/mcp_server/operations.py`.
 
 ## Next step
 
-QP-3.
+QP-4.

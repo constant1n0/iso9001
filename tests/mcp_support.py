@@ -41,6 +41,11 @@ SEEDS = {
     "procesos": {"proceso": "Compras"},
     "indicadores_auditoria": {"area_auditoria": "Calidad"},
     "personas": {"nombre": "Ana Pérez"},
+    # Competence cites the role and the person created above: modules are seeded in
+    # this order on an empty database, so both have id 1.
+    "competencias_requeridas": {"rol_id": 1, "tipo": "formacion", "descripcion": "Curso de seguridad"},
+    "competencias_acreditadas": {"persona_id": 1, "evidencia": "Certificado 123",
+                                 "fecha_obtencion": "2026-10-01"},
 }
 
 

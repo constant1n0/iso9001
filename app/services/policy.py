@@ -30,8 +30,9 @@ The approved role-by-action matrix (decision D1). Roles may read, write
 
 - API tokens: administrators list (read), issue (create) and revoke (update);
   nobody deletes, and the ``mcp`` channel can never touch them.
-- People: every role reads; administrators and auditors write; administrators
-  delete (decision Q1 of ``qms-people``).
+- People and competence (required per role, demonstrated per person): every
+  role reads; administrators and auditors write; administrators delete
+  (decision Q1 of ``qms-people``).
 
 Seams: the ``mcp`` channel never deletes, and token scopes intersect the role.
 """
@@ -74,6 +75,7 @@ class Resource(StrEnum):
     AUDIT_LOG = "audit_log"
     API_TOKENS = "api_tokens"
     PEOPLE = "people"
+    COMPETENCE = "competence"
 
 
 _ALL = frozenset(RoleEnum)
@@ -116,6 +118,7 @@ _MATRIX: dict[Resource, Grant] = {
     # Read lists, create issues, update revokes; tokens are never hard-deleted.
     Resource.API_TOKENS: Grant(_ADMIN, _ADMIN, _NOBODY),
     Resource.PEOPLE: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
+    Resource.COMPETENCE: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
 }
 
 

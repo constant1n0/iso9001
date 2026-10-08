@@ -26,9 +26,10 @@ association table has no audit row of its own, so every audit row of a person
 carries ``rol_ids`` next to the columns. Like every service this module
 flushes and never commits, and an update that changes nothing writes nothing.
 
-Trainings, nonconformities and audits cite a person through the columns in
-``REFERENCES`` (decision Q4); their services validate such a link with
-``reference``, and a person they still cite cannot be deleted.
+Trainings, nonconformities, audits and competence records cite a person
+through the columns in ``REFERENCES`` (decision Q4); their services validate
+such a link with ``reference`` or ``check_reference``, and a person they still
+cite cannot be deleted.
 
 Errors:
 
@@ -53,7 +54,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
-    Auditoria, Capacitacion, NoConformidad, Person, RolResponsabilidad, User,
+    Auditoria, Capacitacion, CompetenceRecord, NoConformidad, Person, RolResponsabilidad,
+    User,
 )
 from . import audit, crud, fields, policy
 from .actor import Actor
@@ -80,7 +82,10 @@ STILL_REFERENCED = (
 
 # Columns that cite a person. Their foreign keys are ``ON DELETE RESTRICT``,
 # which SQLite only enforces on request, so ``delete`` also checks them.
-REFERENCES = (Capacitacion.persona_id, NoConformidad.responsable_id, Auditoria.auditor_id)
+REFERENCES = (
+    Capacitacion.persona_id, NoConformidad.responsable_id, Auditoria.auditor_id,
+    CompetenceRecord.persona_id, CompetenceRecord.evaluador_id,
+)
 
 _READS = crud.Spec(
     model=Person,
