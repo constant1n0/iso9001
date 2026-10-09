@@ -22,10 +22,15 @@
 {% block content %}
 {{ fields([
     ('Fecha detectada', no_conformidad.fecha_detectada.strftime('%d/%m/%Y')),
+    ('Origen', no_conformidad.origen.value if no_conformidad.origen else '—'),
+    ('Gravedad', no_conformidad.gravedad.value if no_conformidad.gravedad else '—'),
     ('Responsable', no_conformidad.responsable or 'Sin asignar'),
-    ('Estado', no_conformidad.estado),
+    ('Estado', no_conformidad.estado.value),
     ('Fecha de cierre', no_conformidad.fecha_cierre.strftime('%d/%m/%Y') if no_conformidad.fecha_cierre else '—'),
 ]) }}
 {{ section('Descripción', no_conformidad.descripcion) }}
+{{ section('Contención', no_conformidad.contencion) }}
+{{ section('Causa raíz', no_conformidad.causa_raiz) }}
 {{ section('Acción correctiva', no_conformidad.accion_correctiva) }}
+{% if no_conformidad.motivo_cancelacion %}{{ section('Motivo de la cancelación', no_conformidad.motivo_cancelacion) }}{% endif %}
 {% endblock %}

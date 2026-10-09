@@ -10,7 +10,9 @@ import test_auth_bootstrap as bootstrap
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db
-from app.models import Auditoria, Mejora, NoConformidad, RoleEnum, User
+from app.models import (
+    Auditoria, EstadoNoConformidad, Mejora, NoConformidad, RoleEnum, User,
+)
 
 
 PASSWORD = "StrongPassword123!"
@@ -75,53 +77,33 @@ class CalidadScreensTestCase(unittest.TestCase):
             self.assertEqual("Etiquetado revisado", mejora.no_conformidad)
             self.assertEqual("Checklist", mejora.accion_preventiva)
 
-    def test_nonconformity_state_is_a_fixed_choice(self) -> None:
+    def test_nonconformity_state_is_shown_but_never_posted(self) -> None:
         html = self.client.get("/no_conformidades/nueva").get_data(as_text=True)
-        self.assertTrue(re.search(r'<select[^>]*name="estado"', html), "estado is not a select")
+        self.assertIsNone(re.search(r'name="estado"', html), "estado must not be editable")
+        self.assertTrue(re.search(r'<select[^>]*name="origen"', html), "origen is not a select")
+        self.assertTrue(re.search(r'<select[^>]*name="gravedad"', html), "gravedad is not a select")
 
         base = {"descripcion": "NC", "fecha_detectada": "2026-10-05"}
-        rejected = self.client.post("/no_conformidades/nueva", data=base | {"estado": "Casi cerrada"})
+        rejected = self.client.post("/no_conformidades/nueva", data=base | {"origen": "Cliente"})
         self.assertEqual(200, rejected.status_code)
-        accepted = self.client.post("/no_conformidades/nueva", data=base | {"estado": "En proceso"})
+        accepted = self.client.post("/no_conformidades/nueva",
+                                    data=base | {"estado": "cerrada", "origen": "cliente"})
         self.assertEqual(302, accepted.status_code)
         with self.app.app_context():
-            states = sorted(nc.estado for nc in NoConformidad.query.all())
-        self.assertEqual(["Abierta", "En proceso"], states)
-
-    def test_legacy_free_text_state_is_preserved_when_editing(self) -> None:
-        with self.app.app_context():
-            nc = db.session.get(NoConformidad, 1)
-            nc.estado = "Pendiente revisión"
-            db.session.commit()
-
-        edit = self.client.get("/no_conformidades/editar/1").get_data(as_text=True)
-        self.assertTrue(
-            re.search(r'<option selected value="Pendiente revisión">', edit),
-            "legacy state is not preselected",
-        )
-        listing = self.client.get("/no_conformidades/").get_data(as_text=True)
-        self.assertIn('<option value="Pendiente revisión"', listing)
-
-        response = self.client.post("/no_conformidades/editar/1", data={
-            "descripcion": "Etiqueta ilegible en lote 42", "fecha_detectada": "2026-10-05",
-            "estado": "Pendiente revisión",
-        })
-        self.assertEqual(302, response.status_code)
-        with self.app.app_context():
-            nc = db.session.get(NoConformidad, 1)
-            self.assertEqual("Pendiente revisión", nc.estado)
-            self.assertEqual("Etiqueta ilegible en lote 42", nc.descripcion)
+            states = sorted(nc.estado.name for nc in NoConformidad.query.all())
+        self.assertEqual(["abierta", "abierta"], states)
 
     def test_state_filter_matches_exactly(self) -> None:
         with self.app.app_context():
-            db.session.add(NoConformidad(descripcion="Reabierta tras auditoría",
-                                         fecha_detectada=DAY, estado="Reabierta"))
+            db.session.add(NoConformidad(descripcion="Cancelada por duplicada",
+                                         fecha_detectada=DAY,
+                                         estado=EstadoNoConformidad.cancelada))
             db.session.commit()
 
-        html = self.client.get("/no_conformidades/?estado=Abierta").get_data(as_text=True)
+        html = self.client.get("/no_conformidades/?estado=abierta").get_data(as_text=True)
 
         self.assertIn("Etiqueta ilegible", html)
-        self.assertNotIn("Reabierta tras auditoría", html)
+        self.assertNotIn("Cancelada por duplicada", html)
 
 
 if __name__ == "__main__":

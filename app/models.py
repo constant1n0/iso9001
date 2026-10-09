@@ -487,6 +487,38 @@ class CompetenceRecord(RecordMetadataMixin, db.Model):
     evaluador_id = db.Column(db.Integer, nullable=True)
 
 
+class EstadoNoConformidad(enum.Enum):
+    """Where a nonconformity stands (ISO 9001 clause 10.2, decision N2 of ``nc-capa-loop``).
+
+    Only the service changes it (``nonconformities``); ``cerrada`` and
+    ``cancelada`` are terminal until an administrator reopens the record.
+    """
+
+    abierta = 'Abierta'
+    accion_planificada = 'Acción planificada'
+    en_verificacion = 'En verificación'
+    cerrada = 'Cerrada'
+    cancelada = 'Cancelada'
+
+
+class OrigenNoConformidad(enum.Enum):
+    """Where a nonconformity was detected (decision N1)."""
+
+    auditoria = 'Auditoría'
+    cliente = 'Cliente'
+    proceso = 'Proceso'
+    proveedor = 'Proveedor'
+    otro = 'Otro'
+
+
+class GravedadNoConformidad(enum.Enum):
+    """How serious a nonconformity is (decision N1)."""
+
+    mayor = 'Mayor'
+    menor = 'Menor'
+    observacion = 'Observación'
+
+
 # Modelo para registrar No Conformidades dentro del SGC
 class NoConformidad(RecordMetadataMixin, db.Model):
     __tablename__ = 'no_conformidades'
@@ -495,9 +527,19 @@ class NoConformidad(RecordMetadataMixin, db.Model):
     fecha_detectada = db.Column(db.Date, nullable=False, default=datetime.utcnow)
     responsable = db.Column(db.String(50))  # legacy free text, kept as written
     responsable_id = person_link('no_conformidades', 'responsable_id')
-    estado = db.Column(db.String(20), nullable=False, default="Abierta")
-    accion_correctiva = db.Column(db.Text)
-    fecha_cierre = db.Column(db.Date)
+    estado = db.Column(
+        text_enum(EstadoNoConformidad, 'ck_no_conformidades_estado'),
+        nullable=False,
+        default=EstadoNoConformidad.abierta,
+        server_default=EstadoNoConformidad.abierta.name,
+    )
+    origen = db.Column(text_enum(OrigenNoConformidad, 'ck_no_conformidades_origen'))
+    gravedad = db.Column(text_enum(GravedadNoConformidad, 'ck_no_conformidades_gravedad'))
+    contencion = db.Column(db.Text)  # immediate containment of the effects
+    causa_raiz = db.Column(db.Text)
+    accion_correctiva = db.Column(db.Text)  # legacy free text (decision N6)
+    fecha_cierre = db.Column(db.Date)  # set on closing or cancelling, cleared on reopening
+    motivo_cancelacion = db.Column(db.Text)
 
 # Modelo para almacenar resultados de Satisfacción del Cliente
 class SatisfaccionCliente(RecordMetadataMixin, db.Model):

@@ -16,8 +16,10 @@
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required
+from ..audit_notifications import local_today
 from ..forms import NoConformidadForm, person_choices
 from ..extensions import db
+from ..models import EstadoNoConformidad
 from ..services import nonconformities, people
 from ..services.errors import ValidationError
 from ..utils.permissions import require_permission
@@ -28,8 +30,9 @@ from ..utils.web_args import date_arg
 # Define el blueprint y la URL base
 bp = Blueprint('no_conformidad', __name__, url_prefix='/no_conformidades')
 
-FORM_FIELDS = ('descripcion', 'fecha_detectada', 'responsable', 'responsable_id', 'estado',
-               'accion_correctiva')
+# The state is never posted: the service sets it, and cancel/reopen change it.
+FORM_FIELDS = ('descripcion', 'fecha_detectada', 'origen', 'gravedad', 'responsable',
+               'responsable_id', 'contencion', 'causa_raiz', 'accion_correctiva')
 
 
 def _form_data(form):
@@ -57,17 +60,18 @@ def _saved(write):
 @login_required
 def listar_no_conformidades():
     actor = current_actor()
+    # An unknown state (an old bookmark, a typo) is ignored, like an invalid date.
+    estado = EstadoNoConformidad.__members__.get(request.args.get('estado', ''))
     no_conformidades = nonconformities.list_(
         db.session,
         actor,
         descripcion=request.args.get('descripcion'),
-        estado=request.args.get('estado'),
+        estado=estado,
         fecha_detectada=date_arg('fecha_detectada'),
     )
     personas = people.names(db.session, actor, (nc.responsable_id for nc in no_conformidades))
     return render_template('no_conformidades/listar.html', no_conformidades=no_conformidades,
-                           estados=nonconformities.available_states(db.session, actor),
-                           personas=personas)
+                           estados=list(EstadoNoConformidad), personas=personas)
 
 # Ruta para registrar una nueva no conformidad
 @bp.route('/nueva', methods=['GET', 'POST'])
@@ -92,13 +96,6 @@ def editar_no_conformidad(id):
     actor = current_actor()
     no_conformidad = nonconformities.get(db.session, actor, id)
     form = NoConformidadForm(obj=no_conformidad)
-    # Records created when the state was free text keep their value
-    # unless the user picks another one.
-    if no_conformidad.estado not in nonconformities.ESTADOS_NO_CONFORMIDAD:
-        form.estado.choices = [
-            (no_conformidad.estado, f'{no_conformidad.estado} (heredado)'),
-            *form.estado.choices,
-        ]
     form.responsable_id.choices = person_choices(
         people.choices(db.session, actor, include=no_conformidad.responsable_id))
     if form.validate_on_submit() and _saved(
@@ -106,7 +103,35 @@ def editar_no_conformidad(id):
     ):
         flash('No conformidad actualizada exitosamente', 'success')
         return redirect(url_for('no_conformidad.listar_no_conformidades'))
-    return render_template('no_conformidades/editar.html', form=form, no_conformidad=no_conformidad)
+    return render_template(
+        'no_conformidades/editar.html', form=form, no_conformidad=no_conformidad,
+        solo_lectura=no_conformidad.estado in nonconformities.TERMINAL_STATES,
+        puede_cancelar=nonconformities.may_cancel(actor, no_conformidad),
+        puede_reabrir=nonconformities.may_reopen(actor, no_conformidad),
+    )
+
+
+# Cancel and reopen: refusals (permission, blank reason, wrong state) are
+# domain errors that the error handlers flash before going back to the form.
+@bp.route('/cancelar/<int:id>', methods=['POST'])
+@login_required
+@require_permission('update', 'nonconformities')
+def cancelar_no_conformidad(id):
+    nonconformities.cancel(db.session, current_actor(), id,
+                           request.form.get('motivo_cancelacion', ''), today=local_today())
+    db.session.commit()
+    flash('No conformidad cancelada.', 'success')
+    return redirect(url_for('no_conformidad.editar_no_conformidad', id=id))
+
+
+@bp.route('/reabrir/<int:id>', methods=['POST'])
+@login_required
+@require_permission('update', 'nonconformities')
+def reabrir_no_conformidad(id):
+    nonconformities.reopen(db.session, current_actor(), id)
+    db.session.commit()
+    flash('No conformidad reabierta.', 'success')
+    return redirect(url_for('no_conformidad.editar_no_conformidad', id=id))
 
 # Ruta para eliminar una no conformidad
 @bp.route('/eliminar/<int:id>', methods=['POST'])

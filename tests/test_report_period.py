@@ -11,8 +11,8 @@ from werkzeug.security import generate_password_hash
 
 from app.extensions import db
 from app.models import (
-    Auditoria, Capacitacion, EstadoAuditoriaEnum, NoConformidad, RoleEnum,
-    SatisfaccionCliente, User,
+    Auditoria, Capacitacion, EstadoAuditoriaEnum, EstadoNoConformidad, NoConformidad,
+    RoleEnum, SatisfaccionCliente, User,
 )
 from app.utils import reports
 
@@ -52,6 +52,18 @@ class MonthlyReportPeriodTestCase(unittest.TestCase):
         self.assertEqual(2, ctx["total_no_conformidades"])
         self.assertEqual(2, ctx["total_capacitaciones"])
         self.assertEqual(6, ctx["promedio_satisfaccion"])
+
+    def test_nonconformities_of_every_state_are_counted(self) -> None:
+        for estado in EstadoNoConformidad:
+            db.session.add(NoConformidad(descripcion=estado.value, estado=estado,
+                                         fecha_detectada=date(2026, 9, 10)))
+        db.session.commit()
+
+        ctx = reports._monthly_report_context(SEPT)
+
+        self.assertEqual(len(EstadoNoConformidad), ctx["total_no_conformidades"])
+        html = reports.render_monthly_report_html(SEPT)
+        self.assertIn(f'kpi__value">{len(EstadoNoConformidad)}<', html)
 
     def test_an_empty_month_reports_zeros(self) -> None:
         self._seed(date(2026, 8, 15), 9)

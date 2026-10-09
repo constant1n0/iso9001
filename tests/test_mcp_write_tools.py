@@ -13,7 +13,7 @@ from mcp_support import ADMIN, AUDITOR, OPERATIVO, SEEDS, McpDbCase, mcp_actor
 from app.extensions import db
 from app.mcp_server import operations
 from app.mcp_server.registry import MODULES
-from app.models import AuditLog, NoConformidad, User
+from app.models import AuditLog, EstadoNoConformidad, NoConformidad, User
 from app.services import audit
 
 JSON_REGISTERS = ("roles_responsabilidades", "riesgos_oportunidades", "recursos_capacitacion",
@@ -258,6 +258,35 @@ class CompetenceTestCase(McpDbCase):
                 self.assertNotIn("Traceback", error_text(result))
         self.assertEqual([], [row for row in audit_rows() if row.channel == "mcp"])
 
+class NonconformityTestCase(McpDbCase):
+    async def test_new_fields_round_trip_and_the_state_starts_open(self) -> None:
+        data = SEEDS["no_conformidades"] | {
+            "origen": "proveedor", "gravedad": "observacion",
+            "contencion": "Material apartado", "causa_raiz": "Proveedor sin control"}
+        created = await self.call(mcp_actor(OPERATIVO), "qms_create",
+                                  {"module": "no_conformidades", "data": data})
+        self.assertFalse(created.is_error, created.content)
+        record = created.structured_content
+        self.assertEqual(
+            ("Abierta", "Proveedor", "Observación", "Material apartado",
+             "Proveedor sin control", None),
+            tuple(record[k] for k in ("estado", "origen", "gravedad", "contencion",
+                                      "causa_raiz", "motivo_cancelacion")),
+        )
+        updated = await self.call(mcp_actor(OPERATIVO), "qms_update", {
+            "module": "no_conformidades", "id": record["id"], "data": {"gravedad": "mayor"}})
+        self.assertEqual("Mayor", updated.structured_content["gravedad"])
+
+    async def test_a_cancelled_record_is_read_only(self) -> None:
+        record_id = self.seed("no_conformidades")
+        self.force_nc_state(record_id, EstadoNoConformidad.cancelada)
+        result = await self.call(mcp_actor(ADMIN), "qms_update", {
+            "module": "no_conformidades", "id": record_id, "data": {"responsable": "Eva"}})
+        self.assertTrue(result.is_error)
+        self.assertIn("un administrador puede reabrirla", error_text(result))
+        self.assertEqual([], [row for row in audit_rows() if row.channel == "mcp"])
+
+
 class ErrorTestCase(McpDbCase):
     async def test_validation_and_conflict_errors_are_clean(self) -> None:
         self.seed("documentos")
@@ -273,8 +302,14 @@ class ErrorTestCase(McpDbCase):
              "Ya existe un documento con ese código."),
             ("qms_update", {"module": "no_conformidades", "id": 999, "data": {}},
              "No conformidad no encontrada."),
+            ("qms_create", {"module": "no_conformidades",
+                            "data": SEEDS["no_conformidades"] | {"estado": "cerrada"}},
+             "Campos no permitidos: estado."),
+            ("qms_create", {"module": "no_conformidades",
+                            "data": SEEDS["no_conformidades"] | {"gravedad": "Mayor"}},
+             "gravedad"),
             ("qms_update", {"module": "no_conformidades", "id": self.seed("no_conformidades"),
-                            "data": {"estado": "Inventado"}}, "El estado no es válido."),
+                            "data": {"estado": "cerrada"}}, "Campos no permitidos: estado."),
         ]
         for tool, arguments, expected in cases:
             with self.subTest(tool=tool, expected=expected):

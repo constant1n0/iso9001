@@ -13,10 +13,12 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
+import enum
+
 from .models import (
-    CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAuditoriaEnum, RoleEnum,
+    CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAuditoriaEnum,
+    GravedadNoConformidad, OrigenNoConformidad, RoleEnum,
 )
-from .services.nonconformities import ESTADOS_NO_CONFORMIDAD
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
 from wtforms.validators import DataRequired, Length, NumberRange, EqualTo, Email, Optional
@@ -86,13 +88,39 @@ class AuditoriaForm(BaseForm):
 
 
 # Formulario para registrar No Conformidades
+def member_name(value):
+    """Select value from a stored enum member (its name), a posted name or nothing (``''``)."""
+    if isinstance(value, enum.Enum):
+        return value.name
+    return '' if value is None else str(value)
+
+
+class OptionalEnumField(SelectField):
+    """Select over an enum's member names; the empty choice means none.
+
+    The record's member (or its absence) becomes the selected name, so an edit
+    that does not post the field keeps it valid instead of failing the choice.
+    """
+
+    def process_data(self, value):
+        self.data = member_name(value)
+
+
+def optional_enum_field(label, enum_cls, empty_label):
+    return OptionalEnumField(label, coerce=member_name,
+                             choices=[('', empty_label), *((m.name, m.value) for m in enum_cls)])
+
+
+# The state is not a field: the service sets it (see ``nonconformities``).
 class NoConformidadForm(BaseForm):
     descripcion = TextAreaField('Descripción', validators=[DataRequired()])
     fecha_detectada = DateField('Fecha Detectada', validators=[DataRequired()])
+    origen = optional_enum_field('Origen', OrigenNoConformidad, '— Sin indicar —')
+    gravedad = optional_enum_field('Gravedad', GravedadNoConformidad, '— Sin indicar —')
     responsable = StringField('Responsable', validators=[Length(max=50)])
     responsable_id = person_field('Responsable (persona)')
-    estado = SelectField('Estado', choices=[(e, e) for e in ESTADOS_NO_CONFORMIDAD],
-                         default='Abierta', validators=[DataRequired()])
+    contencion = TextAreaField('Contención')
+    causa_raiz = TextAreaField('Causa raíz')
     accion_correctiva = TextAreaField('Acción Correctiva')
     submit = SubmitField('Guardar')
 

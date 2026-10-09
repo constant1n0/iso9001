@@ -13,14 +13,14 @@ from enum import Enum
 from typing import Any
 
 from ..models import (
-    CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAuditoriaEnum, TipoEnum,
+    CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAuditoriaEnum,
+    EstadoNoConformidad, GravedadNoConformidad, OrigenNoConformidad, TipoEnum,
 )
 from ..services import (
     audit_indicators, audits, competence, documents, improvements, nonconformities, people,
     process_operations, risks_opportunities, roles_responsibilities,
     satisfaction, stakeholders, training, training_resources,
 )
-from ..services.nonconformities import ESTADOS_NO_CONFORMIDAD
 from ..services.policy import Resource
 
 
@@ -88,14 +88,17 @@ def _legacy_name(name: str, link: str) -> FieldDef:
 # are not flagged required: the services require them only when no person is
 # cited (``people.fill_name``), and their note says so.
 _MODULES = (
+    # ``estado`` is not writable: a record starts "abierta" and only the service's
+    # explicit transitions move it (records show the Spanish label, filters take
+    # the member name). A closed or cancelled record refuses updates.
     Module("no_conformidades", "Non-conformities", Resource.NONCONFORMITIES, nonconformities, (
         _f("descripcion", required=True), _f("fecha_detectada", "date", True),
+        _f("origen", "enum", members=OrigenNoConformidad),
+        _f("gravedad", "enum", members=GravedadNoConformidad),
         _legacy_name("responsable", "responsable_id"), _f("responsable_id", "integer"),
-        _f("estado", "enum", allowed=ESTADOS_NO_CONFORMIDAD), _f("accion_correctiva"),
-    # The state filter takes the fixed states only: stored legacy free-text states
-    # are still listed but cannot be filtered on (writes keep a record's current
-    # legacy state); nonconformities.available_states shows them to humans.
-    ), (_f("descripcion"), _f("estado", "enum", allowed=ESTADOS_NO_CONFORMIDAD),
+        _f("contencion"), _f("causa_raiz"),
+        _f("accion_correctiva", note="Legacy free-text corrective action."),
+    ), (_f("descripcion"), _f("estado", "enum", members=EstadoNoConformidad),
         _f("fecha_detectada", "date"))),
     Module("auditorias", "Audits", Resource.AUDITS, audits, (
         _f("area_auditada", required=True), _f("fecha", "date", True),
