@@ -17,7 +17,7 @@ import enum
 
 from .models import (
     CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAuditoriaEnum,
-    GravedadNoConformidad, OrigenNoConformidad, RoleEnum,
+    GravedadNoConformidad, OrigenNoConformidad, ResultadoVerificacion, RoleEnum,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -27,6 +27,7 @@ from wtforms.validators import DataRequired, Length, NumberRange, EqualTo, Email
 # person. The legacy free-text name next to each picker is optional here: the
 # service requires it only when no person is picked.
 NO_PERSON = ('', '— Sin persona —')
+CHOOSE_PERSON = ('', '— Elige una persona —')  # for pickers where a person is required
 
 
 def optional_id(value):
@@ -36,10 +37,10 @@ def optional_id(value):
     return int(value)
 
 
-def person_choices(people):
-    """Picker choices: the empty one, then each person; inactive ones are marked."""
-    return [NO_PERSON, *((p.id, p.nombre if p.activo else f'{p.nombre} (desactivada)')
-                         for p in people)]
+def person_choices(people, empty=NO_PERSON):
+    """Picker choices: the ``empty`` one, then each person; inactive ones are marked."""
+    return [empty, *((p.id, p.nombre if p.activo else f'{p.nombre} (desactivada)')
+                     for p in people)]
 
 
 def person_field(label):
@@ -123,6 +124,31 @@ class NoConformidadForm(BaseForm):
     causa_raiz = TextAreaField('Causa raíz')
     accion_correctiva = TextAreaField('Acción Correctiva')
     submit = SubmitField('Guardar')
+
+# Corrective actions of a nonconformity (decisions N3 and N4 of nc-capa-loop).
+# The routes fill the person pickers; the service has the last word on every
+# value (active owner, done date not before the detection, verifier other than
+# the owner, verification date not before the done date).
+class AccionCorrectivaForm(BaseForm):
+    descripcion = TextAreaField('Descripción', validators=[DataRequired(), Length(max=1000)])
+    responsable_id = SelectField('Responsable', coerce=optional_id, choices=[CHOOSE_PERSON],
+                                 validators=[DataRequired()])
+    fecha_prevista = DateField('Fecha prevista', validators=[DataRequired()])
+    fecha_realizada = DateField('Fecha de realización', validators=[Optional()])
+
+
+class VerificacionAccionForm(BaseForm):
+    resultado_verificacion = SelectField(
+        'Resultado',
+        choices=[('', '— Elige un resultado —'),
+                 *((result.name, result.value) for result in ResultadoVerificacion)],
+        validators=[DataRequired()],
+    )
+    fecha_verificacion = DateField('Fecha de verificación', validators=[DataRequired()])
+    verificador_id = SelectField('Verificada por', coerce=optional_id, choices=[CHOOSE_PERSON],
+                                 validators=[DataRequired()])
+    evidencia_verificacion = TextAreaField('Evidencia', validators=[DataRequired()])
+
 
 # Formulario para registrar Mejoras (acciones correctivas y preventivas)
 class MejoraForm(BaseForm):

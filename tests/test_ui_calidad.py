@@ -46,6 +46,7 @@ class CalidadScreensTestCase(unittest.TestCase):
         for path in (
             "/auditorias/", "/auditorias/nueva", "/auditorias/editar/1",
             "/no_conformidades/", "/no_conformidades/nueva", "/no_conformidades/editar/1",
+            "/no_conformidades/1", "/no_conformidades/1/acciones/nueva",
             "/mejoras/", "/mejoras/nueva", "/mejoras/editar/1",
         ):
             with self.subTest(path=path):

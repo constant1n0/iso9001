@@ -1,0 +1,140 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, action_form, delete_form, empty_state %}
+{% from "no_conformidades/_macros.html" import estado_badge, accion_badge, cancel_form %}
+{% set nc = no_conformidad %}
+{% block title %}No conformidad n.º {{ nc.id }}{% endblock %}
+{% block crumb %}Calidad · No conformidades{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 10.2 · No conformidad y acción correctiva', 'No conformidad n.º ' ~ nc.id) %}
+    {% if abierta and can('update', 'nonconformities') %}
+    <a class="btn" href="{{ url_for('no_conformidad.editar_no_conformidad', id=nc.id) }}">Editar</a>
+    {% endif %}
+    <a class="btn" href="{{ url_for('no_conformidad.exportar_pdf', id=nc.id) }}" target="_blank" rel="noopener">PDF</a>
+    {% if puede_reabrir %}
+        {{ action_form(url_for('no_conformidad.reabrir_no_conformidad', id=nc.id), 'Reabrir', '¿Reabrir esta no conformidad?') }}
+    {% endif %}
+{% endcall %}
+
+<article class="card">
+    <header class="card__header">
+        <h2 class="card__title">Estado</h2>
+        {{ estado_badge(nc) }}
+    </header>
+    <div class="card__body">
+        {% if nc.fecha_cierre %}<p class="card__text">{{ 'Cancelada' if nc.estado.name == 'cancelada' else 'Cerrada' }} el {{ nc.fecha_cierre.strftime('%d/%m/%Y') }}.</p>{% endif %}
+        {% if nc.motivo_cancelacion %}<p class="card__text">Motivo de la cancelación: {{ nc.motivo_cancelacion }}</p>{% endif %}
+        {% if not abierta %}<p class="card__text muted">Una no conformidad cerrada o cancelada no se puede modificar; un administrador puede reabrirla.</p>{% endif %}
+        {% if puede_cerrar %}
+            {% if bloqueos %}
+            <p class="card__text">No se puede cerrar todavía:</p>
+            <ul class="card__text">
+                {% for bloqueo in bloqueos %}<li>{{ bloqueo }}</li>{% endfor %}
+            </ul>
+            {% else %}
+            <p class="card__text">Todas las acciones correctivas han resultado eficaces.</p>
+            {{ action_form(url_for('no_conformidad.cerrar_no_conformidad', id=nc.id), 'Cerrar no conformidad', '¿Cerrar esta no conformidad?', 'primary') }}
+            {% endif %}
+        {% endif %}
+    </div>
+</article>
+
+<article class="card">
+    <header class="card__header">
+        <h2 class="card__title">Datos</h2>
+    </header>
+    <ul class="list">
+        <li class="list__item"><span class="list__primary">Descripción</span><span class="list__secondary">{{ nc.descripcion }}</span></li>
+        <li class="list__item"><span class="list__primary">Detectada</span><span class="list__secondary">{{ nc.fecha_detectada.strftime('%d/%m/%Y') }}</span></li>
+        <li class="list__item"><span class="list__primary">Origen</span><span class="list__secondary">{{ nc.origen.value if nc.origen else '—' }}</span></li>
+        <li class="list__item"><span class="list__primary">Gravedad</span><span class="list__secondary">{{ nc.gravedad.value if nc.gravedad else '—' }}</span></li>
+        {% set persona = personas.get(nc.responsable_id) %}
+        <li class="list__item"><span class="list__primary">Responsable</span><span class="list__secondary">{{ nc.responsable or '—' }}{% if persona %} · Persona: {{ persona }}{% endif %}</span></li>
+        <li class="list__item"><span class="list__primary">Contención</span><span class="list__secondary">{{ nc.contencion or '—' }}</span></li>
+        <li class="list__item"><span class="list__primary">Causa raíz</span><span class="list__secondary">{{ nc.causa_raiz or '—' }}</span></li>
+        {% if nc.accion_correctiva %}
+        <li class="list__item"><span class="list__primary">Acción correctiva (texto anterior)</span><span class="list__secondary">{{ nc.accion_correctiva }}</span></li>
+        {% endif %}
+    </ul>
+</article>
+
+<section aria-labelledby="acciones">
+    <div class="section-header">
+        <h2 id="acciones">Acciones correctivas</h2>
+        {% if abierta and can('create', 'corrective_actions') %}
+        <a class="btn btn--primary btn--sm" href="{{ url_for('accion_correctiva.nueva_accion', nc_id=nc.id) }}">+ Añadir acción</a>
+        {% endif %}
+    </div>
+    {% if acciones %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Descripción</th>
+                    <th scope="col">Responsable</th>
+                    <th scope="col">Prevista</th>
+                    <th scope="col">Realizada</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col">Verificación de la eficacia</th>
+                    <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for accion in acciones %}
+                <tr>
+                    <td>{{ accion.descripcion }}</td>
+                    <td>{{ personas.get(accion.responsable_id, '—') }}</td>
+                    <td class="date">{{ accion.fecha_prevista.strftime('%d/%m/%Y') }}</td>
+                    <td class="date">{{ accion.fecha_realizada.strftime('%d/%m/%Y') if accion.fecha_realizada else '—' }}</td>
+                    <td>{{ accion_badge(accion) }}</td>
+                    <td>
+                        {% if accion.resultado_verificacion %}
+                        {{ accion.resultado_verificacion.value }} · {{ accion.fecha_verificacion.strftime('%d/%m/%Y') }}<br>
+                        <span class="muted">Por {{ personas.get(accion.verificador_id, '—') }}</span><br>
+                        {{ accion.evidencia_verificacion }}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        <div class="table__actions">
+                            {% if abierta %}
+                                {% if accion.resultado_verificacion is none and can('update', 'corrective_actions') %}
+                                <a class="btn btn--sm" href="{{ url_for('accion_correctiva.editar_accion', nc_id=nc.id, accion_id=accion.id) }}">Editar</a>
+                                {% endif %}
+                                {% if accion.estado.name == 'realizada' and puede_verificar %}
+                                <a class="btn btn--sm btn--primary" href="{{ url_for('accion_correctiva.verificar_accion', nc_id=nc.id, accion_id=accion.id) }}">Verificar</a>
+                                {% endif %}
+                                {% if can('delete', 'corrective_actions') %}
+                                {{ delete_form(url_for('accion_correctiva.eliminar_accion', nc_id=nc.id, accion_id=accion.id), '¿Eliminar esta acción correctiva?') }}
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        {{ empty_state('Todavía no hay acciones correctivas.') }}
+    {% endif %}
+</section>
+
+{% if puede_cancelar %}
+{{ cancel_form(nc) }}
+{% endif %}
+{% endblock %}
