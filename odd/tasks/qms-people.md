@@ -44,7 +44,7 @@ Route for every task: **delegated direct** (two or more non-trivial files each).
   - People list, create and edit with roles; a person's competence page; requirements per role; person pickers in the training, nonconformity and audit forms.
   - Also: deleting a role that a competence requirement cites is refused with a clear Spanish `Conflict` on every database (today PostgreSQL gives the generic conflict and SQLite allows it; `roles_responsabilidades.py`); QP-3 review suggestions as tests (a `datetime` refused for the optional dates; an unchanged reference passes while a changed unknown one is refused in the same update).
   - Acceptance: role-based access per Q1; forms keep input on errors; CSP-clean templates; when a person is picked and the legacy text (`personal`, `responsable`, `auditor`) is empty, the text is filled with the person's name so lists, PDFs and reports keep working, and the text is no longer required when a person is given (service rule, so the MCP behaves the same).
-- [ ] **QP-5 — Competence matrix and docs.** Forecast 200-300.
+- [x] **QP-5 — Competence matrix and docs.** Forecast 200-300.
   - Required-versus-actual matrix per role and person (met, expired, missing, pending evaluation); README and `docs/mcp.md` updates.
   - Acceptance: the matrix reflects expiry against today; access per Q1.
   - Also (QP-4 review suggestions): `delete_record` handles a `Conflict` like the other delete routes; the people filter badge counts only filters actually applied; tests pin the requirement list order and an out-of-domain `activo` value; `qms_modules` marks `personal`/`auditor` as optional when a person is given (registry and service consistent).
@@ -68,7 +68,7 @@ Baseline at `69bcfa7`: 734 tests. Migrations are tested on PostgreSQL (`TEST_POS
 | QP-3 | Done | `fc25833` (`competencias_requeridas`, `competencias_acreditadas`, migration `c9e3a5b7d1f4`, `app/services/competence.py`, policy `COMPETENCE`, two MCP modules, people delete protection extended) | RED: 113 targeted tests (10 failures, 42 errors: missing `competence`, `CompetenceEvaluation`, `KeyError: 'COMPETENCE'`, `NoSuchTableError`, unknown module, `15 != 13`). GREEN: 798 tests incl. PostgreSQL | Range `f9b2b65..fc25833`: **medium**, `slice_budget_reached` (1,218 lines, two thirds tests; standing size exception); consent granted; reliability review `review-7121a7fbda85395f` **approved** and acknowledged with three test suggestions, two moved into QP-4; the third (seeds rely on registry order) is noted |
 | QP-4 (first half) | Done | `8b5ce0b` (legacy text filled from the person's name and optional when a person is given; role delete refused while a competence requirement cites it; person pickers in the three forms; forms keep input on validation errors), review follow-up in the next commit | RED: 97 targeted tests (47 failures, 16 errors: required text, MCP create, generic or missing role conflict, missing pickers). GREEN: 831, then 834 tests incl. PostgreSQL | Range `acdacf6..8b5ce0b`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-a1388fa1ea1ec91f` **approved** and acknowledged; fixed: a non-numeric role id on delete raised `TypeError` (now `NotFound`); pinned: OPERATIVO still opens the three pages (every role reads people); added: re-sending an inactive person with a blank text |
 | QP-4 (screens) | Done | `d973fc6` (`/personas/` list, detail, new, edit, delete; competence records from the person page; `/competencias/requisitos/`; navigation group "Personas y competencia") | RED: 54 targeted tests (183 failures, 2 errors: missing routes `302/200 != 404`, missing buttons). GREEN: 866 tests incl. PostgreSQL; the characterization table covers the 14 new endpoints for every role | Range `67b795f..d973fc6`: **medium**, `slice_budget_reached` (1,494 lines, under the 1,500 cap); consent granted; reliability review `review-45e948a374728838` **approved** and acknowledged with five suggestions, moved into QP-5 |
-| QP-5 | Pending | — | — | — |
+| QP-5 | Done | `5fa915a` (`competence.matrix` and `/competencias/matriz`; QP-4 review suggestions; `personal`/`auditor` optional in `qms_modules` with a note naming the person field; README "Personas y competencia"; `docs/mcp.md` 15 modules) | RED: 24 matrix errors (`no attribute 'matrix'`), route errors, delete conflict redirected to the dashboard, filter badge `0 != 3`, MCP `no attribute 'note'` and required flags. GREEN: 889 tests incl. PostgreSQL; the matrix runs 5 statements whatever the data size | Range `4d66d2a..5fa915a`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-d23d564afed5787c` **approved** and acknowledged; its warning (no service test for the relocated "name or person" rule) is already covered by `tests/test_person_links.py` (lines 188-279), which still pass; its suggestion (one shared helper for that rule across trainings, audits and the registry) is a follow-up |
 
 ## Findings during implementation
 
@@ -82,6 +82,23 @@ Baseline at `69bcfa7`: 734 tests. Migrations are tested on PostgreSQL (`TEST_POS
 - `qms_modules` shows only a field's name, type, required flag and allowed values; describing that the new fields reference `personas` would need `app/mcp_server/server.py` (`_describe`).
 - The edit surface was widened for QP-1 with the user's approval (2026-10-08): `tests/test_attribution.py`, `tests/test_mcp_http.py`, `app/mcp_server/operations.py`.
 
+- Matrix rules (`competence.cell_status`): a record is valid when it has no expiry or expires today or later; `Cumplida` = the newest valid record evaluated `eficaz`; otherwise the newest valid record decides (`Pendiente de evaluación` or `No eficaz`); `Caducada` = every record expired; `Falta` = no record. Only roles with requirements appear; rows are the active people holding the role.
+
+## Delivery
+
+| Slice | Pull request | Commits | Merged as | Note |
+|---|---|---|---|---|
+| 1 | [#81](https://github.com/constant1n0/iso9001/pull/81) | tracker, QP-1 | `891edb0` | standing `size:exception` |
+| 2 | [#82](https://github.com/constant1n0/iso9001/pull/82) | QP-2 | `f9b2b65` | |
+| 3 | [#83](https://github.com/constant1n0/iso9001/pull/83) | QP-3 | `acdacf6` | |
+| 4 | [#84](https://github.com/constant1n0/iso9001/pull/84) | QP-4 first half | `67b795f` | |
+| 5 | [#85](https://github.com/constant1n0/iso9001/pull/85) | QP-4 screens | `4d66d2a` | |
+| 6 | Pending | QP-5, this closing update | — | Final slice |
+
+## Production deployment (pending authorization)
+
+Three migrations (`a3c5e7f9b2d4` personas, `b8d2f4a6c1e3` person links, `c9e3a5b7d1f4` competence) on top of `f2c7a9e4b1d6`: back up the database, fast-forward, `flask db upgrade`, `flask db check`, then the user restarts the four services; smoke tests: `/personas/`, `/competencias/matriz`, a training form with the person picker, `qms_modules` lists 15 modules.
+
 ## Next step
 
-QP-5.
+**Feature complete** once slice 6 merges. Next: the production deployment above, after explicit authorization; then Wave 1 (`nc-capa-loop` first).
