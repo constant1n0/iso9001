@@ -19,7 +19,7 @@ from flask_login import login_required
 from ..audit_notifications import local_today
 from ..forms import NoConformidadForm, person_choices
 from ..extensions import db
-from ..models import EstadoNoConformidad
+from ..models import EstadoNoConformidad, GravedadNoConformidad, OrigenNoConformidad
 from ..services import corrective_actions, nonconformities, people
 from ..services.errors import ValidationError
 from ..utils.permissions import require_permission
@@ -64,23 +64,40 @@ def _page(id):
     return redirect(url_for('no_conformidad.ver_no_conformidad', id=id))
 
 
+def _people_of(actor, no_conformidad, acciones):
+    """Names of the people a nonconformity and its actions cite (owner, verifiers)."""
+    person_ids = [no_conformidad.responsable_id, *(a.responsable_id for a in acciones),
+                  *(a.verificador_id for a in acciones)]
+    return people.names(db.session, actor, person_ids)
+
+
+def _enum_arg(name, enum_cls):
+    """The enum member named by query argument ``name``, or ``None``.
+
+    An unknown name (an old bookmark, a typo) is ignored, like an invalid date.
+    """
+    return enum_cls.__members__.get(request.args.get(name, ''))
+
+
 # Ruta para listar todas las no conformidades
 @bp.route('/', methods=['GET'])
 @login_required
 def listar_no_conformidades():
     actor = current_actor()
-    # An unknown state (an old bookmark, a typo) is ignored, like an invalid date.
-    estado = EstadoNoConformidad.__members__.get(request.args.get('estado', ''))
     no_conformidades = nonconformities.list_(
         db.session,
         actor,
         descripcion=request.args.get('descripcion'),
-        estado=estado,
+        estado=_enum_arg('estado', EstadoNoConformidad),
+        origen=_enum_arg('origen', OrigenNoConformidad),
+        gravedad=_enum_arg('gravedad', GravedadNoConformidad),
         fecha_detectada=date_arg('fecha_detectada'),
     )
     personas = people.names(db.session, actor, (nc.responsable_id for nc in no_conformidades))
     return render_template('no_conformidades/listar.html', no_conformidades=no_conformidades,
-                           estados=list(EstadoNoConformidad), personas=personas)
+                           estados=list(EstadoNoConformidad),
+                           origenes=list(OrigenNoConformidad),
+                           gravedades=list(GravedadNoConformidad), personas=personas)
 
 # Ruta para registrar una nueva no conformidad
 @bp.route('/nueva', methods=['GET', 'POST'])
@@ -103,15 +120,14 @@ def nueva_no_conformidad():
 # buttons the role and the state allow (decisions N3-N5 of nc-capa-loop).
 @bp.route('/<int:id>', methods=['GET'])
 @login_required
+@require_permission('read', 'nonconformities')
 def ver_no_conformidad(id):
     actor = current_actor()
     no_conformidad = nonconformities.get(db.session, actor, id)
     acciones = corrective_actions.list_(db.session, actor, no_conformidad_id=id)
-    person_ids = [no_conformidad.responsable_id, *(a.responsable_id for a in acciones),
-                  *(a.verificador_id for a in acciones)]
     return render_template(
         'no_conformidades/detalle.html', no_conformidad=no_conformidad, acciones=acciones,
-        personas=people.names(db.session, actor, person_ids),
+        personas=_people_of(actor, no_conformidad, acciones),
         abierta=no_conformidad.estado not in nonconformities.TERMINAL_STATES,
         puede_verificar=may_verify(),
         puede_cerrar=nonconformities.may_close(actor, no_conformidad),
@@ -187,9 +203,14 @@ def eliminar_no_conformidad(id):
     flash('No conformidad eliminada exitosamente', 'success')
     return redirect(url_for('no_conformidad.listar_no_conformidades'))
 
-# Ruta para exportar una no conformidad a PDF
+# Ruta para exportar una no conformidad a PDF: its fields, the closing or
+# cancellation, and every corrective action with its verification.
 @bp.route('/exportar_pdf/<int:id>', methods=['GET'])
 @login_required
 def exportar_pdf(id):
-    no_conformidad = nonconformities.get(db.session, current_actor(), id)
-    return pdf_response(render_pdf('no_conformidades/pdf_template.html', no_conformidad=no_conformidad), f'no_conformidad_{id}.pdf')
+    actor = current_actor()
+    no_conformidad = nonconformities.get(db.session, actor, id)
+    acciones = corrective_actions.list_(db.session, actor, no_conformidad_id=id)
+    pdf = render_pdf('no_conformidades/pdf_template.html', no_conformidad=no_conformidad,
+                     acciones=acciones, personas=_people_of(actor, no_conformidad, acciones))
+    return pdf_response(pdf, f'no_conformidad_{id}.pdf')

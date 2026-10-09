@@ -102,6 +102,17 @@ class RegistryTestCase(unittest.TestCase):
             (field.type, field.allowed, field.members),
         )
 
+    def test_nonconformity_origin_and_severity_filters_offer_the_enum_names(self) -> None:
+        from app.models import GravedadNoConformidad, OrigenNoConformidad
+
+        filters = {f.name: f for f in registry().MODULES["no_conformidades"].filters}
+        for name, members in (("origen", OrigenNoConformidad),
+                              ("gravedad", GravedadNoConformidad)):
+            with self.subTest(filter=name):
+                field = filters[name]
+                self.assertEqual(("enum", tuple(members.__members__), members),
+                                 (field.type, field.allowed, field.members))
+
     def test_nonconformity_fields_add_origin_severity_and_never_the_state(self) -> None:
         fields = {f.name: f for f in registry().MODULES["no_conformidades"].fields}
         self.assertNotIn("estado", fields)
@@ -179,8 +190,11 @@ class ModulesToolTestCase(McpDbCase):
         self.assertEqual("date", fields["fecha_detectada"]["type"])
         self.assertEqual(["mayor", "menor", "observacion"], fields["gravedad"]["allowed"])
         self.assertNotIn("estado", fields)
-        self.assertEqual({"descripcion", "estado", "fecha_detectada"},
+        self.assertEqual({"descripcion", "estado", "fecha_detectada", "origen", "gravedad"},
                          {f["name"] for f in nc["filters"]})
+        filters = {f["name"]: f for f in nc["filters"]}
+        self.assertEqual(["auditoria", "cliente", "proceso", "proveedor", "otro"],
+                         filters["origen"]["allowed"])
         training = {f["name"]: f for f in modules["capacitaciones"]["fields"]}
         self.assertEqual({"name", "type", "required", "note"}, set(training["personal"]))
         self.assertFalse(training["personal"]["required"])

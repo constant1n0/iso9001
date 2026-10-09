@@ -16,8 +16,8 @@ from test_nonconformity_service import ServiceBase, actor, errors
 
 from app.extensions import db
 from app.models import (
-    Capacitacion, Document, DocumentCategory, EstadoNoConformidad, NoConformidad,
-    ParteInteresada, RoleEnum, SatisfaccionCliente,
+    Capacitacion, Document, DocumentCategory, EstadoNoConformidad, GravedadNoConformidad,
+    NoConformidad, OrigenNoConformidad, ParteInteresada, RoleEnum, SatisfaccionCliente,
 )
 from app.services import crud
 
@@ -126,6 +126,23 @@ class NonconformityListPageTestCase(FilteredListPageContract, ServiceBase):
         # Newest date first; rows sharing a date come newest id first.
         self.expected_matches = [last, first]
         return [last, closed, first, old, oldest]
+
+    def test_origin_and_severity_narrow_the_rows_and_the_total(self) -> None:
+        def nc(descripcion, origen, gravedad):
+            return self.insert(descripcion=descripcion, fecha_detectada=OCT,
+                               estado=EstadoNoConformidad.abierta, origen=origen,
+                               gravedad=gravedad)
+
+        customer, minor = OrigenNoConformidad.cliente, GravedadNoConformidad.menor
+        nc("Proveedor", OrigenNoConformidad.proveedor, minor)
+        older = nc("Cliente leve", customer, minor)
+        nc("Cliente grave", customer, GravedadNoConformidad.mayor)
+        nc("Sin clasificar", None, None)
+        newer = nc("Cliente leve otra vez", customer, minor)
+        filters = {"origen": "cliente", "gravedad": minor}
+        self.assertEqual(([newer], 2), self.page(1, 1, **filters))
+        self.assertEqual(([older], 2), self.page(2, 1, **filters))
+        self.assertEqual(([], 0), self.page(1, 5, origen="otro"))
 
 
 class DocumentListPageTestCase(ListPageContract, ServiceBase):

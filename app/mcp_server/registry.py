@@ -95,7 +95,8 @@ def _legacy_name(name: str, link: str) -> FieldDef:
 _MODULES = (
     # ``estado`` is not writable: a record starts "abierta" and only the service's
     # explicit transitions move it (records show the Spanish label, filters take
-    # the member name). A closed or cancelled record refuses updates.
+    # the member name, as for ``origen`` and ``gravedad``). A closed or cancelled
+    # record refuses updates; closing is web-only.
     Module("no_conformidades", "Non-conformities", Resource.NONCONFORMITIES, nonconformities, (
         _f("descripcion", required=True), _f("fecha_detectada", "date", True),
         _f("origen", "enum", members=OrigenNoConformidad),
@@ -104,7 +105,8 @@ _MODULES = (
         _f("contencion"), _f("causa_raiz"),
         _f("accion_correctiva", note="Legacy free-text corrective action."),
     ), (_f("descripcion"), _f("estado", "enum", members=EstadoNoConformidad),
-        _f("fecha_detectada", "date"))),
+        _f("fecha_detectada", "date"), _f("origen", "enum", members=OrigenNoConformidad),
+        _f("gravedad", "enum", members=GravedadNoConformidad))),
     Module("auditorias", "Audits", Resource.AUDITS, audits, (
         _f("area_auditada", required=True), _f("fecha", "date", True),
         _legacy_name("auditor", "auditor_id"), _f("auditor_id", "integer"),

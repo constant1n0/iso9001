@@ -16,12 +16,19 @@
 """Monthly quality summary report rendered as PDF."""
 
 from datetime import date
+from enum import Enum
+from typing import Any, TypeVar
 
 from flask import render_template
 
 from ..extensions import db
-from ..models import Auditoria, Capacitacion, NoConformidad, SatisfaccionCliente
+from ..models import (
+    AccionCorrectiva, Auditoria, Capacitacion, EstadoNoConformidad, NoConformidad,
+    ResultadoVerificacion, SatisfaccionCliente,
+)
 from .pdf import render_pdf
+
+E = TypeVar("E", bound=Enum)
 
 
 def _month_bounds(fecha: date) -> tuple[date, date]:
@@ -31,8 +38,23 @@ def _month_bounds(fecha: date) -> tuple[date, date]:
     return start, end
 
 
+def _count_by(column: Any, enum_cls: type[E], condition: Any) -> dict[E, int]:
+    """Rows matching ``condition``, counted by ``column``, for every member of ``enum_cls``.
+
+    Members come in the enum's order, with zero when no row has them.
+    """
+    found = dict(
+        db.session.query(column, db.func.count()).filter(condition).group_by(column).all()
+    )
+    return {member: found.get(member, 0) for member in enum_cls}
+
+
 def _monthly_report_context(fecha: date) -> dict:
-    """Count only the records dated within the calendar month of ``fecha``."""
+    """Count only the records dated within the calendar month of ``fecha``.
+
+    Nonconformities count by their detection date (split by their current
+    state) and corrective actions by their verification date (split by result).
+    """
     start, end = _month_bounds(fecha)
 
     def in_month(column):
@@ -44,12 +66,18 @@ def _monthly_report_context(fecha: date) -> dict:
         .scalar()
         or 0
     )
+    por_estado = _count_by(NoConformidad.estado, EstadoNoConformidad,
+                           in_month(NoConformidad.fecha_detectada))
+    verificadas = _count_by(AccionCorrectiva.resultado_verificacion, ResultadoVerificacion,
+                            in_month(AccionCorrectiva.fecha_verificacion))
     return dict(
         fecha=fecha,
         total_auditorias=Auditoria.query.filter(in_month(Auditoria.fecha)).count(),
-        total_no_conformidades=NoConformidad.query.filter(
-            in_month(NoConformidad.fecha_detectada)
-        ).count(),
+        total_no_conformidades=sum(por_estado.values()),
+        no_conformidades_por_estado=por_estado,
+        acciones_verificadas=sum(verificadas.values()),
+        acciones_eficaces=verificadas[ResultadoVerificacion.eficaz],
+        acciones_no_eficaces=verificadas[ResultadoVerificacion.no_eficaz],
         promedio_satisfaccion=promedio_satisfaccion,
         total_capacitaciones=Capacitacion.query.filter(
             in_month(Capacitacion.fecha)

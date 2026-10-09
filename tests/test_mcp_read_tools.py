@@ -43,7 +43,8 @@ class EveryModuleTestCase(McpDbCase):
 class FilterTestCase(McpDbCase):
     async def test_filters_are_validated_and_applied(self) -> None:
         self.force_nc_state(self.seed("no_conformidades"), EstadoNoConformidad.accion_planificada)
-        self.seed("no_conformidades", descripcion="Otra", fecha_detectada="2026-09-01")
+        self.seed("no_conformidades", descripcion="Otra", fecha_detectada="2026-09-01",
+                  origen="cliente", gravedad="menor")
         actor = mcp_actor(ADMIN)
 
         async def total(slug, filters):
@@ -54,6 +55,10 @@ class FilterTestCase(McpDbCase):
         self.assertEqual(1, await total("no_conformidades", {"estado": "accion_planificada"}))
         self.assertEqual(1, await total("no_conformidades", {"fecha_detectada": "2026-09-01"}))
         self.assertEqual(1, await total("no_conformidades", {"descripcion": "otra"}))
+        self.assertEqual(1, await total("no_conformidades", {"origen": "cliente"}))
+        self.assertEqual(1, await total("no_conformidades", {"gravedad": "menor"}))
+        self.assertEqual(0, await total("no_conformidades",
+                                        {"origen": "cliente", "gravedad": "mayor"}))
         self.seed("auditorias", estado="COMPLETADA")
         self.assertEqual(1, await total("auditorias", {"estado": "COMPLETADA"}))
         self.assertEqual(0, await total("auditorias", {"estado": "PENDIENTE"}))
@@ -97,7 +102,9 @@ class FilterTestCase(McpDbCase):
         from app.mcp_server.registry import MODULES
 
         enum_filters = [(m.slug, f) for m in MODULES.values() for f in m.filters if f.type == "enum"]
-        self.assertIn(("no_conformidades", "estado"), [(s, f.name) for s, f in enum_filters])
+        declared = [(s, f.name) for s, f in enum_filters]
+        for name in ("estado", "origen", "gravedad"):
+            self.assertIn(("no_conformidades", name), declared)
         for slug, field in enum_filters:
             for value in (*field.allowed, "VALOR_INVENTADO"):
                 with self.subTest(module=slug, filter=field.name, value=value):
@@ -136,6 +143,8 @@ class FilterTestCase(McpDbCase):
             ("documentos", {"title": "x"}, "title"),
             ("no_conformidades", {"fecha_detectada": "ayer"}, "fecha_detectada"),
             ("auditorias", {"estado": "NOPE"}, "estado"),
+            ("no_conformidades", {"origen": "Cliente"}, "El filtro «origen» admite: auditoria"),
+            ("no_conformidades", {"gravedad": "grave"}, "El filtro «gravedad» admite: mayor"),
             ("satisfaccion_clientes", {"puntuacion_minima": "alta"}, "puntuacion_minima"),
         ]
         for slug, filters, word in cases:

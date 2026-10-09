@@ -116,6 +116,7 @@ class NonconformityRoutesTestCase(unittest.TestCase):
                          "estado": "cerrada"},
         )
         self.assertEqual(302, response.status_code)
+        self.assertTrue(response.headers["Location"].endswith(f"{BASE}/{nc_id}"))
         self.assertIn(("success", "No conformidad actualizada exitosamente"), self.flashes())
         with self.app.app_context():
             nc = db.session.get(NoConformidad, nc_id)
@@ -192,6 +193,34 @@ class NonconformityRoutesTestCase(unittest.TestCase):
         by_date = self.client.get(f"{BASE}/?fecha_detectada=2026-09-01").get_data(as_text=True)
         self.assertIn("Ruido en linea", by_date)
         self.assertNotIn("Fuga de aceite", by_date)
+
+    def test_list_filters_by_origin_and_severity_names(self) -> None:
+        self.seed(descripcion="Queja de cliente", origen="cliente", gravedad="mayor")
+        self.seed(descripcion="Hallazgo interno", origen="auditoria", gravedad="menor")
+        self.login()
+        html = self.client.get(f"{BASE}/").get_data(as_text=True)
+        for text in ('<select name="origen" id="origen">',
+                     '<option value="proveedor">Proveedor</option>',
+                     '<select name="gravedad" id="gravedad">',
+                     '<option value="observacion">Observación</option>'):
+            self.assertIn(text, html)
+        by_origin = self.client.get(f"{BASE}/?origen=cliente").get_data(as_text=True)
+        self.assertIn("Queja de cliente", by_origin)
+        self.assertNotIn("Hallazgo interno", by_origin)
+        self.assertIn('<option value="cliente" selected>', by_origin)
+        by_severity = self.client.get(f"{BASE}/?gravedad=menor").get_data(as_text=True)
+        self.assertIn("Hallazgo interno", by_severity)
+        self.assertNotIn("Queja de cliente", by_severity)
+        self.assertIn('<option value="menor" selected>', by_severity)
+        both = self.client.get(f"{BASE}/?origen=cliente&gravedad=menor").get_data(as_text=True)
+        self.assertIn("Ninguna no conformidad coincide con los filtros.", both)
+
+    def test_unknown_origin_and_severity_filters_are_ignored_like_the_state(self) -> None:
+        self.seed(origen="cliente", gravedad="mayor")
+        self.login()
+        response = self.client.get(f"{BASE}/?origen=Cliente&gravedad=grave")
+        self.assertEqual(200, response.status_code)
+        self.assertIn("Semilla", response.get_data(as_text=True))
 
     def test_an_unknown_state_filter_is_ignored_instead_of_failing(self) -> None:
         self.seed()
@@ -296,19 +325,64 @@ class NonconformityRoutesTestCase(unittest.TestCase):
         with self.app.app_context():
             self.assertEqual("Semilla", db.session.get(NoConformidad, nc_id).descripcion)
 
+    def pdf_html(self, nc_id: int) -> str:
+        """The HTML the export route hands to WeasyPrint for ``nc_id``."""
+        from flask import render_template
+
+        def as_html(template: str, **context) -> bytes:
+            return render_template(template, generado=date(2026, 10, 31), **context).encode()
+
+        self.login()
+        with patch("app.routes.no_conformidad_routes.render_pdf", side_effect=as_html):
+            response = self.client.get(f"{BASE}/exportar_pdf/{nc_id}")
+        self.assertEqual(200, response.status_code)
+        return response.get_data(as_text=True)
+
     def test_pdf_shows_the_state_label_and_the_new_fields(self) -> None:
         nc_id = self.seed(origen="cliente", gravedad="mayor", contencion="Lote retenido",
                           causa_raiz="Molde gastado")
-        with self.app.test_request_context():
-            from flask import render_template
-
-            with self.app.app_context():
-                nc = db.session.get(NoConformidad, nc_id)
-                html = render_template("no_conformidades/pdf_template.html",
-                                       no_conformidad=nc, generado=date(2026, 10, 9))
-        for text in ("Abierta", "Cliente", "Mayor", "Lote retenido", "Molde gastado"):
+        html = self.pdf_html(nc_id)
+        for text in ("Abierta", "Cliente", "Mayor", "Lote retenido", "Molde gastado",
+                     "Sin acciones correctivas"):
             self.assertIn(text, html)
         self.assertNotIn("EstadoNoConformidad", html)
+
+    def test_pdf_lists_the_actions_with_their_status_and_verification(self) -> None:
+        from app.services import nonconformities
+        from app.services.actor import Actor
+
+        ana, eva, luis = (self.seed_person(name)
+                          for name in ("Ana Pérez", "Eva Ruiz", "Luis Gil"))
+        nc_id = self.seed(origen="proveedor", gravedad="menor", contencion="Lote retenido",
+                          causa_raiz="Molde gastado", responsable="Texto libre",
+                          responsable_id=luis)
+        self.seed_action(nc_id, ana, done=date(2026, 10, 12), verified=("no_eficaz", eva))
+        self.seed_action(nc_id, eva, done=date(2026, 10, 14), verified=("eficaz", ana),
+                         descripcion="Cambiar el proveedor de resina")
+        with self.app.app_context():
+            nonconformities.close(db.session, Actor(1, "seed", RoleEnum.AUDITOR, "system"),
+                                  nc_id, today=date(2026, 10, 30))
+            db.session.commit()
+        html = self.pdf_html(nc_id)
+        for text in ("Proveedor", "Menor", "Lote retenido", "Molde gastado", "Texto libre",
+                     "Luis Gil", "Cerrada", "Fecha de cierre", "30/10/2026",
+                     "Afilar el molde", "Cambiar el proveedor de resina", "20/10/2026",
+                     "12/10/2026", "14/10/2026", "Verificada no eficaz", "Verificada eficaz",
+                     "No eficaz", "15/10/2026", "Ana Pérez", "Eva Ruiz",
+                     "Muestreo de 50 piezas"):
+            self.assertIn(text, html)
+        self.assertNotIn("Sin acciones correctivas", html)
+        self.assertNotIn("EstadoAccionCorrectiva", html)
+
+    def test_pdf_shows_the_cancellation(self) -> None:
+        nc_id = self.seed()
+        self.force_state(nc_id, EstadoNoConformidad.cancelada, fecha_cierre=date(2026, 10, 9),
+                         motivo_cancelacion="Registrada dos veces")
+        html = self.pdf_html(nc_id)
+        for text in ("Cancelada", "Fecha de cancelación", "09/10/2026",
+                     "Motivo de la cancelación", "Registrada dos veces"):
+            self.assertIn(text, html)
+        self.assertNotIn("Fecha de cierre", html)
 
     # -- detail page and closing (NC-3) ------------------------------------
 
@@ -323,7 +397,8 @@ class NonconformityRoutesTestCase(unittest.TestCase):
             return person.id
 
     def seed_action(self, nc_id: int, owner: int, *, done: date | None = None,
-                    verified: tuple[str, int] | None = None) -> int:
+                    verified: tuple[str, int] | None = None,
+                    descripcion: str = "Afilar el molde") -> int:
         """An action through the service; ``verified`` is (result name, verifier id)."""
         from app.services import corrective_actions
         from app.services.actor import Actor
@@ -331,7 +406,7 @@ class NonconformityRoutesTestCase(unittest.TestCase):
         who = Actor(1, "seed", RoleEnum.ADMINISTRADOR, "system")
         with self.app.app_context():
             action = corrective_actions.create(db.session, who, {
-                "no_conformidad_id": nc_id, "descripcion": "Afilar el molde",
+                "no_conformidad_id": nc_id, "descripcion": descripcion,
                 "responsable_id": owner, "fecha_prevista": date(2026, 10, 20),
                 "fecha_realizada": done})
             if verified:
@@ -367,6 +442,28 @@ class NonconformityRoutesTestCase(unittest.TestCase):
                      "15/10/2026", "Eva Ruiz", "Muestreo de 50 piezas"):
             self.assertIn(text, html)
         self.assertNotIn("EstadoNoConformidad", html)
+
+    def test_the_detail_page_checks_the_read_permission_before_loading(self) -> None:
+        from app.services import policy
+
+        nc_id = self.seed()
+        allowed = policy.can
+
+        def no_nonconformity_reads(actor, action, resource):
+            if (action, resource) == (policy.Action.READ, policy.Resource.NONCONFORMITIES):
+                return False
+            return allowed(actor, action, resource)
+
+        self.login()
+        with patch.object(policy, "can", side_effect=no_nonconformity_reads), patch(
+            "app.services.nonconformities.get",
+            side_effect=AssertionError("loaded before the route guard"),
+        ):
+            response = self.client.get(f"{BASE}/{nc_id}")
+        self.assertEqual(302, response.status_code)
+        self.assertTrue(response.headers["Location"].endswith("/dashboard/"))
+        self.assertIn(("danger", "No tienes permiso para acceder a esta página."),
+                      self.flashes())
 
     def test_the_detail_page_shows_the_cancellation(self) -> None:
         nc_id = self.seed()
@@ -499,13 +596,13 @@ class NonconformityRoutesTestCase(unittest.TestCase):
         self.assertEqual(409, response.status_code)
         self.assertEqual({"error": "Duplicado."}, response.get_json())
 
-
-if __name__ == "__main__":
-    unittest.main()
-
     def test_an_operativo_user_can_open_the_list_and_the_create_form(self) -> None:
         """The person picker reads PEOPLE, which every role may read."""
         self.login(RoleEnum.OPERATIVO)
         for url in ("/no_conformidades/", "/no_conformidades/nueva"):
             with self.subTest(url=url):
                 self.assertEqual(200, self.client.get(url).status_code)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -11,8 +11,8 @@ from werkzeug.security import generate_password_hash
 
 from app.extensions import db
 from app.models import (
-    Auditoria, Capacitacion, EstadoAuditoriaEnum, EstadoNoConformidad, NoConformidad,
-    RoleEnum, SatisfaccionCliente, User,
+    AccionCorrectiva, Auditoria, Capacitacion, EstadoAuditoriaEnum, EstadoNoConformidad,
+    NoConformidad, Person, ResultadoVerificacion, RoleEnum, SatisfaccionCliente, User,
 )
 from app.utils import reports
 
@@ -65,6 +65,55 @@ class MonthlyReportPeriodTestCase(unittest.TestCase):
         html = reports.render_monthly_report_html(SEPT)
         self.assertIn(f'kpi__value">{len(EstadoNoConformidad)}<', html)
 
+    def test_nonconformities_detected_in_the_month_are_counted_by_state(self) -> None:
+        E = EstadoNoConformidad
+        for day, estado in ((date(2026, 9, 1), E.abierta), (date(2026, 9, 30), E.abierta),
+                            (date(2026, 9, 10), E.cerrada), (date(2026, 9, 11), E.cancelada),
+                            (date(2026, 8, 31), E.cerrada), (date(2026, 10, 1), E.abierta)):
+            db.session.add(NoConformidad(descripcion="NC", fecha_detectada=day, estado=estado))
+        db.session.commit()
+
+        ctx = reports._monthly_report_context(SEPT)
+
+        by_state = ctx["no_conformidades_por_estado"]
+        self.assertEqual(list(E), list(by_state))  # every state, in the enum's order
+        self.assertEqual([2, 0, 0, 1, 1], list(by_state.values()))
+        self.assertEqual(ctx["total_no_conformidades"], sum(by_state.values()))
+        html = reports.render_monthly_report_html(SEPT)
+        for row in ("<tr><th>Abierta</th><td>2</td></tr>",
+                    "<tr><th>Acción planificada</th><td>0</td></tr>",
+                    "<tr><th>Cerrada</th><td>1</td></tr>"):
+            self.assertIn(row, html)
+
+    def test_actions_verified_in_the_month_are_counted_by_result(self) -> None:
+        owner, verifier = Person(nombre="Ana"), Person(nombre="Eva")
+        nc = NoConformidad(descripcion="NC", fecha_detectada=date(2026, 8, 1),
+                           estado=EstadoNoConformidad.en_verificacion)
+        db.session.add_all([owner, verifier, nc])
+        db.session.flush()
+        effective, not_effective = ResultadoVerificacion.eficaz, ResultadoVerificacion.no_eficaz
+        for verified, result in ((date(2026, 9, 1), effective), (date(2026, 9, 30), effective),
+                                 (date(2026, 9, 15), not_effective),
+                                 (date(2026, 8, 31), effective),
+                                 (date(2026, 10, 1), not_effective), (None, None)):
+            db.session.add(AccionCorrectiva(
+                no_conformidad_id=nc.id, descripcion="Acción", responsable_id=owner.id,
+                fecha_prevista=date(2026, 8, 20), fecha_realizada=date(2026, 8, 25),
+                resultado_verificacion=result, fecha_verificacion=verified,
+                verificador_id=verifier.id if result else None,
+                evidencia_verificacion="Evidencia" if result else None))
+        db.session.commit()
+
+        ctx = reports._monthly_report_context(SEPT)
+
+        self.assertEqual((3, 2, 1), (ctx["acciones_verificadas"], ctx["acciones_eficaces"],
+                                     ctx["acciones_no_eficaces"]))
+        html = reports.render_monthly_report_html(SEPT)
+        for row in ("<tr><th>Acciones verificadas</th><td>3</td></tr>",
+                    "<tr><th>Eficaces</th><td>2</td></tr>",
+                    "<tr><th>No eficaces</th><td>1</td></tr>"):
+            self.assertIn(row, html)
+
     def test_an_empty_month_reports_zeros(self) -> None:
         self._seed(date(2026, 8, 15), 9)
         db.session.commit()
@@ -72,10 +121,13 @@ class MonthlyReportPeriodTestCase(unittest.TestCase):
         ctx = reports._monthly_report_context(SEPT)
 
         self.assertEqual(
-            (0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0),
             (ctx["total_auditorias"], ctx["total_no_conformidades"],
-             ctx["total_capacitaciones"], ctx["promedio_satisfaccion"]),
+             ctx["total_capacitaciones"], ctx["promedio_satisfaccion"],
+             ctx["acciones_verificadas"], ctx["acciones_eficaces"],
+             ctx["acciones_no_eficaces"]),
         )
+        self.assertEqual({0}, set(ctx["no_conformidades_por_estado"].values()))
         self.assertIn("0.0", reports.render_monthly_report_html(SEPT))
 
     def test_the_e_mail_sent_on_the_first_reports_the_previous_month(self) -> None:

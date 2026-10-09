@@ -206,6 +206,27 @@ class ActionFormsTestCase(ScreensBase):
         with self.app.app_context():
             self.assertEqual(0, AccionCorrectiva.query.count())
 
+    def test_editing_a_verified_action_is_refused_and_keeps_the_input(self) -> None:
+        """The detail page offers no edit link once verified; the URL still opens the form
+        with the stored values, and saving is refused with the service's message."""
+        action_id = self.seed_action(fecha_realizada=date(2026, 10, 12))
+        self.seed_verified(action_id)
+        self.login(ADMIN)
+        self.assertNotIn(self.action_url(action_id, "editar"), self.html(self.detail()))
+        form = self.client.get(self.action_url(action_id, "editar"))
+        self.assertEqual(200, form.status_code)
+        self.assertIn("Ajustar el molde", form.get_data(as_text=True))
+        before = self.audit_actions()
+        response = self.client.post(self.action_url(action_id, "editar"), data=self.action_form(
+            descripcion="Texto conservado", fecha_realizada="2026-10-12"))
+        self.assertEqual(200, response.status_code)
+        html = response.get_data(as_text=True)
+        self.assertIn(actions().VERIFIED_READ_ONLY, html)
+        self.assertIn("Texto conservado", html)
+        self.assertEqual("Ajustar el molde", self.action(action_id).descripcion)
+        self.assertEqual(before, self.audit_actions())
+        self.assertIs(E.en_verificacion, self.state())
+
     def test_missing_fields_are_marked_without_writing(self) -> None:
         self.login(OPERATIVO)
         response = self.client.post(self.new_url(), data=self.action_form(

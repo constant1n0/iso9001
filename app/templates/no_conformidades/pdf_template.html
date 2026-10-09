@@ -16,21 +16,69 @@
  -->
 {% extends "_partials/pdf_base.html" %}
 {% from "_partials/pdf.html" import fields, section %}
+{% set nc = no_conformidad %}
+{% set cancelada = nc.estado.name == 'cancelada' %}
+{% macro fecha(valor) %}{{ valor.strftime('%d/%m/%Y') if valor else '—' }}{% endmacro %}
 {% block title %}Informe de no conformidad{% endblock %}
 {% block clause %}Cláusula 10.2 · No conformidad y acción correctiva{% endblock %}
-{% block subtitle %}No conformidad n.º {{ no_conformidad.id }}{% endblock %}
+{% block subtitle %}No conformidad n.º {{ nc.id }}{% endblock %}
 {% block content %}
+{# PDF-only template (never served to a browser, so the CSP does not apply):
+   the corrective action table is the only multi-column table of the print theme. #}
+<style>
+.acciones { width: 100%; border-collapse: collapse; margin-bottom: 6mm; font-size: 8pt; line-height: 1.35; }
+.acciones th, .acciones td { padding: 1.8mm 2mm; border-bottom: 0.3mm solid #d9d4c8; text-align: left; vertical-align: top; }
+.acciones thead th { border-top: 0.6mm solid #0a0a0a; color: #6b675f; font: 500 6.5pt "IBM Plex Mono"; letter-spacing: 0.06em; text-transform: uppercase; }
+.acciones tr { page-break-inside: avoid; }
+</style>
 {{ fields([
-    ('Fecha detectada', no_conformidad.fecha_detectada.strftime('%d/%m/%Y')),
-    ('Origen', no_conformidad.origen.value if no_conformidad.origen else '—'),
-    ('Gravedad', no_conformidad.gravedad.value if no_conformidad.gravedad else '—'),
-    ('Responsable', no_conformidad.responsable or 'Sin asignar'),
-    ('Estado', no_conformidad.estado.value),
-    ('Fecha de cierre', no_conformidad.fecha_cierre.strftime('%d/%m/%Y') if no_conformidad.fecha_cierre else '—'),
+    ('Fecha detectada', fecha(nc.fecha_detectada)),
+    ('Origen', nc.origen.value if nc.origen else '—'),
+    ('Gravedad', nc.gravedad.value if nc.gravedad else '—'),
+    ('Responsable', nc.responsable or 'Sin asignar'),
+    ('Persona responsable', personas.get(nc.responsable_id, '—')),
+    ('Estado', nc.estado.value),
+    ('Fecha de cancelación' if cancelada else 'Fecha de cierre', fecha(nc.fecha_cierre)),
 ]) }}
-{{ section('Descripción', no_conformidad.descripcion) }}
-{{ section('Contención', no_conformidad.contencion) }}
-{{ section('Causa raíz', no_conformidad.causa_raiz) }}
-{{ section('Acción correctiva', no_conformidad.accion_correctiva) }}
-{% if no_conformidad.motivo_cancelacion %}{{ section('Motivo de la cancelación', no_conformidad.motivo_cancelacion) }}{% endif %}
+{% if cancelada %}{{ section('Motivo de la cancelación', nc.motivo_cancelacion) }}{% endif %}
+{{ section('Descripción', nc.descripcion) }}
+{{ section('Contención', nc.contencion) }}
+{{ section('Causa raíz', nc.causa_raiz) }}
+<div class="section">
+    <h2>Acciones correctivas</h2>
+    {% if not acciones %}<p class="muted">Sin acciones correctivas.</p>{% endif %}
+</div>
+{% if acciones %}
+<table class="acciones">
+    <thead>
+        <tr>
+            <th>Descripción</th>
+            <th>Responsable</th>
+            <th>Prevista</th>
+            <th>Realizada</th>
+            <th>Estado</th>
+            <th>Verificación de la eficacia</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for accion in acciones %}
+        <tr>
+            <td>{{ accion.descripcion }}</td>
+            <td>{{ personas.get(accion.responsable_id, '—') }}</td>
+            <td>{{ fecha(accion.fecha_prevista) }}</td>
+            <td>{{ fecha(accion.fecha_realizada) }}</td>
+            <td>{{ accion.estado.value }}</td>
+            <td>
+                {% if accion.resultado_verificacion %}
+                {{ accion.resultado_verificacion.value }} · {{ fecha(accion.fecha_verificacion) }}<br>
+                Por {{ personas.get(accion.verificador_id, '—') }}<br>
+                {{ accion.evidencia_verificacion }}
+                {% else %}—{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% if nc.accion_correctiva %}{{ section('Acción correctiva (texto anterior)', nc.accion_correctiva) }}{% endif %}
 {% endblock %}

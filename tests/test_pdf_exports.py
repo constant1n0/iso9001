@@ -12,10 +12,13 @@ from werkzeug.security import generate_password_hash
 
 from app.extensions import db
 from app.models import (
+    AccionCorrectiva,
     Auditoria,
     Capacitacion,
     EstadoAuditoriaEnum,
     NoConformidad,
+    Person,
+    ResultadoVerificacion,
     RoleEnum,
     SatisfaccionCliente,
     User,
@@ -53,15 +56,26 @@ class PdfExportsTestCase(unittest.TestCase):
         self.client = self.app.test_client()
         with self.app.app_context():
             db.create_all()
+            nonconformity = NoConformidad(descripcion="Etiqueta ilegible", fecha_detectada=DAY)
+            owner, verifier = Person(nombre="Ana Pérez"), Person(nombre="Eva Ruiz")
             db.session.add_all([
                 User(username="admin", email="admin@example.com",
                      password=generate_password_hash(PASSWORD), role=RoleEnum.ADMINISTRADOR),
                 Auditoria(area_auditada="Compras", fecha=DAY, auditor="M. López",
                           resultado="Sin hallazgos", estado=EstadoAuditoriaEnum.EN_PROCESO),
-                NoConformidad(descripcion="Etiqueta ilegible", fecha_detectada=DAY),
+                nonconformity,
                 Capacitacion(tema="ISO 9001", fecha=DAY, personal="Equipo", duracion_horas=4),
                 SatisfaccionCliente(fecha_encuesta=DAY, cliente="Farmacia Sol", puntuacion=9),
+                owner,
+                verifier,
             ])
+            db.session.flush()
+            # The nonconformity PDF then prints its table of corrective actions.
+            db.session.add(AccionCorrectiva(
+                no_conformidad_id=nonconformity.id, descripcion="Reimprimir las etiquetas",
+                responsable_id=owner.id, fecha_prevista=DAY, fecha_realizada=DAY,
+                resultado_verificacion=ResultadoVerificacion.eficaz, fecha_verificacion=DAY,
+                verificador_id=verifier.id, evidencia_verificacion="Revisión de 200 etiquetas"))
             db.session.commit()
         self.client.post("/login", data={"username": "admin", "password": PASSWORD})
 

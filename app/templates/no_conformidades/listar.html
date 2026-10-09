@@ -19,8 +19,18 @@
 {% from "no_conformidades/_macros.html" import estado_badge %}
 {% block title %}No conformidades{% endblock %}
 {% block crumb %}Calidad · No conformidades{% endblock %}
-{% set filtros = ['descripcion', 'estado', 'fecha_detectada'] %}
+{% set filtros = ['descripcion', 'estado', 'origen', 'gravedad', 'fecha_detectada'] %}
 {% set filtrando = request.args.items() | selectattr(1) | map(attribute=0) | select('in', filtros) | list %}
+{# A select of enum options by member name; an unknown value in the URL selects nothing. #}
+{% macro enum_select(name, label, opciones, todos='Todos') -%}
+<div class="field"><label for="{{ name }}">{{ label }}</label>
+            <select name="{{ name }}" id="{{ name }}">
+                <option value="">{{ todos }}</option>
+                {% for opcion in opciones %}
+                    <option value="{{ opcion.name }}"{% if request.args.get(name) == opcion.name %} selected{% endif %}>{{ opcion.value }}</option>
+                {% endfor %}
+            </select></div>
+{% endmacro %}
 {% block content %}
 {% call page_header('Cláusula 10.2 · No conformidad y acción correctiva', 'No conformidades') %}
     {% if can('create', 'nonconformities') %}
@@ -33,13 +43,9 @@
     <form method="get" action="{{ url_for('no_conformidad.listar_no_conformidades') }}" class="filters__body">
         <div class="field"><label for="descripcion">Descripción</label>
             <input type="text" name="descripcion" id="descripcion" value="{{ request.args.get('descripcion', '') }}"></div>
-        <div class="field"><label for="estado">Estado</label>
-            <select name="estado" id="estado">
-                <option value="">Todos</option>
-                {% for opcion in estados %}
-                    <option value="{{ opcion.name }}"{% if request.args.get('estado') == opcion.name %} selected{% endif %}>{{ opcion.value }}</option>
-                {% endfor %}
-            </select></div>
+        {{ enum_select('estado', 'Estado', estados) }}
+        {{ enum_select('origen', 'Origen', origenes) }}
+        {{ enum_select('gravedad', 'Gravedad', gravedades, 'Todas') }}
         <div class="field"><label for="fecha_detectada">Detectada el</label>
             <input type="date" name="fecha_detectada" id="fecha_detectada" value="{{ request.args.get('fecha_detectada', '') }}"></div>
         <div class="filters__actions">

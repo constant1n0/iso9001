@@ -120,25 +120,37 @@ def lock(session: Session, nc_id: int) -> NoConformidad:
 _ORDER = (NoConformidad.fecha_detectada.desc(), NoConformidad.id.desc())
 
 
-def _state_filter(estado: EstadoNoConformidad | str) -> EstadoNoConformidad:
-    """A state filter given as the member or its name; anything else is refused."""
+# Enum filters: the column, the enum, and the refusal for anything else.
+_ENUM_FILTERS = {
+    "estado": (NoConformidad.estado, EstadoNoConformidad, "El estado no es válido."),
+    "origen": (NoConformidad.origen, OrigenNoConformidad, "El origen no es válido."),
+    "gravedad": (NoConformidad.gravedad, GravedadNoConformidad, "La gravedad no es válida."),
+}
+
+
+def _enum_condition(key: str, value: Any) -> Any:
+    """``column == member`` for an enum filter given as the member or its name."""
+    column, enum_cls, refusal = _ENUM_FILTERS[key]
     try:
-        return fields.enum_member({"estado": estado}, "estado", EstadoNoConformidad)
+        return column == fields.enum_member({key: value}, key, enum_cls)
     except ValidationError:
-        raise ValidationError("El estado no es válido.") from None
+        raise ValidationError(refusal) from None
 
 
 def _conditions(
     descripcion: str | None,
     estado: EstadoNoConformidad | str | None,
     fecha_detectada: date | None,
+    origen: OrigenNoConformidad | str | None,
+    gravedad: GravedadNoConformidad | str | None,
 ) -> list[Any]:
     """The filters shared by ``list_`` and ``list_page``; they combine with AND."""
     where: list[Any] = []
     if descripcion:
         where.append(NoConformidad.descripcion.ilike(f"%{descripcion}%"))
-    if estado:
-        where.append(NoConformidad.estado == _state_filter(estado))
+    for key, value in (("estado", estado), ("origen", origen), ("gravedad", gravedad)):
+        if value:
+            where.append(_enum_condition(key, value))
     if fecha_detectada:
         where.append(NoConformidad.fecha_detectada == fecha_detectada)
     return where
@@ -151,10 +163,18 @@ def list_(
     descripcion: str | None = None,
     estado: EstadoNoConformidad | str | None = None,
     fecha_detectada: date | None = None,
+    origen: OrigenNoConformidad | str | None = None,
+    gravedad: GravedadNoConformidad | str | None = None,
 ) -> list[NoConformidad]:
-    """List nonconformities, newest first; filters combine with AND."""
+    """List nonconformities, newest first; filters combine with AND.
+
+    ``estado``, ``origen`` and ``gravedad`` take the enum member or its name.
+
+    Raises:
+        ValidationError: An enum filter holds anything else.
+    """
     policy.require(actor, Action.READ, Resource.NONCONFORMITIES)
-    where = _conditions(descripcion, estado, fecha_detectada)
+    where = _conditions(descripcion, estado, fecha_detectada, origen, gravedad)
     return list(session.scalars(select(NoConformidad).where(*where).order_by(*_ORDER)))
 
 
@@ -165,13 +185,15 @@ def list_page(
     descripcion: str | None = None,
     estado: EstadoNoConformidad | str | None = None,
     fecha_detectada: date | None = None,
+    origen: OrigenNoConformidad | str | None = None,
+    gravedad: GravedadNoConformidad | str | None = None,
     page: int = 1,
     per_page: int = crud.DEFAULT_PER_PAGE,
 ) -> tuple[list[NoConformidad], int]:
     """One page in the ``list_`` order plus the total matching the same filters."""
     policy.require(actor, Action.READ, Resource.NONCONFORMITIES)
     page, per_page = crud.page_bounds(page, per_page)
-    where = _conditions(descripcion, estado, fecha_detectada)
+    where = _conditions(descripcion, estado, fecha_detectada, origen, gravedad)
     total = session.scalar(select(func.count()).select_from(NoConformidad).where(*where))
     query = (
         select(NoConformidad).where(*where).order_by(*_ORDER)
