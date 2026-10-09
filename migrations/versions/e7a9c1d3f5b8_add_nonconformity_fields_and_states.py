@@ -6,8 +6,9 @@ cancelled, why. ``estado`` becomes an enum stored by member name with a CHECK
 constraint (decision N2 of ``nc-capa-loop``). The free-text states convert:
 "Abierta" -> ``abierta``, "En proceso" -> ``accion_planificada``, "Cerrada" ->
 ``cerrada`` and any other text -> ``abierta``; the Alembic log reports how many
-rows changed. The downgrade maps back: both intermediate states become
-"En proceso" and ``cancelada`` becomes "Cerrada".
+rows were rewritten and how many held unrecognised text. The downgrade maps
+back: both intermediate states become "En proceso" and ``cancelada`` becomes
+"Cerrada".
 
 Revision ID: e7a9c1d3f5b8
 Revises: c9e3a5b7d1f4
@@ -83,7 +84,7 @@ def upgrade():
     ).scalar_one()
     converted = _convert_states(LEGACY_STATES, 'abierta')
     log.info(
-        'Converted %d nonconformity states to the enum (%d unrecognised values became '
+        'Rewrote %d nonconformity states as enum members (%d unrecognised values became '
         "'abierta').", converted, unrecognised,
     )
     op.alter_column(TABLE, 'estado', server_default='abierta')

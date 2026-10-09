@@ -31,11 +31,12 @@ Turn nonconformities into a controlled loop: record origin, severity, containmen
 
 Route for every task: **delegated direct** (two or more non-trivial files each).
 
-- [ ] **NC-1 — Nonconformity fields and states.** Forecast 350-450.
+- [x] **NC-1 — Nonconformity fields and states.** Forecast 350-450.
   - Columns for N1, the state as a constrained enum with the N2 conversion in the migration (upgrade and downgrade), service validation and transitions that do not depend on actions (cancel with reason, reopen by ADMIN), MCP fields.
   - Acceptance: legacy rows convert as N2; invalid transitions refused with Spanish messages; existing NC screens, PDF and reports still work.
 - [ ] **NC-2 — Corrective actions and effectiveness.** Forecast 350-450.
   - `AccionCorrectiva` model and migration, service (create, update, delete, verify), policy resource, state synchronisation N5, close rule, MCP module.
+  - Build `close` and the automatic moves on `nonconformities._transition` (snapshot, `_set_state`, stamp, audit, flush) with the role check done like `cancel`; make the date injected by the adapter (`local_today()`) mandatory for terminal transitions instead of the server clock fallback (NC-1 review).
   - Acceptance: N3–N5 enforced in the service (including concurrent edits refused cleanly); audit rows for every write.
 - [ ] **NC-3 — Screens.** Forecast 400-600.
   - NC form with the new fields and person picker; NC detail page with actions, add/edit/delete action, verify action, close, cancel, reopen; state badges; list filters by state, origin and severity.
@@ -55,8 +56,17 @@ Baseline at `4bd9cdf`: 889 tests. Migrations are tested on PostgreSQL (`TEST_POS
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| NC-1..NC-4 | Pending | — | — | — |
+| NC-1 | Done | `e34df98` (columns `origen`, `gravedad`, `contencion`, `causa_raiz`, `motivo_cancelacion`; `estado` enum with CHECK; migration `e7a9c1d3f5b8`; `cancel`, `reopen`; closed and cancelled NCs read-only; screens, PDF, dashboard and MCP updated), review follow-up in the next commit | RED: 11 modules `ImportError: EstadoNoConformidad`; PostgreSQL conversion still legacy text; then 20 state tests (`no attribute 'cancel'`, fields not allowed, CHECK failed). GREEN: 915 tests incl. PostgreSQL | Range `4bd9cdf..e34df98`: **medium**, `slice_budget_reached` (1,406 lines; standing Wave 1 size exception); consent granted; reliability review `review-62d26d7fd282d214` **approved** and acknowledged; the migration log now says "rewrote" (the count is every row, not only changed ones); the clock suggestion moved into NC-2 |
+| NC-2..NC-4 | Pending | — | — | — |
+
+## Findings during implementation
+
+- The edit surface was widened for NC-1 with the user's approval (2026-10-09): `tests/test_ui_calidad.py`, `tests/test_mcp_modules.py`, `tests/test_service_list_page.py`, `tests/test_audit.py`, `docs/architecture/services.md` (one stale example).
+- MCP and audit snapshots show enum display values ("Cancelada") while filters take member names (`cancelada`).
+- The nonconformity policy only knows resource and action, so cancel (ADMIN, AUDITOR) and reopen (ADMIN) check the role in the service after `policy.require(UPDATE)`.
+- An administrator can still delete a closed nonconformity (only updates are blocked); whether closed records may be deleted at all belongs with the soft-delete decision of document control (D3).
+- Legacy rows keep their existing `fecha_cierre`.
 
 ## Next step
 
-NC-1.
+NC-2.
