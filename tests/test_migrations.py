@@ -25,7 +25,8 @@ POSTGRES_URI = os.environ.get("TEST_POSTGRES_URI")
 MIGRATIONS_DIR = str(bootstrap.PROJECT_ROOT / "migrations")
 # Audited tables created after the record-metadata migration (c4d8e1f2a9b7).
 LATER_AUDITED_TABLES = frozenset(
-    {"personas", "competencias_requeridas", "competencias_acreditadas"}
+    {"personas", "competencias_requeridas", "competencias_acreditadas",
+     "acciones_correctivas"}
 )
 
 
@@ -483,6 +484,56 @@ class MigrationsTestCase(unittest.TestCase):
                 connection.execute(text("UPDATE no_conformidades SET estado = 'Pendiente'"))
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual({"abierta"}, set(self._nc_states().values()))
+            self.assertEqual([], self._schema_differences())
+
+
+    def test_corrective_actions_table_guards_its_links_and_downgrade(self) -> None:
+        table = "acciones_correctivas"
+        expected = {
+            "fk_acciones_correctivas_no_conformidad_id_no_conformidades":
+                ("no_conformidades", "CASCADE"),
+            "fk_acciones_correctivas_responsable_id_personas": ("personas", "RESTRICT"),
+            "fk_acciones_correctivas_verificador_id_personas": ("personas", "RESTRICT"),
+        }
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            foreign_keys = {fk["name"]: (fk["referred_table"], fk["options"].get("ondelete"))
+                            for fk in inspector.get_foreign_keys(table)}
+            self.assertLessEqual(expected.items(), foreign_keys.items())
+            self.assertEqual(
+                {f"ix_{table}_{column}"
+                 for column in ("no_conformidad_id", "responsable_id", "verificador_id")},
+                {index["name"] for index in inspector.get_indexes(table)})
+            with db.engine.begin() as connection:
+                for statement in (
+                    "INSERT INTO personas (nombre) VALUES ('Ana')",
+                    "INSERT INTO no_conformidades (descripcion, fecha_detectada) "
+                    "VALUES ('Fallo', '2026-10-01')",
+                    "INSERT INTO acciones_correctivas (no_conformidad_id, descripcion, "
+                    "responsable_id, fecha_prevista, verificador_id) "
+                    "SELECT n.id, 'Reajustar', p.id, '2026-10-20', p.id "
+                    "FROM no_conformidades n, personas p",
+                ):
+                    connection.execute(text(statement))
+            for statement in (
+                "UPDATE acciones_correctivas SET resultado_verificacion = 'Eficaz'",
+                "UPDATE acciones_correctivas SET descripcion = NULL",
+                "DELETE FROM personas",
+            ):
+                with self.subTest(refused=statement):
+                    with self.assertRaises(IntegrityError):
+                        with db.engine.begin() as connection:
+                            connection.execute(text(statement))
+            with db.engine.begin() as connection:
+                connection.execute(text(
+                    "UPDATE acciones_correctivas SET resultado_verificacion = 'no_eficaz'"))
+                connection.execute(text("DELETE FROM no_conformidades"))  # cascades
+                self.assertEqual(0, connection.execute(text(
+                    "SELECT count(*) FROM acciones_correctivas")).scalar_one())
+            downgrade(directory=MIGRATIONS_DIR, revision="e7a9c1d3f5b8")
+            self.assertNotIn(table, inspect(db.engine).get_table_names())
+            upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 
 

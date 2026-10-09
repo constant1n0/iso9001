@@ -33,6 +33,8 @@ The approved role-by-action matrix (decision D1). Roles may read, write
 - People and competence (required per role, demonstrated per person): every
   role reads; administrators and auditors write; administrators delete
   (decision Q1 of ``qms-people``).
+- Corrective actions follow nonconformities; verifying one is further limited
+  to administrators and auditors by its service (decision N4 of ``nc-capa-loop``).
 
 Seams: the ``mcp`` channel never deletes, and token scopes intersect the role.
 """
@@ -76,6 +78,7 @@ class Resource(StrEnum):
     API_TOKENS = "api_tokens"
     PEOPLE = "people"
     COMPETENCE = "competence"
+    CORRECTIVE_ACTIONS = "corrective_actions"
 
 
 _ALL = frozenset(RoleEnum)
@@ -119,6 +122,7 @@ _MATRIX: dict[Resource, Grant] = {
     Resource.API_TOKENS: Grant(_ADMIN, _ADMIN, _NOBODY),
     Resource.PEOPLE: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
     Resource.COMPETENCE: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
+    Resource.CORRECTIVE_ACTIONS: _OPEN_REGISTER,
 }
 
 

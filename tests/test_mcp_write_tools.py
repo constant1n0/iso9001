@@ -58,7 +58,8 @@ class EveryModuleTestCase(McpDbCase):
                 self.assertEqual(record["id"], updated.structured_content["id"])
         db.session.expire_all()
         rows = audit_rows()
-        self.assertEqual(2 * len(MODULES), len(rows))
+        # Plus the nonconformity's move to "Acción planificada" on its first action.
+        self.assertEqual(2 * len(MODULES) + 1, len(rows))
         self.assertEqual({"mcp"}, {r.channel for r in rows})
         self.assertEqual({7}, {r.actor_user_id for r in rows})
         self.assertEqual({"create", "update"}, {r.action for r in rows})

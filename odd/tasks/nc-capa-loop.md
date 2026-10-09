@@ -34,7 +34,7 @@ Route for every task: **delegated direct** (two or more non-trivial files each).
 - [x] **NC-1 — Nonconformity fields and states.** Forecast 350-450.
   - Columns for N1, the state as a constrained enum with the N2 conversion in the migration (upgrade and downgrade), service validation and transitions that do not depend on actions (cancel with reason, reopen by ADMIN), MCP fields.
   - Acceptance: legacy rows convert as N2; invalid transitions refused with Spanish messages; existing NC screens, PDF and reports still work.
-- [ ] **NC-2 — Corrective actions and effectiveness.** Forecast 350-450.
+- [x] **NC-2 — Corrective actions and effectiveness.** Forecast 350-450.
   - `AccionCorrectiva` model and migration, service (create, update, delete, verify), policy resource, state synchronisation N5, close rule, MCP module.
   - Build `close` and the automatic moves on `nonconformities._transition` (snapshot, `_set_state`, stamp, audit, flush) with the role check done like `cancel`; make the date injected by the adapter (`local_today()`) mandatory for terminal transitions instead of the server clock fallback (NC-1 review).
   - Acceptance: N3–N5 enforced in the service (including concurrent edits refused cleanly); audit rows for every write.
@@ -57,7 +57,8 @@ Baseline at `4bd9cdf`: 889 tests. Migrations are tested on PostgreSQL (`TEST_POS
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
 | NC-1 | Done | `e34df98` (columns `origen`, `gravedad`, `contencion`, `causa_raiz`, `motivo_cancelacion`; `estado` enum with CHECK; migration `e7a9c1d3f5b8`; `cancel`, `reopen`; closed and cancelled NCs read-only; screens, PDF, dashboard and MCP updated), review follow-up in the next commit | RED: 11 modules `ImportError: EstadoNoConformidad`; PostgreSQL conversion still legacy text; then 20 state tests (`no attribute 'cancel'`, fields not allowed, CHECK failed). GREEN: 915 tests incl. PostgreSQL | Range `4bd9cdf..e34df98`: **medium**, `slice_budget_reached` (1,406 lines; standing Wave 1 size exception); consent granted; reliability review `review-62d26d7fd282d214` **approved** and acknowledged; the migration log now says "rewrote" (the count is every row, not only changed ones); the clock suggestion moved into NC-2 |
-| NC-2..NC-4 | Pending | — | — | — |
+| NC-2 | Done | `7cf117d` (`acciones_correctivas`, migration `f8b2d4a6c9e1`, `app/services/corrective_actions.py` with `verify`, policy `CORRECTIVE_ACTIONS`, state synchronisation, `nonconformities.close`, row lock, MCP module `acciones_correctivas` with the derived status), review follow-up in the next commit | RED: 146 tests (6 failures, 47 errors: missing service, models, `close`, table, policy key, counts, unknown module); follow-up: moving the detection date after a done date was accepted. GREEN: 955, then 956 tests incl. PostgreSQL; removing the row lock makes the PostgreSQL race test fail | Range `6faad03..7cf117d`: **medium**, `slice_budget_reached` (1,488 lines; standing Wave 1 size exception); consent granted; reliability review `review-2be049d83f2437c2` **approved** and acknowledged; fixed: the detection date can no longer move past a recorded done date; its other warning (adapters passing `today` to `cancel`) is covered by the existing web route tests, and the MCP has no cancel tool |
+| NC-3..NC-4 | Pending | — | — | — |
 
 ## Findings during implementation
 
@@ -66,7 +67,10 @@ Baseline at `4bd9cdf`: 889 tests. Migrations are tested on PostgreSQL (`TEST_POS
 - The nonconformity policy only knows resource and action, so cancel (ADMIN, AUDITOR) and reopen (ADMIN) check the role in the service after `policy.require(UPDATE)`.
 - An administrator can still delete a closed nonconformity (only updates are blocked); whether closed records may be deleted at all belongs with the soft-delete decision of document control (D3).
 - Legacy rows keep their existing `fecha_cierre`.
+- **Close rule as implemented (N5, clarified):** read literally, "close only when every action is effective" plus "an ineffective action needs a new one" would make a nonconformity with any ineffective action impossible to close, because verified actions are read-only. The service applies: the latest action verified `no_eficaz` sends the nonconformity back to `accion_planificada`; closing needs every action verified and the latest one `eficaz`; earlier ineffective actions stay as evidence. Edge case: if an earlier action is found ineffective while a later one is already done, the state stays `en_verificacion`. Reported to the user (2026-10-09).
+- Other NC-2 rules: verification needs evidence and a date not before the done date; the verifier person differs from the owner; reopening lands on the state the actions call for; deleting a nonconformity deletes its actions with an audit row each; `update`, `cancel`, `reopen` and every action write lock the nonconformity row (`SELECT … FOR UPDATE`).
+- The MCP has no verify or close tool: `qms_update` refuses those fields; NC-3 screens are the only way to verify and close.
 
 ## Next step
 
-NC-2.
+NC-3.
