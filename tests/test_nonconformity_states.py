@@ -133,7 +133,7 @@ class CancelTestCase(StatesBase):
             with self.subTest(estado=estado.name):
                 nc = self.create()
                 self.force_state(nc, estado)
-                service().cancel(db.session, actor(ADMIN), nc.id, "Duplicada")
+                service().cancel(db.session, actor(ADMIN), nc.id, "Duplicada", today=TODAY)
                 db.session.commit()
                 self.assertEqual(E.cancelada, nc.estado)
                 self.assertIsNotNone(nc.fecha_cierre)
@@ -143,7 +143,7 @@ class CancelTestCase(StatesBase):
         for motivo in ("", "   ", None):
             with self.subTest(motivo=motivo):
                 with self.assertRaises(errors().ValidationError) as raised:
-                    service().cancel(db.session, actor(ADMIN), nc.id, motivo)
+                    service().cancel(db.session, actor(ADMIN), nc.id, motivo, today=TODAY)
                 self.assertEqual("El motivo de la cancelación es obligatorio.",
                                  raised.exception.message)
                 db.session.rollback()
@@ -156,7 +156,7 @@ class CancelTestCase(StatesBase):
                     actor(AUDITOR, channel="mcp", scopes={"read"})):
             with self.subTest(actor=who):
                 with self.assertRaises(errors().PermissionDenied):
-                    service().cancel(db.session, who, nc.id, "Duplicada")
+                    service().cancel(db.session, who, nc.id, "Duplicada", today=TODAY)
         self.assertEqual(E.abierta, nc.estado)
         self.assertEqual(1, len(self.audit_rows()))
 
@@ -166,12 +166,12 @@ class CancelTestCase(StatesBase):
                 nc = self.create()
                 self.force_state(nc, estado)
                 with self.assertRaises(errors().ValidationError):
-                    service().cancel(db.session, actor(ADMIN), nc.id, "Otra vez")
+                    service().cancel(db.session, actor(ADMIN), nc.id, "Otra vez", today=TODAY)
                 db.session.rollback()
 
     def test_cancel_missing_raises_not_found(self) -> None:
         with self.assertRaises(errors().NotFound):
-            service().cancel(db.session, actor(ADMIN), 999, "Duplicada")
+            service().cancel(db.session, actor(ADMIN), 999, "Duplicada", today=TODAY)
 
 
 class ReopenTestCase(StatesBase):

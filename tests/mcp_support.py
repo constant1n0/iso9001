@@ -46,6 +46,9 @@ SEEDS = {
     "competencias_requeridas": {"rol_id": 1, "tipo": "formacion", "descripcion": "Curso de seguridad"},
     "competencias_acreditadas": {"persona_id": 1, "evidencia": "Certificado 123",
                                  "fecha_obtencion": "2026-10-01"},
+    # Cites the nonconformity and the person seeded above (both id 1).
+    "acciones_correctivas": {"no_conformidad_id": 1, "descripcion": "Reajustar el molde",
+                             "responsable_id": 1, "fecha_prevista": "2026-10-15"},
 }
 
 

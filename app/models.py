@@ -541,6 +541,80 @@ class NoConformidad(RecordMetadataMixin, db.Model):
     fecha_cierre = db.Column(db.Date)  # set on closing or cancelling, cleared on reopening
     motivo_cancelacion = db.Column(db.Text)
 
+
+class ResultadoVerificacion(enum.Enum):
+    """Outcome of verifying a corrective action's effectiveness (decision N3)."""
+
+    eficaz = 'Eficaz'
+    no_eficaz = 'No eficaz'
+
+
+class EstadoAccionCorrectiva(enum.Enum):
+    """Where a corrective action stands; derived from its dates and verification."""
+
+    planificada = 'Planificada'
+    realizada = 'Realizada'
+    verificada_eficaz = 'Verificada eficaz'
+    verificada_no_eficaz = 'Verificada no eficaz'
+
+
+class AccionCorrectiva(RecordMetadataMixin, db.Model):
+    """A corrective action taken on a nonconformity (ISO 9001 clause 10.2, decision N3).
+
+    Its status is derived (``estado``), never stored. The verification columns
+    are written only by ``services.corrective_actions.verify``; the service
+    also keeps the nonconformity's state in step with its actions (N5).
+    """
+
+    __tablename__ = 'acciones_correctivas'
+    __table_args__ = (
+        db.ForeignKeyConstraint(
+            ['no_conformidad_id'],
+            ['no_conformidades.id'],
+            name='fk_acciones_correctivas_no_conformidad_id_no_conformidades',
+            ondelete='CASCADE',
+        ),
+        db.ForeignKeyConstraint(
+            ['responsable_id'],
+            ['personas.id'],
+            name='fk_acciones_correctivas_responsable_id_personas',
+            ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['verificador_id'],
+            ['personas.id'],
+            name='fk_acciones_correctivas_verificador_id_personas',
+            ondelete='RESTRICT',
+        ),
+        db.Index('ix_acciones_correctivas_no_conformidad_id', 'no_conformidad_id'),
+        db.Index('ix_acciones_correctivas_responsable_id', 'responsable_id'),
+        db.Index('ix_acciones_correctivas_verificador_id', 'verificador_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    no_conformidad_id = db.Column(db.Integer, nullable=False)
+    descripcion = db.Column(db.String(1000), nullable=False)
+    responsable_id = db.Column(db.Integer, nullable=False)
+    fecha_prevista = db.Column(db.Date, nullable=False)
+    fecha_realizada = db.Column(db.Date)
+    resultado_verificacion = db.Column(
+        text_enum(ResultadoVerificacion, 'ck_acciones_correctivas_resultado_verificacion')
+    )
+    fecha_verificacion = db.Column(db.Date)
+    verificador_id = db.Column(db.Integer, nullable=True)
+    evidencia_verificacion = db.Column(db.Text)
+
+    @property
+    def estado(self) -> EstadoAccionCorrectiva:
+        """Planificada until done, then Realizada until verified, then the result."""
+        if self.resultado_verificacion is ResultadoVerificacion.eficaz:
+            return EstadoAccionCorrectiva.verificada_eficaz
+        if self.resultado_verificacion is ResultadoVerificacion.no_eficaz:
+            return EstadoAccionCorrectiva.verificada_no_eficaz
+        if self.fecha_realizada is not None:
+            return EstadoAccionCorrectiva.realizada
+        return EstadoAccionCorrectiva.planificada
+
 # Modelo para almacenar resultados de Satisfacción del Cliente
 class SatisfaccionCliente(RecordMetadataMixin, db.Model):
     __tablename__ = 'satisfaccion_cliente'

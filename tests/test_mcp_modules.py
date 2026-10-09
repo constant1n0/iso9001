@@ -15,7 +15,7 @@ SLUGS = {
     "satisfaccion_clientes", "partes_interesadas", "mejoras",
     "roles_responsabilidades", "riesgos_oportunidades", "recursos_capacitacion",
     "procesos", "indicadores_auditoria", "personas",
-    "competencias_requeridas", "competencias_acreditadas",
+    "competencias_requeridas", "competencias_acreditadas", "acciones_correctivas",
 }
 # The two competence registers share one policy resource (decision Q1 of qms-people).
 SHARED_RESOURCE = ("competencias_requeridas", "competencias_acreditadas")
@@ -42,7 +42,7 @@ class LayoutTestCase(unittest.TestCase):
 
 
 class RegistryTestCase(unittest.TestCase):
-    def test_registry_holds_the_fifteen_modules(self) -> None:
+    def test_registry_holds_the_sixteen_modules(self) -> None:
         self.assertEqual(SLUGS, set(registry().MODULES))
 
     def test_each_module_maps_to_its_own_policy_resource(self) -> None:

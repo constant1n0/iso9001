@@ -29,17 +29,25 @@ Rules this module follows, and the services that copy it should too:
 ``people.check_reference``); ``responsable`` keeps the legacy free-text name,
 which a write that leaves it blank takes from that person (``people.fill_name``).
 
-States (decision N2 of ``nc-capa-loop``): ``estado`` is never part of a write.
-A new nonconformity starts ``abierta``; ``cancel`` (administrators and
+States (decisions N2 and N5 of ``nc-capa-loop``): ``estado`` is never part of
+a write. A new nonconformity starts ``abierta``; while open, its state follows
+its corrective actions (``expected_state``, applied by ``sync_state`` after
+every write of ``corrective_actions``). ``close`` (administrators and
+auditors, once every action proved effective), ``cancel`` (administrators and
 auditors, with a reason) and ``reopen`` (administrators) are the explicit
-transitions, and every state change goes through ``_transition``, which keeps
-``fecha_cierre`` and ``motivo_cancelacion`` consistent. A ``cerrada`` or
-``cancelada`` nonconformity is read-only until it is reopened.
+transitions; closing and cancelling record the date the adapter passes. Every
+state change goes through ``_transition``, which keeps ``fecha_cierre`` and
+``motivo_cancelacion`` consistent. A ``cerrada`` or ``cancelada``
+nonconformity is read-only until it is reopened.
+
+Writes that can move the state take the nonconformity's row lock first
+(``lock``), so concurrent ones serialize on PostgreSQL and the second sees
+the first one's outcome.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from typing import Any
 
@@ -48,7 +56,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
-    EstadoNoConformidad, GravedadNoConformidad, NoConformidad, OrigenNoConformidad, RoleEnum,
+    AccionCorrectiva, EstadoNoConformidad, GravedadNoConformidad, NoConformidad,
+    OrigenNoConformidad, ResultadoVerificacion, RoleEnum,
 )
 from . import audit, crud, fields, people, policy
 from .actor import Actor
@@ -62,9 +71,12 @@ OPEN_STATES = (
     EstadoNoConformidad.en_verificacion,
 )
 TERMINAL_STATES = (EstadoNoConformidad.cerrada, EstadoNoConformidad.cancelada)
-# Beyond writing nonconformities (the policy matrix), these roles cancel or reopen.
+# Beyond writing nonconformities (the policy matrix), these roles cancel, close or reopen.
 CANCEL_ROLES = frozenset({RoleEnum.ADMINISTRADOR, RoleEnum.AUDITOR})
+CLOSE_ROLES = CANCEL_ROLES
 REOPEN_ROLES = frozenset({RoleEnum.ADMINISTRADOR})
+NOT_FOUND = "No conformidad no encontrada."
+ALREADY_TERMINAL = "La no conformidad ya está cerrada o cancelada."
 READ_ONLY_MESSAGE = (
     "Esta no conformidad está cerrada o cancelada y no se puede modificar; "
     "un administrador puede reabrirla."
@@ -80,8 +92,24 @@ def get(session: Session, actor: Actor, nc_id: int) -> NoConformidad:
 def _load(session: Session, nc_id: int) -> NoConformidad:
     nc = session.get(NoConformidad, nc_id)
     if nc is None:
-        raise NotFound("No conformidad no encontrada.")
+        raise NotFound(NOT_FOUND)
     return nc
+
+
+def lock(session: Session, nc_id: int) -> NoConformidad:
+    """Load a nonconformity afresh with its row locked (``FOR UPDATE``), or raise ``NotFound``.
+
+    The lock lasts until the adapter ends the transaction; SQLite ignores it.
+    """
+    found = None
+    if people.is_db_id(nc_id):
+        found = session.scalars(
+            select(NoConformidad).where(NoConformidad.id == nc_id).with_for_update()
+            .execution_options(populate_existing=True)
+        ).one_or_none()
+    if found is None:
+        raise NotFound(NOT_FOUND)
+    return found
 
 
 # Newest first; the id breaks ties between rows detected on the same day.
@@ -234,7 +262,7 @@ def update(
     A closed or cancelled nonconformity is read-only (``ValidationError``).
     """
     policy.require(actor, Action.UPDATE, Resource.NONCONFORMITIES)
-    nc = _load(session, nc_id)
+    nc = lock(session, nc_id)
     if nc.estado in TERMINAL_STATES:
         raise ValidationError(READ_ONLY_MESSAGE)
     values = _clean(session, _fill_responsable(session, data, nc), current=nc)
@@ -252,6 +280,14 @@ def update(
 def may_cancel(actor: Actor, nc: NoConformidad) -> bool:
     """Whether ``actor`` may cancel ``nc`` now (role, token scope and state)."""
     return _may(actor, CANCEL_ROLES) and nc.estado not in TERMINAL_STATES
+
+
+def may_close(actor: Actor, nc: NoConformidad) -> bool:
+    """Whether ``actor`` may try to close ``nc`` now (role, token scope and state).
+
+    Whether its actions allow it is checked by ``close`` (see ``close_blockers``).
+    """
+    return _may(actor, CLOSE_ROLES) and nc.estado not in TERMINAL_STATES
 
 
 def may_reopen(actor: Actor, nc: NoConformidad) -> bool:
@@ -273,15 +309,13 @@ def _require_role(actor: Actor, roles: frozenset[RoleEnum]) -> None:
 
 
 def cancel(
-    session: Session, actor: Actor, nc_id: int, motivo: str | None,
-    *, today: date | None = None,
+    session: Session, actor: Actor, nc_id: int, motivo: str | None, *, today: date,
 ) -> NoConformidad:
     """Cancel an open nonconformity, recording why; administrators and auditors only.
 
     Args:
         motivo: Why it is cancelled; required and stored trimmed.
-        today: The closing date to record (the adapter's local date); defaults
-            to the server's date.
+        today: The closing date to record (the adapter's local date).
 
     Raises:
         PermissionDenied: The actor may not cancel nonconformities.
@@ -289,27 +323,120 @@ def cancel(
             or cancelled.
     """
     _require_role(actor, CANCEL_ROLES)
-    nc = _load(session, nc_id)
+    nc = lock(session, nc_id)
     if not isinstance(motivo, str) or not motivo.strip():
         raise ValidationError("El motivo de la cancelación es obligatorio.")
     if nc.estado in TERMINAL_STATES:
-        raise ValidationError("La no conformidad ya está cerrada o cancelada.")
+        raise ValidationError(ALREADY_TERMINAL)
     _transition(session, actor, nc, EstadoNoConformidad.cancelada,
                 today=today, motivo=motivo.strip())
     return nc
 
 
-def reopen(session: Session, actor: Actor, nc_id: int) -> NoConformidad:
-    """Reopen a closed or cancelled nonconformity as ``abierta``; administrators only.
+def close(session: Session, actor: Actor, nc_id: int, *, today: date) -> NoConformidad:
+    """Close an open nonconformity; administrators and auditors only (decision N5).
 
-    The closing date and the cancellation reason are cleared.
+    Every corrective action must be verified effective; an ineffective one
+    followed by a later action no longer counts (``close_blockers``).
+
+    Args:
+        today: The closing date to record (the adapter's local date).
+
+    Raises:
+        PermissionDenied: The actor may not close nonconformities.
+        ValidationError: Already closed or cancelled, or the actions do not
+            allow it yet; the message says what is missing.
+    """
+    _require_role(actor, CLOSE_ROLES)
+    nc = lock(session, nc_id)
+    if nc.estado in TERMINAL_STATES:
+        raise ValidationError(ALREADY_TERMINAL)
+    missing = close_blockers(_actions(session, nc.id))
+    if missing:
+        raise ValidationError(f"No se puede cerrar la no conformidad: {'; '.join(missing)}.")
+    _transition(session, actor, nc, EstadoNoConformidad.cerrada, today=today)
+    return nc
+
+
+def reopen(session: Session, actor: Actor, nc_id: int) -> NoConformidad:
+    """Reopen a closed or cancelled nonconformity; administrators only.
+
+    It lands on the state its corrective actions call for (``expected_state``,
+    ``abierta`` without actions); the closing date and the cancellation reason
+    are cleared.
     """
     _require_role(actor, REOPEN_ROLES)
-    nc = _load(session, nc_id)
+    nc = lock(session, nc_id)
     if nc.estado not in TERMINAL_STATES:
         raise ValidationError("Solo se puede reabrir una no conformidad cerrada o cancelada.")
-    _transition(session, actor, nc, EstadoNoConformidad.abierta)
+    _transition(session, actor, nc, expected_state(_actions(session, nc.id)))
     return nc
+
+
+def _actions(session: Session, nc_id: int) -> list[AccionCorrectiva]:
+    """The corrective actions of a nonconformity, in the order they were registered."""
+    return list(session.scalars(
+        select(AccionCorrectiva).where(AccionCorrectiva.no_conformidad_id == nc_id)
+        .order_by(AccionCorrectiva.id)
+    ))
+
+
+def _latest_failed(actions: Sequence[AccionCorrectiva]) -> bool:
+    """Whether the latest action was verified not effective: a new one is needed."""
+    return bool(actions) and actions[-1].resultado_verificacion is ResultadoVerificacion.no_eficaz
+
+
+def expected_state(actions: Sequence[AccionCorrectiva]) -> EstadoNoConformidad:
+    """The open state that ``actions``, in registration order, call for (decision N5).
+
+    ``abierta`` without actions; ``accion_planificada`` while an action is not
+    done or the latest one was verified not effective; otherwise
+    ``en_verificacion``, which only an explicit ``close`` leaves. An
+    ineffective action followed by a later one stays as evidence.
+    """
+    if not actions:
+        return EstadoNoConformidad.abierta
+    if _latest_failed(actions) or any(a.fecha_realizada is None for a in actions):
+        return EstadoNoConformidad.accion_planificada
+    return EstadoNoConformidad.en_verificacion
+
+
+def _count(number: int, singular: str, plural: str) -> str:
+    return f"{number} {singular if number == 1 else plural}"
+
+
+def close_blockers(actions: Sequence[AccionCorrectiva]) -> list[str]:
+    """What keeps a nonconformity with ``actions`` from closing, in Spanish; empty if nothing."""
+    if not actions:
+        return ["no tiene ninguna acción correctiva"]
+    missing = []
+    not_done = sum(a.fecha_realizada is None for a in actions)
+    unverified = sum(
+        a.fecha_realizada is not None and a.resultado_verificacion is None for a in actions
+    )
+    if not_done:
+        missing.append(_count(not_done, "acción sin realizar", "acciones sin realizar"))
+    if unverified:
+        missing.append(_count(unverified, "acción pendiente de verificar",
+                              "acciones pendientes de verificar"))
+    if _latest_failed(actions):
+        missing.append(
+            "la última acción correctiva no fue eficaz; registra una nueva acción correctiva"
+        )
+    return missing
+
+
+def sync_state(session: Session, actor: Actor, nc: NoConformidad) -> None:
+    """Move an open ``nc`` to the state its actions call for (``expected_state``).
+
+    ``corrective_actions`` calls it after each write, holding the row lock; a
+    closed or cancelled nonconformity is left as it is.
+    """
+    if nc.estado in TERMINAL_STATES:
+        return
+    wanted = expected_state(_actions(session, nc.id))
+    if wanted is not nc.estado:
+        _transition(session, actor, nc, wanted)
 
 
 def _transition(
@@ -333,18 +460,26 @@ def _set_state(
 ) -> None:
     """Set ``estado`` and keep its companions consistent.
 
-    ``fecha_cierre`` holds ``today`` in a terminal state and is empty
-    otherwise; ``motivo_cancelacion`` is kept only while ``cancelada``.
+    ``fecha_cierre`` holds ``today`` in a terminal state, which needs it (there
+    is no server-clock fallback), and is empty otherwise;
+    ``motivo_cancelacion`` is kept only while ``cancelada``.
     """
+    terminal = estado in TERMINAL_STATES
+    if terminal and today is None:
+        raise ValueError("A closed or cancelled state needs the adapter's date.")
     nc.estado = estado
-    nc.fecha_cierre = (today or date.today()) if estado in TERMINAL_STATES else None
+    nc.fecha_cierre = today if terminal else None
     nc.motivo_cancelacion = motivo if estado is EstadoNoConformidad.cancelada else None
 
 
 def delete(session: Session, actor: Actor, nc_id: int) -> None:
-    """Hard-delete a nonconformity, keeping its full snapshot in the audit log."""
+    """Hard-delete a nonconformity and its corrective actions, with full audit snapshots."""
     policy.require(actor, Action.DELETE, Resource.NONCONFORMITIES)
-    nc = _load(session, nc_id)
+    nc = lock(session, nc_id)
+    for action in _actions(session, nc.id):
+        audit.record(session, actor, "delete", action)
+        session.delete(action)
+    _flush(session)  # the actions' rows go before the row they reference
     audit.record(session, actor, "delete", nc)
     session.delete(nc)
     _flush(session)

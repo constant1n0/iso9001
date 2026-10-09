@@ -13,13 +13,14 @@ from enum import Enum
 from typing import Any
 
 from ..models import (
-    CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAuditoriaEnum,
-    EstadoNoConformidad, GravedadNoConformidad, OrigenNoConformidad, TipoEnum,
+    CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAccionCorrectiva,
+    EstadoAuditoriaEnum, EstadoNoConformidad, GravedadNoConformidad, OrigenNoConformidad,
+    TipoEnum,
 )
 from ..services import (
-    audit_indicators, audits, competence, documents, improvements, nonconformities, people,
-    process_operations, risks_opportunities, roles_responsibilities,
-    satisfaction, stakeholders, training, training_resources,
+    audit_indicators, audits, competence, corrective_actions, documents, improvements,
+    nonconformities, people, process_operations, risks_opportunities,
+    roles_responsibilities, satisfaction, stakeholders, training, training_resources,
 )
 from ..services.policy import Resource
 
@@ -64,6 +65,10 @@ class Module:
 
 def _person_extras(person: Any) -> dict[str, Any]:
     return {"rol_ids": person.rol_ids}
+
+
+def _action_extras(action: Any) -> dict[str, Any]:
+    return {"estado": action.estado}  # derived, never stored
 
 
 def _f(name: str, type: str = "string", required: bool = False, allowed=(), members=None,
@@ -180,6 +185,23 @@ _MODULES = (
         _f("fecha_evaluacion", "date"), _f("evaluador_id", "integer"),
     ), (_f("persona_id", "integer"), _f("requisito_id", "integer"),
         _f("evaluacion_eficacia", "enum", members=CompetenceEvaluation))),
+    # Records add the derived ``estado`` (Spanish label; the filter takes the member
+    # name) and show the verification columns, which no tool writes: verifying an
+    # action's effectiveness is a separate service step (administrators and
+    # auditors). Each write moves the nonconformity's state along (decision N5).
+    Module("acciones_correctivas", "Corrective actions", Resource.CORRECTIVE_ACTIONS,
+           corrective_actions, (
+        _f("no_conformidad_id", "integer", True, note=(
+            "Id of an open non-conformity (no_conformidades); it cannot change later.")),
+        _f("descripcion", required=True),
+        _f("responsable_id", "integer", True, note="Person (personas) who owns the action."),
+        _f("fecha_prevista", "date", True),
+        _f("fecha_realizada", "date", note=(
+            "Set when the action is done; not before the non-conformity was detected. "
+            "Verified actions are read-only.")),
+    ), (_f("no_conformidad_id", "integer"), _f("responsable_id", "integer"),
+        _f("estado", "enum", members=EstadoAccionCorrectiva)),
+        extras=_action_extras),
 )
 
 MODULES: dict[str, Module] = {module.slug: module for module in _MODULES}

@@ -211,11 +211,13 @@ ALLOWED = {
     "PROCESS_OPERATIONS": JSON_REGISTER,
     "PEOPLE": JSON_REGISTER,  # decision Q1 of qms-people
     "COMPETENCE": JSON_REGISTER,
+    "CORRECTIVE_ACTIONS": (ALL, ALL, {ADMIN}),
 }
 # Policy entries without routes. AUDIT_LOG has no adapter yet. The API_TOKENS
 # matrix (issue, list, revoke any token) stays CLI-only; "Mi perfil" bypasses it
 # with an ownership check, so tests/test_profile_routes.py characterizes it.
-NO_ROUTES = {"AUDIT_LOG", "API_TOKENS"}
+# CORRECTIVE_ACTIONS gets its screens in task NC-3 of nc-capa-loop.
+NO_ROUTES = {"AUDIT_LOG", "API_TOKENS", "CORRECTIVE_ACTIONS"}
 
 
 def allowed_roles(endpoint: Endpoint) -> set:
