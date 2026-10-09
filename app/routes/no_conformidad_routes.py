@@ -20,12 +20,13 @@ from ..audit_notifications import local_today
 from ..forms import NoConformidadForm, person_choices
 from ..extensions import db
 from ..models import EstadoNoConformidad
-from ..services import nonconformities, people
+from ..services import corrective_actions, nonconformities, people
 from ..services.errors import ValidationError
 from ..utils.permissions import require_permission
 from ..utils.pdf import pdf_response, render_pdf
 from ..utils.web_actor import current_actor
 from ..utils.web_args import date_arg
+from .corrective_action_routes import may_verify
 
 # Define el blueprint y la URL base
 bp = Blueprint('no_conformidad', __name__, url_prefix='/no_conformidades')
@@ -41,18 +42,26 @@ def _form_data(form):
 
 
 def _saved(write):
-    """Run a service write and commit it; on a refusal roll back and flash why.
+    """Run a service write that returns its record, commit, and return the record.
 
-    The route then shows the form again, keeping what the user typed.
+    On a ``ValidationError`` roll back, flash why and return ``None``; the route
+    then shows the form again, keeping what the user typed (or, for a one-button
+    action, the nonconformity's page with the reason). Other domain errors reach
+    the global handlers.
     """
     try:
-        write()
+        written = write()
         db.session.commit()
     except ValidationError as error:
         db.session.rollback()
         flash(error.message, 'danger')
-        return False
-    return True
+        return None
+    return written
+
+
+def _page(id):
+    """Back to the nonconformity's page."""
+    return redirect(url_for('no_conformidad.ver_no_conformidad', id=id))
 
 
 # Ruta para listar todas las no conformidades
@@ -81,12 +90,35 @@ def nueva_no_conformidad():
     actor = current_actor()
     form = NoConformidadForm()
     form.responsable_id.choices = person_choices(people.choices(db.session, actor))
-    if form.validate_on_submit() and _saved(
+    created = form.validate_on_submit() and _saved(
         lambda: nonconformities.create(db.session, actor, _form_data(form))
-    ):
+    )
+    if created:
         flash('No conformidad registrada exitosamente', 'success')
-        return redirect(url_for('no_conformidad.listar_no_conformidades'))
+        return _page(created.id)
     return render_template('no_conformidades/nueva.html', form=form)
+
+
+# The nonconformity's page: every field, its corrective actions and the
+# buttons the role and the state allow (decisions N3-N5 of nc-capa-loop).
+@bp.route('/<int:id>', methods=['GET'])
+@login_required
+def ver_no_conformidad(id):
+    actor = current_actor()
+    no_conformidad = nonconformities.get(db.session, actor, id)
+    acciones = corrective_actions.list_(db.session, actor, no_conformidad_id=id)
+    person_ids = [no_conformidad.responsable_id, *(a.responsable_id for a in acciones),
+                  *(a.verificador_id for a in acciones)]
+    return render_template(
+        'no_conformidades/detalle.html', no_conformidad=no_conformidad, acciones=acciones,
+        personas=people.names(db.session, actor, person_ids),
+        abierta=no_conformidad.estado not in nonconformities.TERMINAL_STATES,
+        puede_verificar=may_verify(),
+        puede_cerrar=nonconformities.may_close(actor, no_conformidad),
+        bloqueos=nonconformities.close_blockers(acciones),
+        puede_cancelar=nonconformities.may_cancel(actor, no_conformidad),
+        puede_reabrir=nonconformities.may_reopen(actor, no_conformidad),
+    )
 
 # Ruta para editar una no conformidad
 @bp.route('/editar/<int:id>', methods=['GET', 'POST'])
@@ -102,7 +134,7 @@ def editar_no_conformidad(id):
         lambda: nonconformities.update(db.session, actor, id, _form_data(form))
     ):
         flash('No conformidad actualizada exitosamente', 'success')
-        return redirect(url_for('no_conformidad.listar_no_conformidades'))
+        return _page(id)
     return render_template(
         'no_conformidades/editar.html', form=form, no_conformidad=no_conformidad,
         solo_lectura=no_conformidad.estado in nonconformities.TERMINAL_STATES,
@@ -121,7 +153,7 @@ def cancelar_no_conformidad(id):
                            request.form.get('motivo_cancelacion', ''), today=local_today())
     db.session.commit()
     flash('No conformidad cancelada.', 'success')
-    return redirect(url_for('no_conformidad.editar_no_conformidad', id=id))
+    return _page(id)
 
 
 @bp.route('/reabrir/<int:id>', methods=['POST'])
@@ -131,7 +163,19 @@ def reabrir_no_conformidad(id):
     nonconformities.reopen(db.session, current_actor(), id)
     db.session.commit()
     flash('No conformidad reabierta.', 'success')
-    return redirect(url_for('no_conformidad.editar_no_conformidad', id=id))
+    return _page(id)
+
+
+# Closing (administrators and auditors, once every action proved effective):
+# what is still missing comes back as a flash on the nonconformity's page.
+@bp.route('/cerrar/<int:id>', methods=['POST'])
+@login_required
+@require_permission('update', 'nonconformities')
+def cerrar_no_conformidad(id):
+    if _saved(lambda: nonconformities.close(db.session, current_actor(), id,
+                                            today=local_today())):
+        flash('No conformidad cerrada.', 'success')
+    return _page(id)
 
 # Ruta para eliminar una no conformidad
 @bp.route('/eliminar/<int:id>', methods=['POST'])

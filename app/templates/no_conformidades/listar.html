@@ -16,11 +16,11 @@
  -->
 {% extends "base.html" %}
 {% from "_partials/ui.html" import page_header, delete_form, empty_state %}
+{% from "no_conformidades/_macros.html" import estado_badge %}
 {% block title %}No conformidades{% endblock %}
 {% block crumb %}Calidad · No conformidades{% endblock %}
 {% set filtros = ['descripcion', 'estado', 'fecha_detectada'] %}
 {% set filtrando = request.args.items() | selectattr(1) | map(attribute=0) | select('in', filtros) | list %}
-{% set estilo_estado = {'abierta': 'badge--danger', 'accion_planificada': 'badge--warn', 'en_verificacion': 'badge--warn', 'cerrada': 'badge--ok'} %}
 {% block content %}
 {% call page_header('Cláusula 10.2 · No conformidad y acción correctiva', 'No conformidades') %}
     {% if can('create', 'nonconformities') %}
@@ -69,12 +69,13 @@
                 <td>{{ nc.descripcion | truncate(90) }}</td>
                 {% set persona = personas.get(nc.responsable_id) %}
                 <td>{{ nc.responsable or '—' }}{% if persona %}<br><span class="muted">Persona: {{ persona }}</span>{% endif %}</td>
-                <td><span class="badge {{ estilo_estado.get(nc.estado.name, '') }}">{{ nc.estado.value }}</span></td>
+                <td>{{ estado_badge(nc) }}</td>
                 <td>{{ nc.accion_correctiva | truncate(80) if nc.accion_correctiva else '—' }}</td>
                 <td>
                     <div class="table__actions">
-                        {% if can('update', 'nonconformities') %}
-                        <a class="btn btn--sm" href="{{ url_for('no_conformidad.editar_no_conformidad', id=nc.id) }}">{{ 'Ver' if nc.estado.name in ('cerrada', 'cancelada') else 'Editar' }}</a>
+                        <a class="btn btn--sm" href="{{ url_for('no_conformidad.ver_no_conformidad', id=nc.id) }}">Ver</a>
+                        {% if can('update', 'nonconformities') and nc.estado.name not in ('cerrada', 'cancelada') %}
+                        <a class="btn btn--sm" href="{{ url_for('no_conformidad.editar_no_conformidad', id=nc.id) }}">Editar</a>
                         {% endif %}
                         <a class="btn btn--sm" href="{{ url_for('no_conformidad.exportar_pdf', id=nc.id) }}" target="_blank" rel="noopener">PDF</a>
                         {% if can('delete', 'nonconformities') %}

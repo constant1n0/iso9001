@@ -38,10 +38,11 @@ Route for every task: **delegated direct** (two or more non-trivial files each).
   - `AccionCorrectiva` model and migration, service (create, update, delete, verify), policy resource, state synchronisation N5, close rule, MCP module.
   - Build `close` and the automatic moves on `nonconformities._transition` (snapshot, `_set_state`, stamp, audit, flush) with the role check done like `cancel`; make the date injected by the adapter (`local_today()`) mandatory for terminal transitions instead of the server clock fallback (NC-1 review).
   - Acceptance: N3–N5 enforced in the service (including concurrent edits refused cleanly); audit rows for every write.
-- [ ] **NC-3 — Screens.** Forecast 400-600.
+- [x] **NC-3 — Screens.** Forecast 400-600.
   - NC form with the new fields and person picker; NC detail page with actions, add/edit/delete action, verify action, close, cancel, reopen; state badges; list filters by state, origin and severity.
   - Acceptance: role-based access; forms keep input on errors; CSP-clean.
-- [ ] **NC-4 — Reports and docs.** Forecast 150-300.
+- [ ] **NC-4 — Reports and docs.** Forecast 250-450.
+  - Also: list filters by origin and severity (service `_conditions`, `list_`, `list_page` and the web list; moved from NC-3, which could not change the service); NC-3 review suggestions: `require_permission('read', 'nonconformities')` on the detail route, a test for the edit redirect to the detail page, a route test editing a verified action (refused, input kept), and capture the seeded action and person ids in `tests/test_ui_permissions.py` instead of hard-coding them.
   - PDF of a nonconformity with its actions and verification; monthly report counts by state; README and `docs/mcp.md`.
 
 ## Checks
@@ -58,7 +59,8 @@ Baseline at `4bd9cdf`: 889 tests. Migrations are tested on PostgreSQL (`TEST_POS
 |---|---|---|---|---|
 | NC-1 | Done | `e34df98` (columns `origen`, `gravedad`, `contencion`, `causa_raiz`, `motivo_cancelacion`; `estado` enum with CHECK; migration `e7a9c1d3f5b8`; `cancel`, `reopen`; closed and cancelled NCs read-only; screens, PDF, dashboard and MCP updated), review follow-up in the next commit | RED: 11 modules `ImportError: EstadoNoConformidad`; PostgreSQL conversion still legacy text; then 20 state tests (`no attribute 'cancel'`, fields not allowed, CHECK failed). GREEN: 915 tests incl. PostgreSQL | Range `4bd9cdf..e34df98`: **medium**, `slice_budget_reached` (1,406 lines; standing Wave 1 size exception); consent granted; reliability review `review-62d26d7fd282d214` **approved** and acknowledged; the migration log now says "rewrote" (the count is every row, not only changed ones); the clock suggestion moved into NC-2 |
 | NC-2 | Done | `7cf117d` (`acciones_correctivas`, migration `f8b2d4a6c9e1`, `app/services/corrective_actions.py` with `verify`, policy `CORRECTIVE_ACTIONS`, state synchronisation, `nonconformities.close`, row lock, MCP module `acciones_correctivas` with the derived status), review follow-up in the next commit | RED: 146 tests (6 failures, 47 errors: missing service, models, `close`, table, policy key, counts, unknown module); follow-up: moving the detection date after a done date was accepted. GREEN: 955, then 956 tests incl. PostgreSQL; removing the row lock makes the PostgreSQL race test fail | Range `6faad03..7cf117d`: **medium**, `slice_budget_reached` (1,488 lines; standing Wave 1 size exception); consent granted; reliability review `review-2be049d83f2437c2` **approved** and acknowledged; fixed: the detection date can no longer move past a recorded done date; its other warning (adapters passing `today` to `cancel`) is covered by the existing web route tests, and the MCP has no cancel tool |
-| NC-3..NC-4 | Pending | — | — | — |
+| NC-3 | Done | `0a403bf` (detail page `/no_conformidades/<id>`, action forms under `/no_conformidades/<nc_id>/acciones/…`, verify form with the owner excluded from the verifier picker, close route with blockers as flashes; create, edit, cancel and reopen land on the detail page) | RED: 54 tests (74 subtest failures, 9 errors: routes missing, module missing, characterization `404 != 302/200`, buttons). GREEN: 980 tests incl. PostgreSQL | Range `25eef61..0a403bf`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-c5d81a168d7fd1f8` **approved** and acknowledged; four suggestions moved into NC-4 |
+| NC-4 | Pending | — | — | — |
 
 ## Findings during implementation
 
@@ -73,4 +75,4 @@ Baseline at `4bd9cdf`: 889 tests. Migrations are tested on PostgreSQL (`TEST_POS
 
 ## Next step
 
-NC-3.
+NC-4.

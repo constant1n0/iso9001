@@ -17,6 +17,7 @@ from werkzeug.security import generate_password_hash
 
 from app.extensions import db
 from app.models import (
+    AccionCorrectiva,
     Auditoria,
     AuditoriaIndicador,
     Capacitacion,
@@ -116,6 +117,10 @@ RECORD = dict(
 )
 
 
+ACTION = dict(descripcion="Afilar el molde", responsable_id="1", fecha_prevista="2026-10-20",
+              fecha_realizada="")
+
+
 def _html(resource, base, create, update, delete):
     """Endpoints for a classic HTML register (list/new/edit/delete).
 
@@ -142,6 +147,17 @@ def _json(resource, base, create, update):
 ENDPOINTS = [
     *_html("NONCONFORMITIES", "/no_conformidades/", ("nueva", NC),
            ("editar/1", NC), "eliminar/1"),
+    # Corrective actions live under their nonconformity (NC-3 of nc-capa-loop);
+    # its page lists them. Verifying and closing narrow the role in the service
+    # (administrators and auditors), so tests/test_corrective_action_routes.py
+    # characterizes them, like cancel and reopen.
+    Endpoint("CORRECTIVE_ACTIONS", "read", "GET", "/no_conformidades/1", 200),
+    Endpoint("CORRECTIVE_ACTIONS", "create", "POST", "/no_conformidades/1/acciones/nueva",
+             302, ACTION),
+    Endpoint("CORRECTIVE_ACTIONS", "update", "POST",
+             "/no_conformidades/1/acciones/1/editar", 302, ACTION),
+    Endpoint("CORRECTIVE_ACTIONS", "delete", "POST",
+             "/no_conformidades/1/acciones/1/eliminar", 302),
     *_html("AUDITS", "/auditorias/", ("nueva", AUDIT), ("editar/1", AUDIT),
            "eliminar/1"),
     *_html("DOCUMENTS", "/documents/", ("new", DOC), ("edit/1", DOC), "delete/1"),
@@ -216,8 +232,7 @@ ALLOWED = {
 # Policy entries without routes. AUDIT_LOG has no adapter yet. The API_TOKENS
 # matrix (issue, list, revoke any token) stays CLI-only; "Mi perfil" bypasses it
 # with an ownership check, so tests/test_profile_routes.py characterizes it.
-# CORRECTIVE_ACTIONS gets its screens in task NC-3 of nc-capa-loop.
-NO_ROUTES = {"AUDIT_LOG", "API_TOKENS", "CORRECTIVE_ACTIONS"}
+NO_ROUTES = {"AUDIT_LOG", "API_TOKENS"}
 
 
 def allowed_roles(endpoint: Endpoint) -> set:
@@ -287,6 +302,10 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                     ),
                     CompetenceRecord(
                         persona_id=1, evidencia="Seed", fecha_obtencion=date(2026, 10, 5)
+                    ),
+                    AccionCorrectiva(
+                        no_conformidad_id=1, descripcion="Seed", responsable_id=1,
+                        fecha_prevista=date(2026, 10, 20),
                     ),
                 ]
             )

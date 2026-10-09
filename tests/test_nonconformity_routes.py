@@ -96,10 +96,11 @@ class NonconformityRoutesTestCase(unittest.TestCase):
         self.login(RoleEnum.OPERATIVO)
         response = self.client.post(f"{BASE}/nueva", data=FORM)
         self.assertEqual(302, response.status_code)
-        self.assertTrue(response.headers["Location"].endswith(f"{BASE}/"))
         self.assertIn(("success", "No conformidad registrada exitosamente"), self.flashes())
         with self.app.app_context():
             nc = NoConformidad.query.one()
+            # Its page is where the corrective actions are added next.
+            self.assertTrue(response.headers["Location"].endswith(f"{BASE}/{nc.id}"))
             self.assertEqual(self.ids[RoleEnum.OPERATIVO], nc.created_by_id)
             self.assertEqual(
                 [("create", nc.id, "web", "operativo", self.ids[RoleEnum.OPERATIVO])],
@@ -309,6 +310,133 @@ class NonconformityRoutesTestCase(unittest.TestCase):
             self.assertIn(text, html)
         self.assertNotIn("EstadoNoConformidad", html)
 
+    # -- detail page and closing (NC-3) ------------------------------------
+
+    def seed_person(self, nombre: str) -> int:
+        from app.services import people
+        from app.services.actor import Actor
+
+        with self.app.app_context():
+            person = people.create(db.session, Actor(1, "seed", RoleEnum.ADMINISTRADOR, "system"),
+                                   {"nombre": nombre})
+            db.session.commit()
+            return person.id
+
+    def seed_action(self, nc_id: int, owner: int, *, done: date | None = None,
+                    verified: tuple[str, int] | None = None) -> int:
+        """An action through the service; ``verified`` is (result name, verifier id)."""
+        from app.services import corrective_actions
+        from app.services.actor import Actor
+
+        who = Actor(1, "seed", RoleEnum.ADMINISTRADOR, "system")
+        with self.app.app_context():
+            action = corrective_actions.create(db.session, who, {
+                "no_conformidad_id": nc_id, "descripcion": "Afilar el molde",
+                "responsable_id": owner, "fecha_prevista": date(2026, 10, 20),
+                "fecha_realizada": done})
+            if verified:
+                corrective_actions.verify(
+                    db.session, who, action.id, resultado=verified[0],
+                    fecha=date(2026, 10, 15), verificador_id=verified[1],
+                    evidencia="Muestreo de 50 piezas")
+            db.session.commit()
+            return action.id
+
+    def test_the_list_links_every_record_to_its_page(self) -> None:
+        nc_id = self.seed()
+        self.force_state(self.seed(descripcion="Cerrada"), EstadoNoConformidad.cerrada)
+        self.login()
+        html = self.client.get(f"{BASE}/").get_data(as_text=True)
+        self.assertIn(f'href="{BASE}/{nc_id}"', html)
+        self.assertIn(f'href="{BASE}/{nc_id + 1}"', html)
+        self.assertNotIn(f'href="{BASE}/editar/{nc_id + 1}"', html)  # closed: read-only
+
+    def test_the_detail_page_shows_every_field_and_the_actions(self) -> None:
+        ana, eva = self.seed_person("Ana Pérez"), self.seed_person("Eva Ruiz")
+        nc_id = self.seed(origen="cliente", gravedad="mayor", contencion="Lote retenido",
+                          causa_raiz="Molde gastado", responsable_id=ana,
+                          accion_correctiva="Texto heredado")
+        self.seed_action(nc_id, ana, done=date(2026, 10, 12), verified=("eficaz", eva))
+        self.login()
+        response = self.client.get(f"{BASE}/{nc_id}")
+        self.assertEqual(200, response.status_code)
+        html = response.get_data(as_text=True)
+        for text in ("Semilla", "01/10/2026", "Cliente", "Mayor", "Lote retenido",
+                     "Molde gastado", "Ana Pérez", "Texto heredado", "En verificación",
+                     "Afilar el molde", "20/10/2026", "12/10/2026", "Verificada eficaz",
+                     "15/10/2026", "Eva Ruiz", "Muestreo de 50 piezas"):
+            self.assertIn(text, html)
+        self.assertNotIn("EstadoNoConformidad", html)
+
+    def test_the_detail_page_shows_the_cancellation(self) -> None:
+        nc_id = self.seed()
+        self.force_state(nc_id, EstadoNoConformidad.cancelada, fecha_cierre=date(2026, 10, 9),
+                         motivo_cancelacion="Registrada dos veces")
+        self.login(RoleEnum.ADMINISTRADOR)
+        html = self.client.get(f"{BASE}/{nc_id}").get_data(as_text=True)
+        for text in ("Cancelada el 09/10/2026", "Registrada dos veces",
+                     f'action="{BASE}/reabrir/{nc_id}"'):
+            self.assertIn(text, html)
+        for text in (f"{BASE}/cancelar/", f"{BASE}/cerrar/", "/acciones/nueva",
+                     f'href="{BASE}/editar/{nc_id}"'):
+            self.assertNotIn(text, html)
+
+    def test_close_blockers_are_shown_instead_of_the_button(self) -> None:
+        nc_id = self.seed()
+        self.seed_action(nc_id, self.seed_person("Ana Pérez"))
+        self.login(RoleEnum.AUDITOR)
+        html = self.client.get(f"{BASE}/{nc_id}").get_data(as_text=True)
+        self.assertIn("1 acción sin realizar", html)
+        self.assertNotIn(f'action="{BASE}/cerrar/{nc_id}"', html)
+        response = self.client.post(f"{BASE}/cerrar/{nc_id}")
+        self.assertEqual(302, response.status_code)
+        self.assertTrue(response.headers["Location"].endswith(f"{BASE}/{nc_id}"))
+        self.assertIn(("danger", "No se puede cerrar la no conformidad: 1 acción sin realizar."),
+                      self.flashes())
+        with self.app.app_context():
+            self.assertEqual(EstadoNoConformidad.accion_planificada,
+                             db.session.get(NoConformidad, nc_id).estado)
+
+    def test_without_actions_the_page_says_closing_needs_one(self) -> None:
+        nc_id = self.seed()
+        self.login(RoleEnum.ADMINISTRADOR)
+        html = self.client.get(f"{BASE}/{nc_id}").get_data(as_text=True)
+        self.assertIn("no tiene ninguna acción correctiva", html)
+
+    def test_auditor_closes_once_every_action_proved_effective(self) -> None:
+        ana, eva = self.seed_person("Ana Pérez"), self.seed_person("Eva Ruiz")
+        nc_id = self.seed()
+        self.seed_action(nc_id, ana, done=date(2026, 10, 12), verified=("eficaz", eva))
+        self.login(RoleEnum.OPERATIVO)
+        self.assertNotIn(f"{BASE}/cerrar/", self.client.get(f"{BASE}/{nc_id}").get_data(
+            as_text=True))
+        self.client.post(f"{BASE}/cerrar/{nc_id}")  # refused: back to the dashboard
+        with self.app.app_context():
+            self.assertEqual(EstadoNoConformidad.en_verificacion,
+                             db.session.get(NoConformidad, nc_id).estado)
+        self.login(RoleEnum.AUDITOR)
+        self.assertIn(f'action="{BASE}/cerrar/{nc_id}"',
+                      self.client.get(f"{BASE}/{nc_id}").get_data(as_text=True))
+        with patch("app.routes.no_conformidad_routes.local_today",
+                   return_value=date(2026, 10, 30)):
+            response = self.client.post(f"{BASE}/cerrar/{nc_id}")
+        self.assertTrue(response.headers["Location"].endswith(f"{BASE}/{nc_id}"))
+        self.assertIn(("success", "No conformidad cerrada."), self.flashes())
+        with self.app.app_context():
+            nc = db.session.get(NoConformidad, nc_id)
+            self.assertEqual((EstadoNoConformidad.cerrada, date(2026, 10, 30)),
+                             (nc.estado, nc.fecha_cierre))
+        self.assertEqual("update", self.rows()[-1][0])
+
+    def test_cancel_and_reopen_return_to_the_detail_page(self) -> None:
+        nc_id = self.seed()
+        self.login(RoleEnum.ADMINISTRADOR)
+        for url, data in ((f"{BASE}/cancelar/{nc_id}", {"motivo_cancelacion": "Duplicada"}),
+                          (f"{BASE}/reabrir/{nc_id}", {})):
+            with self.subTest(url=url):
+                response = self.client.post(url, data=data)
+                self.assertTrue(response.headers["Location"].endswith(f"{BASE}/{nc_id}"))
+
     # -- domain errors on HTML posts ---------------------------------------
 
     def test_missing_records_answer_404_as_before(self) -> None:
@@ -318,6 +446,8 @@ class NonconformityRoutesTestCase(unittest.TestCase):
             ("post", f"{BASE}/editar/999"),
             ("post", f"{BASE}/eliminar/999"),
             ("get", f"{BASE}/exportar_pdf/999"),
+            ("get", f"{BASE}/999"),
+            ("post", f"{BASE}/cerrar/999"),
         ):
             with self.subTest(url=url, method=method):
                 response = getattr(self.client, method)(url, data=FORM)

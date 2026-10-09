@@ -16,8 +16,8 @@
  -->
 {% extends "base.html" %}
 {% from "_partials/ui.html" import page_header, form_card, action_form %}
+{% from "no_conformidades/_macros.html" import estado_badge, cancel_form %}
 {% set nc = no_conformidad %}
-{% set estilo_estado = {'abierta': 'badge--danger', 'accion_planificada': 'badge--warn', 'en_verificacion': 'badge--warn', 'cerrada': 'badge--ok'} %}
 {% block title %}{{ 'No conformidad' if solo_lectura else 'Editar no conformidad' }}{% endblock %}
 {% block crumb %}Calidad · No conformidades{% endblock %}
 {% block content %}
@@ -31,7 +31,7 @@
 <article class="card">
     <header class="card__header">
         <h2 class="card__title">Estado</h2>
-        <span class="badge {{ estilo_estado.get(nc.estado.name, '') }}">{{ nc.estado.value }}</span>
+        {{ estado_badge(nc) }}
     </header>
     <div class="card__body">
         {% if nc.fecha_cierre %}<p class="card__text">{{ 'Cancelada' if nc.estado.name == 'cancelada' else 'Cerrada' }} el {{ nc.fecha_cierre.strftime('%d/%m/%Y') }}.</p>{% endif %}
@@ -56,21 +56,10 @@
     </div>
 </article>
 {% else %}
-{{ form_card(form, url_for('no_conformidad.listar_no_conformidades'), 'Guardar cambios') }}
+{{ form_card(form, url_for('no_conformidad.ver_no_conformidad', id=nc.id), 'Guardar cambios') }}
 {% endif %}
 
 {% if puede_cancelar %}
-<form method="post" class="form-card" action="{{ url_for('no_conformidad.cancelar_no_conformidad', id=nc.id) }}" data-confirm="¿Cancelar esta no conformidad?">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="form-grid">
-        <div class="field field--wide">
-            <label for="motivo_cancelacion">Motivo de la cancelación</label>
-            <textarea name="motivo_cancelacion" id="motivo_cancelacion" required></textarea>
-        </div>
-    </div>
-    <div class="form-actions">
-        <button type="submit" class="btn btn--danger">Cancelar no conformidad</button>
-    </div>
-</form>
+{{ cancel_form(nc) }}
 {% endif %}
 {% endblock %}

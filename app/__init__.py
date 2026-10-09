@@ -36,6 +36,7 @@ from .routes import (
     dashboard_routes,
     auditoria_routes,
     no_conformidad_routes,
+    corrective_action_routes,
     capacitacion_routes,
     satisfaccion_cliente_routes,
     document_routes,
@@ -105,6 +106,7 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
     app.register_blueprint(dashboard_routes.bp)
     app.register_blueprint(auditoria_routes.bp)
     app.register_blueprint(no_conformidad_routes.bp)
+    app.register_blueprint(corrective_action_routes.bp)
     app.register_blueprint(capacitacion_routes.bp)
     app.register_blueprint(satisfaccion_cliente_routes.bp)
     app.register_blueprint(document_routes.bp)

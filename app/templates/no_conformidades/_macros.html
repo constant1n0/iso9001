@@ -1,0 +1,46 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{# Badges and forms shared by the nonconformity pages. #}
+
+{% macro estado_badge(nc) -%}
+{%- set estilo = {'abierta': 'badge--danger', 'accion_planificada': 'badge--warn',
+                  'en_verificacion': 'badge--warn', 'cerrada': 'badge--ok'} -%}
+<span class="badge {{ estilo.get(nc.estado.name, '') }}">{{ nc.estado.value }}</span>
+{%- endmacro %}
+
+{# The derived status of a corrective action. #}
+{% macro accion_badge(accion) -%}
+{%- set estilo = {'realizada': 'badge--warn', 'verificada_eficaz': 'badge--ok',
+                  'verificada_no_eficaz': 'badge--danger'} -%}
+<span class="badge {{ estilo.get(accion.estado.name, '') }}">{{ accion.estado.value }}</span>
+{%- endmacro %}
+
+{# Cancelling needs a reason (decision N5); confirmation by static/js/app.js. #}
+{% macro cancel_form(nc) %}
+<form method="post" class="form-card" action="{{ url_for('no_conformidad.cancelar_no_conformidad', id=nc.id) }}" data-confirm="¿Cancelar esta no conformidad?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-grid">
+        <div class="field field--wide">
+            <label for="motivo_cancelacion">Motivo de la cancelación</label>
+            <textarea name="motivo_cancelacion" id="motivo_cancelacion" required></textarea>
+        </div>
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn--danger">Cancelar no conformidad</button>
+    </div>
+</form>
+{% endmacro %}

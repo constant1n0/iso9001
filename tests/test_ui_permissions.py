@@ -11,17 +11,20 @@ from werkzeug.security import generate_password_hash
 
 from app.extensions import db
 from app.models import (
+    AccionCorrectiva,
     Auditoria,
     Capacitacion,
     CompetenceRequirement,
     CompetenceType,
     Document,
     DocumentCategory,
+    EstadoNoConformidad,
     Mejora,
     NoConformidad,
     ParteInteresada,
     Person,
     RoleEnum,
+    ResultadoVerificacion,
     RolResponsabilidad,
     SatisfaccionCliente,
     User,
@@ -97,6 +100,70 @@ class UiPermissionsTestCase(unittest.TestCase):
                     self.assertEqual(role in write, f'href="{url}{new}"' in html, "new button")
                     self.assertEqual(role in write, edit in html, "edit link")
                     self.assertEqual(role in remove, delete in html, "delete form")
+
+    def _nonconformity(self, estado: EstadoNoConformidad, *actions: dict) -> int:
+        """A nonconformity in ``estado`` with ``actions`` owned by person 1."""
+        with self.app.app_context():
+            nc = NoConformidad(descripcion="Con acciones", fecha_detectada=DAY, estado=estado)
+            db.session.add(nc)
+            db.session.flush()
+            for values in actions:
+                db.session.add(AccionCorrectiva(no_conformidad_id=nc.id, descripcion="Acción",
+                                                responsable_id=1, fecha_prevista=DAY, **values))
+            db.session.commit()
+            return nc.id
+
+    def test_nonconformity_page_controls_follow_role_and_state(self) -> None:
+        """Every role adds and edits actions; administrators delete them; administrators
+        and auditors verify done actions, close and cancel; administrators reopen."""
+        with self.app.app_context():
+            db.session.add(Person(nombre="Verificadora"))  # person 2
+            db.session.commit()
+        done = {"fecha_realizada": DAY}
+        effective = done | {"resultado_verificacion": ResultadoVerificacion.eficaz,
+                            "fecha_verificacion": DAY, "verificador_id": 2,
+                            "evidencia_verificacion": "Evidencia"}
+        planned = self._nonconformity(EstadoNoConformidad.accion_planificada, {}, done)
+        ready = self._nonconformity(EstadoNoConformidad.en_verificacion, effective)
+        closed = self._nonconformity(EstadoNoConformidad.cerrada, effective)
+        first_planned, first_ready, first_closed = 1, 3, 4  # action ids, in insert order
+
+        def controls(nc_id: int, action_id: int) -> dict:
+            base = f"/no_conformidades/{nc_id}"
+            return {
+                "add": f'href="{base}/acciones/nueva"',
+                "edit": f'href="{base}/acciones/{action_id}/editar"',
+                "delete": f'action="{base}/acciones/{action_id}/eliminar"',
+                "verify": "/verificar",
+                "close": f'action="/no_conformidades/cerrar/{nc_id}"',
+                "blockers": "No se puede cerrar todavía",
+                "cancel": f'action="/no_conformidades/cancelar/{nc_id}"',
+                "reopen": f'action="/no_conformidades/reabrir/{nc_id}"',
+            }
+
+        verify_done = f'href="/no_conformidades/{planned}/acciones/2/verificar"'
+        everyone, deciders = set(RoleEnum), {ADMIN, AUDITOR}
+        expected = {
+            (planned, first_planned): {"add": everyone, "edit": everyone, "delete": {ADMIN},
+                                       "verify": deciders, "close": set(),
+                                       "blockers": deciders, "cancel": deciders,
+                                       "reopen": set()},
+            (ready, first_ready): {"add": everyone, "edit": set(), "delete": {ADMIN},
+                                   "verify": set(), "close": deciders, "blockers": set(),
+                                   "cancel": deciders, "reopen": set()},
+            (closed, first_closed): {"add": set(), "edit": set(), "delete": set(),
+                                     "verify": set(), "close": set(), "blockers": set(),
+                                     "cancel": set(), "reopen": {ADMIN}},
+        }
+        for (nc_id, action_id), allowed in expected.items():
+            for role in RoleEnum:
+                html = self._page(role, f"/no_conformidades/{nc_id}").get_data(as_text=True)
+                for name, marker in controls(nc_id, action_id).items():
+                    with self.subTest(nc=nc_id, role=role.name, control=name):
+                        self.assertEqual(role in allowed[name], marker in html)
+                if nc_id == planned:  # only the done action offers verification
+                    with self.subTest(role=role.name, control="verify done action"):
+                        self.assertEqual(role in deciders, verify_done in html)
 
     def test_navigation_links_follow_the_read_permission(self) -> None:
         expected = {"/auditorias/": {ADMIN, AUDITOR}, "/documents/": {ADMIN}, "/no_conformidades/": set(RoleEnum),
