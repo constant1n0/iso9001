@@ -77,6 +77,10 @@ CLOSE_ROLES = CANCEL_ROLES
 REOPEN_ROLES = frozenset({RoleEnum.ADMINISTRADOR})
 NOT_FOUND = "No conformidad no encontrada."
 ALREADY_TERMINAL = "La no conformidad ya está cerrada o cancelada."
+DETECTED_AFTER_DONE = (
+    "La fecha de detección no puede ser posterior a la fecha de realización de sus "
+    "acciones correctivas."
+)
 READ_ONLY_MESSAGE = (
     "Esta no conformidad está cerrada o cancelada y no se puede modificar; "
     "un administrador puede reabrirla."
@@ -269,12 +273,24 @@ def update(
     before = audit.snapshot(nc)
     if all(getattr(nc, key) == value for key, value in values.items()):
         return nc
+    if "fecha_detectada" in values:
+        _check_detection_date(session, nc.id, values["fecha_detectada"])
     for key, value in values.items():
         setattr(nc, key, value)
     stamp_updated(nc, actor)
     audit.record(session, actor, "update", nc, before=before)
     _flush(session)
     return nc
+
+
+def _check_detection_date(session: Session, nc_id: int, detected: date) -> None:
+    """A detection date never falls after a done date already recorded on its actions."""
+    earliest_done = session.scalar(
+        select(func.min(AccionCorrectiva.fecha_realizada))
+        .where(AccionCorrectiva.no_conformidad_id == nc_id)
+    )
+    if earliest_done is not None and detected > earliest_done:
+        raise ValidationError(DETECTED_AFTER_DONE)
 
 
 def may_cancel(actor: Actor, nc: NoConformidad) -> bool:

@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 import threading
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from functools import partial
 from unittest.mock import patch
 
@@ -229,6 +229,14 @@ class UpdateTestCase(ActionBase):
         count = len(self.audit_rows())
         self.edit(added.id, descripcion="Cambiar el molde", no_conformidad_id=self.nc)
         self.assertEqual(count, len(self.audit_rows()))
+
+    def test_the_detection_date_cannot_move_past_a_recorded_done_date(self) -> None:
+        self.add(fecha_realizada=DETECTED + timedelta(days=2))
+        self.refused(errors().ValidationError, "fecha de detección", ncs().update,
+                     db.session, actor(), self.nc,
+                     {"fecha_detectada": DETECTED + timedelta(days=5)})
+        ncs().update(db.session, actor(), self.nc, {"fecha_detectada": DETECTED + timedelta(days=1)})
+        db.session.commit()
 
     def test_an_owner_deactivated_later_stays_but_cannot_be_newly_chosen(self) -> None:
         added = self.add()
