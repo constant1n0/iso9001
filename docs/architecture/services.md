@@ -51,7 +51,8 @@ bounded: the page is clamped to `1..crud.MAX_PAGE` and the size to
 
 | Module | Resource |
 |---|---|
-| `nonconformities.py` | Nonconformities (the reference pattern) |
+| `nonconformities.py` | Nonconformities (the reference pattern) and their states (see below) |
+| `corrective_actions.py` | Corrective actions of a nonconformity and their verification (see below) |
 | `audits.py`, `documents.py` | Audits, documents (bespoke) |
 | `crud.py` | Generic helper driven by a `Spec` (model, resource, fields, ordering) |
 | `training.py`, `satisfaction.py`, `stakeholders.py`, `improvements.py` | Plain HTML registers on `crud` |
@@ -76,7 +77,7 @@ checked first (`mcp` never deletes), then the role.
 
 | Resource | Read | Create / update | Delete |
 |---|---|---|---|
-| Nonconformities, improvements, surveys, training, stakeholders | all roles | all roles | ADMIN |
+| Nonconformities, corrective actions, improvements, surveys, training, stakeholders | all roles | all roles | ADMIN |
 | Audits | ADMIN, AUDITOR | ADMIN, AUDITOR | ADMIN |
 | Documents | ADMIN | ADMIN | ADMIN |
 | Roles, risks and opportunities, training resources, process operations, audit indicators | all roles | ADMIN, AUDITOR | ADMIN |
@@ -91,6 +92,51 @@ e-mail or password (`users.change_own_*`) and listing or revoking your own API
 tokens (`api_tokens.list_own`, `revoke_own`) are open to every role, replacing
 the grant with an ownership check on `actor.user_id` (see "Users" and "API
 tokens" below).
+
+## Nonconformity states and corrective actions
+
+Decisions N2-N5 of `nc-capa-loop` (ISO 9001 clause 10.2). `estado` is never
+part of a write payload; only these functions move it, all through
+`nonconformities._transition` (snapshot, state, stamp, audit, flush):
+
+- `nonconformities.cancel(session, actor, nc_id, motivo, *, today)`:
+  administrators and auditors cancel an open nonconformity; the reason is
+  required and stored trimmed.
+- `nonconformities.close(session, actor, nc_id, *, today)`: administrators and
+  auditors close an open nonconformity once `close_blockers(actions)` is
+  empty: at least one action, every action done and verified, and the latest
+  one verified `eficaz`. Otherwise the `ValidationError` lists what is
+  missing.
+- `nonconformities.reopen(session, actor, nc_id)`: administrators reopen a
+  closed or cancelled nonconformity; it lands on `expected_state(actions)`
+  and loses `fecha_cierre` and `motivo_cancelacion`.
+- `today` is the closing date to record. The adapter passes its local date
+  (`audit_notifications.local_today()`, in `APP_TIMEZONE`); a terminal state
+  without it is a programming error, never a server-clock fallback.
+- The role checks run after `policy.require(UPDATE, NONCONFORMITIES)`, because
+  the policy matrix only knows resources and actions. `may_cancel`,
+  `may_close` and `may_reopen` answer the same question for the screens.
+- While open, a nonconformity follows its actions: `expected_state` is
+  `abierta` without actions, `accion_planificada` while an action is not done
+  or the latest one was verified `no_eficaz`, and `en_verificacion` otherwise.
+  `corrective_actions` calls `nonconformities.sync_state` after every write.
+- A `cerrada` or `cancelada` nonconformity refuses `update` and every write of
+  its actions. `update`, `cancel`, `close`, `reopen` and every action write
+  take the nonconformity's row lock first (`nonconformities.lock`, `SELECT …
+  FOR UPDATE`), so concurrent writes serialize on PostgreSQL.
+- `list_` and `list_page` filter by `descripcion`, `estado`, `origen`,
+  `gravedad` (enum members or their names; anything else is a Spanish
+  `ValidationError`) and `fecha_detectada`.
+
+`corrective_actions.verify(session, actor, action_id, *, resultado, fecha,
+verificador_id, evidencia)` records the effectiveness check of a done action:
+administrators and auditors only (`VERIFY_ROLES`, checked after
+`policy.require(UPDATE, CORRECTIVE_ACTIONS)`); the result is `eficaz` or
+`no_eficaz` (member or name), the date is not before the done date, the
+verifier is an active person other than the action's owner, and the evidence
+is required. A verified action is read-only (`update` refuses it), though an
+administrator may still delete it while the nonconformity is open. The MCP
+adapter exposes neither `verify` nor the state functions: they are web-only.
 
 ## Error mapping
 

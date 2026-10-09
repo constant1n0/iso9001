@@ -12,10 +12,13 @@ from werkzeug.security import generate_password_hash
 
 from app.extensions import db
 from app.models import (
+    AccionCorrectiva,
     Auditoria,
     Capacitacion,
     EstadoAuditoriaEnum,
     NoConformidad,
+    Person,
+    ResultadoVerificacion,
     RoleEnum,
     SatisfaccionCliente,
     User,
@@ -61,7 +64,16 @@ class PdfExportsTestCase(unittest.TestCase):
                 NoConformidad(descripcion="Etiqueta ilegible", fecha_detectada=DAY),
                 Capacitacion(tema="ISO 9001", fecha=DAY, personal="Equipo", duracion_horas=4),
                 SatisfaccionCliente(fecha_encuesta=DAY, cliente="Farmacia Sol", puntuacion=9),
+                Person(nombre="Ana Pérez"),
+                Person(nombre="Eva Ruiz"),
             ])
+            db.session.flush()
+            # The nonconformity PDF then prints its table of corrective actions.
+            db.session.add(AccionCorrectiva(
+                no_conformidad_id=1, descripcion="Reimprimir las etiquetas", responsable_id=1,
+                fecha_prevista=DAY, fecha_realizada=DAY,
+                resultado_verificacion=ResultadoVerificacion.eficaz, fecha_verificacion=DAY,
+                verificador_id=2, evidencia_verificacion="Revisión de 200 etiquetas"))
             db.session.commit()
         self.client.post("/login", data={"username": "admin", "password": PASSWORD})
 

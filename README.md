@@ -285,6 +285,54 @@ people, requirements, demonstrated competence and the matrix; administrators
 and auditors create and edit; only administrators delete; the MCP server never
 deletes. Every change is written to the audit log.
 
+**2e. No conformidades y acciones correctivas**
+
+Nonconformities (`/no_conformidades/`, ISO 9001 clause 10.2) record what went
+wrong, how it was contained and corrected, and whether the correction worked:
+
+- **Fields**: description, detection date, origin (*Auditoría*, *Cliente*,
+  *Proceso*, *Proveedor*, *Otro*), severity (*Mayor*, *Menor*, *Observación*),
+  the responsible person (plus the legacy free-text name), containment and
+  root cause. The old free-text corrective action is kept read-only as
+  *Acción correctiva (texto anterior)*.
+- **States**: *Abierta* → *Acción planificada* → *En verificación* →
+  *Cerrada*, plus *Cancelada*. Nobody edits the state: while the
+  nonconformity is open it follows its corrective actions, and closing,
+  cancelling and reopening are buttons on the nonconformity's page.
+  - The first action moves an *Abierta* nonconformity to *Acción planificada*.
+  - Once every action is done, it moves to *En verificación*.
+  - When the latest action is verified not effective, it goes back to *Acción
+    planificada*: register a new action.
+- **Corrective actions** (on the nonconformity's page): description, owner (a
+  person), planned date and done date (never before the detection date). The
+  status is derived: *Planificada*, *Realizada*, *Verificada eficaz* or
+  *Verificada no eficaz*. Every role adds and edits actions, only
+  administrators delete them, and a verified action is read-only.
+- **Verification of effectiveness**: an administrator or an auditor records
+  the result (*Eficaz* or *No eficaz*), the date (not before the done date),
+  the verifying person and the evidence. The verifier is never the action's
+  owner; the picker leaves the owner out.
+- **Closing**: administrators and auditors close a nonconformity once every
+  action is done and verified and the latest one proved effective. An earlier
+  ineffective action stays as evidence and does not block closing once a
+  later action proved effective. While something is missing, the page lists
+  it instead of the button. (Edge case: if an earlier action is found
+  ineffective while a later one is already done, the nonconformity stays *En
+  verificación*.)
+- **Cancelling and reopening**: administrators and auditors cancel an open
+  nonconformity with a reason. A closed or cancelled nonconformity, and its
+  actions, are read-only until an administrator reopens it; it then returns
+  to the state its actions call for, without the closing date or the reason.
+- **List filters**: description, state, origin, severity and detection date.
+  An unknown value in the URL is ignored.
+- **PDF**: a nonconformity's PDF holds its fields, the closing or cancellation
+  date and reason, and a table of its corrective actions with their status
+  and verification (result, date, verifier and evidence).
+
+The MCP server reads and writes nonconformities and corrective actions with
+the same rules, but verifying, closing, cancelling and reopening are web-only
+(see `docs/mcp.md`). Every change is written to the audit log.
+
 **3. Iniciar Redis y Celery para las Notificaciones Programadas**
 
 Celery envía tres avisos por correo; la aplicación web funciona sin él.
@@ -298,7 +346,9 @@ Celery envía tres avisos por correo; la aplicación web funciona sin él.
 Las horas son locales a `APP_TIMEZONE` (por defecto `Europe/Madrid`). El aviso
 diario incluye las auditorías pendientes o en proceso de los próximos 7 días;
 el informe semanal, las pendientes; el informe mensual adjunta un PDF con
-el total de auditorías, no conformidades y capacitaciones y la satisfacción media. Los usuarios sin correo se omiten. Si falla
+el total de auditorías, no conformidades y capacitaciones y la satisfacción media
+registrados en el mes, las no conformidades del mes por estado y las acciones
+correctivas verificadas en el mes (eficaces y no eficaces). Los usuarios sin correo se omiten. Si falla
 el envío a algún destinatario, se sigue con el resto, se registra el error y la
 tarea termina en fallo.
 

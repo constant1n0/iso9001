@@ -15,7 +15,10 @@ from sqlalchemy.exc import IntegrityError
 from test_audit import AuditDbBase
 
 from app.extensions import db
-from app.models import AuditLog, EstadoNoConformidad, NoConformidad, RoleEnum
+from app.models import (
+    AuditLog, EstadoNoConformidad, GravedadNoConformidad, NoConformidad, OrigenNoConformidad,
+    RoleEnum,
+)
 from app.services.actor import Actor
 
 ADMIN, AUDITOR, OPERATIVO = (
@@ -107,6 +110,34 @@ class ReadTestCase(ServiceBase):
         self.assertEqual([new], service().list_(db.session, who, estado=closed))
         self.assertEqual([old], service().list_(db.session, who, fecha_detectada=date(2026, 9, 1)))
         self.assertEqual([], service().list_(db.session, who, descripcion="x", estado=open_))
+
+    def test_list_filters_by_origin_and_severity_given_as_members_or_names(self) -> None:
+        customer_major = self.seed(descripcion="Queja", origen=OrigenNoConformidad.cliente,
+                                   gravedad=GravedadNoConformidad.mayor)
+        audit_minor = self.seed(descripcion="Hallazgo", origen=OrigenNoConformidad.auditoria,
+                                gravedad=GravedadNoConformidad.menor)
+        self.seed(descripcion="Sin clasificar")
+        who = actor()
+        self.assertEqual([customer_major], service().list_(db.session, who, origen="cliente"))
+        self.assertEqual([audit_minor], service().list_(
+            db.session, who, gravedad=GravedadNoConformidad.menor))
+        self.assertEqual([customer_major], service().list_(
+            db.session, who, origen=OrigenNoConformidad.cliente, gravedad="mayor"))
+        self.assertEqual([], service().list_(db.session, who, origen="cliente", gravedad="menor"))
+
+    def test_unknown_enum_filters_are_refused_with_spanish_messages(self) -> None:
+        self.seed()
+        cases = (
+            ({"estado": "Cerrada"}, "El estado no es válido."),
+            ({"origen": "Cliente"}, "El origen no es válido."),
+            ({"gravedad": "grave"}, "La gravedad no es válida."),
+        )
+        for listing in (service().list_, service().list_page):
+            for filters, message in cases:
+                with self.subTest(listing=listing.__name__, filters=filters):
+                    with self.assertRaises(errors().ValidationError) as caught:
+                        listing(db.session, actor(), **filters)
+                    self.assertEqual(message, caught.exception.message)
 
 
 class WriteBase(ServiceBase):

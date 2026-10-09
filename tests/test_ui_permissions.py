@@ -67,13 +67,15 @@ class UiPermissionsTestCase(unittest.TestCase):
                 Auditoria(area_auditada="A", fecha=DAY, auditor="x", resultado="r"),
                 Document(title="T", code="DOC-1", category=DocumentCategory.OTRO, content="c"),
                 RolResponsabilidad(rol="Rol"),
-                Person(nombre="Persona"),
             ])
+            owner = Person(nombre="Persona")
+            db.session.add(owner)
             db.session.flush()
             db.session.add(CompetenceRequirement(rol_id=1, tipo=CompetenceType.formacion,
                                                  descripcion="Requisito"))
             db.session.commit()
             self.ids = {u.role: u.id for u in User.query.all()}
+            self.owner_id = owner.id
         self.addCleanup(self._teardown)
 
     def _teardown(self) -> None:
@@ -101,32 +103,41 @@ class UiPermissionsTestCase(unittest.TestCase):
                     self.assertEqual(role in write, edit in html, "edit link")
                     self.assertEqual(role in remove, delete in html, "delete form")
 
-    def _nonconformity(self, estado: EstadoNoConformidad, *actions: dict) -> int:
-        """A nonconformity in ``estado`` with ``actions`` owned by person 1."""
+    def _nonconformity(
+        self, estado: EstadoNoConformidad, *actions: dict
+    ) -> tuple[int, list[int]]:
+        """A nonconformity in ``estado`` with ``actions`` owned by the seeded person.
+
+        Returns the nonconformity's id and its actions' ids, in the order given.
+        """
         with self.app.app_context():
             nc = NoConformidad(descripcion="Con acciones", fecha_detectada=DAY, estado=estado)
             db.session.add(nc)
             db.session.flush()
-            for values in actions:
-                db.session.add(AccionCorrectiva(no_conformidad_id=nc.id, descripcion="Acción",
-                                                responsable_id=1, fecha_prevista=DAY, **values))
+            rows = [AccionCorrectiva(no_conformidad_id=nc.id, descripcion="Acción",
+                                     responsable_id=self.owner_id, fecha_prevista=DAY, **values)
+                    for values in actions]
+            db.session.add_all(rows)
             db.session.commit()
-            return nc.id
+            return nc.id, [row.id for row in rows]
 
     def test_nonconformity_page_controls_follow_role_and_state(self) -> None:
         """Every role adds and edits actions; administrators delete them; administrators
         and auditors verify done actions, close and cancel; administrators reopen."""
         with self.app.app_context():
-            db.session.add(Person(nombre="Verificadora"))  # person 2
+            verifier = Person(nombre="Verificadora")
+            db.session.add(verifier)
             db.session.commit()
+            verifier_id = verifier.id
         done = {"fecha_realizada": DAY}
         effective = done | {"resultado_verificacion": ResultadoVerificacion.eficaz,
-                            "fecha_verificacion": DAY, "verificador_id": 2,
+                            "fecha_verificacion": DAY, "verificador_id": verifier_id,
                             "evidencia_verificacion": "Evidencia"}
-        planned = self._nonconformity(EstadoNoConformidad.accion_planificada, {}, done)
-        ready = self._nonconformity(EstadoNoConformidad.en_verificacion, effective)
-        closed = self._nonconformity(EstadoNoConformidad.cerrada, effective)
-        first_planned, first_ready, first_closed = 1, 3, 4  # action ids, in insert order
+        planned, (first_planned, done_planned) = self._nonconformity(
+            EstadoNoConformidad.accion_planificada, {}, done)
+        ready, (first_ready,) = self._nonconformity(EstadoNoConformidad.en_verificacion,
+                                                     effective)
+        closed, (first_closed,) = self._nonconformity(EstadoNoConformidad.cerrada, effective)
 
         def controls(nc_id: int, action_id: int) -> dict:
             base = f"/no_conformidades/{nc_id}"
@@ -141,7 +152,7 @@ class UiPermissionsTestCase(unittest.TestCase):
                 "reopen": f'action="/no_conformidades/reabrir/{nc_id}"',
             }
 
-        verify_done = f'href="/no_conformidades/{planned}/acciones/2/verificar"'
+        verify_done = f'href="/no_conformidades/{planned}/acciones/{done_planned}/verificar"'
         everyone, deciders = set(RoleEnum), {ADMIN, AUDITOR}
         expected = {
             (planned, first_planned): {"add": everyone, "edit": everyone, "delete": {ADMIN},

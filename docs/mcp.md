@@ -14,7 +14,7 @@ can never delete.
 
   | Tool | Purpose |
   |---|---|
-  | `qms_modules` | The 15 modules with fields, allowed values, filters and what the caller may do |
+  | `qms_modules` | The 16 modules with fields, allowed values, filters and what the caller may do |
   | `qms_list` | One bounded page of a module, with the filters `qms_modules` lists |
   | `qms_get` | One record by `id` |
   | `qms_create` | Create a record |
@@ -35,14 +35,41 @@ can never delete.
 
 ## Modules
 
-`qms_modules` lists 15 modules: `no_conformidades`, `auditorias`,
+`qms_modules` lists 16 modules: `no_conformidades`, `auditorias`,
 `documentos`, `capacitaciones`, `satisfaccion_clientes`,
 `partes_interesadas`, `mejoras`, `roles_responsabilidades`,
 `riesgos_oportunidades`, `recursos_capacitacion`, `procesos`,
-`indicadores_auditoria`, `personas`, `competencias_requeridas` and
-`competencias_acreditadas`. Each field has a `type`, a `required` flag,
-`allowed` values for enums and, where the flags do not say enough, a short
-`note`.
+`indicadores_auditoria`, `personas`, `competencias_requeridas`,
+`competencias_acreditadas` and `acciones_correctivas`. Each field has a
+`type`, a `required` flag, `allowed` values for enums and, where the flags do
+not say enough, a short `note`.
+
+Nonconformities and corrective actions (ISO 9001 clause 10.2):
+
+- `no_conformidades`: `descripcion` and `fecha_detectada` are required;
+  `origen` is `auditoria`, `cliente`, `proceso`, `proveedor` or `otro`;
+  `gravedad` is `mayor`, `menor` or `observacion`; `contencion` and
+  `causa_raiz` are text; `responsable_id` cites a person, and `responsable`
+  and `accion_correctiva` are legacy free text. `estado` is never written:
+  a record starts `abierta` and then follows its corrective actions. Records
+  show the Spanish labels (`"Acción planificada"`, `"Cliente"`) plus
+  `fecha_cierre` and `motivo_cancelacion`. Filters: `descripcion`
+  (contains), `estado`, `origen`, `gravedad` (member names such as
+  `accion_planificada`, `cliente`, `mayor`) and `fecha_detectada`; any other
+  enum value is refused with the allowed list. A `cerrada` or `cancelada`
+  record refuses updates.
+- `acciones_correctivas`: `no_conformidad_id` (an open nonconformity; it
+  never changes), `descripcion`, `responsable_id` (the owner, a person),
+  `fecha_prevista` and `fecha_realizada` (not before the detection date).
+  Records add the derived `estado` (`Planificada`, `Realizada`, `Verificada
+  eficaz`, `Verificada no eficaz`) and the verification columns, which no
+  tool writes. Filters: `no_conformidad_id`, `responsable_id` and `estado`
+  (member names such as `verificada_eficaz`). A verified action is
+  read-only, and every write moves the nonconformity's state along.
+- Web-only: verifying an action's effectiveness (administrators and
+  auditors, never the action's owner), closing a nonconformity once its
+  actions proved effective, cancelling it and reopening it. `qms_update`
+  refuses `estado` and the verification fields, and there is no delete tool.
 
 People and competence (ISO 9001 clauses 5.3 and 7.2):
 
@@ -114,9 +141,6 @@ letting it expire or changing its owner's role takes effect on the next call
 `qms_list` pages every module in the database: each service's `list_page`
 counts and fetches one page with the same filters and order as its `list_`
 (a test checks that every registered service has one).
-
-Known gap (follow-up): the `estado` filter of `no_conformidades` accepts only
-the fixed states, so legacy free-text states cannot be filtered on.
 
 A missing or invalid token gets `401` with `WWW-Authenticate: Bearer`; failures
 are written to the security log (prefix and reason, never the token). Deploying

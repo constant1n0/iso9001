@@ -15,6 +15,7 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
 {% extends "_partials/pdf_base.html" %}
+{% from "_partials/pdf.html" import fields %}
 {% block title %}Informe mensual de calidad{% endblock %}
 {% block clause %}Cláusula 9.1 · Seguimiento y medición{% endblock %}
 {% block subtitle %}Situación a {{ fecha.strftime('%d/%m/%Y') }}{% endblock %}
@@ -26,7 +27,23 @@
     <div class="kpi"><span class="kpi__label">Capacitaciones</span><span class="kpi__value">{{ total_capacitaciones }}</span></div>
 </div>
 <div class="section">
+    <h2>No conformidades por estado</h2>
+    <table class="fields">
+        {% for estado, total in no_conformidades_por_estado.items() %}
+        <tr><th>{{ estado.value }}</th><td>{{ total }}</td></tr>
+        {% endfor %}
+    </table>
+</div>
+<div class="section">
+    <h2>Acciones correctivas verificadas</h2>
+    {{ fields([
+        ('Acciones verificadas', acciones_verificadas),
+        ('Eficaces', acciones_eficaces),
+        ('No eficaces', acciones_no_eficaces),
+    ]) }}
+</div>
+<div class="section">
     <h2>Alcance</h2>
-    <p>Indicadores del sistema de gestión de calidad registrados en el mes del informe. La satisfacción media se expresa sobre 10.</p>
+    <p>Indicadores del sistema de gestión de calidad registrados en el mes del informe: las no conformidades por su fecha de detección, con su estado al generar el informe, y las acciones correctivas por su fecha de verificación. La satisfacción media se expresa sobre 10.</p>
 </div>
 {% endblock %}
