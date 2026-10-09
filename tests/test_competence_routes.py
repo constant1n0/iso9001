@@ -9,6 +9,7 @@ are flashed on the re-rendered form, which keeps what was typed.
 
 from __future__ import annotations
 
+import re
 import unittest
 from datetime import date
 from unittest.mock import patch
@@ -59,6 +60,17 @@ class RequirementListTestCase(CompetenceRoutesBase):
                     self.assertEqual(text in shown, text in html, text)
         html = self.page(f"{REQ}/?rol_id={self.compras}")
         self.assertIn(f'<option selected value="{self.compras}">Compras</option>', html)
+
+    def test_the_list_is_ordered_by_role_name_ignoring_case_then_by_id(self) -> None:
+        almacen = self.add_role("almacén")  # after «Calidad» by id and by plain sort
+        self.add_requirement(self.compras, "Uno de compras")
+        self.add_requirement(self.calidad, "Uno de calidad")
+        self.add_requirement(almacen, "Uno de almacén")
+        self.add_requirement(self.compras, "Dos de compras")
+        html = self.page(f"{REQ}/")
+        order = ("Uno de almacén", "Uno de calidad", "Uno de compras", "Dos de compras")
+        positions = [html.index(text) for text in order]
+        self.assertEqual(sorted(positions), positions)
 
 
 
@@ -239,6 +251,17 @@ class RecordFlowTestCase(CompetenceRoutesBase):
                          (found.persona_id, found.evidencia, found.capacitacion_id,
                           found.fecha_caducidad, found.evaluacion_eficacia))
 
+    def test_a_delete_conflict_is_flashed_on_the_person_page(self) -> None:
+        record = self.add_record(self.ana)
+        self.login(ADMIN)
+        with patch.object(competence.records, "delete",
+                          side_effect=Conflict("Registro en conflicto.")):
+            response = self.client.post(f"{BASE}/{record}/eliminar")
+        self.assertEqual((302, f"/personas/{self.ana}"),
+                         (response.status_code, response.headers["Location"]))
+        self.assertIn(("danger", "Registro en conflicto."), self.flashes())
+        self.assertIsNotNone(self.stored(CompetenceRecord, record))
+
     def deactivate(self, person_id: int) -> None:
         with self.app.app_context():
             people.update(db.session, SYSTEM, person_id, {"activo": False})
@@ -256,6 +279,85 @@ class RecordFlowTestCase(CompetenceRoutesBase):
                 response = self.client.open(url, method=method, data=self.form())
                 self.assertEqual(404, response.status_code)
         self.assertEqual(0, self.count(CompetenceRecord))
+
+
+class MatrixRouteTestCase(CompetenceRoutesBase):
+    """``/competencias/matriz``: who may open it is pinned in test_access_characterization."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.ana = self.add_person(rol_ids=[self.calidad])
+        self.luis = self.add_person("Luis Gil", rol_ids=[self.calidad, self.compras])
+        self.add_person("Eva Inactiva", rol_ids=[self.calidad], activo=False)
+        auditor = self.add_requirement(self.calidad, "Auditor interno")
+        carne = self.add_requirement(self.calidad, "Carné de carretillero", "habilidad")
+        negociacion = self.add_requirement(self.compras, "Negociación", "habilidad")
+        evaluated = {"fecha_evaluacion": date(2026, 3, 1), "evaluador_id": self.luis}
+        self.add_record(self.ana, requisito_id=auditor, evaluacion_eficacia="eficaz",
+                        **evaluated)
+        self.add_record(self.luis, requisito_id=auditor)  # pending evaluation
+        self.add_record(self.ana, requisito_id=carne, fecha_caducidad=date(2026, 6, 30),
+                        evaluacion_eficacia="eficaz", **evaluated)
+        self.add_record(self.luis, requisito_id=negociacion, evaluacion_eficacia="no_eficaz",
+                        **evaluated)
+
+    def matrix(self, query: str = "", role: RoleEnum = OPERATIVO,
+               today: date = date(2026, 10, 9)) -> str:
+        with patch("app.routes.competence_routes.local_today", return_value=today):
+            return self.page(f"{BASE}/matriz{query}", role)
+
+    def cell(self, person_id: int, badge: str, label: str) -> str:
+        return (rf'<a href="/personas/{person_id}"[^>]*>'
+                rf'<span class="badge badge--{badge}">{label}</span></a>')
+
+    def test_every_cell_shows_its_status_and_links_to_the_person(self) -> None:
+        html = self.matrix()
+        for text in ("Calidad", "Compras", "Auditor interno", "Carné de carretillero",
+                     "Negociación", "Ana Pérez", "Luis Gil"):
+            with self.subTest(text=text):
+                self.assertIn(text, html)
+        self.assertNotIn("Eva Inactiva", html)
+        for person, badge, label, count in (
+            (self.ana, "ok", "Cumplida", 1), (self.ana, "danger", "Caducada", 1),
+            (self.luis, "warn", "Pendiente de evaluación", 1),
+            (self.luis, "solid", "Falta", 1), (self.luis, "danger", "No eficaz", 1),
+        ):
+            with self.subTest(person=person, label=label):
+                self.assertEqual(count, len(re.findall(self.cell(person, badge, label), html)))
+
+    def test_expiry_follows_today(self) -> None:
+        html = self.matrix(today=date(2026, 6, 30))
+        self.assertEqual(2, len(re.findall(self.cell(self.ana, "ok", "Cumplida"), html)))
+        self.assertNotIn("Caducada</span>", html)
+
+    def test_the_role_filter(self) -> None:
+        html = self.matrix(f"?rol_id={self.compras}")
+        self.assertIn("Negociación", html)
+        self.assertNotIn("Auditor interno", html)
+        self.assertIn(f'<option selected value="{self.compras}">Compras</option>', html)
+        self.assertIn('<span class="badge badge--warn">1 activo</span>', html)
+        html = self.matrix("?rol_id=x")
+        self.assertIn("Auditor interno", html)
+        self.assertNotIn("1 activo", html)
+        empty = self.add_role("Sin requisitos")
+        self.assertIn("El rol elegido no tiene competencias requeridas.",
+                      self.matrix(f"?rol_id={empty}"))
+
+    def test_the_navigation_marks_the_matrix_as_current(self) -> None:
+        html = self.matrix()
+        self.assertRegex(html, rf'href="{BASE}/matriz"\s+aria-current="page"')
+        self.assertNotRegex(html, rf'href="{REQ}/"\s+aria-current="page"')
+        html = self.page(f"{REQ}/")
+        self.assertRegex(html, rf'href="{REQ}/"\s+aria-current="page"')
+        self.assertNotRegex(html, rf'href="{BASE}/matriz"\s+aria-current="page"')
+
+    def test_no_requirement_shows_an_empty_state(self) -> None:
+        self.login(ADMIN)
+        with self.app.app_context():
+            db.session.execute(CompetenceRecord.__table__.delete())
+            db.session.execute(CompetenceRequirement.__table__.delete())
+            db.session.commit()
+        self.assertIn("Todavía no hay competencias requeridas.", self.matrix())
 
 
 class CompetenceCsrfTestCase(CsrfRoutesBase):

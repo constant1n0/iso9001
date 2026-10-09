@@ -32,7 +32,8 @@ class FieldDef:
     ``integer``, ``integer_list`` (a JSON array of integers), ``boolean`` or
     ``enum`` (one of ``allowed``). ``members`` names the Python enum a filter
     must be turned into before the service sees it; without it an enum filter
-    is passed on as the plain string.
+    is passed on as the plain string. ``note`` is a short hint shown to the
+    agent when the type and flags do not say enough.
     """
 
     name: str
@@ -40,6 +41,7 @@ class FieldDef:
     required: bool = False
     allowed: tuple[str, ...] = ()
     members: type[Enum] | None = None
+    note: str = ""
 
 
 @dataclass(frozen=True)
@@ -64,20 +66,31 @@ def _person_extras(person: Any) -> dict[str, Any]:
     return {"rol_ids": person.rol_ids}
 
 
-def _f(name: str, type: str = "string", required: bool = False, allowed=(), members=None) -> FieldDef:
+def _f(name: str, type: str = "string", required: bool = False, allowed=(), members=None,
+       note: str = "") -> FieldDef:
     if members is not None:
         allowed = members.__members__
-    return FieldDef(name, type, required, tuple(allowed), members)
+    return FieldDef(name, type, required, tuple(allowed), members, note)
+
+
+def _legacy_name(name: str, link: str) -> FieldDef:
+    """A legacy free-text name that the person cited by ``link`` can fill."""
+    return _f(name, note=(
+        f"Legacy free-text name, never matched to a person. Required on create unless "
+        f"«{link}» cites a person (personas); left blank, it takes that person's name."
+    ))
 
 
 # ``responsable_id``, ``auditor_id`` and ``persona_id`` are ids of ``personas``
 # records (an existing person, active when newly chosen; ``null`` clears the
 # link). The free-text ``responsable``, ``auditor`` and ``personal`` stay as
-# legacy names and are never matched to a person.
+# legacy names and are never matched to a person. ``auditor`` and ``personal``
+# are not flagged required: the services require them only when no person is
+# cited (``people.fill_name``), and their note says so.
 _MODULES = (
     Module("no_conformidades", "Non-conformities", Resource.NONCONFORMITIES, nonconformities, (
         _f("descripcion", required=True), _f("fecha_detectada", "date", True),
-        _f("responsable"), _f("responsable_id", "integer"),
+        _legacy_name("responsable", "responsable_id"), _f("responsable_id", "integer"),
         _f("estado", "enum", allowed=ESTADOS_NO_CONFORMIDAD), _f("accion_correctiva"),
     # The state filter takes the fixed states only: stored legacy free-text states
     # are still listed but cannot be filtered on (writes keep a record's current
@@ -86,7 +99,7 @@ _MODULES = (
         _f("fecha_detectada", "date"))),
     Module("auditorias", "Audits", Resource.AUDITS, audits, (
         _f("area_auditada", required=True), _f("fecha", "date", True),
-        _f("auditor", required=True), _f("auditor_id", "integer"),
+        _legacy_name("auditor", "auditor_id"), _f("auditor_id", "integer"),
         _f("resultado", required=True), _f("accion_correctiva"),
         _f("estado", "enum", members=EstadoAuditoriaEnum),
     ), (_f("area"), _f("auditor"), _f("estado", "enum", members=EstadoAuditoriaEnum),
@@ -98,7 +111,8 @@ _MODULES = (
         _f("approved_by"), _f("content", required=True),
     )),
     Module("capacitaciones", "Training", Resource.TRAINING, training, (
-        _f("tema", required=True), _f("fecha", "date", True), _f("personal", required=True),
+        _f("tema", required=True), _f("fecha", "date", True),
+        _legacy_name("personal", "persona_id"),
         _f("duracion_horas", "integer"), _f("evaluacion_final"), _f("persona_id", "integer"),
     ), (_f("tema"), _f("fecha", "date"), _f("personal"))),
     Module("satisfaccion_clientes", "Customer satisfaction", Resource.CUSTOMER_SATISFACTION,

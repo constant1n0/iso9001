@@ -1,0 +1,79 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% block title %}Matriz de competencias{% endblock %}
+{% block crumb %}Personas y competencia · Matriz de competencias{% endblock %}
+{% set status_badge = {'cumplida': 'ok', 'pendiente_evaluacion': 'warn', 'no_eficaz': 'danger', 'caducada': 'danger', 'falta': 'solid'} %}
+{% block content %}
+{{ page_header('Cláusula 7.2 · Competencia requerida y acreditada', 'Matriz de competencias') }}
+
+<details class="filters"{% if rol_id is not none %} open{% endif %}>
+    <summary>Filtros{% if rol_id is not none %} <span class="badge badge--warn">1 activo</span>{% endif %}</summary>
+    <form method="get" action="{{ url_for('competence.matrix') }}" class="filters__body">
+        <div class="field"><label for="rol_id">Rol</label>
+            <select name="rol_id" id="rol_id">
+                <option {% if rol_id is none %}selected {% endif %}value="">Todos</option>
+                {% for role in roles %}
+                <option {% if role.id_rol == rol_id %}selected {% endif %}value="{{ role.id_rol }}">{{ role.rol }}</option>
+                {% endfor %}
+            </select></div>
+        <div class="filters__actions">
+            <button type="submit" class="btn btn--primary">Buscar</button>
+            <a class="btn btn--ghost" href="{{ url_for('competence.matrix') }}">Limpiar</a>
+        </div>
+    </form>
+</details>
+
+{% for group in groups %}
+<section aria-labelledby="rol-{{ group.role.id_rol }}">
+    <div class="section-header">
+        <h2 id="rol-{{ group.role.id_rol }}">{{ group.role.rol }}</h2>
+    </div>
+    {% if group.rows %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Persona</th>
+                    {% for requirement in group.requirements %}
+                    <th scope="col" title="{{ requirement.tipo.value }}">{{ requirement.descripcion }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in group.rows %}
+                {% set person_url = url_for('people.show_person', person_id=row.person.id) %}
+                <tr>
+                    <th scope="row"><a href="{{ person_url }}">{{ row.person.nombre }}</a></th>
+                    {% for cell in row.cells %}
+                    {% set expires = cell.record.fecha_caducidad if cell.record else none %}
+                    <td><a href="{{ person_url }}" title="{{ row.person.nombre }} · {{ cell.requirement.descripcion }}{% if expires %} · caducidad {{ expires.strftime('%d/%m/%Y') }}{% endif %}"><span class="badge badge--{{ status_badge[cell.status.name] }}">{{ cell.status.value }}</span></a></td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        {{ empty_state('Ninguna persona activa ocupa este rol.') }}
+    {% endif %}
+</section>
+{% else %}
+    {{ empty_state('El rol elegido no tiene competencias requeridas.' if rol_id is not none else 'Todavía no hay competencias requeridas.') }}
+{% endfor %}
+{% endblock %}

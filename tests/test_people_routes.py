@@ -94,6 +94,25 @@ class PeopleListTestCase(PeopleRoutesBase):
         self.assertIn(f'<option selected value="{calidad}">Calidad</option>', html)
         self.assertIn('<option selected value="0">Inactivas</option>', html)
 
+    def test_the_filter_badge_counts_only_the_filters_applied(self) -> None:
+        calidad = self.add_role("Calidad")
+        for query, applied in (("nombre=%20%20&rol_id=x&activo=x", 0), ("nombre=ana&rol_id=x", 1),
+                               ("activo=0&nombre=%20", 1), (f"rol_id={calidad}", 1),
+                               (f"nombre=ana&activo=1&rol_id={calidad}", 3)):
+            with self.subTest(query=query):
+                html = self.page(f"{BASE}/?{query}")
+                badge = re.search(r'<span class="badge badge--warn">(\d+) activos?</span>', html)
+                self.assertEqual(applied, int(badge.group(1)) if badge else 0)
+                self.assertEqual(applied > 0, '<details class="filters" open>' in html)
+
+    def test_an_unknown_state_value_lists_everyone(self) -> None:
+        self.add_person("Ana Pérez")
+        self.add_person("Luis Gil", activo=False)
+        html = self.page(f"{BASE}/?activo=x")
+        self.assertIn("Ana Pérez", html)
+        self.assertIn("Luis Gil", html)
+        self.assertIn('<option selected value="">Todas</option>', html)
+
     def test_operativo_sees_a_link_without_the_account_name(self) -> None:
         self.add_person(user_id=self.ids[ADMIN])
         html = self.page(f"{BASE}/", OPERATIVO)

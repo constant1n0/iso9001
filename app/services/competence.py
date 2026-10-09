@@ -29,11 +29,17 @@ training, and a newly chosen person must be active (``people.check_reference``).
 A record's dates and evaluation follow the rules in ``check_record``, checked
 on the record as the write would leave it before anything changes. A
 requirement that records still cite cannot be deleted.
+
+``matrix`` compares the competence each role requires with what its active
+holders have demonstrated (read grant of ``COMPETENCE``); see ``cell_status``
+for how a status and its deciding record are chosen.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+import enum
+from collections import defaultdict
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from functools import partial
@@ -44,7 +50,7 @@ from sqlalchemy.orm import Session
 
 from ..models import (
     Capacitacion, CompetenceEvaluation, CompetenceRecord, CompetenceRequirement,
-    CompetenceType, RolResponsabilidad,
+    CompetenceType, Person, RolResponsabilidad, persona_roles,
 )
 from . import crud, fields, people, policy
 from .actor import Actor
@@ -290,3 +296,133 @@ records = Register(
     update=_update_record,
     delete=partial(crud.delete, RECORD_SPEC),
 )
+
+
+# -- required versus demonstrated competence -----------------------------------------
+
+
+class MatrixStatus(enum.Enum):
+    """How far a person meets one requirement of a role, as shown in the matrix."""
+
+    cumplida = "Cumplida"
+    pendiente_evaluacion = "Pendiente de evaluación"
+    no_eficaz = "No eficaz"
+    caducada = "Caducada"
+    falta = "Falta"
+
+
+@dataclass(frozen=True)
+class MatrixCell:
+    """One requirement for one person; ``record`` decided the status (``None`` if missing)."""
+
+    requirement: CompetenceRequirement
+    status: MatrixStatus
+    record: CompetenceRecord | None
+
+
+@dataclass(frozen=True)
+class MatrixRow:
+    """An active person holding the role, with one cell per requirement of the role."""
+
+    person: Person
+    cells: list[MatrixCell]
+
+
+@dataclass(frozen=True)
+class RoleMatrix:
+    """A role, its requirements (the columns) and its active holders (the rows)."""
+
+    role: RolResponsabilidad
+    requirements: list[CompetenceRequirement]
+    rows: list[MatrixRow]
+
+
+def _newest_first(record: CompetenceRecord) -> tuple[date, int]:
+    return record.fecha_obtencion, record.id
+
+
+def cell_status(found: Sequence[CompetenceRecord],
+                today: date) -> tuple[MatrixStatus, CompetenceRecord | None]:
+    """The status of one person against one requirement, and the record deciding it.
+
+    ``found`` are that person's records for that requirement. A record is
+    unexpired when it has no expiry date or expires today or later. In order:
+
+    - ``cumplida``: the newest unexpired record evaluated ``eficaz``, even if
+      newer records exist (an effective, valid competence is still held);
+    - ``pendiente_evaluacion`` or ``no_eficaz``: otherwise the newest
+      unexpired record decides, by its evaluation;
+    - ``caducada``: every record has expired; the newest one is kept;
+    - ``falta``: there is no record.
+
+    "Newest" means the latest ``fecha_obtencion``, then the highest id.
+    """
+    ordered = sorted(found, key=_newest_first, reverse=True)
+    if not ordered:
+        return MatrixStatus.falta, None
+    valid = [r for r in ordered if r.fecha_caducidad is None or r.fecha_caducidad >= today]
+    if not valid:
+        return MatrixStatus.caducada, ordered[0]
+    for record in valid:
+        if record.evaluacion_eficacia is CompetenceEvaluation.eficaz:
+            return MatrixStatus.cumplida, record
+    latest = valid[0]
+    if latest.evaluacion_eficacia is CompetenceEvaluation.pendiente:
+        return MatrixStatus.pendiente_evaluacion, latest
+    return MatrixStatus.no_eficaz, latest
+
+
+def matrix(session: Session, actor: Actor, *, rol_id: int | None = None,
+           today: date) -> list[RoleMatrix]:
+    """Required versus demonstrated competence for every role with requirements.
+
+    Roles are ordered by name ignoring case, then id; requirements by id; rows
+    are the active people holding the role, by name then id. ``rol_id`` keeps
+    one role (an unknown id gives an empty list). Only records citing one of
+    the shown requirements count (see ``cell_status``). It runs a fixed number
+    of queries, whatever the number of roles, people or records.
+    """
+    policy.require(actor, Action.READ, Resource.COMPETENCE)
+    shown = select(CompetenceRequirement).where(*_requirement_conditions(rol_id=rol_id))
+    requirements = list(session.scalars(shown.order_by(CompetenceRequirement.id)))
+    if not requirements:
+        return []
+    role_ids = {requirement.rol_id for requirement in requirements}
+    roles = session.scalars(
+        select(RolResponsabilidad).where(RolResponsabilidad.id_rol.in_(role_ids))
+    ).all()
+    holders = session.execute(
+        select(persona_roles.c.rol_id, Person)
+        .join(Person, Person.id == persona_roles.c.persona_id)
+        .where(Person.activo.is_(True), persona_roles.c.rol_id.in_(role_ids))
+        .order_by(Person.nombre, Person.id)
+    ).all()
+    records = session.scalars(
+        select(CompetenceRecord)
+        .join(Person, Person.id == CompetenceRecord.persona_id)
+        .where(Person.activo.is_(True),
+               CompetenceRecord.requisito_id.in_(shown.with_only_columns(
+                   CompetenceRequirement.id)))
+    ).all()
+
+    by_role: dict[int, list[CompetenceRequirement]] = defaultdict(list)
+    for requirement in requirements:
+        by_role[requirement.rol_id].append(requirement)
+    people_by_role: dict[int, list[Person]] = defaultdict(list)
+    for role_id, person in holders:
+        people_by_role[role_id].append(person)
+    found: dict[tuple[int, int], list[CompetenceRecord]] = defaultdict(list)
+    for record in records:
+        found[record.persona_id, record.requisito_id].append(record)
+
+    def row(person: Person, columns: list[CompetenceRequirement]) -> MatrixRow:
+        return MatrixRow(person, [
+            MatrixCell(requirement, *cell_status(found[person.id, requirement.id], today))
+            for requirement in columns
+        ])
+
+    return [
+        RoleMatrix(role, by_role[role.id_rol],
+                   [row(person, by_role[role.id_rol]) for person in people_by_role[role.id_rol]])
+        for role in sorted(roles, key=lambda role: (role.rol.casefold(), role.id_rol))
+    ]

@@ -19,8 +19,6 @@
 {% from "people/_macros.html" import linked_user, state_badge %}
 {% block title %}Personas{% endblock %}
 {% block crumb %}Personas y competencia · Personas{% endblock %}
-{% set filtrando = request.args.items() | selectattr(1) | map(attribute=0) | select('in', ['nombre', 'activo', 'rol_id']) | list %}
-{% set activo = request.args.get('activo', '') %}
 {% block content %}
 {% call page_header('Cláusulas 5.3 y 7.2 · Personas y roles', 'Personas') %}
     {% if can('create', 'people') %}
@@ -28,8 +26,8 @@
     {% endif %}
 {% endcall %}
 
-<details class="filters"{% if filtrando %} open{% endif %}>
-    <summary>Filtros{% if filtrando %} <span class="badge badge--warn">{{ filtrando | length }} {{ 'activo' if filtrando | length == 1 else 'activos' }}</span>{% endif %}</summary>
+<details class="filters"{% if applied %} open{% endif %}>
+    <summary>Filtros{% if applied %} <span class="badge badge--warn">{{ applied }} {{ 'activo' if applied == 1 else 'activos' }}</span>{% endif %}</summary>
     <form method="get" action="{{ url_for('people.list_people') }}" class="filters__body">
         <div class="field"><label for="nombre">Nombre</label>
             <input type="text" name="nombre" id="nombre" value="{{ request.args.get('nombre', '') }}"></div>
@@ -90,6 +88,6 @@
     </table>
 </div>
 {% else %}
-    {{ empty_state('Ninguna persona coincide con los filtros.' if filtrando else 'Todavía no hay personas registradas.') }}
+    {{ empty_state('Ninguna persona coincide con los filtros.' if applied else 'Todavía no hay personas registradas.') }}
 {% endif %}
 {% endblock %}

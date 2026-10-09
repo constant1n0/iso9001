@@ -19,11 +19,14 @@ Validation mirrors ``CapacitacionForm``; every role may use the register.
 ``persona_id`` cites the person trained (``personas``, see
 ``people.check_reference``); ``personal`` keeps the legacy free-text name.
 ``personal`` is required unless a person is cited: a write that leaves it
-blank takes the person's name (``people.fill_name``).
+blank takes the person's name (``people.fill_name``). Its field is therefore
+not flagged ``required`` in ``SPEC`` (which the MCP registry mirrors); the
+``prepare`` hook requires it on create once the person's name is filled in.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date
 from functools import partial
 from typing import Any
@@ -38,6 +41,18 @@ from .policy import Resource
 TEMA_MAX = 100  # mirrors Capacitacion.tema and the web form
 PERSONAL_MAX = 100  # mirrors Capacitacion.personal and the web form
 EVALUACION_MAX = 20  # mirrors Capacitacion.evaluacion_final and the web form
+# Required on create; ``personal`` may come from the cited person instead.
+REQUIRED_ON_CREATE = frozenset({"tema", "fecha", "personal"})
+
+
+def _prepare(session: Session, data: Any, found: Capacitacion | None) -> Any:
+    """Fill a blank ``personal`` from the cited person, then require it on create."""
+    data = people.fill_name(session, data, found, link="persona_id", text="personal",
+                            max_length=PERSONAL_MAX)
+    if found is None and isinstance(data, Mapping):
+        fields.require_keys(data, REQUIRED_ON_CREATE)
+    return data
+
 
 SPEC = crud.Spec(
     model=Capacitacion,
@@ -46,14 +61,14 @@ SPEC = crud.Spec(
     fields=(
         crud.Field("tema", partial(fields.text, required=True, max_length=TEMA_MAX), required=True),
         crud.Field("fecha", fields.required_date, required=True),
-        crud.Field("personal", partial(fields.text, required=True, max_length=PERSONAL_MAX), required=True),
+        # Not ``required``: a cited person can supply it (see ``_prepare``).
+        crud.Field("personal", partial(fields.text, required=True, max_length=PERSONAL_MAX)),
         crud.Field("duracion_horas", partial(fields.integer, minimum=0)),
         crud.Field("evaluacion_final", partial(fields.text, max_length=EVALUACION_MAX)),
         crud.Field("persona_id", fields.integer, check=people.check_reference),
     ),
     order_by=(Capacitacion.fecha.desc(), Capacitacion.id.desc()),
-    prepare=partial(people.fill_name, link="persona_id", text="personal",
-                    max_length=PERSONAL_MAX),
+    prepare=_prepare,
 )
 
 get = partial(crud.get, SPEC)
