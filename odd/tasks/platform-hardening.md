@@ -31,7 +31,7 @@ Close three known gaps before more agents use the system: Gunicorn trusting prox
   - Acceptance: the per-token limit answers 429 with `Retry-After` and logs the prefix; failed bearer tokens from one address are refused with 429 before the database lookup once over the limit; limits are configurable; a storage outage does not block valid requests; existing MCP tests stay green.
 - [x] **PH-3 — Database paging for five registers.** Route: delegated (five services, registry, tests). Forecast 300-450.
   - Acceptance: each service has `list_page` with the same filters and order as `list_`, counted in the database; `qms_list` uses it for all five; paging and totals are tested per register; `docs/mcp.md` no longer lists them as paged in memory.
-- [ ] **PH-4 — Production deployment** after explicit authorization.
+- [x] **PH-4 — Production deployment** after explicit authorization.
 
 ## Checks
 
@@ -48,7 +48,7 @@ Baseline at `5c9765d`: 694 tests.
 | PH-1 | Done | `1dae970` (route: inline) | RED: 2 `test_gunicorn_config` tests (`*` found). GREEN; access-log tests unchanged | Range `5c9765d..108ee2c`: **high**; consent granted; 4-lens review `review-efaa043a33d55277` **approved** and acknowledged |
 | PH-2 | Done | `108ee2c`, review follow-ups `e03aded`, `f2bb09f` | RED: missing `rate_limit` module, no `Actor.token_prefix`; for the follow-ups: a valid token behind a throttled address got 429, 8 parallel failures all got 401, Redis options without timeouts, storage errors escaping `main`, a decoded password echoed in the start-up error. GREEN: 709, then 733, then 734 tests | Same review: the pre-authentication gate locked valid tokens out behind a noisy address and was not atomic, so failures are now counted after authentication with one atomic hit and only failing requests get 429; 1 s Redis timeouts by default; storage errors exit 2 without credentials; docs cover the window strategy and the shared bucket without an address. Range `108ee2c..e03aded` (**medium**, `slice_budget_reached`): reliability review `review-bce8c6165b608f49` **approved** and acknowledged; its redaction warning fixed in `f2bb09f`; its other warning (a throttled address still reaches the token lookup) is the accepted trade-off of failure-only refusals with 256-bit tokens |
 | PH-3 | Done | `de63828`; dead in-memory branch and `paged_in_db` removed in `e03aded` | RED: 19 `list_page` tests (`AttributeError`), MCP paging `(3, 2, 1, False) != (0, 2, 0, False)` for the five modules. GREEN: 730 tests | Covered by `review-bce8c6165b608f49` |
-| PH-4 | Pending (authorization) | — | — | — |
+| PH-4 | Done | merged as `69bcfa7` (PR [#79](https://github.com/constant1n0/iso9001/pull/79)); copied to `vulcano` on 2026-10-06, activated by the restart of the `3206275` deployment on 2026-10-09 | See below | — |
 
 ## Findings during implementation
 
@@ -57,6 +57,19 @@ Baseline at `5c9765d`: 694 tests.
 - `limits.parse` silently drops anything after `;` and accepts `0/minute`, so the settings are validated with `parse_many`.
 - Every MCP module now pages in the database; `operations.list_records` always calls `list_page`.
 
+## Production deployment (2026-10-06 and 2026-10-09)
+
+The code (`69bcfa7`) was copied to `vulcano` on 2026-10-06 (backup `iso9001-code-*-pre-69bcfa7.tar.gz`); it went live with the restart of the `qms-people` deployment (`3206275`):
+
+| Step | Result |
+|---|---|
+| Preflight | Was `69bcfa7` (platform hardening copied but not yet restarted), clean, migration `f2c7a9e4b1d6` |
+| Backups | `~/work/backups/calidad-*-pre-3206275.dump` (`pg_dump -Fc`, 164 entries listed by `pg_restore -l`) and `iso9001-code-*-pre-3206275.tar.gz`, both mode 600 |
+| Code | Incremental git bundle `69bcfa7..main`, fast-forward to `3206275`; `pip check` clean, no dependency changes |
+| Database | `flask db upgrade` `f2c7a9e4b1d6` → `a3c5e7f9b2d4` → `b8d2f4a6c1e3` → `c9e3a5b7d1f4` before the restart; `flask db check` clean |
+| Restart (user, with sudo) | `iso9001`, `iso9001-celery-worker`, `iso9001-celery-beat`, `iso9001-mcp` (also activates the platform hardening) |
+| Smoke tests | Services active, no error entries in the journal; `/login` 200; `/personas/` and `/competencias/matriz` redirect to the login; the MCP registry has 15 modules; 21 consecutive bad bearer tokens from one address got 20 × 401 then 429 with `Retry-After: 60`, and the security log recorded `API_TOKEN_AUTH_FAILED` and `MCP_AUTH_RATE_LIMITED` with the real client address |
+
 ## Next step
 
-Deliver the pull request, then PH-4 after explicit authorization: deploy (no migrations, no `.env` changes needed because the defaults apply), the user restarts the services, smoke tests check a 429 for repeated bad bearer tokens and normal tool calls with a valid token.
+**Feature complete and deployed.**

@@ -93,12 +93,21 @@ Baseline at `69bcfa7`: 734 tests. Migrations are tested on PostgreSQL (`TEST_POS
 | 3 | [#83](https://github.com/constant1n0/iso9001/pull/83) | QP-3 | `acdacf6` | |
 | 4 | [#84](https://github.com/constant1n0/iso9001/pull/84) | QP-4 first half | `67b795f` | |
 | 5 | [#85](https://github.com/constant1n0/iso9001/pull/85) | QP-4 screens | `4d66d2a` | |
-| 6 | Pending | QP-5, this closing update | — | Final slice |
+| 6 | [#86](https://github.com/constant1n0/iso9001/pull/86) | QP-5, closing update | `3206275` | |
 
-## Production deployment (pending authorization)
+## Production deployment (2026-10-09)
 
-Three migrations (`a3c5e7f9b2d4` personas, `b8d2f4a6c1e3` person links, `c9e3a5b7d1f4` competence) on top of `f2c7a9e4b1d6`: back up the database, fast-forward, `flask db upgrade`, `flask db check`, then the user restarts the four services; smoke tests: `/personas/`, `/competencias/matriz`, a training form with the person picker, `qms_modules` lists 15 modules.
+`main@3206275` runs on `vulcano`. The user authorized this deployment over SSH as `dcm`, with no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `69bcfa7` (platform hardening copied but not yet restarted), clean, migration `f2c7a9e4b1d6` |
+| Backups | `~/work/backups/calidad-*-pre-3206275.dump` (`pg_dump -Fc`, 164 entries listed by `pg_restore -l`) and `iso9001-code-*-pre-3206275.tar.gz`, both mode 600 |
+| Code | Incremental git bundle `69bcfa7..main`, fast-forward to `3206275`; `pip check` clean, no dependency changes |
+| Database | `flask db upgrade` `f2c7a9e4b1d6` → `a3c5e7f9b2d4` → `b8d2f4a6c1e3` → `c9e3a5b7d1f4` before the restart; `flask db check` clean |
+| Restart (user, with sudo) | `iso9001`, `iso9001-celery-worker`, `iso9001-celery-beat`, `iso9001-mcp` (also activates the platform hardening) |
+| Smoke tests | Services active, no error entries in the journal; `/login` 200; `/personas/` and `/competencias/matriz` redirect to the login; the MCP registry has 15 modules; 21 consecutive bad bearer tokens from one address got 20 × 401 then 429 with `Retry-After: 60`, and the security log recorded `API_TOKEN_AUTH_FAILED` and `MCP_AUTH_RATE_LIMITED` with the real client address |
 
 ## Next step
 
-**Feature complete** once slice 6 merges. Next: the production deployment above, after explicit authorization; then Wave 1 (`nc-capa-loop` first).
+**Feature complete and deployed.** Next: Wave 1, starting with `nc-capa-loop`.
