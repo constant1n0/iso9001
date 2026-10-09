@@ -20,7 +20,7 @@
 {% block crumb %}Calidad · No conformidades{% endblock %}
 {% set filtros = ['descripcion', 'estado', 'fecha_detectada'] %}
 {% set filtrando = request.args.items() | selectattr(1) | map(attribute=0) | select('in', filtros) | list %}
-{% set estilo_estado = {'Abierta': 'badge--danger', 'En proceso': 'badge--warn', 'Cerrada': 'badge--ok'} %}
+{% set estilo_estado = {'abierta': 'badge--danger', 'accion_planificada': 'badge--warn', 'en_verificacion': 'badge--warn', 'cerrada': 'badge--ok'} %}
 {% block content %}
 {% call page_header('Cláusula 10.2 · No conformidad y acción correctiva', 'No conformidades') %}
     {% if can('create', 'nonconformities') %}
@@ -37,7 +37,7 @@
             <select name="estado" id="estado">
                 <option value="">Todos</option>
                 {% for opcion in estados %}
-                    <option value="{{ opcion }}"{% if request.args.get('estado') == opcion %} selected{% endif %}>{{ opcion }}</option>
+                    <option value="{{ opcion.name }}"{% if request.args.get('estado') == opcion.name %} selected{% endif %}>{{ opcion.value }}</option>
                 {% endfor %}
             </select></div>
         <div class="field"><label for="fecha_detectada">Detectada el</label>
@@ -69,12 +69,12 @@
                 <td>{{ nc.descripcion | truncate(90) }}</td>
                 {% set persona = personas.get(nc.responsable_id) %}
                 <td>{{ nc.responsable or '—' }}{% if persona %}<br><span class="muted">Persona: {{ persona }}</span>{% endif %}</td>
-                <td><span class="badge {{ estilo_estado.get(nc.estado, '') }}">{{ nc.estado }}</span></td>
+                <td><span class="badge {{ estilo_estado.get(nc.estado.name, '') }}">{{ nc.estado.value }}</span></td>
                 <td>{{ nc.accion_correctiva | truncate(80) if nc.accion_correctiva else '—' }}</td>
                 <td>
                     <div class="table__actions">
                         {% if can('update', 'nonconformities') %}
-                        <a class="btn btn--sm" href="{{ url_for('no_conformidad.editar_no_conformidad', id=nc.id) }}">Editar</a>
+                        <a class="btn btn--sm" href="{{ url_for('no_conformidad.editar_no_conformidad', id=nc.id) }}">{{ 'Ver' if nc.estado.name in ('cerrada', 'cancelada') else 'Editar' }}</a>
                         {% endif %}
                         <a class="btn btn--sm" href="{{ url_for('no_conformidad.exportar_pdf', id=nc.id) }}" target="_blank" rel="noopener">PDF</a>
                         {% if can('delete', 'nonconformities') %}

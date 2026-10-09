@@ -13,7 +13,9 @@ import test_auth_bootstrap as bootstrap
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db
-from app.models import NoConformidad, RoleEnum, SatisfaccionCliente, User
+from app.models import (
+    EstadoNoConformidad, NoConformidad, RoleEnum, SatisfaccionCliente, User,
+)
 
 
 PASSWORD = "StrongPassword123!"
@@ -112,10 +114,12 @@ class UiFoundationTestCase(unittest.TestCase):
 
     def test_dashboard_embeds_chart_data_as_json_arrays(self) -> None:
         with self.app.app_context():
-            for estado in ("Abierta", "Abierta", "Cerrada", "En proceso"):
+            for estado in ("abierta", "abierta", "cerrada", "accion_planificada",
+                           "en_verificacion", "cancelada"):
                 db.session.add(
                     NoConformidad(
-                        descripcion="NC", fecha_detectada=date(2026, 9, 1), estado=estado
+                        descripcion=f"NC {estado}", fecha_detectada=date(2026, 9, 1),
+                        estado=EstadoNoConformidad[estado],
                     )
                 )
             for day, score in ((date(2026, 8, 3), 6), (date(2026, 8, 20), 8),
@@ -133,10 +137,13 @@ class UiFoundationTestCase(unittest.TestCase):
         match = DATA_SCRIPT.search(html)
         self.assertIsNotNone(match, "dashboard data script is missing")
         data = json.loads(match.group(1))
-        self.assertEqual({"abiertas": 2, "cerradas": 1}, data["no_conformidades"])
+        # Open means neither closed nor cancelled; a cancelled one is not "closed" either.
+        self.assertEqual({"abiertas": 4, "cerradas": 1}, data["no_conformidades"])
+        self.assertIn("4<span class=\"kpi__unit\">/ 6</span>", html)
+        self.assertIn("NC accion_planificada", html)  # pending list holds every open state
+        self.assertNotIn("NC cancelada", html)
         self.assertEqual(["2026-08", "2026-09"], data["satisfaccion"]["meses"])
         self.assertEqual([7.0, 9.0], data["satisfaccion"]["promedios"])
-        # A free-text state that is neither open nor closed is not "closed".
         self.assertIn("1 cerrada<", html)
         self.assertIn("/static/lib/chart.umd.min.js", html)
         self.assertIn("/static/js/dashboard.js", html)

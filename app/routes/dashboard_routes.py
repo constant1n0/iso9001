@@ -20,8 +20,10 @@ from flask_login import login_required
 
 from ..audit_notifications import local_today
 from ..extensions import db
-from ..models import Auditoria, Capacitacion, NoConformidad, SatisfaccionCliente
-from ..services.nonconformities import ESTADO_ABIERTA, ESTADO_CERRADA
+from ..models import (
+    Auditoria, Capacitacion, EstadoNoConformidad, NoConformidad, SatisfaccionCliente,
+)
+from ..services.nonconformities import OPEN_STATES
 
 bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 
@@ -34,14 +36,18 @@ def dashboard():
     """
     hoy = local_today()
 
-    no_conformidades_abiertas = NoConformidad.query.filter_by(estado=ESTADO_ABIERTA).count()
-    no_conformidades_cerradas = NoConformidad.query.filter_by(estado=ESTADO_CERRADA).count()
+    # Open: not yet closed or cancelled. A cancelled one counts as neither.
+    abiertas = NoConformidad.estado.in_(OPEN_STATES)
+    no_conformidades_abiertas = NoConformidad.query.filter(abiertas).count()
+    no_conformidades_cerradas = NoConformidad.query.filter_by(
+        estado=EstadoNoConformidad.cerrada
+    ).count()
 
     proximas_auditorias = Auditoria.query.filter(
         Auditoria.fecha.between(hoy, hoy + timedelta(days=7))
     ).order_by(Auditoria.fecha).all()
-    no_conformidades_pendientes = NoConformidad.query.filter_by(
-        estado=ESTADO_ABIERTA
+    no_conformidades_pendientes = NoConformidad.query.filter(
+        abiertas
     ).order_by(NoConformidad.fecha_detectada).all()
     proximas_capacitaciones = Capacitacion.query.filter(
         Capacitacion.fecha.between(hoy, hoy + timedelta(days=30))

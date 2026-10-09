@@ -92,11 +92,25 @@ class RegistryTestCase(unittest.TestCase):
                    if not callable(getattr(module.service, "list_page", None))]
         self.assertEqual([], unpaged)
 
-    def test_nonconformity_state_filter_offers_the_fixed_states(self) -> None:
-        from app.services.nonconformities import ESTADOS_NO_CONFORMIDAD
+    def test_nonconformity_state_filter_offers_the_enum_names(self) -> None:
+        from app.models import EstadoNoConformidad
 
         field = {f.name: f for f in registry().MODULES["no_conformidades"].filters}["estado"]
-        self.assertEqual(("enum", ESTADOS_NO_CONFORMIDAD), (field.type, field.allowed))
+        self.assertEqual(
+            ("enum", ("abierta", "accion_planificada", "en_verificacion", "cerrada",
+                      "cancelada"), EstadoNoConformidad),
+            (field.type, field.allowed, field.members),
+        )
+
+    def test_nonconformity_fields_add_origin_severity_and_never_the_state(self) -> None:
+        fields = {f.name: f for f in registry().MODULES["no_conformidades"].fields}
+        self.assertNotIn("estado", fields)
+        self.assertEqual(("enum", ("auditoria", "cliente", "proceso", "proveedor", "otro")),
+                         (fields["origen"].type, fields["origen"].allowed))
+        self.assertEqual(("enum", ("mayor", "menor", "observacion")),
+                         (fields["gravedad"].type, fields["gravedad"].allowed))
+        self.assertLessEqual({"contencion", "causa_raiz", "accion_correctiva"}, set(fields))
+        self.assertNotIn("motivo_cancelacion", fields)
 
     def test_enum_fields_list_the_values_the_services_accept(self) -> None:
         from app.models import (
@@ -163,7 +177,8 @@ class ModulesToolTestCase(McpDbCase):
         fields = {f["name"]: f for f in nc["fields"]}
         self.assertTrue(fields["descripcion"]["required"])
         self.assertEqual("date", fields["fecha_detectada"]["type"])
-        self.assertEqual(["Abierta", "En proceso", "Cerrada"], fields["estado"]["allowed"])
+        self.assertEqual(["mayor", "menor", "observacion"], fields["gravedad"]["allowed"])
+        self.assertNotIn("estado", fields)
         self.assertEqual({"descripcion", "estado", "fecha_detectada"},
                          {f["name"] for f in nc["filters"]})
         training = {f["name"]: f for f in modules["capacitaciones"]["fields"]}

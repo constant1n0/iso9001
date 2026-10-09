@@ -11,7 +11,10 @@ from decimal import Decimal
 import test_auth_bootstrap as bootstrap
 
 from app.extensions import db
-from app.models import NoConformidad, RoleEnum, User
+from app.models import EstadoNoConformidad, NoConformidad, RoleEnum, User
+
+# The stored state is an enum; snapshots show its Spanish label.
+ABIERTA, CERRADA = EstadoNoConformidad.abierta, EstadoNoConformidad.cerrada
 
 
 def audit_module():
@@ -68,7 +71,7 @@ class AuditDbBase(unittest.TestCase):
         values = {
             "descripcion": "Fallo",
             "fecha_detectada": date(2026, 10, 1),
-            "estado": "Abierta",
+            "estado": ABIERTA,
         } | kwargs
         nc = NoConformidad(**values)
         db.session.add(nc)
@@ -117,7 +120,7 @@ class AuditDatabaseTestCase(AuditDbBase):
         audit = audit_module()
         nc = self.new_nc()
         before = audit.snapshot(nc)
-        nc.estado = "Cerrada"
+        nc.estado = CERRADA
         nc.fecha_cierre = date(2026, 10, 2)
         row = audit.record(
             db.session, make_actor(), "update", nc, before=before, request_id="req-1"
@@ -250,7 +253,7 @@ class FlushGuardTestCase(AuditDbBase):
         audit.record(db.session, make_actor(), "create", nc)
         db.session.commit()
         before = audit.snapshot(nc)
-        nc.estado = "Cerrada"
+        nc.estado = CERRADA
         audit.record(db.session, make_actor(), "update", nc, before=before)
         db.session.commit()
         audit.record(db.session, make_actor(), "delete", nc)
@@ -277,7 +280,7 @@ class FlushGuardTestCase(AuditDbBase):
         db.session.commit()
         remove = audit.install_audit_guard(db.session, audit.AUDITED_MODELS)
         self.addCleanup(remove)
-        nc.estado = "Cerrada"
+        nc.estado = CERRADA
         with self.assertRaises(audit.AuditGuardViolation):
             db.session.flush()
         db.session.rollback()
@@ -312,8 +315,8 @@ class FlushGuardTestCase(AuditDbBase):
         remove = audit.install_audit_guard(db.session, audit.AUDITED_MODELS)
         self.addCleanup(remove)
         before = audit.snapshot(first)
-        first.estado = "Cerrada"
-        second.estado = "Cerrada"
+        first.estado = CERRADA
+        second.estado = CERRADA
         audit.record(db.session, make_actor(), "update", first, before=before)
         with self.assertRaises(audit.AuditGuardViolation):
             db.session.flush()
@@ -327,7 +330,7 @@ class FlushGuardTestCase(AuditDbBase):
         self.addCleanup(remove)
         for nc in (first, second):
             before = audit.snapshot(nc)
-            nc.estado = "Cerrada"
+            nc.estado = CERRADA
             audit.record(db.session, make_actor(), "update", nc, before=before)
         db.session.commit()
         self.assertEqual(2, db.session.query(audit.AuditLog).count())

@@ -13,7 +13,7 @@ from app.extensions import db
 from app.mcp_server import context
 from app.mcp_server.server import build_server
 from app.mcp_server.registry import MODULES
-from app.models import RoleEnum, User
+from app.models import EstadoNoConformidad, NoConformidad, RoleEnum, User
 from app.services import api_tokens
 from app.services.actor import Actor
 
@@ -91,6 +91,13 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
         row = module.service.create(db.session, admin, data)
         db.session.commit()
         return sa_inspect(row).mapper.primary_key_from_instance(row)[0]
+
+    @staticmethod
+    def force_nc_state(record_id: int, estado: EstadoNoConformidad) -> None:
+        """Put a nonconformity in a state no write tool sets (core update, no audit)."""
+        db.session.execute(NoConformidad.__table__.update()
+                           .where(NoConformidad.id == record_id).values(estado=estado))
+        db.session.commit()
 
     @staticmethod
     def cli() -> Actor:

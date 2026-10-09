@@ -16,8 +16,8 @@ from test_nonconformity_service import ServiceBase, actor, errors
 
 from app.extensions import db
 from app.models import (
-    Capacitacion, Document, DocumentCategory, NoConformidad, ParteInteresada,
-    RoleEnum, SatisfaccionCliente,
+    Capacitacion, Document, DocumentCategory, EstadoNoConformidad, NoConformidad,
+    ParteInteresada, RoleEnum, SatisfaccionCliente,
 )
 from app.services import crud
 
@@ -106,7 +106,8 @@ class FilteredListPageContract(ListPageContract):
 
 class NonconformityListPageTestCase(FilteredListPageContract, ServiceBase):
     model = NoConformidad
-    filters = {"descripcion": "fuga", "estado": "Abierta", "fecha_detectada": OCT}
+    filters = {"descripcion": "fuga", "estado": EstadoNoConformidad.abierta,
+               "fecha_detectada": OCT}
 
     def service(self):
         from app.services import nonconformities
@@ -114,12 +115,12 @@ class NonconformityListPageTestCase(FilteredListPageContract, ServiceBase):
         return nonconformities
 
     def seed_ordered(self) -> list[int]:
-        def nc(descripcion, fecha, estado="Abierta"):
+        def nc(descripcion, fecha, estado=EstadoNoConformidad.abierta):
             return self.insert(descripcion=descripcion, fecha_detectada=fecha, estado=estado)
 
         old = nc("Ruido en linea", SEP)
         first = nc("Fuga de aceite", OCT)
-        closed = nc("Fuga de agua", OCT, estado="Cerrada")
+        closed = nc("Fuga de agua", OCT, estado=EstadoNoConformidad.cerrada)
         oldest = nc("Fuga antigua", AUG)
         last = nc("Fuga menor", OCT)
         # Newest date first; rows sharing a date come newest id first.

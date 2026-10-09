@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from mcp_support import ADMIN, OPERATIVO, SEEDS, McpDbCase, mcp_actor
 
+from app.models import EstadoNoConformidad
 from app.services import crud, nonconformities
 
 
@@ -41,7 +42,7 @@ class EveryModuleTestCase(McpDbCase):
 
 class FilterTestCase(McpDbCase):
     async def test_filters_are_validated_and_applied(self) -> None:
-        self.seed("no_conformidades", estado="En proceso")
+        self.force_nc_state(self.seed("no_conformidades"), EstadoNoConformidad.accion_planificada)
         self.seed("no_conformidades", descripcion="Otra", fecha_detectada="2026-09-01")
         actor = mcp_actor(ADMIN)
 
@@ -50,7 +51,7 @@ class FilterTestCase(McpDbCase):
             self.assertFalse(result.is_error, result.content)
             return result.structured_content["total"]
 
-        self.assertEqual(1, await total("no_conformidades", {"estado": "En proceso"}))
+        self.assertEqual(1, await total("no_conformidades", {"estado": "accion_planificada"}))
         self.assertEqual(1, await total("no_conformidades", {"fecha_detectada": "2026-09-01"}))
         self.assertEqual(1, await total("no_conformidades", {"descripcion": "otra"}))
         self.seed("auditorias", estado="COMPLETADA")
@@ -106,17 +107,23 @@ class FilterTestCase(McpDbCase):
                     if result.is_error:
                         self.assertIn(field.allowed[0], error_text(result))
 
-    async def test_the_nonconformity_state_filter_is_the_fixed_state_list(self) -> None:
-        self.seed("no_conformidades", estado="Cerrada")
-        self.seed("no_conformidades", descripcion="Otra")
+    async def test_the_nonconformity_state_filter_takes_enum_names(self) -> None:
+        self.force_nc_state(self.seed("no_conformidades"), EstadoNoConformidad.cancelada)
+        self.seed("no_conformidades", descripcion="Otra", origen="cliente", gravedad="menor")
         ok = await self.call(mcp_actor(ADMIN), "qms_list",
-                             {"module": "no_conformidades", "filters": {"estado": "Cerrada"}})
+                             {"module": "no_conformidades", "filters": {"estado": "cancelada"}})
         self.assertEqual(1, ok.structured_content["total"])
-        # Legacy free-text states are listed but deliberately not filterable.
-        legacy = await self.call(mcp_actor(ADMIN), "qms_list",
-                                 {"module": "no_conformidades", "filters": {"estado": "Pendiente de revisar"}})
-        self.assertTrue(legacy.is_error)
-        self.assertIn("Cerrada", error_text(legacy))
+        listed = await self.call(mcp_actor(ADMIN), "qms_list", {"module": "no_conformidades"})
+        items = {i["descripcion"]: i for i in listed.structured_content["items"]}
+        # Records show the Spanish labels; filters take the names.
+        self.assertEqual("Cancelada", items["Pieza fuera de tolerancia"]["estado"])
+        self.assertEqual(("Abierta", "Cliente", "Menor", None, None, None), tuple(
+            items["Otra"][k] for k in ("estado", "origen", "gravedad", "contencion",
+                                       "causa_raiz", "motivo_cancelacion")))
+        label = await self.call(mcp_actor(ADMIN), "qms_list",
+                                {"module": "no_conformidades", "filters": {"estado": "Cancelada"}})
+        self.assertTrue(label.is_error)
+        self.assertIn("accion_planificada", error_text(label))
 
     def test_enum_coercion_lives_in_the_registry_not_in_operations(self) -> None:
         from app.mcp_server import operations

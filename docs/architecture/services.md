@@ -13,7 +13,7 @@ from app.services import nonconformities
 from app.services.actor import Actor
 
 actor = Actor.from_user(user, channel="web")        # who, with which role, through which channel
-record = nonconformities.update(db.session, actor, 7, {"estado": "Cerrada"})
+record = nonconformities.update(db.session, actor, 7, {"gravedad": "mayor"})
 db.session.commit()                                  # the adapter owns the transaction
 ```
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import unittest
+from unittest.mock import patch
 
 import test_auth_bootstrap as bootstrap
 from alembic.autogenerate import compare_metadata
@@ -102,7 +103,8 @@ class MigrationsTestCase(unittest.TestCase):
             downgrade(directory=MIGRATIONS_DIR, revision="b7e2c9d41f03")
             self.assertNotIn("audit_logs", inspect(db.engine).get_table_names())
 
-    def _insert_legacy_user_and_nc(self) -> None:
+    def _insert_legacy_user_and_nc(self, estado: str = "Abierta") -> None:
+        """A user and a nonconformity; ``estado`` is free text before e7a9c1d3f5b8."""
         with db.engine.begin() as connection:
             connection.execute(
                 text(
@@ -114,8 +116,9 @@ class MigrationsTestCase(unittest.TestCase):
                 text(
                     "INSERT INTO no_conformidades "
                     "(descripcion, fecha_detectada, estado) "
-                    "VALUES ('vieja', '2026-01-01', 'Abierta')"
-                )
+                    "VALUES ('vieja', '2026-01-01', :estado)"
+                ),
+                {"estado": estado},
             )
 
     def test_metadata_migration_keeps_legacy_rows_null_and_downgrades(self) -> None:
@@ -164,7 +167,7 @@ class MigrationsTestCase(unittest.TestCase):
     def test_deleting_a_user_nulls_the_attribution_ids(self) -> None:
         with self.app.app_context():
             upgrade(directory=MIGRATIONS_DIR)
-            self._insert_legacy_user_and_nc()
+            self._insert_legacy_user_and_nc(estado="abierta")
             with db.engine.begin() as connection:
                 connection.execute(
                     text(
@@ -333,7 +336,7 @@ class MigrationsTestCase(unittest.TestCase):
                 connection.execute(text(
                     "INSERT INTO no_conformidades "
                     "(descripcion, fecha_detectada, estado, responsable_id) "
-                    "SELECT 'Fallo', '2026-10-01', 'Abierta', id FROM personas"
+                    "SELECT 'Fallo', '2026-10-01', 'abierta', id FROM personas"
                 ))
                 connection.execute(text(
                     "INSERT INTO auditorias "
@@ -419,6 +422,67 @@ class MigrationsTestCase(unittest.TestCase):
             downgrade(directory=MIGRATIONS_DIR, revision="b8d2f4a6c1e3")
             self.assertFalse(set(indexed) & set(inspect(db.engine).get_table_names()))
             upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+    def _nc_states(self) -> dict:
+        with db.engine.connect() as connection:
+            return dict(connection.execute(
+                text("SELECT descripcion, estado FROM no_conformidades")).all())
+
+    def test_nonconformity_states_convert_both_ways(self) -> None:
+        legacy = {"a": "Abierta", "b": "En proceso", "c": "Cerrada", "d": "Pendiente revisión"}
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision="c9e3a5b7d1f4")
+            with db.engine.begin() as connection:
+                for descripcion, estado in legacy.items():
+                    connection.execute(text(
+                        "INSERT INTO no_conformidades (descripcion, fecha_detectada, estado) "
+                        "VALUES (:d, '2026-01-01', :e)"), {"d": descripcion, "e": estado})
+            # env.py reconfigures logging on every run; keep the capture handler.
+            with patch("logging.config.fileConfig"), \
+                    self.assertLogs("alembic.runtime.migration", "INFO") as logs:
+                upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual({"a": "abierta", "b": "accion_planificada", "c": "cerrada",
+                              "d": "abierta"}, self._nc_states())
+            self.assertTrue(any("4 nonconformity states" in line and "1 unrecognised" in line
+                                for line in logs.output), logs.output)
+            columns = {c["name"]: c for c in inspect(db.engine).get_columns("no_conformidades")}
+            for name in ("origen", "gravedad", "contencion", "causa_raiz",
+                         "motivo_cancelacion"):
+                self.assertTrue(columns[name]["nullable"], name)
+            with db.engine.begin() as connection:
+                self.assertEqual((None, None), tuple(connection.execute(text(
+                    "SELECT origen, gravedad FROM no_conformidades WHERE descripcion = 'a'"
+                )).one()))
+                # Writers outside the ORM get the opening state by default.
+                connection.execute(text(
+                    "INSERT INTO no_conformidades (descripcion, fecha_detectada, origen, "
+                    "gravedad) VALUES ('e', '2026-02-01', 'cliente', 'observacion')"))
+            self.assertEqual("abierta", self._nc_states()["e"])
+            for statement in (
+                "UPDATE no_conformidades SET estado = 'Abierta'",
+                "UPDATE no_conformidades SET origen = 'Cliente'",
+                "UPDATE no_conformidades SET gravedad = 'critica'",
+            ):
+                with self.subTest(refused=statement):
+                    with self.assertRaises(IntegrityError):
+                        with db.engine.begin() as connection:
+                            connection.execute(text(statement))
+            with db.engine.begin() as connection:
+                for descripcion, estado in (("a", "en_verificacion"), ("d", "cancelada")):
+                    connection.execute(text(
+                        "UPDATE no_conformidades SET estado = :e WHERE descripcion = :d"),
+                        {"d": descripcion, "e": estado})
+            downgrade(directory=MIGRATIONS_DIR, revision="c9e3a5b7d1f4")
+            self.assertEqual({"a": "En proceso", "b": "En proceso", "c": "Cerrada",
+                              "d": "Cerrada", "e": "Abierta"}, self._nc_states())
+            names = {c["name"] for c in inspect(db.engine).get_columns("no_conformidades")}
+            self.assertFalse(names & {"origen", "gravedad", "contencion", "causa_raiz",
+                                      "motivo_cancelacion"})
+            with db.engine.begin() as connection:  # free text again
+                connection.execute(text("UPDATE no_conformidades SET estado = 'Pendiente'"))
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual({"abierta"}, set(self._nc_states().values()))
             self.assertEqual([], self._schema_differences())
 
 

@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from test_audit import AuditDbBase
 
 from app.extensions import db
-from app.models import AuditLog, NoConformidad, RoleEnum
+from app.models import AuditLog, EstadoNoConformidad, NoConformidad, RoleEnum
 from app.services.actor import Actor
 
 ADMIN, AUDITOR, OPERATIVO = (
@@ -76,20 +76,6 @@ class ServiceBase(AuditDbBase):
         return db.session.query(AuditLog).order_by(AuditLog.id).all()
 
 
-class StateConstantTestCase(unittest.TestCase):
-    def test_states_are_the_three_spanish_values(self) -> None:
-        self.assertEqual(
-            ("Abierta", "En proceso", "Cerrada"), service().ESTADOS_NO_CONFORMIDAD
-        )
-        self.assertEqual("Abierta", service().ESTADO_ABIERTA)
-        self.assertEqual("Cerrada", service().ESTADO_CERRADA)
-
-    def test_forms_reuse_the_service_constant(self) -> None:
-        from app import forms
-
-        self.assertIs(service().ESTADOS_NO_CONFORMIDAD, forms.ESTADOS_NO_CONFORMIDAD)
-
-
 class ReadTestCase(ServiceBase):
     def test_get_returns_the_record_for_every_role(self) -> None:
         nc = self.seed()
@@ -111,33 +97,16 @@ class ReadTestCase(ServiceBase):
     def test_list_orders_newest_first_and_filters_like_the_web_list(self) -> None:
         old = self.seed(descripcion="Ruido en Linea", fecha_detectada=date(2026, 9, 1))
         new = self.seed(
-            descripcion="Fuga de aceite", fecha_detectada=date(2026, 10, 1), estado="Cerrada"
+            descripcion="Fuga de aceite", fecha_detectada=date(2026, 10, 1),
+            estado=EstadoNoConformidad.cerrada,
         )
         who = actor()
+        closed, open_ = EstadoNoConformidad.cerrada, EstadoNoConformidad.abierta
         self.assertEqual([new, old], service().list_(db.session, who))
         self.assertEqual([old], service().list_(db.session, who, descripcion="linea"))
-        self.assertEqual([new], service().list_(db.session, who, estado="Cerrada"))
+        self.assertEqual([new], service().list_(db.session, who, estado=closed))
         self.assertEqual([old], service().list_(db.session, who, fecha_detectada=date(2026, 9, 1)))
-        self.assertEqual([], service().list_(db.session, who, descripcion="x", estado="Abierta"))
-
-    def test_available_states_append_legacy_values_after_the_fixed_ones(self) -> None:
-        self.seed(estado="Abierta")
-        self.seed_legacy_states()
-        self.assertEqual(
-            ["Abierta", "En proceso", "Cerrada", "Pendiente", "Zeta"],
-            service().available_states(db.session, actor()),
-        )
-
-    def seed_legacy_states(self) -> None:
-        # Legacy rows predate the service; a core insert bypasses ORM flush hooks.
-        db.session.execute(
-            NoConformidad.__table__.insert(),
-            [
-                {"descripcion": "old", "fecha_detectada": date(2026, 1, 1), "estado": "Pendiente"},
-                {"descripcion": "old", "fecha_detectada": date(2026, 1, 1), "estado": "Zeta"},
-            ],
-        )
-        db.session.commit()
+        self.assertEqual([], service().list_(db.session, who, descripcion="x", estado=open_))
 
 
 class WriteBase(ServiceBase):
@@ -170,7 +139,10 @@ class CreateTestCase(WriteBase):
 
     def test_state_defaults_to_abierta_and_text_is_trimmed(self) -> None:
         nc = self.create(descripcion="  espacios  ", responsable="  Ana ")
-        self.assertEqual(("espacios", "Ana", "Abierta"), (nc.descripcion, nc.responsable, nc.estado))
+        self.assertEqual(
+            ("espacios", "Ana", EstadoNoConformidad.abierta),
+            (nc.descripcion, nc.responsable, nc.estado),
+        )
 
     def test_invalid_data_raises_validation_error_and_writes_nothing(self) -> None:
         cases = {
@@ -178,7 +150,7 @@ class CreateTestCase(WriteBase):
             "missing description": {k: v for k, v in VALID.items() if k != "descripcion"},
             "missing date": {k: v for k, v in VALID.items() if k != "fecha_detectada"},
             "date as text": VALID | {"fecha_detectada": "2026-10-01"},
-            "unknown state": VALID | {"estado": "Archivada"},
+            "state is not writable": VALID | {"estado": "abierta"},
             "null state": VALID | {"estado": None},
             "responsable too long": VALID | {"responsable": "x" * 51},
             "unknown field": VALID | {"created_by_id": 1},
@@ -211,34 +183,35 @@ class UpdateTestCase(WriteBase):
         created_at = nc.created_at
         service().update(
             db.session, actor(AUDITOR, user_id=8), nc.id,
-            {"estado": "En proceso", "responsable": "Luis"},
+            {"gravedad": "menor", "responsable": "Luis"},
         )
         db.session.commit()
-        self.assertEqual(("En proceso", "Luis"), (nc.estado, nc.responsable))
+        self.assertEqual(("menor", "Luis"), (nc.gravedad.name, nc.responsable))
         self.assertEqual((7, 8, created_at), (nc.created_by_id, nc.updated_by_id, nc.created_at))
         row = self.audit_rows()[-1]
         self.assertEqual("update", row.action)
-        self.assertEqual("Abierta", row.before["estado"])
-        self.assertEqual("En proceso", row.after["estado"])
+        self.assertIsNone(row.before["gravedad"])
+        self.assertEqual("Menor", row.after["gravedad"])
         self.assertEqual("Luis", row.after["responsable"])
+        self.assertNotIn("estado", row.after)
         self.assertNotIn("descripcion", row.after)
         self.assertEqual(8, row.after["updated_by_id"])
 
     def test_update_without_changes_writes_no_audit_row_and_keeps_stamps(self) -> None:
         nc = self.create(actor(user_id=7))
         before = (nc.updated_at, nc.updated_by_id)
-        service().update(db.session, actor(user_id=8), nc.id, {"estado": "Abierta"})
+        service().update(db.session, actor(user_id=8), nc.id, {"responsable": "Ana"})
         db.session.commit()
         self.assertEqual(1, len(self.audit_rows()))
         self.assertEqual(before, (nc.updated_at, nc.updated_by_id))
 
     def test_update_missing_raises_not_found(self) -> None:
         with self.assertRaises(errors().NotFound):
-            service().update(db.session, actor(), 999, {"estado": "Cerrada"})
+            service().update(db.session, actor(), 999, {"responsable": "Eva"})
 
     def test_update_validates_like_create_and_leaves_the_record_untouched(self) -> None:
         nc = self.create()
-        for data in ({"estado": "Archivada"}, {"estado": None}, {"descripcion": " "},
+        for data in ({"estado": "cerrada"}, {"estado": None}, {"descripcion": " "},
                      {"fecha_detectada": None},
                      {"responsable": "x" * 51}, {"updated_by_id": 3}):
             with self.subTest(data=data):
@@ -249,24 +222,10 @@ class UpdateTestCase(WriteBase):
         self.assertEqual("Pieza fuera de tolerancia", nc.descripcion)
         self.assertEqual(1, len(self.audit_rows()))
 
-    def test_legacy_state_is_tolerated_only_while_unchanged(self) -> None:
-        nc = self.create()
-        db.session.execute(
-            NoConformidad.__table__.update().values(estado="Pendiente")
-        )
-        db.session.commit()
-        db.session.refresh(nc)
-        service().update(db.session, actor(), nc.id, {"estado": "Pendiente", "responsable": "Eva"})
-        db.session.commit()
-        self.assertEqual("Pendiente", nc.estado)
-        with self.assertRaises(errors().ValidationError):
-            service().update(db.session, actor(), nc.id, {"estado": "Otro heredado"})
-        db.session.rollback()
-
     def test_scoped_actor_without_write_cannot_update(self) -> None:
         nc = self.create()
         with self.assertRaises(errors().PermissionDenied):
-            service().update(db.session, actor(scopes={"read"}), nc.id, {"estado": "Cerrada"})
+            service().update(db.session, actor(scopes={"read"}), nc.id, {"responsable": "Eva"})
 
     def test_integrity_error_becomes_conflict(self) -> None:
         nc = self.create()
@@ -274,7 +233,7 @@ class UpdateTestCase(WriteBase):
             db.session, "flush", side_effect=IntegrityError("stmt", {}, Exception("dup"))
         ):
             with self.assertRaises(errors().Conflict):
-                service().update(db.session, actor(), nc.id, {"estado": "Cerrada"})
+                service().update(db.session, actor(), nc.id, {"responsable": "Eva"})
 
 
 class DeleteTestCase(WriteBase):

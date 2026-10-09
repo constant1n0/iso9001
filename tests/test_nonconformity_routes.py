@@ -14,7 +14,10 @@ import test_auth_bootstrap as bootstrap
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db
-from app.models import AuditLog, NoConformidad, RoleEnum, User
+from app.models import (
+    AuditLog, EstadoNoConformidad, GravedadNoConformidad, NoConformidad, OrigenNoConformidad,
+    RoleEnum, User,
+)
 from app.services import audit, errors
 
 PASSWORD_HASH = generate_password_hash("StrongPassword123!")
@@ -23,7 +26,10 @@ FORM = {
     "descripcion": "Pieza fuera de tolerancia",
     "fecha_detectada": "2026-10-05",
     "responsable": "Ana",
-    "estado": "Abierta",
+    "origen": "auditoria",
+    "gravedad": "menor",
+    "contencion": "Lote retenido",
+    "causa_raiz": "",
     "accion_correctiva": "",
 }
 
@@ -104,13 +110,19 @@ class NonconformityRoutesTestCase(unittest.TestCase):
         nc_id = self.seed()
         self.login(RoleEnum.AUDITOR)
         response = self.client.post(
-            f"{BASE}/editar/{nc_id}", data=FORM | {"estado": "En proceso"}
+            f"{BASE}/editar/{nc_id}",
+            data=FORM | {"gravedad": "mayor", "causa_raiz": "Molde gastado",
+                         "estado": "cerrada"},
         )
         self.assertEqual(302, response.status_code)
         self.assertIn(("success", "No conformidad actualizada exitosamente"), self.flashes())
         with self.app.app_context():
             nc = db.session.get(NoConformidad, nc_id)
-            self.assertEqual("En proceso", nc.estado)
+            self.assertEqual(
+                (EstadoNoConformidad.abierta, OrigenNoConformidad.auditoria,
+                 GravedadNoConformidad.mayor, "Lote retenido", "Molde gastado"),
+                (nc.estado, nc.origen, nc.gravedad, nc.contencion, nc.causa_raiz),
+            )
             self.assertEqual(self.ids[RoleEnum.AUDITOR], nc.updated_by_id)
             self.assertEqual("update", self.rows()[-1][0])
 
@@ -149,29 +161,43 @@ class NonconformityRoutesTestCase(unittest.TestCase):
 
     # -- reads keep their behaviour ----------------------------------------
 
-    def test_list_filters_and_state_dropdown_keep_legacy_values(self) -> None:
-        self.seed(descripcion="Ruido en linea", fecha_detectada=date(2026, 9, 1))
-        self.seed(descripcion="Fuga de aceite", estado="Cerrada")
+    def force_state(self, nc_id: int, estado: EstadoNoConformidad, **values) -> None:
+        """A state the NC-1 screens cannot reach yet (closing comes in NC-2)."""
         with self.app.app_context():
             db.session.execute(
-                NoConformidad.__table__.insert().values(
-                    descripcion="Antigua", fecha_detectada=date(2026, 1, 1), estado="Pendiente"
-                )
+                NoConformidad.__table__.update().where(NoConformidad.id == nc_id)
+                .values(estado=estado, **values)
             )
             db.session.commit()
+
+    def test_list_filters_by_state_name_and_shows_spanish_labels(self) -> None:
+        self.seed(descripcion="Ruido en linea", fecha_detectada=date(2026, 9, 1))
+        self.force_state(self.seed(descripcion="Fuga de aceite"), EstadoNoConformidad.cerrada)
+        self.force_state(self.seed(descripcion="Plan en marcha"),
+                         EstadoNoConformidad.accion_planificada)
         self.login()
         html = self.client.get(f"{BASE}/").get_data(as_text=True)
-        for text in ("Ruido en linea", "Fuga de aceite", "Antigua", "Pendiente"):
+        for text in ("Ruido en linea", "Fuga de aceite", "Acción planificada",
+                     '<option value="en_verificacion">En verificación</option>'):
             self.assertIn(text, html)
+        self.assertNotIn("EstadoNoConformidad", html)
         only_noise = self.client.get(f"{BASE}/?descripcion=RUIDO").get_data(as_text=True)
         self.assertIn("Ruido en linea", only_noise)
         self.assertNotIn("Fuga de aceite", only_noise)
-        closed = self.client.get(f"{BASE}/?estado=Cerrada").get_data(as_text=True)
+        closed = self.client.get(f"{BASE}/?estado=cerrada").get_data(as_text=True)
         self.assertIn("Fuga de aceite", closed)
         self.assertNotIn("Ruido en linea", closed)
+        self.assertIn('<option value="cerrada" selected>', closed)
         by_date = self.client.get(f"{BASE}/?fecha_detectada=2026-09-01").get_data(as_text=True)
         self.assertIn("Ruido en linea", by_date)
         self.assertNotIn("Fuga de aceite", by_date)
+
+    def test_an_unknown_state_filter_is_ignored_instead_of_failing(self) -> None:
+        self.seed()
+        self.login()
+        response = self.client.get(f"{BASE}/?estado=Cerrada")
+        self.assertEqual(200, response.status_code)
+        self.assertIn("Semilla", response.get_data(as_text=True))
 
     def test_invalid_date_filter_is_ignored_instead_of_failing(self) -> None:
         self.seed()
@@ -180,19 +206,108 @@ class NonconformityRoutesTestCase(unittest.TestCase):
         self.assertEqual(200, response.status_code)
         self.assertIn("Semilla", response.get_data(as_text=True))
 
-    def test_edit_form_offers_the_legacy_state_of_the_record(self) -> None:
-        with self.app.app_context():
-            db.session.execute(
-                NoConformidad.__table__.insert().values(
-                    id=50, descripcion="Antigua", fecha_detectada=date(2026, 1, 1),
-                    estado="Pendiente",
-                )
-            )
-            db.session.commit()
+    # -- states: shown, never edited; cancel and reopen are explicit ------
+
+    def test_forms_show_the_state_without_a_state_field(self) -> None:
+        nc_id = self.seed()
         self.login()
-        response = self.client.get(f"{BASE}/editar/50")
+        for url in (f"{BASE}/nueva", f"{BASE}/editar/{nc_id}"):
+            with self.subTest(url=url):
+                html = self.client.get(url).get_data(as_text=True)
+                self.assertNotIn('name="estado"', html)
+                for name in ("origen", "gravedad", "contencion", "causa_raiz"):
+                    self.assertIn(f'name="{name}"', html)
+        edit = self.client.get(f"{BASE}/editar/{nc_id}").get_data(as_text=True)
+        self.assertIn("Abierta", edit)
+        self.assertIn('<option selected value="auditoria">', self.client.get(
+            f"{BASE}/editar/{self.seed(origen='auditoria')}").get_data(as_text=True))
+
+    def test_auditor_cancels_with_a_reason_and_admin_reopens(self) -> None:
+        nc_id = self.seed()
+        self.login(RoleEnum.AUDITOR)
+        edit = self.client.get(f"{BASE}/editar/{nc_id}").get_data(as_text=True)
+        self.assertIn(f'action="{BASE}/cancelar/{nc_id}"', edit)
+        self.assertNotIn(f"{BASE}/reabrir/", edit)
+        response = self.client.post(f"{BASE}/cancelar/{nc_id}",
+                                    data={"motivo_cancelacion": "Registrada dos veces"})
+        self.assertEqual(302, response.status_code)
+        self.assertIn(("success", "No conformidad cancelada."), self.flashes())
+        with self.app.app_context():
+            nc = db.session.get(NoConformidad, nc_id)
+            self.assertEqual((EstadoNoConformidad.cancelada, "Registrada dos veces"),
+                             (nc.estado, nc.motivo_cancelacion))
+            self.assertIsNotNone(nc.fecha_cierre)
+        page = self.client.get(f"{BASE}/editar/{nc_id}").get_data(as_text=True)
+        self.assertIn("Registrada dos veces", page)
+        self.assertNotIn('name="descripcion"', page)  # read-only: no edit form
+        self.assertNotIn(f"{BASE}/reabrir/", page)  # only administrators reopen
+
+        self.login(RoleEnum.ADMINISTRADOR)
+        page = self.client.get(f"{BASE}/editar/{nc_id}").get_data(as_text=True)
+        self.assertIn(f'action="{BASE}/reabrir/{nc_id}"', page)
+        self.assertEqual(302, self.client.post(f"{BASE}/reabrir/{nc_id}").status_code)
+        self.assertIn(("success", "No conformidad reabierta."), self.flashes())
+        with self.app.app_context():
+            nc = db.session.get(NoConformidad, nc_id)
+            self.assertEqual((EstadoNoConformidad.abierta, None, None),
+                             (nc.estado, nc.motivo_cancelacion, nc.fecha_cierre))
+        self.assertEqual(["create", "update", "update"], [r[0] for r in self.rows()])
+
+    def test_cancel_without_a_reason_is_refused_with_a_message(self) -> None:
+        nc_id = self.seed()
+        self.login(RoleEnum.ADMINISTRADOR)
+        response = self.client.post(
+            f"{BASE}/cancelar/{nc_id}", data={"motivo_cancelacion": "  "},
+            headers={"Referer": f"http://localhost{BASE}/editar/{nc_id}"},
+        )
+        self.assertEqual(302, response.status_code)
+        self.assertEqual(f"{BASE}/editar/{nc_id}", response.headers["Location"])
+        self.assertIn(("danger", "El motivo de la cancelación es obligatorio."), self.flashes())
+        with self.app.app_context():
+            self.assertEqual(EstadoNoConformidad.abierta,
+                             db.session.get(NoConformidad, nc_id).estado)
+
+    def test_operativo_cannot_cancel_and_auditor_cannot_reopen(self) -> None:
+        nc_id = self.seed()
+        self.login(RoleEnum.OPERATIVO)
+        edit = self.client.get(f"{BASE}/editar/{nc_id}").get_data(as_text=True)
+        self.assertNotIn(f"{BASE}/cancelar/", edit)
+        self.client.post(f"{BASE}/cancelar/{nc_id}", data={"motivo_cancelacion": "x"})
+        self.force_state(nc_id, EstadoNoConformidad.cerrada)
+        self.login(RoleEnum.AUDITOR)
+        self.client.post(f"{BASE}/reabrir/{nc_id}")
+        with self.app.app_context():
+            self.assertEqual(EstadoNoConformidad.cerrada,
+                             db.session.get(NoConformidad, nc_id).estado)
+        self.assertEqual(["create"], [r[0] for r in self.rows()])
+
+    def test_a_closed_record_refuses_edits_with_a_message(self) -> None:
+        nc_id = self.seed()
+        self.force_state(nc_id, EstadoNoConformidad.cerrada, fecha_cierre=date(2026, 10, 9))
+        self.login(RoleEnum.ADMINISTRADOR)
+        page = self.client.get(f"{BASE}/editar/{nc_id}").get_data(as_text=True)
+        self.assertIn("09/10/2026", page)
+        response = self.client.post(f"{BASE}/editar/{nc_id}", data=FORM)
         self.assertEqual(200, response.status_code)
-        self.assertIn("Pendiente (heredado)", response.get_data(as_text=True))
+        # The service's refusal is flashed (the page's own notice words it differently).
+        self.assertIn("Esta no conformidad está cerrada o cancelada",
+                      response.get_data(as_text=True))
+        with self.app.app_context():
+            self.assertEqual("Semilla", db.session.get(NoConformidad, nc_id).descripcion)
+
+    def test_pdf_shows_the_state_label_and_the_new_fields(self) -> None:
+        nc_id = self.seed(origen="cliente", gravedad="mayor", contencion="Lote retenido",
+                          causa_raiz="Molde gastado")
+        with self.app.test_request_context():
+            from flask import render_template
+
+            with self.app.app_context():
+                nc = db.session.get(NoConformidad, nc_id)
+                html = render_template("no_conformidades/pdf_template.html",
+                                       no_conformidad=nc, generado=date(2026, 10, 9))
+        for text in ("Abierta", "Cliente", "Mayor", "Lote retenido", "Molde gastado"):
+            self.assertIn(text, html)
+        self.assertNotIn("EstadoNoConformidad", html)
 
     # -- domain errors on HTML posts ---------------------------------------
 
