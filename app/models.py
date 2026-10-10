@@ -712,12 +712,13 @@ class EstadoRevision(enum.Enum):
 # DC1: at most one revision in preparation and one in force per document.
 _PENDING_REVISION = db.text("estado IN ('borrador', 'en_revision', 'aprobado')")
 _EFFECTIVE_REVISION = db.text("estado = 'vigente'")
-# An attachment is recorded whole (all five columns) or not at all (DC7).
-_ATTACHMENT_COLUMNS = ('attachment_name', 'attachment_path', 'attachment_size',
-                       'attachment_sha256', 'attachment_mime')
+# An attachment is recorded whole (all five columns) or not at all (DC7). The
+# services read this tuple too, so the columns are named in one place only.
+ATTACHMENT_COLUMNS = ('attachment_name', 'attachment_path', 'attachment_size',
+                      'attachment_sha256', 'attachment_mime')
 _ATTACHMENT_COMPLETE = (
-    '(' + ' AND '.join(f'{c} IS NULL' for c in _ATTACHMENT_COLUMNS) + ') OR ('
-    + ' AND '.join(f'{c} IS NOT NULL' for c in _ATTACHMENT_COLUMNS) + ' AND attachment_size > 0)'
+    '(' + ' AND '.join(f'{c} IS NULL' for c in ATTACHMENT_COLUMNS) + ') OR ('
+    + ' AND '.join(f'{c} IS NOT NULL' for c in ATTACHMENT_COLUMNS) + ' AND attachment_size > 0)'
 )
 
 

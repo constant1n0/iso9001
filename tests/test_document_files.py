@@ -206,6 +206,18 @@ class ZipBombTestCase(StorageBase):
             self.assertEqual(files.UNRECOGNIZED, self.refused(crowded, "a.docx"))
         parser.assert_not_called()
 
+    def test_zip64_markers_are_refused_whatever_the_limits(self) -> None:
+        end = docx().rfind(b"PK\x05\x06")
+        for start, marker in ((8, b"\xff\xff"), (10, b"\xff\xff"), (12, b"\xff" * 4)):
+            marked = bytearray(docx())
+            marked[end + start:end + start + len(marker)] = marker
+            with self.subTest(offset=start), \
+                    patch.object(files, "MAX_ZIP_ENTRIES", 0x10000), \
+                    patch.object(files, "MAX_ZIP_DIRECTORY", 0x100000000), \
+                    patch.object(files.zipfile, "ZipFile") as parser:
+                self.assertEqual(files.UNRECOGNIZED, self.refused(bytes(marked), "a.docx"))
+                parser.assert_not_called()
+
     def test_an_odt_mimetype_with_trailing_data_is_refused(self) -> None:
         sneaky = odt(ODT_MIME + b"\x00" * 100_000)
         self.assertEqual(files.UNRECOGNIZED, self.refused(sneaky, "a.odt"))
@@ -263,6 +275,15 @@ class DisplayNameTestCase(unittest.TestCase):
         name = files.display_name("x" * 400 + ".xlsx")
         self.assertEqual(files.NAME_MAX, len(name))
         self.assertTrue(name.endswith("x.xlsx"))
+
+    def test_sizes_read_in_bytes_kilobytes_or_megabytes_with_a_decimal_comma(self) -> None:
+        for size, shown in ((0, "0 B"), (1023, "1023 B"), (1024, "1 KB"), (1536, "1,5 KB"),
+                            (200_000, "195,3 KB"), (1_572_864, "1,5 MB"),
+                            (20 * 1024 * 1024, "20 MB")):
+            with self.subTest(size=size):
+                self.assertEqual(shown, files.human_size(size))
+        self.assertEqual("El fichero supera el tamaño máximo de 20 MB.",
+                         files.too_large(20 * 1024 * 1024))
 
     def test_the_content_disposition_is_an_rfc_5987_attachment(self) -> None:
         self.assertEqual(

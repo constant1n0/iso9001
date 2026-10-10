@@ -35,7 +35,9 @@ effective and obsolete revisions never change again (DC3).
 
 Attachments (DC7): ``attach`` records a file kept by ``document_files.store``
 on a ``borrador`` and ``detach`` clears it; both return the stored name of the
-file they replace, which the adapter deletes only after committing. A new
+file they replace, which the adapter deletes only after committing.
+``require_draft`` lets the adapter refuse an upload before storing it; the
+write re-checks under the lock. A new
 draft starts without the effective revision's file, so no two revisions share
 one (``attachment_path`` is unique). ``discard_draft`` deletes a ``borrador``
 when its document has a revision in force to fall back on: revision 1 of a
@@ -51,6 +53,7 @@ withdrawing.
 Every write locks the document row first (``lock_document``), so concurrent
 transitions of one document serialize on PostgreSQL. Each changed row gets its
 own audit row; dates come from the adapter, never from the server clock.
+Workflow dates are ``date`` values: a ``datetime`` is refused (``ValueError``).
 """
 
 from __future__ import annotations
@@ -64,7 +67,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..models import Document, DocumentRevision, EstadoRevision, RoleEnum
+from ..models import ATTACHMENT_COLUMNS, Document, DocumentRevision, EstadoRevision, RoleEnum
 from . import audit, fields, people, policy
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
@@ -80,8 +83,6 @@ DRAFT_READERS = frozenset({RoleEnum.ADMINISTRADOR, RoleEnum.AUDITOR})  # DC4
 APPROVE_ROLES = frozenset({RoleEnum.ADMINISTRADOR})
 WITHDRAW_ROLES = APPROVE_ROLES
 DRAFT_FIELDS = frozenset({"content", "change_summary", "author_id"})
-ATTACHMENT_FIELDS = ("attachment_name", "attachment_path", "attachment_size",
-                     "attachment_sha256", "attachment_mime")
 NEW_DRAFT_FIELDS = frozenset({"change_summary", "author_id"})  # the text is copied
 
 DOCUMENT_NOT_FOUND = "Documento no encontrado."
@@ -167,6 +168,16 @@ def in_preparation(
     """The document's revision in preparation, for actors who read drafts (else ``None``)."""
     policy.require(actor, Action.READ, Resource.DOCUMENTS)
     return _pending(session, document_id) if may_see_drafts(actor) else None
+
+
+def require_draft(session: Session, revision: DocumentRevision) -> None:
+    """Refuse a ``revision`` that is not a ``borrador`` of an active document.
+
+    A cheap check without locks, for the adapter to run before costly work
+    (storing an upload); the write itself checks again under the lock.
+    """
+    _check_state(session.get(Document, revision.document_id), revision, R.borrador,
+                 NOT_A_DRAFT)
 
 
 def in_force(session: Session, document_id: int) -> DocumentRevision | None:
@@ -326,10 +337,10 @@ def detach(session: Session, actor: Actor, revision_id: int) -> str | None:
     """Remove a ``borrador``'s attachment; returns its stored name, ``None`` if it had none."""
     policy.require(actor, Action.UPDATE, Resource.DOCUMENTS)
     revision = _locked(session, revision_id, R.borrador, NOT_A_DRAFT)
-    replaced = revision.attachment_path
-    if replaced is not None:
-        _change(session, actor, revision, **dict.fromkeys(ATTACHMENT_FIELDS))
-    return replaced
+    removed = revision.attachment_path
+    if removed is not None:
+        _change(session, actor, revision, **dict.fromkeys(ATTACHMENT_COLUMNS))
+    return removed
 
 
 def discard_draft(session: Session, actor: Actor, revision_id: int) -> str | None:
@@ -342,14 +353,14 @@ def discard_draft(session: Session, actor: Actor, revision_id: int) -> str | Non
     revision = _locked(session, revision_id, R.borrador, NOT_A_DRAFT)
     if in_force(session, revision.document_id) is None:
         raise ValidationError(FIRST_DRAFT)
-    replaced = revision.attachment_path
+    orphaned = revision.attachment_path
     audit.record(session, actor, "delete", revision)
     session.delete(revision)
     try:
         session.flush()
-    except IntegrityError as exc:
+    except IntegrityError as exc:  # nothing should reference a draft; stay typed if it does
         raise Conflict(CONFLICT) from exc
-    return replaced
+    return orphaned
 
 
 def _attachment_values(stored: Any) -> dict[str, Any]:
@@ -364,8 +375,8 @@ def _attachment_values(stored: Any) -> dict[str, Any]:
     )
     if not valid:
         raise ValueError("An attachment must be a StoredFile returned by document_files.store.")
-    return dict(zip(ATTACHMENT_FIELDS, (stored.display_name, stored.stored_name, stored.size,
-                                        stored.sha256, stored.mime)))
+    return dict(zip(ATTACHMENT_COLUMNS, (stored.display_name, stored.stored_name, stored.size,
+                                         stored.sha256, stored.mime), strict=True))
 
 
 def _load(session: Session, revision_id: int) -> DocumentRevision:
@@ -388,12 +399,19 @@ def _locked(
         select(DocumentRevision).where(DocumentRevision.id == revision_id)
         .execution_options(populate_existing=True)
     ).one()
+    _check_state(document, revision, state, wrong_state)
+    return revision
+
+
+def _check_state(
+    document: Document, revision: DocumentRevision, state: EstadoRevision, wrong_state: str
+) -> None:
+    """Refuse a withdrawn ``document``, a frozen ``revision`` or one not in ``state``."""
     _ensure_active(document)
     if revision.estado in FROZEN_STATES:
         raise ValidationError(IMMUTABLE)
     if revision.estado is not state:
         raise ValidationError(wrong_state)
-    return revision
 
 
 def _ensure_active(document: Document) -> None:

@@ -20,12 +20,16 @@
 # Documents are withdrawn, never deleted, so there is no delete route.
 #
 # Attachments (DC7): a draft's file is uploaded, replaced, removed or discarded
-# with the draft; the file is stored first and recorded after, and a file no
-# committed revision references any more is deleted only after the commit
-# (a failure leaves it to ``flask cleanup-document-files``). Downloads follow
-# the reading rules: the revision in force for every role, the others for
-# administrators and auditors only.
+# with the draft; the file is stored first and recorded after. A new file is
+# deleted only when it is refused before the commit; a file no committed
+# revision references any more is deleted only after a successful commit. A
+# failed commit may still have succeeded, so it deletes nothing: whatever no
+# revision references is left to ``flask cleanup-document-files``. Downloads
+# follow the reading rules: the revision in force for every role, the others
+# for administrators and auditors only; they answer conditional (ETag from the
+# SHA-256) and range requests.
 import logging
+import os
 
 from flask import (Blueprint, abort, current_app, flash, redirect, render_template, request,
                    send_file, url_for)
@@ -74,7 +78,8 @@ def view_document(document_id):
         'documents/view.html', document=document, vigente=vigente,
         pendiente=document_revisions.in_preparation(db.session, actor, document.id),
         personas=people.names(db.session, actor, cited), accept=document_files.ACCEPT,
-        max_size=document_files.megabytes(current_app.config['DOCUMENT_MAX_BYTES']))
+        human_size=document_files.human_size,
+        max_size=document_files.human_size(current_app.config['DOCUMENT_MAX_BYTES']))
 
 
 @bp.route('/new', methods=['GET', 'POST'])
@@ -136,6 +141,24 @@ def _delete_file(stored_name):
                        'flask cleanup-document-files will remove it.', stored_name)
 
 
+def _commit(revision_id, kept):
+    """Commit; on failure roll back, log the file left for the cleanup and re-raise.
+
+    The commit may have succeeded with its acknowledgement lost, so a failure
+    deletes no file: ``kept`` (a stored name or ``None``) stays on disk.
+    """
+    try:
+        db.session.commit()
+    except BaseException:
+        db.session.rollback()
+        if kept is None:
+            logger.error('The commit of document revision %s failed.', revision_id)
+        else:
+            logger.error('The commit of document revision %s failed; stored file %s is kept '
+                         'for flask cleanup-document-files.', revision_id, kept)
+        raise
+
+
 def _back_to(document_id):
     return redirect(url_for('document.view_document', document_id=document_id))
 
@@ -150,18 +173,18 @@ def _attachment(revision):
 def upload_attachment(document_id, revision_id):
     """Attach the uploaded ``file`` to a draft revision, replacing its previous file."""
     actor = current_actor()
-    _revision_of(actor, document_id, revision_id)
+    revision = _revision_of(actor, document_id, revision_id)
     upload = request.files.get('file')
     if upload is None or not upload.filename:
         flash('Selecciona un fichero.', 'danger')
         return _back_to(document_id)
     try:
+        document_revisions.require_draft(db.session, revision)  # before any disk I/O
         stored = document_files.store(_storage(), upload.stream, upload.filename,
                                       max_bytes=current_app.config['DOCUMENT_MAX_BYTES'])
         try:
-            replaced = document_revisions.attach(db.session, actor, revision_id, stored)
-            db.session.commit()
-        except BaseException:
+            previous = document_revisions.attach(db.session, actor, revision_id, stored)
+        except BaseException:  # refused before the commit: nothing records the new file
             db.session.rollback()
             _delete_file(stored.stored_name)
             raise
@@ -170,7 +193,8 @@ def upload_attachment(document_id, revision_id):
             actor.label, document_id, revision_id, document_files.display_name(upload.filename),
             error.message)
         raise
-    _delete_file(replaced)
+    _commit(revision_id, kept=stored.stored_name)
+    _delete_file(previous)
     security_logger.log_document_file('DOCUMENT_ATTACHMENT_UPLOADED', actor.label, document_id,
                                       revision_id, stored.display_name, stored.size,
                                       stored.sha256)
@@ -186,12 +210,12 @@ def detach_attachment(document_id, revision_id):
     """Remove a draft revision's file."""
     actor = current_actor()
     described = _attachment(_revision_of(actor, document_id, revision_id))
-    replaced = document_revisions.detach(db.session, actor, revision_id)
-    db.session.commit()
-    if replaced is None:
+    removed = document_revisions.detach(db.session, actor, revision_id)
+    _commit(revision_id, kept=removed)
+    if removed is None:
         flash('La revisión no tiene ningún fichero adjunto.', 'info')
         return _back_to(document_id)
-    _delete_file(replaced)
+    _delete_file(removed)
     security_logger.log_document_file('DOCUMENT_ATTACHMENT_DETACHED', actor.label, document_id,
                                       revision_id, *described)
     flash('Fichero quitado.', 'success')
@@ -205,9 +229,9 @@ def discard_draft(document_id, revision_id):
     """Delete a draft revision and its file (``document_revisions.discard_draft``)."""
     actor = current_actor()
     described = _attachment(_revision_of(actor, document_id, revision_id))
-    replaced = document_revisions.discard_draft(db.session, actor, revision_id)
-    db.session.commit()
-    _delete_file(replaced)
+    orphaned = document_revisions.discard_draft(db.session, actor, revision_id)
+    _commit(revision_id, kept=orphaned)
+    _delete_file(orphaned)
     security_logger.log_document_file('DOCUMENT_DRAFT_DISCARDED', actor.label, document_id,
                                       revision_id, *described)
     flash('Borrador descartado.', 'success')
@@ -218,20 +242,34 @@ def discard_draft(document_id, revision_id):
 @login_required
 @require_permission('read', 'documents')
 def download_attachment(document_id, revision_id):
-    """Send a revision's file as a download, never rendered by the browser."""
+    """Send a revision's file as a download, never rendered by the browser.
+
+    The ETag is the file's SHA-256, so an unchanged file answers 304; ranges
+    are served from the file's size on disk. Drafts are never stored by caches.
+    """
     revision = _revision_of(current_actor(), document_id, revision_id)
     if revision.attachment_path is None:
         abort(404)
     try:
         handle = document_files.open_stored(_storage(), revision.attachment_path)
-    except (ValueError, FileNotFoundError):
+    except ValueError:
+        logger.error('Document revision %s records an invalid stored file name.', revision.id)
+        abort(404)
+    except FileNotFoundError:
         logger.error('The stored file of document revision %s is missing.', revision.id)
         abort(404)
-    response = send_file(handle, mimetype=revision.attachment_mime, conditional=False,
-                         etag=False, max_age=None)
-    response.headers['Content-Disposition'] = document_files.content_disposition(
-        revision.attachment_name)
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    frozen = revision.estado in document_revisions.FROZEN_STATES
-    response.headers['Cache-Control'] = 'private, no-cache' if frozen else 'no-store'
-    return response
+    try:
+        size = os.fstat(handle.fileno()).st_size
+        response = send_file(handle, mimetype=revision.attachment_mime, conditional=False,
+                             etag=revision.attachment_sha256, max_age=None)
+        response.content_length = size
+        response.headers['Content-Disposition'] = document_files.content_disposition(
+            revision.attachment_name)
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        frozen = revision.estado in document_revisions.FROZEN_STATES
+        response.headers['Cache-Control'] = 'private, no-cache' if frozen else 'no-store'
+        # send_file cannot serve ranges of an open file: it does not know its size
+        return response.make_conditional(request, accept_ranges=True, complete_length=size)
+    except BaseException:  # the response never took the handle over: close it here
+        handle.close()
+        raise

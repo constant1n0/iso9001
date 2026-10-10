@@ -37,7 +37,7 @@ Route for every task: **delegated direct**.
 
 - [x] **DC-1 — Revisions and workflow (service).** Forecast 600-1,000.
   - `DocumentRevision` model and migration (existing documents → revision 1 `vigente`, DC8); `Document` gains owner, next review date, withdrawal fields; workflow service (create draft, edit draft, submit, approve, reject with comment, publish, withdraw) with DC1–DC6 rules; policy per DC4; MCP reads the effective revision.
-- [ ] **DC-2 — File attachments.** Forecast 400-700.
+- [x] **DC-2 — File attachments.** Forecast 400-700.
   - Storage module (configurable directory, size and type checks by magic bytes, safe names, SHA-256, atomic write), upload on draft revisions, authorized download, immutability, cleanup of an unreferenced file when a draft is replaced or discarded; a way to discard a draft.
   - Also (DC-1 review): the workflow dates refuse a `datetime` like `next_review_date` does; a test proves the `IntegrityError` → `Conflict` message of revision writes.
 - [ ] **DC-3 — Screens.** Forecast 700-1,200.
@@ -59,7 +59,8 @@ Baseline at `420f499`: 993 tests. Migrations are tested on PostgreSQL (`TEST_POS
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
 | DC-1 | Done | `19c1ec2` (`document_revisions`, migration `a7d3f5b9c2e4` converting each document into revision 1 in force, `app/services/document_revisions.py` with start_draft, edit_draft, submit, approve, reject, publish, withdraw; documents readable by every role, drafts by ADMIN and AUDITOR; no hard delete; MCP reads the revision in force and refuses document writes; minimal detail page) | RED: 58 tests (2 failures, 48 errors: required `issued_date`/`version`, `documents.content` NOT NULL, missing table and enum, delete still allowed). GREEN: 1,016 tests incl. PostgreSQL; removing the row lock makes the race test fail | Range `2a59ef3..19c1ec2`: **medium**, `slice_budget_reached` (2,044 lines; the user approved one PR above the 1,500 cap, 2026-10-10); consent granted; reliability review `review-d18afc86d8994c48` **approved** and acknowledged; its warning (edit route of a withdrawn document untested) and three suggestions moved into DC-2 and DC-3 |
-| DC-2..DC-4 | Pending | — | — | — |
+| DC-2 | Done | `0657e6b` (framework-free storage module `app/services/document_files.py`), `8c78eab` (attachment columns, migration `c3e8a1f6d4b2`, attach, detach, `discard_draft`, upload and download routes, `flask cleanup-document-files`, README), review follow-ups `c28e1bf` and `b8cefdd` | RED: `ImportError: document_files`; 16 service errors and 1 failure (`attach`, `discard_draft`, `FIRST_DRAFT`, datetime accepted); 27 route failures; follow-ups: new file deleted on a commit failure, storage written before the state check, no ETag, an `IntegrityError` on discard escaping untyped. GREEN: 1,077, then 1,088 tests incl. PostgreSQL; `0657e6b` alone passed 1,039 | Range `f850bf8..8c78eab`: **high** (file uploads); consent granted; 4-lens review `review-8b4d0055900bd1f5` **approved** and acknowledged; findings applied in `c28e1bf` (no delete after a possibly-committed transaction, one attachment column list, drafts hidden from OPERATIVO proved, cleanup command aborts on database errors, state pre-check before disk I/O, ETag/304 and Range, log fields escaped, clarity fixes). That commit (**medium**) got reliability review `review-02afabdd405332a8`, **approved** and acknowledged; its warnings fixed in `b8cefdd` (discard stays a typed `Conflict`, the download closes its file handle on any failure) |
+| DC-3..DC-4 | Pending | — | — | — |
 
 ## Findings during implementation
 
@@ -68,7 +69,8 @@ Baseline at `420f499`: 993 tests. Migrations are tested on PostgreSQL (`TEST_POS
 - AUDITOR can reject and publish (updates); only ADMIN approves and withdraws; the approver can be neither the author nor the person linked to the acting user. `owner_id` is required when creating and cannot be cleared; converted documents may have no author.
 - The `mcp` channel cannot create or update documents (`policy.can`), so `qms_modules` shows those permissions as false; MCP output carries `effective_revision` or null, never drafts.
 - `docs/mcp.md` still describes documents as writable through MCP (fix in DC-4).
+- **Attachments (DC-2):** files are stored mode 0600 under `DOCUMENT_STORAGE_DIR` (default `instance/documents`, created 0700; a directory under `static/` stops start-up) with a random 32-hex name; types are detected by content (PDF signature; DOCX/XLSX/ODT ZIP structure with entry, size and ZIP64 limits) and must match the extension; `DOCUMENT_MAX_BYTES` 20 MB, `MAX_CONTENT_LENGTH` slightly above it (413). A new draft does not inherit the revision in force's file; files are deleted only after a successful commit, and `flask cleanup-document-files [--dry-run]` removes unreferenced files older than an hour. Downloads: any role for revisions in force, ADMIN/AUDITOR otherwise; `Content-Disposition: attachment` (RFC 5987), `nosniff`, ETag = SHA-256, Range, `no-store` for drafts. A draft can be discarded only when the document has a revision in force. The storage directory must be in the backups.
 
 ## Next step
 
-DC-2.
+DC-3.

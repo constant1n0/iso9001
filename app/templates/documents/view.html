@@ -16,9 +16,7 @@
  -->
 {% extends "base.html" %}
 {% from "_partials/ui.html" import page_header, action_form %}
-{% macro human_size(size) -%}
-{%- if size >= 1048576 %}{{ '%.1f' | format(size / 1048576) }} MB{% elif size >= 1024 %}{{ '%.1f' | format(size / 1024) }} KB{% else %}{{ size }} B{% endif -%}
-{%- endmacro %}
+{# human_size is document_files.human_size, which also words the upload limit. #}
 {% macro attachment_item(revision) %}
 <li class="list__item"><span class="list__primary">Fichero</span><span class="list__secondary">
     {%- if revision.attachment_path -%}
@@ -82,7 +80,7 @@
         <form action="{{ url_for('document.upload_attachment', document_id=document.id, revision_id=pendiente.id) }}" method="post" enctype="multipart/form-data">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="field">
-                <label for="attachment-file">Fichero PDF, DOCX, XLSX u ODT (máximo {{ max_size }} MB){% if pendiente.attachment_path %}; sustituye al actual{% endif %}</label>
+                <label for="attachment-file">Fichero PDF, DOCX, XLSX u ODT (máximo {{ max_size }}){% if pendiente.attachment_path %}; sustituye al actual{% endif %}</label>
                 <input id="attachment-file" type="file" name="file" accept="{{ accept }}" required>
             </div>
             <button type="submit" class="btn btn--sm btn--primary">Adjuntar</button>
