@@ -1,0 +1,34 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{# Dates, badges and attachment links shared by the document pages. #}
+
+{% macro fecha(value) -%}
+{{ value.strftime('%d/%m/%Y') if value else '—' }}
+{%- endmacro %}
+
+{# A revision's state (DC2): in force green, waiting for someone amber. #}
+{% macro estado_badge(revision) -%}
+{%- set estilo = {'en_revision': 'badge--warn', 'aprobado': 'badge--warn', 'vigente': 'badge--ok'} -%}
+<span class="badge {{ estilo.get(revision.estado.name, '') }}">{{ revision.estado.value }}</span>
+{%- endmacro %}
+
+{# The download link of a revision's file; the page lists only revisions the user may read. #}
+{% macro attachment_link(revision) -%}
+{%- if revision.attachment_path -%}
+<a href="{{ url_for('document.download_attachment', document_id=revision.document_id, revision_id=revision.id) }}">{{ revision.attachment_name }}</a>
+{%- else -%}—{%- endif -%}
+{%- endmacro %}

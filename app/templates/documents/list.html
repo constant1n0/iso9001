@@ -16,6 +16,7 @@
  -->
 {% extends "base.html" %}
 {% from "_partials/ui.html" import page_header, empty_state %}
+{% from "documents/_macros.html" import fecha %}
 {% block title %}Documentos{% endblock %}
 {% block crumb %}Documentación · Documentos{% endblock %}
 {% block content %}
@@ -25,7 +26,43 @@
     {% endif %}
 {% endcall %}
 
-{% if documents %}
+<details class="filters"{% if applied %} open{% endif %}>
+    <summary>Filtros{% if applied %} <span class="badge badge--warn">{{ applied }} {{ 'activo' if applied == 1 else 'activos' }}</span>{% endif %}</summary>
+    <form method="get" action="{{ url_for('document.list_documents') }}" class="filters__body">
+        <div class="field"><label for="categoria">Categoría</label>
+            <select name="categoria" id="categoria">
+                <option {% if not filters.categoria %}selected {% endif %}value="">Todas</option>
+                {% for category in categories %}
+                <option {% if filters.categoria == category.name %}selected {% endif %}value="{{ category.name }}">{{ category.value }}</option>
+                {% endfor %}
+            </select></div>
+        <div class="field"><label for="propietario">Propietario</label>
+            <select name="propietario" id="propietario">
+                <option {% if filters.propietario is none %}selected {% endif %}value="">Todos</option>
+                {% for owner_id, nombre in owners.items() | sort(attribute='1') %}
+                <option {% if filters.propietario == owner_id %}selected {% endif %}value="{{ owner_id }}">{{ nombre }}</option>
+                {% endfor %}
+            </select></div>
+        {% if may_see_drafts %}
+        <div class="field"><label for="estado">Estado</label>
+            <select name="estado" id="estado">
+                <option {% if not filters.estado %}selected {% endif %}value="">Todos</option>
+                {% for value, label in statuses.items() %}
+                <option {% if filters.estado == value %}selected {% endif %}value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+            </select></div>
+        {% endif %}
+        <div class="field field--check"><label for="vencida">
+            <input type="checkbox" name="vencida" id="vencida" value="1"{% if filters.vencida %} checked{% endif %}>
+            Solo con la revisión periódica vencida</label></div>
+        <div class="filters__actions">
+            <button type="submit" class="btn btn--primary">Buscar</button>
+            <a class="btn btn--ghost" href="{{ url_for('document.list_documents') }}">Limpiar</a>
+        </div>
+    </form>
+</details>
+
+{% if rows %}
 <div class="table-wrap">
     <table>
         <thead>
@@ -33,22 +70,24 @@
                 <th scope="col">Código</th>
                 <th scope="col">Título</th>
                 <th scope="col">Categoría</th>
-                <th scope="col">Revisión</th>
-                <th scope="col">En vigor desde</th>
+                <th scope="col">Propietario</th>
+                <th scope="col">Revisión vigente</th>
+                <th scope="col">Próxima revisión</th>
                 <th scope="col">Estado</th>
                 <th scope="col"><span class="visually-hidden">Acciones</span></th>
             </tr>
         </thead>
         <tbody>
-            {% for document in documents %}
-            {% set vigente = vigentes.get(document.id) %}
+            {% set badge = {'vigente': 'badge--ok', 'sin_publicar': 'badge--warn', 'de_baja': ''} %}
+            {% for document, vigente, status, overdue in rows %}
             <tr>
                 <td class="mono">{{ document.code }}</td>
                 <td><a href="{{ url_for('document.view_document', document_id=document.id) }}">{{ document.title }}</a></td>
                 <td><span class="badge">{{ document.category.value }}</span></td>
-                <td class="mono">{% if vigente %}Rev. {{ vigente.numero }}{% if vigente.legacy_version %} (v{{ vigente.legacy_version }}){% endif %}{% else %}—{% endif %}</td>
-                <td class="date">{{ vigente.effective_from.strftime('%d/%m/%Y') if vigente and vigente.effective_from else '—' }}</td>
-                <td><span class="badge">{% if document.withdrawn_at %}De baja{% elif vigente %}Vigente{% else %}En preparación{% endif %}</span></td>
+                <td>{{ owners.get(document.owner_id, '—') }}</td>
+                <td class="date">{% if vigente %}Rev. {{ vigente.numero }}{% if vigente.legacy_version %} (v{{ vigente.legacy_version }}){% endif %} · {{ fecha(vigente.effective_from) }}{% else %}—{% endif %}</td>
+                <td class="date{% if overdue %} date--overdue{% endif %}">{{ fecha(document.next_review_date) }}{% if overdue %} <span class="badge badge--danger">Vencida</span>{% endif %}</td>
+                <td><span class="badge {{ badge[status] }}">{{ statuses[status] }}</span></td>
                 <td>
                     <div class="table__actions">
                         {% if can('update', 'documents') and not document.withdrawn_at %}
@@ -62,6 +101,6 @@
     </table>
 </div>
 {% else %}
-    {{ empty_state('Todavía no hay documentos registrados.') }}
+    {{ empty_state('Ningún documento coincide con los filtros.' if applied else 'Todavía no hay documentos registrados.') }}
 {% endif %}
 {% endblock %}

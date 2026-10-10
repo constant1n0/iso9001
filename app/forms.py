@@ -194,6 +194,37 @@ class NewDocumentForm(DocumentForm):
                             choices=[CHOOSE_PERSON], validators=[DataRequired()])
     content = TextAreaField('Contenido', validators=[DataRequired()])
 
+
+# The revision workflow (decisions DC1-DC6 of document-control). The routes
+# fill the person pickers; the ``document_revisions`` service has the last word
+# (author required, approver never the author, reasons required).
+def required_person_field(label):
+    return SelectField(label, coerce=optional_id, choices=[CHOOSE_PERSON],
+                       validators=[DataRequired()])
+
+
+class NewRevisionForm(BaseForm):
+    author_id = required_person_field('Autor de la revisión')
+    change_summary = TextAreaField('Resumen de cambios')
+
+
+class DraftRevisionForm(BaseForm):
+    content = TextAreaField('Contenido', validators=[DataRequired()])
+    change_summary = TextAreaField('Resumen de cambios (obligatorio para enviarla a revisión)')
+    author_id = required_person_field('Autor de la revisión')
+
+
+class ApproveRevisionForm(BaseForm):
+    approver_id = required_person_field('Aprobada por')
+
+
+class RejectRevisionForm(BaseForm):
+    review_comment = TextAreaField('Motivo del rechazo', validators=[DataRequired()])
+
+
+class WithdrawDocumentForm(BaseForm):
+    withdrawn_reason = TextAreaField('Motivo de la baja', validators=[DataRequired()])
+
 # Formulario para solicitar recuperación de contraseña
 class PasswordResetRequestForm(BaseForm):
     email = StringField('Correo electrónico', validators=[DataRequired(), Email()])

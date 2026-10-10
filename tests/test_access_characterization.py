@@ -84,6 +84,7 @@ DOC = dict(
     author_id="1",
     content="Texto",
 )
+DRAFT = dict(content="Texto nuevo", change_summary="Cambio", author_id="1")
 IMPROVEMENT = dict(no_conformidad="NC", accion_correctiva="a", accion_preventiva="b")
 SURVEY = dict(
     cliente="ACME", fecha_encuesta="2026-10-05", puntuacion="8", comentarios=""
@@ -166,6 +167,16 @@ ENDPOINTS = [
     # every role reads its page. The workflow narrows roles in its service.
     *_html("DOCUMENTS", "/documents/", ("new", DOC), ("edit/1", DOC), None),
     Endpoint("DOCUMENTS", "read", "GET", "/documents/1", 200),
+    # The revision workflow (DC-3). Revision 2 is a draft: editing and
+    # submitting it succeed, the form pages answer 200, and publishing a draft
+    # is refused with a flash on the document's page. Approving and withdrawing
+    # narrow the role to administrators, so tests/test_document_screens.py
+    # characterizes them.
+    Endpoint("DOCUMENTS", "create", "GET", "/documents/1/revisions/new", 200),
+    Endpoint("DOCUMENTS", "update", "POST", "/documents/1/revisions/2/edit", 302, DRAFT),
+    Endpoint("DOCUMENTS", "update", "POST", "/documents/1/revisions/2/submit", 302),
+    Endpoint("DOCUMENTS", "update", "GET", "/documents/1/revisions/2/reject", 200),
+    Endpoint("DOCUMENTS", "update", "POST", "/documents/1/revisions/2/publish", 302),
     *_html("IMPROVEMENTS", "/mejoras/", ("nueva", IMPROVEMENT),
            ("editar/1", IMPROVEMENT), "eliminar/1"),
     *_html("CUSTOMER_SATISFACTION", "/satisfaccion_cliente/", ("nueva", SURVEY),
@@ -312,6 +323,10 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                     DocumentRevision(
                         document_id=1, numero=1, estado=EstadoRevision.vigente,
                         content="c", effective_from=date(2026, 10, 5),
+                    ),
+                    DocumentRevision(
+                        document_id=1, numero=2, estado=EstadoRevision.borrador,
+                        content="c", change_summary="Cambio", author_id=1,
                     ),
                 ]
             )

@@ -20,5 +20,5 @@
 {% block crumb %}Documentación · Documentos{% endblock %}
 {% block content %}
 {{ page_header('Cláusula 7.5 · Información documentada', 'Editar documento') }}
-{{ form_card(form, url_for('document.list_documents'), 'Guardar cambios') }}
+{{ form_card(form, url_for('document.view_document', document_id=document.id), 'Guardar cambios') }}
 {% endblock %}

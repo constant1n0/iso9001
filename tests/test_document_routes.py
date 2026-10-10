@@ -121,14 +121,14 @@ class DocumentRoutesBase(unittest.TestCase):
 class DocumentRoutesTestCase(DocumentRoutesBase):
     # -- writes are audited and stamped ------------------------------------
 
-    def test_create_is_audited_stamped_and_redirects_with_the_same_flash(self) -> None:
+    def test_create_is_audited_stamped_and_lands_on_the_document_page(self) -> None:
         self.login()
         response = self.client.post(f"{BASE}/new", data=FORM)
         self.assertEqual(302, response.status_code)
-        self.assertTrue(response.headers["Location"].endswith(f"{BASE}/"))
         self.assertIn(("success", "Documento creado exitosamente"), self.flashes())
         with self.app.app_context():
             doc = Document.query.one()
+            self.assertEqual(f"{BASE}/{doc.id}", response.headers["Location"])
             self.assertEqual(DocumentCategory.MANUAL_CALIDAD, doc.category)
             self.assertEqual(self.ids[RoleEnum.ADMINISTRADOR], doc.created_by_id)
             admin = ("web", "administrador", self.ids[RoleEnum.ADMINISTRADOR])
@@ -193,16 +193,14 @@ class DocumentRoutesTestCase(DocumentRoutesBase):
         with self.app.app_context():
             self.assertEqual(0, Document.query.count())
 
-    def test_duplicate_code_flashes_a_conflict_instead_of_failing(self) -> None:
+    def test_duplicate_code_shows_the_conflict_on_the_form_it_keeps(self) -> None:
         self.seed()
         self.login()
-        response = self.client.post(
-            f"{BASE}/new", data=FORM | {"code": "SEED-1"},
-            headers={"Referer": f"http://localhost{BASE}/new"},
-        )
-        self.assertEqual(302, response.status_code)
-        self.assertEqual(f"{BASE}/new", response.headers["Location"])
-        self.assertIn(("danger", "Ya existe un documento con ese código."), self.flashes())
+        response = self.client.post(f"{BASE}/new", data=FORM | {"code": "SEED-1"})
+        self.assertEqual(200, response.status_code)
+        html = response.get_data(as_text=True)
+        self.assertIn("Ya existe un documento con ese código.", html)
+        self.assertIn('value="Manual de calidad"', html)
         with self.app.app_context():
             self.assertEqual(1, Document.query.count())
 
@@ -232,7 +230,7 @@ class DocumentRoutesTestCase(DocumentRoutesBase):
                 response = getattr(self.client, method)(url, data=FORM)
                 self.assertEqual(404, response.status_code)
 
-    def test_service_validation_error_flashes_and_returns_to_the_form(self) -> None:
+    def test_service_validation_error_shows_the_form_again(self) -> None:
         doc_id = self.seed()
         self.login()
         for url in (f"{BASE}/new", f"{BASE}/edit/{doc_id}"):
@@ -242,12 +240,9 @@ class DocumentRoutesTestCase(DocumentRoutesBase):
                     f"app.services.documents.{target}",
                     side_effect=errors.ValidationError("Dato rechazado."),
                 ):
-                    response = self.client.post(
-                        url, data=FORM, headers={"Referer": f"http://localhost{url}"}
-                    )
-                self.assertEqual(302, response.status_code)
-                self.assertEqual(url, response.headers["Location"])
-                self.assertIn(("danger", "Dato rechazado."), self.flashes())
+                    response = self.client.post(url, data=FORM)
+                self.assertEqual(200, response.status_code)
+                self.assertIn("Dato rechazado.", response.get_data(as_text=True))
 
 
 class AttachmentRoutesBase(DocumentRoutesBase):
