@@ -51,6 +51,8 @@ SEEDS = {
     # Cites the nonconformity and the person seeded above (both id 1).
     "acciones_correctivas": {"no_conformidad_id": 1, "descripcion": "Reajustar el molde",
                              "responsable_id": 1, "fecha_prevista": "2026-10-15"},
+    "programas_auditoria": {"anio": 2026, "objetivos": "Auditar todos los procesos",
+                            "alcance": "Todo el SGC"},
 }
 
 

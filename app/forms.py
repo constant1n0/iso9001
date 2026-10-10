@@ -73,11 +73,26 @@ class ParteInteresadaForm(BaseForm):
     submit = SubmitField('Guardar')
 
 # Formulario para ingresar datos de Auditoría
+NO_PROGRAMME = ('', '— Sin programa —')
+
+
+def programme_choices(programmes):
+    """Picker choices for an audit's programme: none, then each year with its state."""
+    return [NO_PROGRAMME, *((p.id, f'Programa {p.anio} ({p.estado.value})') for p in programmes)]
+
+
+# Planning fields (``audit-programme``, AP2): the routes fill the programme,
+# people and team choices; the service checks independence and the year.
 class AuditoriaForm(BaseForm):
     area_auditada = StringField('Área Auditada', validators=[DataRequired(), Length(max=50)])
     fecha = DateField('Fecha', validators=[DataRequired()])
+    programa_id = SelectField('Programa de auditoría', coerce=optional_id, choices=[NO_PROGRAMME])
     auditor = StringField('Auditor', validators=[Length(max=50)])
     auditor_id = person_field('Auditor (persona)')
+    equipo_ids = SelectMultipleField('Equipo auditor', coerce=int, choices=[])
+    responsable_area_id = person_field('Responsable del área auditada')
+    alcance = TextAreaField('Alcance')
+    criterios = TextAreaField('Criterios de auditoría')
     resultado = TextAreaField('Resultado', validators=[DataRequired()])
     accion_correctiva = TextAreaField('Acción Correctiva')
     estado = SelectField(

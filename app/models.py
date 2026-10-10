@@ -642,8 +642,88 @@ class EstadoAuditoriaEnum(enum.Enum):
     COMPLETADA = 'Completada'
     CANCELADA = 'Cancelada'
 
+class EstadoProgramaAuditoria(enum.Enum):
+    """Where a yearly audit programme stands (decision AP1 of ``audit-programme``).
+
+    Only ``services.audit_programmes.approve`` moves it, and only forward.
+    """
+
+    borrador = 'Borrador'
+    aprobado = 'Aprobado'
+
+
+# An approved programme records when and by whom; a draft records neither.
+_PROGRAMME_APPROVAL = (
+    "(estado = 'borrador' AND aprobado_en IS NULL AND aprobado_por_id IS NULL) OR "
+    "(estado = 'aprobado' AND aprobado_en IS NOT NULL AND aprobado_por_id IS NOT NULL)"
+)
+
+
+class ProgramaAuditoria(RecordMetadataMixin, db.Model):
+    """The internal audit programme of one year (ISO 9001 clause 9.2.2, decision AP1).
+
+    One per year, with objectives and scope. An administrator approves a
+    draft, recording the date and the approving person; an approved
+    programme's year never changes (``services.audit_programmes``).
+    """
+
+    __tablename__ = 'programas_auditoria'
+    __table_args__ = (
+        db.UniqueConstraint('anio', name='uq_programas_auditoria_anio'),
+        db.CheckConstraint('anio BETWEEN 2000 AND 2100', name='ck_programas_auditoria_anio'),
+        db.CheckConstraint(_PROGRAMME_APPROVAL, name='ck_programas_auditoria_aprobacion'),
+        db.ForeignKeyConstraint(
+            ['aprobado_por_id'], ['personas.id'],
+            name='fk_programas_auditoria_aprobado_por_id_personas', ondelete='RESTRICT',
+        ),
+        db.Index('ix_programas_auditoria_aprobado_por_id', 'aprobado_por_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    anio = db.Column(db.Integer, nullable=False)
+    objetivos = db.Column(db.Text, nullable=False)
+    alcance = db.Column(db.Text, nullable=False)
+    estado = db.Column(
+        text_enum(EstadoProgramaAuditoria, 'ck_programas_auditoria_estado'),
+        nullable=False,
+        default=EstadoProgramaAuditoria.borrador,
+        server_default=EstadoProgramaAuditoria.borrador.name,
+    )
+    aprobado_en = db.Column(db.Date)
+    aprobado_por_id = db.Column(db.Integer, nullable=True)
+
+    def __repr__(self):
+        return f'<ProgramaAuditoria {self.anio}>'
+
+
+# The audit team (decision AP2); a plain table, not audited itself: team
+# changes are recorded on the audit's own rows (``equipo_ids``).
+auditoria_equipo = db.Table(
+    'auditoria_equipo',
+    db.Column('auditoria_id', db.Integer, nullable=False),
+    db.Column('persona_id', db.Integer, nullable=False),
+    db.PrimaryKeyConstraint('auditoria_id', 'persona_id', name='pk_auditoria_equipo'),
+    db.ForeignKeyConstraint(
+        ['auditoria_id'], ['auditorias.id'],
+        name='fk_auditoria_equipo_auditoria_id_auditorias', ondelete='CASCADE',
+    ),
+    db.ForeignKeyConstraint(
+        ['persona_id'], ['personas.id'],
+        name='fk_auditoria_equipo_persona_id_personas', ondelete='RESTRICT',
+    ),
+    db.Index('ix_auditoria_equipo_persona_id', 'persona_id'),
+)
+
+
 # Modelo para Auditorías
 class Auditoria(RecordMetadataMixin, db.Model):
+    """An internal audit (ISO 9001 clause 9.2).
+
+    The planning columns (decision AP2) are nullable so audits that predate
+    them stay valid: the programme it belongs to, its scope and criteria, the
+    audited-area owner and the team. ``auditor_id`` is the lead auditor.
+    """
+
     __tablename__ = 'auditorias'
     id = db.Column(db.Integer, primary_key=True)
     area_auditada = db.Column(db.String(50), nullable=False)
@@ -653,6 +733,30 @@ class Auditoria(RecordMetadataMixin, db.Model):
     resultado = db.Column(db.Text, nullable=False)
     accion_correctiva = db.Column(db.Text)
     estado = db.Column(db.Enum(EstadoAuditoriaEnum), nullable=False, default=EstadoAuditoriaEnum.PENDIENTE)
+    programa_id = db.Column(
+        db.Integer,
+        db.ForeignKey('programas_auditoria.id',
+                      name='fk_auditorias_programa_id_programas_auditoria', ondelete='RESTRICT'),
+        nullable=True,
+        index=True,
+    )
+    alcance = db.Column(db.Text)
+    criterios = db.Column(db.Text)  # e.g. "ISO 9001:2026, procedimientos internos"
+    responsable_area_id = person_link('auditorias', 'responsable_area_id')
+
+    # One-way on purpose, like ``Person.roles``: a back-reference would mark
+    # people as changed (and unaudited) whenever a team changes.
+    equipo = db.relationship(
+        'Person',
+        secondary=auditoria_equipo,
+        order_by='Person.nombre',
+        lazy='selectin',
+    )
+
+    @property
+    def equipo_ids(self) -> list[int]:
+        """Ids of the team members, ascending."""
+        return sorted(person.id for person in self.equipo)
 
     def __repr__(self):
         return f'<Auditoria {self.area_auditada}>'
