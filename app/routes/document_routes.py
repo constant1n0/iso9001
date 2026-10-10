@@ -16,8 +16,9 @@
 # routes/document_routes.py
 # Document control screens (``document-control``): adapters over ``documents``
 # and ``document_revisions``. The list shows each document's revision in force,
-# owner, next review date (flagged once overdue) and status; its filters are
-# applied here, over what the services let the user read. A new document is
+# owner, next review date (flagged once overdue) and status; its filters run in
+# the service (``documents.list_``), and a value outside the options offered is
+# ignored rather than refused. A new document is
 # created with its draft revision 1 and lands on its page, which shows the
 # revision in force to every role and, to administrators and auditors, the
 # revision in preparation with the actions its state allows, plus the history.
@@ -26,10 +27,13 @@
 # and publish revisions; only administrators approve and withdraw. The approver
 # picker leaves the author out; the service has the last word on every rule.
 # A withdrawn document is read-only: its forms send back to its page with the
-# reason. A service ``ValidationError`` or ``Conflict`` is rolled back and
-# flashed: a form shows again with what was typed, a one-button action returns
-# to the document's page. Workflow dates are ``local_today``. Documents are
-# withdrawn, never deleted, so there is no delete route.
+# reason, as do the approve and reject pages of a revision that is not in
+# review. A document's code is shown read-only once a revision has been
+# published (the service refuses the change). A service ``ValidationError`` or
+# ``Conflict`` is rolled back and flashed: a form shows again with what was
+# typed, a one-button action returns to the document's page. Workflow dates
+# are ``local_today``. Documents are withdrawn, never deleted, so there is no
+# delete route.
 #
 # Attachments (DC7): a draft's file is uploaded, replaced, removed or discarded
 # with the draft; the file is stored first and recorded after. A new file is
@@ -54,7 +58,7 @@ from ..extensions import db
 from ..forms import (CHOOSE_PERSON, ApproveRevisionForm, DocumentForm, DraftRevisionForm,
                      NewDocumentForm, NewRevisionForm, RejectRevisionForm,
                      WithdrawDocumentForm, person_choices)
-from ..models import Document, DocumentCategory, DocumentRevision
+from ..models import Document, DocumentCategory, DocumentRevision, EstadoRevision
 from ..services import document_files, document_revisions, documents, people
 from ..services.actor import Actor
 from ..services.errors import NotFound, PermissionDenied, ValidationError
@@ -70,8 +74,8 @@ FORM_FIELDS = ('title', 'code', 'category', 'owner_id', 'next_review_date')
 FIRST_REVISION_FIELDS = ('author_id', 'content')
 NEW_REVISION_FIELDS = ('author_id', 'change_summary')
 DRAFT_FIELDS = ('content', 'change_summary', 'author_id')
-# The list's «Estado» filter and badges.
-STATUSES = {'vigente': 'Vigente', 'sin_publicar': 'Sin publicar', 'de_baja': 'De baja'}
+# The list's «Estado» filter and badges, keyed by ``documents.STATUSES``.
+STATUSES = dict(zip(documents.STATUSES, ('Vigente', 'Sin publicar', 'De baja'), strict=True))
 
 
 def may_approve() -> bool:
@@ -102,16 +106,18 @@ def _own_person(actor: Actor) -> int | None:
     return people.of_user(db.session, actor.user_id)
 
 
-def _refused(document: Document,
-             draft: DocumentRevision | None = None) -> ResponseReturnValue | None:
+def _refused(document: Document, revision: DocumentRevision | None = None,
+             state: EstadoRevision = EstadoRevision.borrador,
+             wrong_state: str = document_revisions.NOT_A_DRAFT) -> ResponseReturnValue | None:
     """Back to the document's page with the reason when its forms cannot be used.
 
-    A withdrawn document is read-only, and a ``draft`` given must still be one.
+    A withdrawn document is read-only, and a ``revision`` given must be in
+    ``state`` (a draft unless said otherwise; ``wrong_state`` is the reason).
     The service checks again when the form is posted.
     """
     try:
-        if draft is not None:
-            document_revisions.require_draft(db.session, draft)  # withdrawal included
+        if revision is not None:  # withdrawal included
+            document_revisions.require_state(db.session, revision, state, wrong_state)
         elif document.withdrawn_at is not None:
             raise ValidationError(document_revisions.WITHDRAWN)
     except ValidationError as error:
@@ -134,7 +140,10 @@ def _overdue(document: Document, today: date) -> bool:
 
 
 def _list_filters(owners: dict[int, str]) -> dict:
-    """The list filters; a value outside its options is ignored and does not count."""
+    """The list filters; a value outside its options is ignored and does not count.
+
+    ``propietario`` must be one of ``owners``, the people owning a readable document.
+    """
     categoria = request.args.get('categoria', '')
     estado = request.args.get('estado', '')
     propietario = request.args.get('propietario', type=int)
@@ -146,31 +155,24 @@ def _list_filters(owners: dict[int, str]) -> dict:
     }
 
 
-def _matches(filters: dict, document: Document, status: str, overdue: bool) -> bool:
-    """Whether a listed document passes every filter that applies."""
-    return ((not filters['categoria'] or document.category.name == filters['categoria'])
-            and filters['propietario'] in (None, document.owner_id)
-            and filters['estado'] in ('', status)
-            and (overdue or not filters['vencida']))
-
-
 @bp.route('/', methods=['GET'])
 @login_required
 @require_permission('read', 'documents')
 def list_documents() -> ResponseReturnValue:
     """The documents the user may read, narrowed by category, owner, status and overdue review."""
     actor = current_actor()
-    listed = documents.list_(db.session, actor)
-    vigentes = document_revisions.effective(db.session, actor, (d.id for d in listed))
-    owners = people.names(db.session, actor, (d.owner_id for d in listed))
+    owners = people.names(db.session, actor, documents.owner_ids(db.session, actor))
     today = local_today()
     filters = _list_filters(owners)
+    listed = documents.list_(
+        db.session, actor, category=filters['categoria'] or None,
+        owner_id=filters['propietario'], status=filters['estado'] or None,
+        overdue_on=today if filters['vencida'] else None)
+    vigentes = document_revisions.effective(db.session, actor, (d.id for d in listed))
     rows = []
     for document in listed:
         vigente = vigentes.get(document.id)
-        status, overdue = _status(document, vigente), _overdue(document, today)
-        if _matches(filters, document, status, overdue):
-            rows.append((document, vigente, status, overdue))
+        rows.append((document, vigente, _status(document, vigente), _overdue(document, today)))
     return render_template(
         'documents/list.html', rows=rows, owners=owners, filters=filters,
         applied=sum(1 for value in filters.values() if value), statuses=STATUSES,
@@ -220,13 +222,20 @@ def new_document() -> ResponseReturnValue:
 @login_required
 @require_permission('update', 'documents')
 def edit_document(document_id: int) -> ResponseReturnValue:
-    """Change a document's own data; a withdrawn document sends back to its page."""
+    """Change a document's own data; a withdrawn document sends back to its page.
+
+    Once a revision has been published the code is shown read-only; the
+    service refuses a changed one.
+    """
     actor = current_actor()
     document = documents.get(db.session, actor, document_id)
     if (refused := _refused(document)) is not None:
         return refused
     form = DocumentForm(obj=document)
     form.owner_id.choices = _person_choices(actor, include=document.owner_id)
+    code_locked = document_revisions.ever_published(db.session, document.id)
+    if code_locked:
+        form.code.render_kw = {'readonly': True}
     # The select uses enum names as values; preselect the stored category.
     if request.method == 'GET':
         form.category.data = document.category.name
@@ -234,7 +243,8 @@ def edit_document(document_id: int) -> ResponseReturnValue:
             db.session, actor, document_id, form_data(form, FORM_FIELDS))):
         flash('Documento actualizado exitosamente', 'success')
         return _back_to(document_id)
-    return render_template('documents/edit.html', form=form, document=document)
+    return render_template('documents/edit.html', form=form, document=document,
+                           code_locked=code_locked)
 
 
 def _revision_page(form, document: Document, title: str, submit_label: str,
@@ -278,7 +288,7 @@ def edit_draft(document_id: int, revision_id: int) -> ResponseReturnValue:
     actor = current_actor()
     document = documents.get(db.session, actor, document_id)
     revision = _revision_of(actor, document_id, revision_id)
-    if (refused := _refused(document, draft=revision)) is not None:
+    if (refused := _refused(document, revision)) is not None:
         return refused
     form = DraftRevisionForm(obj=revision)
     form.author_id.choices = _person_choices(actor, include=revision.author_id)
@@ -312,7 +322,8 @@ def approve_revision(document_id: int, revision_id: int) -> ResponseReturnValue:
     actor = current_actor()
     document = documents.get(db.session, actor, document_id)
     revision = _revision_of(actor, document_id, revision_id)
-    if (refused := _refused(document)) is not None:
+    if (refused := _refused(document, revision, EstadoRevision.en_revision,
+                            document_revisions.APPROVE_NOT_IN_REVIEW)) is not None:
         return refused
     form = ApproveRevisionForm()
     form.approver_id.choices = _person_choices(actor, exclude=revision.author_id)
@@ -339,7 +350,8 @@ def reject_revision(document_id: int, revision_id: int) -> ResponseReturnValue:
     actor = current_actor()
     document = documents.get(db.session, actor, document_id)
     revision = _revision_of(actor, document_id, revision_id)
-    if (refused := _refused(document)) is not None:
+    if (refused := _refused(document, revision, EstadoRevision.en_revision,
+                            document_revisions.REJECT_NOT_IN_REVIEW)) is not None:
         return refused
     form = RejectRevisionForm()
     if form.validate_on_submit() and saved(lambda: document_revisions.reject(

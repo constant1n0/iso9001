@@ -23,9 +23,15 @@ from ..extensions import db
 from ..models import (
     Auditoria, Capacitacion, EstadoNoConformidad, NoConformidad, SatisfaccionCliente,
 )
+from ..services import documents
 from ..services.nonconformities import OPEN_STATES
+from ..utils.permissions import can
+from ..utils.web_actor import current_actor
 
 bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
+
+# Document reviews (DC5 of document-control) shown when due within this many days.
+REVIEW_WINDOW_DAYS = 30
 
 
 @bp.route('/', methods=['GET'])
@@ -52,6 +58,13 @@ def dashboard():
     proximas_capacitaciones = Capacitacion.query.filter(
         Capacitacion.fecha.between(hoy, hoy + timedelta(days=30))
     ).order_by(Capacitacion.fecha).all()
+
+    # Reviews overdue or due soon, among the documents the user may read
+    # (an operativo only reads documents in force); None hides the card.
+    revisiones_documentales = None
+    if can('read', 'documents'):
+        revisiones_documentales = documents.due_for_review(
+            db.session, current_actor(), today=hoy, within_days=REVIEW_WINDOW_DAYS)
 
     # Puntuación media de satisfacción por mes
     # (year, month) grouping, last 12 calendar months including the current one
@@ -91,5 +104,7 @@ def dashboard():
         proximas_auditorias=proximas_auditorias,
         no_conformidades_pendientes=no_conformidades_pendientes,
         proximas_capacitaciones=proximas_capacitaciones,
+        revisiones_documentales=revisiones_documentales,
+        review_window_days=REVIEW_WINDOW_DAYS,
         chart_data=chart_data,
     )

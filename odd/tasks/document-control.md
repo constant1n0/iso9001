@@ -43,7 +43,7 @@ Route for every task: **delegated direct**.
 - [x] **DC-3 — Screens.** Forecast 700-1,200.
   - Document list (effective revisions, filters), detail with revision history, draft editor with attachment, workflow actions, withdrawal; role-based visibility.
   - Also (DC-1 review): the edit route of a withdrawn document refuses cleanly (tested); tests render the withdrawn and no-effective-revision branches of the detail page and the list's "De baja" badge.
-- [ ] **DC-4 — Periodic review, docs and deployment notes.** Forecast 250-450.
+- [x] **DC-4 — Periodic review, docs and deployment notes.** Forecast 250-450.
   - Dashboard flag and notification for overdue reviews; README and `docs/mcp.md`; backup procedure for the storage directory.
   - Also (DC-3 notes and review): move the list filters (category, owner, status, overdue review) into `documents.list_`/`list_page` so they run in the database; the document code becomes read-only once a revision has been published; the approve and reject GET pages refuse a revision that is not `en_revision` (no dead-end form); tests for the edit success redirect and for publish on a withdrawn document.
 
@@ -62,7 +62,7 @@ Baseline at `420f499`: 993 tests. Migrations are tested on PostgreSQL (`TEST_POS
 | DC-1 | Done | `19c1ec2` (`document_revisions`, migration `a7d3f5b9c2e4` converting each document into revision 1 in force, `app/services/document_revisions.py` with start_draft, edit_draft, submit, approve, reject, publish, withdraw; documents readable by every role, drafts by ADMIN and AUDITOR; no hard delete; MCP reads the revision in force and refuses document writes; minimal detail page) | RED: 58 tests (2 failures, 48 errors: required `issued_date`/`version`, `documents.content` NOT NULL, missing table and enum, delete still allowed). GREEN: 1,016 tests incl. PostgreSQL; removing the row lock makes the race test fail | Range `2a59ef3..19c1ec2`: **medium**, `slice_budget_reached` (2,044 lines; the user approved one PR above the 1,500 cap, 2026-10-10); consent granted; reliability review `review-d18afc86d8994c48` **approved** and acknowledged; its warning (edit route of a withdrawn document untested) and three suggestions moved into DC-2 and DC-3 |
 | DC-2 | Done | `0657e6b` (framework-free storage module `app/services/document_files.py`), `8c78eab` (attachment columns, migration `c3e8a1f6d4b2`, attach, detach, `discard_draft`, upload and download routes, `flask cleanup-document-files`, README), review follow-ups `c28e1bf` and `b8cefdd` | RED: `ImportError: document_files`; 16 service errors and 1 failure (`attach`, `discard_draft`, `FIRST_DRAFT`, datetime accepted); 27 route failures; follow-ups: new file deleted on a commit failure, storage written before the state check, no ETag, an `IntegrityError` on discard escaping untyped. GREEN: 1,077, then 1,088 tests incl. PostgreSQL; `0657e6b` alone passed 1,039 | Range `f850bf8..8c78eab`: **high** (file uploads); consent granted; 4-lens review `review-8b4d0055900bd1f5` **approved** and acknowledged; findings applied in `c28e1bf` (no delete after a possibly-committed transaction, one attachment column list, drafts hidden from OPERATIVO proved, cleanup command aborts on database errors, state pre-check before disk I/O, ETag/304 and Range, log fields escaped, clarity fixes). That commit (**medium**) got reliability review `review-02afabdd405332a8`, **approved** and acknowledged; its warnings fixed in `b8cefdd` (discard stays a typed `Conflict`, the download closes its file handle on any failure) |
 | DC-3 | Done | `1a53c12` (list with filters and overdue highlight, new document with first draft, detail page with the revision in force, the revision in preparation and its workflow actions, revision history, withdrawal, edit refused for withdrawn documents) | RED: 12 screen tests (20 failures, 16 errors: missing routes, default author, history, withdrawn edit `200 != 302`, status badge). GREEN: 1,101 tests incl. PostgreSQL | Range `606b5c1..1a53c12`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-7967950071a10101` **approved** and acknowledged; its warning (approve and reject pages reachable for revisions in other states) and two suggestions moved into DC-4 |
-| DC-4 | Pending | — | — | — |
+| DC-4 | Done | `36b64b6` (`documents.due_for_review`, dashboard card, weekly `send_document_review_alert` on Mondays at 08:00, list filters in the database and in the MCP, code locked once published, approve/reject pages refuse other states, README "Control documental", `docs/mcp.md`, `docs/architecture/services.md`), review follow-up test in the next commit | RED: 23 tests (17 failures, 42 errors: missing `due_for_review`, filter keywords, alert task, beat entry, guards, code lock). GREEN: 1,125, then 1,126 tests incl. PostgreSQL | Range `e1bedad..36b64b6`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-e2cb890c158e5b49` **approved** and acknowledged; its warning (unknown filter values) is already covered by `test_filters_narrow_the_list_and_ignore_unknown_values`; its suggestion (a failed letter does not stop the others) added as a test |
 
 ## Findings during implementation
 
@@ -73,6 +73,24 @@ Baseline at `420f499`: 993 tests. Migrations are tested on PostgreSQL (`TEST_POS
 - `docs/mcp.md` still describes documents as writable through MCP (fix in DC-4).
 - **Attachments (DC-2):** files are stored mode 0600 under `DOCUMENT_STORAGE_DIR` (default `instance/documents`, created 0700; a directory under `static/` stops start-up) with a random 32-hex name; types are detected by content (PDF signature; DOCX/XLSX/ODT ZIP structure with entry, size and ZIP64 limits) and must match the extension; `DOCUMENT_MAX_BYTES` 20 MB, `MAX_CONTENT_LENGTH` slightly above it (413). A new draft does not inherit the revision in force's file; files are deleted only after a successful commit, and `flask cleanup-document-files [--dry-run]` removes unreferenced files older than an hour. Downloads: any role for revisions in force, ADMIN/AUDITOR otherwise; `Content-Disposition: attachment` (RFC 5987), `nosniff`, ETag = SHA-256, Range, `no-store` for drafts. A draft can be discarded only when the document has a revision in force. The storage directory must be in the backups.
 
+- **Periodic review (DC-4):** the alert covers reviews due on or before today; each owner's linked user gets their own documents (an OPERATIVO only those in force); administrators get the full list with owners; inactive users, people without a user and users without e-mail are skipped and logged. The beat schedule lives in `celery_worker.py`.
+- Test adaptations under the standing Wave 1 approval, besides those listed for DC-1: `tests/test_scheduled_notifications.py`, `tests/test_document_routes.py`, `tests/test_access_characterization.py`, `tests/test_document_screens.py`, `tests/test_service_list_page.py`.
+
+## Delivery
+
+| Slice | Pull request | Commits | Merged as | Note |
+|---|---|---|---|---|
+| 1 | [#93](https://github.com/constant1n0/iso9001/pull/93) | tracker, DC-1 | `f850bf8` | maintainer-approved above the 1,500 cap (2,044) |
+| 2 | [#94](https://github.com/constant1n0/iso9001/pull/94) | DC-2 storage module | merged | |
+| 3 | [#95](https://github.com/constant1n0/iso9001/pull/95) | DC-2 attachments | merged | |
+| 4 | [#96](https://github.com/constant1n0/iso9001/pull/96) | DC-2 review findings | `606b5c1` | |
+| 5 | [#97](https://github.com/constant1n0/iso9001/pull/97) | DC-3 | `e1bedad` | |
+| 6 | Pending | DC-4, this closing update | — | Final slice |
+
+## Production deployment (pending authorization)
+
+Two migrations: `a7d3f5b9c2e4` moves each document's content into revision 1 (back up first) and `c3e8a1f6d4b2` adds the attachment columns. Steps: back up the database and the code, fast-forward, `flask db upgrade`, `flask db check`; the storage directory `instance/documents` is created at start-up (mode 0700) and must be added to the server's backups; the user restarts the four services (Celery beat picks up the weekly review alert). Smoke tests: document list and detail, `qms_modules`, the beat schedule includes `document-review-alert-weekly`.
+
 ## Next step
 
-DC-4.
+**Feature complete** once slice 6 merges. Next: the production deployment above, after explicit authorization; then Wave 1 continues with the audit programme.

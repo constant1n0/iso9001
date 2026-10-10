@@ -28,18 +28,26 @@ Administrators and auditors see every document; other roles only documents
 with a revision in force. A withdrawn document is read-only, and updates lock
 its row like every workflow write.
 
-``code`` is unique: a duplicate raises ``Conflict``. ``owner_id`` cites an
-active person (``people.reference``); it is required on create and cannot be
-cleared, though documents that predate it keep none until edited.
+``code`` is unique: a duplicate raises ``Conflict``. Once any revision has
+been published (it is or was in force) the code is locked (``CODE_LOCKED``).
+``owner_id`` cites an active person (``people.reference``); it is required on
+create and cannot be cleared, though documents that predate it keep none until
+edited.
+
+Listing filters (``list_``, ``list_page``) run in the database and combine
+with AND: ``category`` (member or name), ``owner_id``, ``status`` (one of
+``STATUSES``) and ``overdue_on`` (documents in use whose next review date is
+before that date). Periodic review (DC5): ``due_for_review`` lists the
+documents in use whose review falls due by a date the adapter gives.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import exists, func, select
+from sqlalchemy import exists, false, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -51,12 +59,17 @@ from .errors import Conflict, NotFound, ValidationError
 from .policy import Action, Resource
 
 
+def _in_force() -> Any:
+    """The condition that a document has a revision in force."""
+    return exists().where(DocumentRevision.document_id == Document.id,
+                          DocumentRevision.estado == EstadoRevision.vigente)
+
+
 def _visible(actor: Actor) -> list[Any]:
     """Conditions limiting documents to those ``actor`` may read (DC4)."""
     if document_revisions.may_see_drafts(actor):
         return []
-    return [exists().where(DocumentRevision.document_id == Document.id,
-                           DocumentRevision.estado == EstadoRevision.vigente)]
+    return [_in_force()]
 
 
 def get(session: Session, actor: Actor, document_id: int) -> Document:
@@ -75,23 +88,107 @@ def get(session: Session, actor: Actor, document_id: int) -> Document:
 _ORDER = (Document.code, Document.id)
 
 
-def list_(session: Session, actor: Actor) -> list[Document]:
-    """The documents the actor may read, ordered by code."""
+# The list's statuses: in force, in use but never published, withdrawn.
+STATUSES = ("vigente", "sin_publicar", "de_baja")
+BAD_CATEGORY = "La categoría no es válida."
+BAD_OWNER = "El propietario debe ser un número entero."
+BAD_STATUS = "El estado no es válido."
+BAD_OVERDUE_ON = "La fecha de las revisiones vencidas debe ser una fecha."
+
+
+def _is_date(value: Any) -> bool:
+    return isinstance(value, date) and not isinstance(value, datetime)
+
+
+def _in_use() -> Any:
+    return Document.withdrawn_at.is_(None)
+
+
+def _status_conditions(status: str) -> list[Any]:
+    if status == "de_baja":
+        return [Document.withdrawn_at.is_not(None)]
+    return [_in_use(), _in_force() if status == "vigente" else ~_in_force()]
+
+
+def _conditions(
+    category: DocumentCategory | str | None, owner_id: int | None, status: str | None,
+    overdue_on: date | None,
+) -> list[Any]:
+    """The filters shared by ``list_`` and ``list_page``; they combine with AND."""
+    where: list[Any] = []
+    if category is not None:
+        try:
+            member = fields.enum_member({"category": category}, "category", DocumentCategory)
+        except ValidationError:
+            raise ValidationError(BAD_CATEGORY) from None
+        where.append(Document.category == member)
+    if owner_id is not None:
+        if not isinstance(owner_id, int) or isinstance(owner_id, bool):
+            raise ValidationError(BAD_OWNER)
+        where.append(Document.owner_id == owner_id if people.is_db_id(owner_id) else false())
+    if status is not None:
+        if status not in STATUSES:
+            raise ValidationError(BAD_STATUS)
+        where.extend(_status_conditions(status))
+    if overdue_on is not None:
+        if not _is_date(overdue_on):
+            raise ValidationError(BAD_OVERDUE_ON)
+        where.extend((_in_use(), Document.next_review_date < overdue_on))
+    return where
+
+
+def list_(
+    session: Session, actor: Actor, *, category: DocumentCategory | str | None = None,
+    owner_id: int | None = None, status: str | None = None, overdue_on: date | None = None,
+) -> list[Document]:
+    """The documents the actor may read, ordered by code; filters combine with AND."""
     policy.require(actor, Action.READ, Resource.DOCUMENTS)
-    return list(session.scalars(select(Document).where(*_visible(actor)).order_by(*_ORDER)))
+    where = _visible(actor) + _conditions(category, owner_id, status, overdue_on)
+    return list(session.scalars(select(Document).where(*where).order_by(*_ORDER)))
 
 
 def list_page(
-    session: Session, actor: Actor, *, page: int = 1, per_page: int = crud.DEFAULT_PER_PAGE
+    session: Session, actor: Actor, *, category: DocumentCategory | str | None = None,
+    owner_id: int | None = None, status: str | None = None, overdue_on: date | None = None,
+    page: int = 1, per_page: int = crud.DEFAULT_PER_PAGE,
 ) -> tuple[list[Document], int]:
-    """One page in the ``list_`` order plus the total the actor may read."""
+    """One page in the ``list_`` order plus the total matching the same filters."""
     policy.require(actor, Action.READ, Resource.DOCUMENTS)
     page, per_page = crud.page_bounds(page, per_page)
-    where = _visible(actor)
+    where = _visible(actor) + _conditions(category, owner_id, status, overdue_on)
     total = session.scalar(select(func.count()).select_from(Document).where(*where))
     query = (select(Document).where(*where).order_by(*_ORDER)
              .limit(per_page).offset((page - 1) * per_page))
     return list(session.scalars(query)), total
+
+
+def owner_ids(session: Session, actor: Actor) -> list[int]:
+    """The people owning at least one document the actor may read (the owner filter)."""
+    policy.require(actor, Action.READ, Resource.DOCUMENTS)
+    return list(session.scalars(
+        select(Document.owner_id).where(Document.owner_id.is_not(None), *_visible(actor))
+        .distinct()))
+
+
+def due_for_review(
+    session: Session, actor: Actor, *, today: date, within_days: int = 0
+) -> list[Document]:
+    """Documents in use, readable by the actor, whose review is due by ``today + within_days``.
+
+    Soonest review first. ``today`` is the adapter's date (never a
+    ``datetime``) and ``within_days`` a non-negative integer; anything else is
+    a bug in the adapter (``ValueError``).
+    """
+    policy.require(actor, Action.READ, Resource.DOCUMENTS)
+    if not _is_date(today):
+        raise ValueError("The review date must be a date from the adapter.")
+    if not isinstance(within_days, int) or isinstance(within_days, bool) or within_days < 0:
+        raise ValueError("within_days must be a non-negative integer.")
+    limit = today + timedelta(days=within_days)
+    return list(session.scalars(
+        select(Document)
+        .where(*_visible(actor), _in_use(), Document.next_review_date <= limit)
+        .order_by(Document.next_review_date, *_ORDER)))
 
 
 # Length limits mirror the Document columns and the web form.
@@ -99,6 +196,7 @@ TITLE_MAX, CODE_MAX = 150, 50
 WRITABLE_FIELDS = frozenset({"title", "code", "category", "owner_id", "next_review_date"})
 REQUIRED_ON_CREATE = frozenset({"title", "code", "category", "owner_id"})
 DUPLICATE_CODE = "Ya existe un documento con ese código."
+CODE_LOCKED = "El código de un documento no se puede cambiar una vez publicada una revisión."
 OWNER_REQUIRED = "El propietario del documento es obligatorio."
 
 
@@ -168,7 +266,8 @@ def update(
 ) -> Document:
     """Apply the given fields; a call that changes nothing writes nothing.
 
-    A withdrawn document is read-only (``ValidationError``).
+    A withdrawn document is read-only, and the code of a document with a
+    published revision cannot change (``ValidationError``).
     """
     policy.require(actor, Action.UPDATE, Resource.DOCUMENTS)
     found = document_revisions.lock_document(session, document_id)
@@ -178,7 +277,9 @@ def update(
     before = audit.snapshot(found)
     if all(getattr(found, key) == value for key, value in values.items()):
         return found
-    if "code" in values:
+    if "code" in values and values["code"] != found.code:
+        if document_revisions.ever_published(session, found.id):
+            raise ValidationError(CODE_LOCKED)
         _ensure_code_free(session, values["code"], own_id=found.id)
     for key, value in values.items():
         setattr(found, key, value)

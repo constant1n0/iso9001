@@ -84,6 +84,8 @@ DOC = dict(
     author_id="1",
     content="Texto",
 )
+# Document 1 has a revision in force, so its code is locked (DC-4): the edit keeps it.
+DOC_EDIT = DOC | {"code": "DOC-1"}
 DRAFT = dict(content="Texto nuevo", change_summary="Cambio", author_id="1")
 IMPROVEMENT = dict(no_conformidad="NC", accion_correctiva="a", accion_preventiva="b")
 SURVEY = dict(
@@ -165,17 +167,18 @@ ENDPOINTS = [
            "eliminar/1"),
     # Documents are withdrawn, never deleted (DC6); document 1 is in force, so
     # every role reads its page. The workflow narrows roles in its service.
-    *_html("DOCUMENTS", "/documents/", ("new", DOC), ("edit/1", DOC), None),
+    *_html("DOCUMENTS", "/documents/", ("new", DOC), ("edit/1", DOC_EDIT), None),
     Endpoint("DOCUMENTS", "read", "GET", "/documents/1", 200),
     # The revision workflow (DC-3). Revision 2 is a draft: editing and
     # submitting it succeed, the form pages answer 200, and publishing a draft
-    # is refused with a flash on the document's page. Approving and withdrawing
-    # narrow the role to administrators, so tests/test_document_screens.py
-    # characterizes them.
+    # is refused with a flash on the document's page. Revision 3 (document 2)
+    # is in review, which the reject page needs (DC-4). Approving and
+    # withdrawing narrow the role to administrators, so
+    # tests/test_document_screens.py characterizes them.
     Endpoint("DOCUMENTS", "create", "GET", "/documents/1/revisions/new", 200),
     Endpoint("DOCUMENTS", "update", "POST", "/documents/1/revisions/2/edit", 302, DRAFT),
     Endpoint("DOCUMENTS", "update", "POST", "/documents/1/revisions/2/submit", 302),
-    Endpoint("DOCUMENTS", "update", "GET", "/documents/1/revisions/2/reject", 200),
+    Endpoint("DOCUMENTS", "update", "GET", "/documents/2/revisions/3/reject", 200),
     Endpoint("DOCUMENTS", "update", "POST", "/documents/1/revisions/2/publish", 302),
     *_html("IMPROVEMENTS", "/mejoras/", ("nueva", IMPROVEMENT),
            ("editar/1", IMPROVEMENT), "eliminar/1"),
@@ -291,6 +294,7 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                         resultado="r",
                     ),
                     Document(title="T", code="DOC-1", category=DocumentCategory.OTRO),
+                    Document(title="T2", code="DOC-2", category=DocumentCategory.OTRO),
                     Mejora(no_conformidad="NC"),
                     SatisfaccionCliente(
                         cliente="C", fecha_encuesta=date(2026, 10, 5), puntuacion=5
@@ -327,6 +331,10 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                     DocumentRevision(
                         document_id=1, numero=2, estado=EstadoRevision.borrador,
                         content="c", change_summary="Cambio", author_id=1,
+                    ),
+                    DocumentRevision(
+                        document_id=2, numero=1, estado=EstadoRevision.en_revision,
+                        content="c", change_summary="Alta", author_id=1,
                     ),
                 ]
             )

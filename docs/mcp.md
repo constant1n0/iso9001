@@ -71,6 +71,23 @@ Nonconformities and corrective actions (ISO 9001 clause 10.2):
   actions proved effective, cancelling it and reopening it. `qms_update`
   refuses `estado` and the verification fields, and there is no delete tool.
 
+Documents (ISO 9001 clause 7.5):
+
+- `documentos` is read-only through the MCP server: it declares no writable
+  field, `qms_modules` shows `create` and `update` as false for every role, and
+  `qms_create` and `qms_update` are refused. The revision workflow, file
+  attachments and withdrawal are web-only.
+- A record has the document's own fields (`code`, `title`, `category`,
+  `owner_id`, `next_review_date` and the `withdrawn_*` fields) plus
+  `effective_revision`: the revision in force (`numero`, `content`,
+  `effective_from`, `legacy_version`), or `null` when there is none. Drafts,
+  revisions in review and approved revisions not yet published never reach
+  the agent. Administrators and auditors list every document; other roles only
+  documents with a revision in force.
+- Filters: `category` (member names such as `PROCEDIMIENTO_OPERATIVO`),
+  `owner_id` (the owning person) and `status`: `vigente` (in force),
+  `sin_publicar` (in use with no revision in force) or `de_baja` (withdrawn).
+
 People and competence (ISO 9001 clauses 5.3 and 7.2):
 
 - `personas`: people who work under the QMS, separate from login users.

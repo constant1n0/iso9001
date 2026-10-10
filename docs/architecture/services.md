@@ -54,6 +54,7 @@ bounded: the page is clamped to `1..crud.MAX_PAGE` and the size to
 | `nonconformities.py` | Nonconformities (the reference pattern) and their states (see below) |
 | `corrective_actions.py` | Corrective actions of a nonconformity and their verification (see below) |
 | `audits.py`, `documents.py` | Audits, documents (bespoke) |
+| `document_revisions.py`, `document_files.py` | Document revisions and their workflow; attachment storage (see below) |
 | `crud.py` | Generic helper driven by a `Spec` (model, resource, fields, ordering) |
 | `training.py`, `satisfaction.py`, `stakeholders.py`, `improvements.py` | Plain HTML registers on `crud` |
 | `roles_responsibilities.py`, `risks_opportunities.py`, `training_resources.py`, `process_operations.py`, `audit_indicators.py` | JSON registers on `crud` |
@@ -79,7 +80,7 @@ checked first (`mcp` never deletes), then the role.
 |---|---|---|---|
 | Nonconformities, corrective actions, improvements, surveys, training, stakeholders | all roles | all roles | ADMIN |
 | Audits | ADMIN, AUDITOR | ADMIN, AUDITOR | ADMIN |
-| Documents | ADMIN | ADMIN | ADMIN |
+| Documents | all roles (drafts: ADMIN, AUDITOR) | ADMIN, AUDITOR (approve and withdraw: ADMIN) | nobody (withdrawn instead) |
 | Roles, risks and opportunities, training resources, process operations, audit indicators | all roles | ADMIN, AUDITOR | ADMIN |
 | Users; audit log (policy only, no routes yet) | ADMIN, AUDITOR | ADMIN | nobody |
 | API tokens (list, issue, revoke) | ADMIN | ADMIN | nobody |
@@ -137,6 +138,58 @@ verifier is an active person other than the action's owner, and the evidence
 is required. A verified action is read-only (`update` refuses it), though an
 administrator may still delete it while the nonconformity is open. The MCP
 adapter exposes neither `verify` nor the state functions: they are web-only.
+
+## Document control
+
+Decisions DC1-DC8 of `document-control` (ISO 9001 clause 7.5). A document's
+text lives in numbered revisions; only these functions of
+`document_revisions` move a revision's `estado`, each after locking the
+document's row (`lock_document`, `SELECT … FOR UPDATE`) and through `_change`
+(snapshot, values, stamp, audit, flush):
+
+- `documents.create(session, actor, data)` creates the document and its draft
+  revision 1 (`clean_first`, `add_first`); `start_draft(session, actor,
+  document_id, data)` starts the next draft from the text in force (at most
+  one revision in preparation); `edit_draft` changes a `borrador`.
+- `submit` (`borrador` → `en_revision`, needs a change summary),
+  `approve(…, approver_id, today)` (`en_revision` → `aprobado`; ADMIN only,
+  never the author nor the acting user's own person), `reject(…, comment)`
+  (back to `borrador`) and `publish(…, today)` (`aprobado` → `vigente`; the
+  previous revision in force becomes `obsoleto` the same day).
+- `withdraw(session, actor, document_id, reason, *, today)` (ADMIN only)
+  obsoletes the revision in force and makes the document read-only. Nothing is
+  ever deleted except a later draft (`discard_draft`).
+- Dates are `date` values from the adapter (`local_today()`); a `datetime` is
+  a `ValueError`, never a server-clock fallback. Two partial unique indexes
+  back "one in preparation, one in force"; a lost race is a `Conflict`.
+- `require_state` and `require_draft` are lock-free pre-checks for the
+  adapter (refuse a page or an upload early); the write checks again under the
+  lock. `ever_published` locks `documents.update` out of changing the code.
+- Reading: `get`, `list_`, `effective`, `in_preparation`; non-ADMIN/AUDITOR
+  actors only ever see the revision in force. `documents.list_` and
+  `list_page` filter by `category`, `owner_id`, `status` (`vigente`,
+  `sin_publicar`, `de_baja`) and `overdue_on`; `documents.due_for_review(…,
+  today, within_days)` feeds the dashboard card and the weekly alert
+  (`audit_notifications.send_document_review_alert`).
+
+Attachments (DC7) are stored before they are recorded, and a file is deleted
+only once nothing committed references it:
+
+1. **Store**: `document_files.store(directory, stream, filename, max_bytes)`
+   checks the size, the extension and the content (magic bytes, ZIP
+   structure), writes the file atomically under a random name (mode 0600) and
+   returns a `StoredFile` (names, size, SHA-256, MIME type). It knows nothing
+   of the database. The adapter calls `require_draft` first.
+2. **Attach**: `document_revisions.attach(session, actor, revision_id,
+   stored)` records it on a `borrador` under the lock and returns the stored
+   name of the file it replaces. If attach refuses, the adapter rolls back and
+   deletes the new file.
+3. **Commit**: the adapter commits. A failed commit may still have succeeded,
+   so it deletes nothing.
+4. **Delete the old file**: only after a successful commit, the adapter
+   removes the replaced file (`detach` and `discard_draft` return the name to
+   delete the same way). Anything left behind is removed by `flask
+   cleanup-document-files`.
 
 ## Error mapping
 
