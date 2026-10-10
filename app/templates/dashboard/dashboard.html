@@ -111,6 +111,28 @@
             <p class="empty">Sin capacitaciones previstas.</p>
         {% endif %}
     </article>
+    {% if revisiones_documentales is not none %}
+    {% set vencidas = revisiones_documentales | selectattr('next_review_date', 'lt', hoy) | list %}
+    <article class="card" id="revisiones-documentales">
+        <header class="card__header">
+            <h2 class="card__title">Revisión de documentos</h2>
+            {% if vencidas %}<span class="badge badge--danger">{{ vencidas | length }} {{ 'vencida' if vencidas | length == 1 else 'vencidas' }}</span>{% else %}<span class="card__meta">{{ review_window_days }} días</span>{% endif %}
+        </header>
+        {% if revisiones_documentales %}
+            <ul class="list">
+                {% for d in revisiones_documentales %}
+                    <li class="list__item">
+                        <span class="list__primary"><a href="{{ url_for('document.view_document', document_id=d.id) }}">{{ d.code }}</a><br><span class="muted">{{ d.title }}</span></span>
+                        <span class="list__secondary">{{ d.next_review_date.strftime('%d/%m') }}{% if d.next_review_date < hoy %} <span class="badge badge--danger">Vencida</span>{% endif %}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+            {% if vencidas %}<div class="card__body"><a href="{{ url_for('document.list_documents', vencida=1) }}">Ver los documentos con la revisión vencida</a></div>{% endif %}
+        {% else %}
+            <p class="empty">Ninguna revisión pendiente en los próximos {{ review_window_days }} días.</p>
+        {% endif %}
+    </article>
+    {% endif %}
 </section>
 
 <section class="grid grid--2" aria-label="Gráficas">

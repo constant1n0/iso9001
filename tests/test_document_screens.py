@@ -393,12 +393,13 @@ class WorkflowRulesTestCase(ScreensBase):
 
         doc_id = self.seed("PR-001", R.vigente)
         draft = self.later_draft(doc_id)
+        in_review = self.seed("PR-002", R.en_revision)  # the reject page needs one (DC-4)
         cases = (
             (self.rev_url(doc_id, draft, "edit"), "document_revisions.edit_draft",
              {"content": "Texto tecleado", "change_summary": "Resumen tecleado",
               "author_id": str(self.eva)}),
-            (self.rev_url(doc_id, draft, "reject"), "document_revisions.reject",
-             {"review_comment": "Motivo tecleado"}),
+            (self.rev_url(in_review, self.revision(in_review, 1).id, "reject"),
+             "document_revisions.reject", {"review_comment": "Motivo tecleado"}),
             (f"{BASE}/{doc_id}/withdraw", "document_revisions.withdraw",
              {"withdrawn_reason": "Baja tecleada"}),
             (f"{BASE}/edit/{doc_id}", "documents.update",
@@ -439,6 +440,7 @@ class WorkflowRulesTestCase(ScreensBase):
             ("get", self.rev_url(doc_id, draft, "approve"), None),
             ("get", f"{BASE}/{doc_id}/withdraw", None),
             ("post", self.rev_url(doc_id, draft, "submit"), None),
+            ("post", self.rev_url(doc_id, draft, "publish"), None),
         ):
             with self.subTest(method=method, url=url):
                 response = getattr(self.client, method)(url, data=data)

@@ -333,9 +333,49 @@ The MCP server reads and writes nonconformities and corrective actions with
 the same rules, but verifying, closing, cancelling and reopening are web-only
 (see `docs/mcp.md`). Every change is written to the audit log.
 
-**2f. Document attachments**
+**2f. Control documental**
 
-Each document revision may carry one file: PDF, DOCX, XLSX or ODT. The type is
+Documents (`/documents/`, ISO 9001 clause 7.5) keep their identity (code,
+title, category), an owner (a person) and a next review date; their text lives
+in numbered revisions (1, 2, 3…) that are reviewed and approved before they
+take effect.
+
+- **States**: *Borrador* → *En revisión* → *Aprobado* → *Vigente* →
+  *Obsoleto*. Rejecting a revision in review returns it to *Borrador* with the
+  reason. A document has at most one revision in preparation (draft, in review
+  or approved) and at most one in force. Editing a document in force starts a
+  new draft from the text in force.
+- **Roles**: every role reads the revision in force. Drafts, revisions in
+  review and approved revisions not yet published are visible only to
+  administrators and auditors, who create documents, write drafts, submit,
+  reject and publish. Only administrators approve and withdraw.
+- **Approver**: an administrator approves a revision in review, naming the
+  approving person. The approver is never the revision's author, neither as
+  the person named nor as the person linked to the approving user. The approve
+  and reject pages only open for a revision in review.
+- **Publication and obsolescence**: publishing an approved revision puts it in
+  force from today (in `APP_TIMEZONE`); the revision it replaces becomes
+  obsolete the same day and stays in the history as evidence. Revisions in
+  force or obsolete never change again.
+- **Withdrawal**: documents are never deleted. An administrator withdraws a
+  document with a reason; its revision in force becomes obsolete, the date,
+  reason and person are recorded, and the document becomes read-only.
+- **Code**: the code is unique. It can be changed until a revision has been
+  published; from then on the edit form shows it read-only and the change is
+  refused.
+- **List**: filters by category, owner, status (*Vigente*, *Sin publicar*,
+  *De baja*) and overdue review; they run in the database.
+- **Periodic review**: a document in use whose next review date has passed is
+  flagged *Vencida* on the list. The dashboard card *Revisión de documentos*
+  lists the reviews overdue or due within 30 days (an operativo sees only
+  documents in force), and every Monday the e-mail alert below tells each
+  owner and the administrators which reviews are due. Updating the next review
+  date clears the flag.
+
+The MCP server reads documents and their revision in force only (see
+`docs/mcp.md`). Every change is written to the audit log.
+
+*Attachments.* Each document revision may carry one file: PDF, DOCX, XLSX or ODT. The type is
 checked by content as well as by extension, so a renamed executable or web page
 is refused. Administrators and auditors attach, replace or remove the file of a
 draft (*Borrador*) on the document's page. They can also discard a later draft
@@ -374,20 +414,27 @@ user, document, revision, file name, size and SHA-256.
 
 **3. Iniciar Redis y Celery para las Notificaciones Programadas**
 
-Celery envía tres avisos por correo; la aplicación web funciona sin él.
+Celery envía cuatro avisos por correo; la aplicación web funciona sin él.
 
 | Tarea | Destinatarios | Cuándo |
 |-------|---------------|--------|
 | `iso9001.send_upcoming_audits_alert` | Usuarios con rol Auditor | Cada día a las 7:00 |
 | `iso9001.send_pending_audits_report` | Usuarios con rol Administrador | Los lunes a las 8:00 |
 | `iso9001.send_monthly_quality_report` | Usuarios con rol Administrador | El día 1 de cada mes a las 8:00 (PDF adjunto) |
+| `iso9001.send_document_review_alert` | Propietarios de documentos y usuarios con rol Administrador | Los lunes a las 8:00 |
 
 Las horas son locales a `APP_TIMEZONE` (por defecto `Europe/Madrid`). El aviso
 diario incluye las auditorías pendientes o en proceso de los próximos 7 días;
 el informe semanal, las pendientes; el informe mensual adjunta un PDF con
 el total de auditorías, no conformidades y capacitaciones y la satisfacción media
 registrados en el mes, las no conformidades del mes por estado y las acciones
-correctivas verificadas en el mes (eficaces y no eficaces). Los usuarios sin correo se omiten. Si falla
+correctivas verificadas en el mes (eficaces y no eficaces). El aviso de revisión
+documental lista los documentos en uso cuya fecha de próxima revisión ya ha
+llegado: cada propietario recibe los suyos a través del usuario vinculado a su
+persona (un usuario Operativo, solo los vigentes) y los administradores reciben
+la lista completa con el propietario de cada documento; los propietarios sin
+usuario vinculado se omiten y quedan registrados en el log. Los usuarios
+inactivos o sin correo se omiten. Si falla
 el envío a algún destinatario, se sigue con el resto, se registra el error y la
 tarea termina en fallo.
 

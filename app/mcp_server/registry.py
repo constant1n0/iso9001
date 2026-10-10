@@ -15,7 +15,7 @@ from typing import Any
 from sqlalchemy.orm import object_session
 
 from ..models import (
-    CompetenceEvaluation, CompetenceType, EstadoAccionCorrectiva,
+    CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAccionCorrectiva,
     EstadoAuditoriaEnum, EstadoNoConformidad, GravedadNoConformidad, OrigenNoConformidad,
     TipoEnum,
 )
@@ -128,9 +128,15 @@ _MODULES = (
         _f("fecha_inicio", "date"), _f("fecha_fin", "date"))),
     # Read-only here (DC-1 of ``document-control``): every role reads the documents
     # it may see with their revision in force, and the policy refuses ``qms_create``
-    # and ``qms_update`` on the mcp channel, so no field is writable.
-    Module("documentos", "Documents", Resource.DOCUMENTS, documents, (),
-           extras=_document_extras),
+    # and ``qms_update`` on the mcp channel, so no field is writable. The filters
+    # run in ``documents.list_page`` (DC-4).
+    Module("documentos", "Documents", Resource.DOCUMENTS, documents, (), (
+        _f("category", "enum", members=DocumentCategory),
+        _f("owner_id", "integer", note="Person (personas) who owns the document."),
+        _f("status", "enum", allowed=documents.STATUSES, note=(
+            "vigente: in force; sin_publicar: in use with no revision in force; "
+            "de_baja: withdrawn.")),
+    ), extras=_document_extras),
     Module("capacitaciones", "Training", Resource.TRAINING, training, (
         _f("tema", required=True), _f("fecha", "date", True),
         _legacy_name("personal", "persona_id"),

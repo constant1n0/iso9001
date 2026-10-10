@@ -36,8 +36,10 @@ effective and obsolete revisions never change again (DC3).
 Attachments (DC7): ``attach`` records a file kept by ``document_files.store``
 on a ``borrador`` and ``detach`` clears it; both return the stored name of the
 file they replace, which the adapter deletes only after committing.
-``require_draft`` lets the adapter refuse an upload before storing it; the
-write re-checks under the lock. A new
+``require_draft`` lets the adapter refuse an upload before storing it, and
+``require_state`` a workflow page for a revision in another state; the write
+re-checks under the lock. ``ever_published`` tells whether a document has had a
+revision in force, which locks its code (``documents.update``). A new
 draft starts without the effective revision's file, so no two revisions share
 one (``attachment_path`` is unique). ``discard_draft`` deletes a ``borrador``
 when its document has a revision in force to fall back on: revision 1 of a
@@ -63,7 +65,7 @@ from collections.abc import Iterable, Mapping
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -93,6 +95,8 @@ IMMUTABLE = "Una revisión vigente u obsoleta no se puede modificar."
 ONE_DRAFT = "El documento ya tiene una revisión en preparación."
 NO_EFFECTIVE = "El documento no tiene una revisión vigente de la que partir."
 NOT_A_DRAFT = "Solo se puede modificar una revisión en borrador."
+APPROVE_NOT_IN_REVIEW = "Solo se puede aprobar una revisión enviada a revisión."
+REJECT_NOT_IN_REVIEW = "Solo se puede rechazar una revisión enviada a revisión."
 AUTHOR_REQUIRED = "El autor de la revisión es obligatorio."
 SUMMARY_REQUIRED = "El resumen de cambios es obligatorio para enviar la revisión a revisión."
 APPROVER_REQUIRED = "Indica la persona que aprueba la revisión."
@@ -170,14 +174,28 @@ def in_preparation(
     return _pending(session, document_id) if may_see_drafts(actor) else None
 
 
-def require_draft(session: Session, revision: DocumentRevision) -> None:
-    """Refuse a ``revision`` that is not a ``borrador`` of an active document.
+def require_state(
+    session: Session, revision: DocumentRevision, state: EstadoRevision, wrong_state: str
+) -> None:
+    """Refuse a ``revision`` of a withdrawn document, frozen, or not in ``state``.
 
     A cheap check without locks, for the adapter to run before costly work
-    (storing an upload); the write itself checks again under the lock.
+    (storing an upload) or before showing a form; the write itself checks
+    again under the lock. ``wrong_state`` is the refusal for another state.
     """
-    _check_state(session.get(Document, revision.document_id), revision, R.borrador,
-                 NOT_A_DRAFT)
+    _check_state(session.get(Document, revision.document_id), revision, state, wrong_state)
+
+
+def require_draft(session: Session, revision: DocumentRevision) -> None:
+    """Refuse a ``revision`` that is not a ``borrador`` of an active document."""
+    require_state(session, revision, R.borrador, NOT_A_DRAFT)
+
+
+def ever_published(session: Session, document_id: int) -> bool:
+    """Whether any revision of the document is or was in force (``vigente``, ``obsoleto``)."""
+    return bool(session.scalar(select(exists().where(
+        DocumentRevision.document_id == document_id,
+        DocumentRevision.estado.in_(FROZEN_STATES)))))
 
 
 def in_force(session: Session, document_id: int) -> DocumentRevision | None:
@@ -255,8 +273,7 @@ def approve(
         today: The approval date to record (the adapter's local date).
     """
     _require_role(actor, APPROVE_ROLES)
-    revision = _locked(session, revision_id, R.en_revision,
-                       "Solo se puede aprobar una revisión enviada a revisión.")
+    revision = _locked(session, revision_id, R.en_revision, APPROVE_NOT_IN_REVIEW)
     approver = people.reference(session, {"approver_id": approver_id}, "approver_id")
     if approver is None:
         raise ValidationError(APPROVER_REQUIRED)
@@ -273,8 +290,7 @@ def reject(
 ) -> DocumentRevision:
     """Return a revision in review to ``borrador``, recording why (``review_comment``)."""
     policy.require(actor, Action.UPDATE, Resource.DOCUMENTS)
-    revision = _locked(session, revision_id, R.en_revision,
-                       "Solo se puede rechazar una revisión enviada a revisión.")
+    revision = _locked(session, revision_id, R.en_revision, REJECT_NOT_IN_REVIEW)
     if not isinstance(comment, str) or not comment.strip():
         raise ValidationError(COMMENT_REQUIRED)
     _change(session, actor, revision, estado=R.borrador, review_comment=comment.strip())

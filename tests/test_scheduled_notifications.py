@@ -310,7 +310,7 @@ class CeleryWiringTestCase(unittest.TestCase):
 
     def test_every_scheduled_task_is_registered(self) -> None:
         scheduled = {entry["task"] for entry in self.probe["schedule"].values()}
-        self.assertEqual(3, len(scheduled))
+        self.assertEqual(4, len(scheduled))
         self.assertLessEqual(scheduled, set(self.probe["registered"]))
 
     def test_schedule_runs_daily_weekly_and_monthly_jobs_in_local_time(self) -> None:
@@ -319,7 +319,8 @@ class CeleryWiringTestCase(unittest.TestCase):
         self.assertEqual(
             [
                 "<crontab: 0 7 * * * (m/h/dM/MY/d)>",
-                "<crontab: 0 8 * * monday (m/h/dM/MY/d)>",
+                "<crontab: 0 8 * * monday (m/h/dM/MY/d)>",  # pending audits
+                "<crontab: 0 8 * * monday (m/h/dM/MY/d)>",  # document reviews
                 "<crontab: 0 8 1 * * (m/h/dM/MY/d)>",
             ],
             crontabs,

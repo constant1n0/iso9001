@@ -13,7 +13,7 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-"""Celery application for scheduled audit notifications.
+"""Celery application for scheduled notifications (audits, quality report, document reviews).
 
 Run from the project root with the same environment as the web app:
 
@@ -85,6 +85,12 @@ def send_monthly_quality_report() -> int:
     return audit_notifications.send_monthly_quality_report()
 
 
+@celery.task(name="iso9001.send_document_review_alert")
+def send_document_review_alert() -> int:
+    """Weekly list of overdue document reviews for owners and administrators."""
+    return audit_notifications.send_document_review_alert()
+
+
 # Times are local to APP_TIMEZONE.
 celery.conf.beat_schedule = {
     "upcoming-audits-alert-daily": {
@@ -98,5 +104,9 @@ celery.conf.beat_schedule = {
     "monthly-quality-report": {
         "task": send_monthly_quality_report.name,
         "schedule": crontab(day_of_month=1, hour=8, minute=0),
+    },
+    "document-review-alert-weekly": {
+        "task": send_document_review_alert.name,
+        "schedule": crontab(day_of_week="monday", hour=8, minute=0),
     },
 }

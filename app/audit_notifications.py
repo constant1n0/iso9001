@@ -13,24 +13,28 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-"""Scheduled audit e-mail notifications.
+"""Scheduled e-mail notifications: audits, the monthly report and document reviews.
 
 These functions run inside a Flask application context. Celery tasks in
-``celery_worker.py`` are thin wrappers around them.
+``celery_worker.py`` are thin wrappers around them. Recipients are active
+users with an e-mail address; anyone else is skipped and the skip is logged
+(by user name or person id, never by address).
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from flask import current_app
 from flask_mail import Message
 
-from .extensions import mail
-from .models import Auditoria, EstadoAuditoriaEnum, RoleEnum, User
+from .extensions import db, mail
+from .models import Auditoria, Document, EstadoAuditoriaEnum, Person, RoleEnum, User
+from .services import document_revisions, documents, people
+from .services.actor import Actor
 from .utils import reports
 
 logger = logging.getLogger(__name__)
@@ -129,37 +133,124 @@ def send_monthly_quality_report(today: date | None = None) -> int:
     )
 
 
+# The document review alert reads as the system, with an administrator's reach.
+_REVIEW_READER = Actor(None, "document-review-alert", RoleEnum.ADMINISTRADOR, "system")
+
+
+def send_document_review_alert(today: date | None = None) -> int:
+    """E-mail the periodic reviews that are due (DC5 of ``document-control``).
+
+    A review is due when a document still in use has its next review date on
+    or before ``today``. Each owner hears about their own documents through
+    the user linked to the person, limited to what that user may read (an
+    operativo only the documents in force); administrators get the whole list,
+    with each owner, in a single message. Owners without a user account are
+    skipped and logged.
+    """
+    day = today or local_today()
+    due = documents.due_for_review(db.session, _REVIEW_READER, today=day)
+    if not due:
+        logger.info("No document reviews due on %s", day)
+        return 0
+
+    owners = people.names(db.session, _REVIEW_READER, (d.owner_id for d in due))
+    admins = _recipients(RoleEnum.ADMINISTRADOR)
+    letters = [(user, _review_body(user, due, day, owners)) for user in admins]
+    in_force = document_revisions.effective(db.session, _REVIEW_READER, (d.id for d in due))
+    for user, owned in _owner_users(due, skip={user.id for user in admins}):
+        readable = [d for d in owned
+                    if user.role in document_revisions.DRAFT_READERS or d.id in in_force]
+        if readable:
+            letters.append((user, _review_body(user, readable, day)))
+    return _deliver("Revisiones periódicas de documentos pendientes", letters)
+
+
+def _owner_users(
+    due: list[Document], skip: set[int]
+) -> list[tuple[User, list[Document]]]:
+    """Each reachable user linked to an owner, with the due documents that person owns.
+
+    Users in ``skip`` (the administrators, who get the whole list) are left out.
+    """
+    by_owner: dict[int, list[Document]] = {}
+    for document in due:
+        if document.owner_id is not None:
+            by_owner.setdefault(document.owner_id, []).append(document)
+    found = []
+    for person_id, owned in by_owner.items():
+        person = db.session.get(Person, person_id)
+        user = None if person is None or person.user_id is None else db.session.get(
+            User, person.user_id)
+        if user is None:
+            logger.info("Document owner person %s has no user account; skipped", person_id)
+        elif user.id not in skip and _reachable(user):
+            found.append((user, owned))
+    return found
+
+
+def _review_body(
+    user: User, due: list[Document], day: date, owners: dict[int, str] | None = None
+) -> str:
+    """The alert text; with ``owners`` (the administrators' copy) each line names the owner."""
+    lines = []
+    for document in due:
+        line = (f"- {document.code} · {document.title} · revisión prevista el "
+                f"{document.next_review_date:%d/%m/%Y}")
+        if owners is not None:
+            line += f" · propietario: {owners.get(document.owner_id, 'sin propietario')}"
+        lines.append(line)
+    listing = "\n".join(lines)
+    return (
+        f"Hola {user.username},\n\n"
+        "Estos documentos tienen pendiente su revisión periódica a fecha de "
+        f"{day:%d/%m/%Y}:\n\n{listing}\n\n"
+        "Revísalos en el sistema y actualiza su fecha de próxima revisión."
+    )
+
+
+def _reachable(user: User) -> bool:
+    """Whether ``user`` can receive mail: active and with an address (skips are logged)."""
+    if not user.is_active:
+        logger.info("User %s is inactive; skipped", user.username)
+        return False
+    if not user.email:
+        logger.warning("User %s has no e-mail address; skipped", user.username)
+        return False
+    return True
+
+
 def _recipients(role: RoleEnum) -> list[User]:
     """Active users with ``role`` that have an e-mail address."""
     users: Iterable[User] = User.query.filter_by(role=role).all()
-    recipients = []
-    for user in users:
-        if not user.is_active:
-            logger.info("User %s is inactive; skipped", user.username)
-        elif user.email:
-            recipients.append(user)
-        else:
-            logger.warning("User %s has no e-mail address; skipped", user.username)
-    return recipients
+    return [user for user in users if _reachable(user)]
 
 
 def _send_to_role(
     role: RoleEnum,
     subject: str,
-    body,
+    body: Callable[[User], str],
     attachment: tuple[str, str, bytes] | None = None,
 ) -> int:
     """Send one message per user with ``role``; keep going on failures."""
+    return _deliver(subject, [(user, body(user)) for user in _recipients(role)], attachment)
+
+
+def _deliver(
+    subject: str,
+    letters: Iterable[tuple[User, str]],
+    attachment: tuple[str, str, bytes] | None = None,
+) -> int:
+    """Send each ``(user, body)``; keep going on failures, then raise if any failed."""
     sender = current_app.config.get("MAIL_DEFAULT_SENDER")
     sent = 0
     failed: list[str] = []
 
-    for user in _recipients(role):
+    for user, body in letters:
         message = Message(
             subject=subject,
             sender=sender,
             recipients=[user.email],
-            body=body(user),
+            body=body,
         )
         if attachment:
             message.attach(*attachment)

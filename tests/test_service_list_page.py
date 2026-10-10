@@ -146,8 +146,10 @@ class NonconformityListPageTestCase(FilteredListPageContract, ServiceBase):
         self.assertEqual(([], 0), self.page(1, 5, origen="otro"))
 
 
-class DocumentListPageTestCase(ListPageContract, ServiceBase):
+class DocumentListPageTestCase(FilteredListPageContract, ServiceBase):
     model = Document
+    # Filters run in the database (DC-4); the category may be given by name.
+    filters = {"category": "PROCEDIMIENTO_OPERATIVO", "overdue_on": OCT}
 
     def service(self):
         from app.services import documents
@@ -155,11 +157,15 @@ class DocumentListPageTestCase(ListPageContract, ServiceBase):
         return documents
 
     def seed_ordered(self) -> list[int]:
-        def doc(code):
-            return self.insert(title=f"Doc {code}", code=code,
-                               category=DocumentCategory.PROCEDIMIENTO_OPERATIVO)
-
-        ids = {code: doc(code) for code in ("PR-02", "MC-01", "PR-10", "IT-05", "PR-01")}
+        procedure = DocumentCategory.PROCEDIMIENTO_OPERATIVO
+        reviews = {"PR-02": (procedure, SEP), "MC-01": (procedure, OCT),
+                   "PR-10": (procedure, AUG), "IT-05": (DocumentCategory.INSTRUCCION_TRABAJO, AUG),
+                   "PR-01": (procedure, SEP)}
+        ids = {code: self.insert(title=f"Doc {code}", code=code, category=category,
+                                 next_review_date=review)
+               for code, (category, review) in reviews.items()}
+        # MC-01 is not overdue yet and IT-05 is another category.
+        self.expected_matches = [ids[code] for code in ("PR-01", "PR-02", "PR-10")]
         # ``code`` is unique, so the code order alone is total.
         return [ids[code] for code in ("IT-05", "MC-01", "PR-01", "PR-02", "PR-10")]
 

@@ -20,5 +20,8 @@
 {% block crumb %}Documentación · Documentos{% endblock %}
 {% block content %}
 {{ page_header('Cláusula 7.5 · Información documentada', 'Editar documento') }}
+{% if code_locked %}
+<article class="card"><div class="card__body"><p class="card__text muted">El código no se puede cambiar: el documento ya tiene una revisión publicada.</p></div></article>
+{% endif %}
 {{ form_card(form, url_for('document.view_document', document_id=document.id), 'Guardar cambios') }}
 {% endblock %}
