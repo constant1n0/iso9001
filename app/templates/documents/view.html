@@ -1,0 +1,58 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header %}
+{% block title %}Documento {{ document.code }}{% endblock %}
+{% block crumb %}Documentación · Documentos{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 7.5 · Información documentada', document.code ~ ' · ' ~ document.title) %}
+    {% if can('update', 'documents') and not document.withdrawn_at %}
+    <a class="btn" href="{{ url_for('document.edit_document', document_id=document.id) }}">Editar</a>
+    {% endif %}
+{% endcall %}
+
+<article class="card">
+    <header class="card__header">
+        <h2 class="card__title">Datos</h2>
+    </header>
+    <ul class="list">
+        <li class="list__item"><span class="list__primary">Categoría</span><span class="list__secondary">{{ document.category.value }}</span></li>
+        <li class="list__item"><span class="list__primary">Propietario</span><span class="list__secondary">{{ personas.get(document.owner_id, '—') }}</span></li>
+        <li class="list__item"><span class="list__primary">Próxima revisión</span><span class="list__secondary">{{ document.next_review_date.strftime('%d/%m/%Y') if document.next_review_date else '—' }}</span></li>
+        {% if document.withdrawn_at %}
+        <li class="list__item"><span class="list__primary">De baja</span><span class="list__secondary">{{ document.withdrawn_at.strftime('%d/%m/%Y') }} · {{ document.withdrawn_reason }}{% if document.withdrawn_by_id %} · {{ personas.get(document.withdrawn_by_id) }}{% endif %}</span></li>
+        {% endif %}
+    </ul>
+</article>
+
+<article class="card">
+    {% if vigente %}
+    <header class="card__header">
+        <h2 class="card__title">Revisión {{ vigente.numero }}{% if vigente.legacy_version %} (v{{ vigente.legacy_version }}){% endif %}</h2>
+        <span class="badge">Vigente</span>
+    </header>
+    <ul class="list">
+        <li class="list__item"><span class="list__primary">En vigor desde</span><span class="list__secondary">{{ vigente.effective_from.strftime('%d/%m/%Y') if vigente.effective_from else '—' }}</span></li>
+        <li class="list__item"><span class="list__primary">Autor</span><span class="list__secondary">{{ personas.get(vigente.author_id, '—') }}</span></li>
+        <li class="list__item"><span class="list__primary">Aprobada por</span><span class="list__secondary">{{ personas.get(vigente.approver_id) or vigente.legacy_approved_by or '—' }}</span></li>
+        <li class="list__item"><span class="list__primary">Contenido</span><span class="list__secondary">{{ vigente.content }}</span></li>
+    </ul>
+    {% else %}
+    <p class="card__text">Este documento no tiene ninguna revisión vigente.</p>
+    {% endif %}
+</article>
+{% endblock %}

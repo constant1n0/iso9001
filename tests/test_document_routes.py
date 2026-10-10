@@ -14,7 +14,7 @@ import test_auth_bootstrap as bootstrap
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db
-from app.models import AuditLog, Document, DocumentCategory, RoleEnum, User
+from app.models import AuditLog, Document, DocumentCategory, Person, RoleEnum, User
 from app.services import audit, errors
 
 PASSWORD_HASH = generate_password_hash("StrongPassword123!")
@@ -23,9 +23,9 @@ FORM = {
     "title": "Manual de calidad",
     "code": "MC-001",
     "category": "MANUAL_CALIDAD",
-    "version": "1.0",
-    "issued_date": "2026-10-05",
-    "approved_by": "Direccion",
+    "owner_id": "1",
+    "next_review_date": "",
+    "author_id": "1",
     "content": "Contenido",
 }
 
@@ -44,6 +44,7 @@ class DocumentRoutesTestCase(unittest.TestCase):
                         role=role,
                     )
                 )
+            db.session.add(Person(nombre="Ana"))
             db.session.commit()
             self.ids = {u.role: u.id for u in User.query.all()}
             self.remove_guard = audit.install_audit_guard(db.session, audit.AUDITED_MODELS)
@@ -75,16 +76,30 @@ class DocumentRoutesTestCase(unittest.TestCase):
                 db.session,
                 who,
                 {"title": "Semilla", "code": "SEED-1", "category": DocumentCategory.OTRO,
-                 "version": "1.0", "issued_date": date(2026, 10, 1),
-                 "content": "x"} | values,
+                 "owner_id": 1, "author_id": 1, "content": "x", "change_summary": "Alta"}
+                | values,
             )
             db.session.commit()
             return created.id
 
+    def put_in_force(self, doc_id: int) -> None:
+        from app.services import document_revisions as revisions
+        from app.services.actor import Actor
+
+        with self.app.app_context():
+            who = Actor(None, "seed", RoleEnum.ADMINISTRADOR, "system")
+            db.session.execute(Person.__table__.insert().values(nombre="Eva"))  # id 2
+            (first,) = revisions.list_(db.session, who, doc_id)
+            revisions.submit(db.session, who, first.id)
+            revisions.approve(db.session, who, first.id, approver_id=2, today=date(2026, 10, 5))
+            revisions.publish(db.session, who, first.id, today=date(2026, 10, 5))
+            db.session.commit()
+
     def rows(self):
         with self.app.app_context():
             return [
-                (r.action, r.entity_id, r.channel, r.actor_label, r.actor_user_id)
+                (r.entity_type, r.action, r.entity_id, r.channel, r.actor_label,
+                 r.actor_user_id)
                 for r in AuditLog.query.order_by(AuditLog.id)
             ]
 
@@ -100,8 +115,10 @@ class DocumentRoutesTestCase(unittest.TestCase):
             doc = Document.query.one()
             self.assertEqual(DocumentCategory.MANUAL_CALIDAD, doc.category)
             self.assertEqual(self.ids[RoleEnum.ADMINISTRADOR], doc.created_by_id)
+            admin = ("web", "administrador", self.ids[RoleEnum.ADMINISTRADOR])
             self.assertEqual(
-                [("create", doc.id, "web", "administrador", self.ids[RoleEnum.ADMINISTRADOR])],
+                [("documents", "create", doc.id, *admin),
+                 ("document_revisions", "create", 1, *admin)],
                 self.rows(),
             )
 
@@ -109,38 +126,49 @@ class DocumentRoutesTestCase(unittest.TestCase):
         doc_id = self.seed()
         self.login()
         response = self.client.post(
-            f"{BASE}/edit/{doc_id}", data=FORM | {"code": "SEED-1", "version": "2.0"}
+            f"{BASE}/edit/{doc_id}", data=FORM | {"code": "SEED-1", "title": "Nuevo"}
         )
         self.assertEqual(302, response.status_code)
         self.assertIn(("success", "Documento actualizado exitosamente"), self.flashes())
         with self.app.app_context():
             doc = db.session.get(Document, doc_id)
-            self.assertEqual("2.0", doc.version)
+            self.assertEqual("Nuevo", doc.title)
             self.assertEqual(self.ids[RoleEnum.ADMINISTRADOR], doc.updated_by_id)
-            self.assertEqual("update", self.rows()[-1][0])
+            self.assertEqual(("documents", "update"), self.rows()[-1][:2])
 
-    def test_delete_is_audited_with_a_snapshot(self) -> None:
+    def test_there_is_no_delete_route(self) -> None:
         doc_id = self.seed()
         self.login()
-        response = self.client.post(f"{BASE}/delete/{doc_id}")
-        self.assertEqual(302, response.status_code)
-        self.assertIn(("success", "Documento eliminado exitosamente"), self.flashes())
+        self.assertEqual(404, self.client.post(f"{BASE}/delete/{doc_id}").status_code)
         with self.app.app_context():
-            self.assertIsNone(db.session.get(Document, doc_id))
-            row = AuditLog.query.filter_by(action="delete").one()
-            self.assertEqual("SEED-1", row.before["code"])
+            self.assertIsNotNone(db.session.get(Document, doc_id))
 
-    def test_non_admin_roles_cannot_write_and_leave_no_audit_rows(self) -> None:
+    def test_operativos_cannot_write_and_leave_no_audit_rows(self) -> None:
         doc_id = self.seed()
-        for role in (RoleEnum.AUDITOR, RoleEnum.OPERATIVO):
-            self.login(role)
-            for url in (f"{BASE}/new", f"{BASE}/edit/{doc_id}", f"{BASE}/delete/{doc_id}"):
-                with self.subTest(role=role.name, url=url):
-                    self.assertEqual(302, self.client.post(url, data=FORM).status_code)
+        self.login(RoleEnum.OPERATIVO)
+        for url in (f"{BASE}/new", f"{BASE}/edit/{doc_id}"):
+            with self.subTest(url=url):
+                self.assertEqual(302, self.client.post(url, data=FORM).status_code)
         with self.app.app_context():
             self.assertEqual(1, Document.query.count())
             self.assertEqual("Semilla", db.session.get(Document, doc_id).title)
-        self.assertEqual(["create"], [r[0] for r in self.rows()])
+        self.assertEqual(["create", "create"], [r[1] for r in self.rows()])
+
+    def test_every_role_reads_the_effective_revision_of_a_document_in_force(self) -> None:
+        in_force = self.seed(code="A-1", title="Vigente", content="Texto en vigor")
+        self.put_in_force(in_force)
+        self.seed(code="B-2", title="En preparación")
+        for role in RoleEnum:
+            self.login(role)
+            with self.subTest(role=role.name):
+                listing = self.client.get(f"{BASE}/").get_data(as_text=True)
+                self.assertIn("Vigente", listing)
+                self.assertEqual(role is not RoleEnum.OPERATIVO, "En preparación" in listing)
+                page = self.client.get(f"{BASE}/{in_force}").get_data(as_text=True)
+                self.assertIn("Texto en vigor", page)
+                self.assertIn("05/10/2026", page)
+        self.login(RoleEnum.OPERATIVO)
+        self.assertEqual(404, self.client.get(f"{BASE}/2").status_code)
 
     def test_invalid_form_rerenders_without_writing(self) -> None:
         self.login()
@@ -182,7 +210,7 @@ class DocumentRoutesTestCase(unittest.TestCase):
         for method, url in (
             ("get", f"{BASE}/edit/999"),
             ("post", f"{BASE}/edit/999"),
-            ("post", f"{BASE}/delete/999"),
+            ("get", f"{BASE}/999"),
         ):
             with self.subTest(url=url, method=method):
                 response = getattr(self.client, method)(url, data=FORM)

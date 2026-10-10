@@ -177,15 +177,22 @@ class CapacitacionForm(BaseForm):
     submit = SubmitField('Guardar')
 
 # Formulario para el registro y actualización de documentos
+# A document's own fields; its text lives in revisions (``document-control``).
+# The routes fill the person pickers; the service has the last word.
 class DocumentForm(BaseForm):
     title = StringField('Título', validators=[DataRequired(), Length(max=150)])
     code = StringField('Código de Identificación', validators=[DataRequired(), Length(max=50)])
     category = SelectField('Categoría', choices=[(cat.name, cat.value) for cat in DocumentCategory], validators=[DataRequired()])
-    version = StringField('Versión', validators=[DataRequired(), Length(max=10)])
-    issued_date = DateField('Fecha de Emisión', validators=[DataRequired()])
-    approved_by = StringField('Aprobado por', validators=[Length(max=100)])
+    owner_id = SelectField('Propietario', coerce=optional_id, choices=[CHOOSE_PERSON],
+                           validators=[DataRequired()])
+    next_review_date = DateField('Próxima revisión', validators=[Optional()])
+
+
+# A new document also writes its draft revision 1.
+class NewDocumentForm(DocumentForm):
+    author_id = SelectField('Autor de la revisión 1', coerce=optional_id,
+                            choices=[CHOOSE_PERSON], validators=[DataRequired()])
     content = TextAreaField('Contenido', validators=[DataRequired()])
-    submit = SubmitField('Guardar Documento')
 
 # Formulario para solicitar recuperación de contraseña
 class PasswordResetRequestForm(BaseForm):

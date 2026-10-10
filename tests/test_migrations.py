@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import unittest
+from datetime import date
 from unittest.mock import patch
 
 import test_auth_bootstrap as bootstrap
@@ -26,7 +27,7 @@ MIGRATIONS_DIR = str(bootstrap.PROJECT_ROOT / "migrations")
 # Audited tables created after the record-metadata migration (c4d8e1f2a9b7).
 LATER_AUDITED_TABLES = frozenset(
     {"personas", "competencias_requeridas", "competencias_acreditadas",
-     "acciones_correctivas"}
+     "acciones_correctivas", "document_revisions"}
 )
 
 
@@ -534,6 +535,82 @@ class MigrationsTestCase(unittest.TestCase):
             downgrade(directory=MIGRATIONS_DIR, revision="e7a9c1d3f5b8")
             self.assertNotIn(table, inspect(db.engine).get_table_names())
             upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+    def _rows(self, sql: str) -> list[tuple]:
+        with db.engine.connect() as connection:
+            return [tuple(row) for row in connection.execute(text(sql))]
+
+    def test_documents_become_effective_revisions_and_convert_back(self) -> None:
+        moved = {"content", "version", "approved_by", "signature", "issued_date"}
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision="f8b2d4a6c9e1")
+            with db.engine.begin() as connection:
+                connection.execute(text(
+                    "INSERT INTO documents (title, code, category, version, issued_date, "
+                    "approved_by, signature, content, created_at) VALUES "
+                    "('Manual', 'MC-1', 'MANUAL_CALIDAD', '2.1', '2026-03-01', 'Dirección', "
+                    "'firma', 'Texto A', '2026-01-05 12:00+00'), "
+                    "('Proc', 'PO-1', 'OTRO', '1.0', NULL, NULL, NULL, 'Texto B', "
+                    "'2026-02-07 12:00+00'), "
+                    "('Antiguo', 'AN-1', 'OTRO', '1', NULL, NULL, NULL, 'Texto C', NULL)"))
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([
+                ("MC-1", 1, "vigente", "Texto A", "2.1", "Dirección", "firma", date(2026, 3, 1)),
+                ("PO-1", 1, "vigente", "Texto B", "1.0", None, None, date(2026, 2, 7)),
+                ("AN-1", 1, "vigente", "Texto C", "1", None, None, None),
+            ], self._rows(
+                "SELECT d.code, r.numero, r.estado, r.content, r.legacy_version, "
+                "r.legacy_approved_by, r.legacy_signature, r.effective_from "
+                "FROM document_revisions r JOIN documents d ON d.id = r.document_id "
+                "ORDER BY d.id"))
+            columns = {c["name"]: c for c in inspect(db.engine).get_columns("documents")}
+            self.assertFalse(moved & set(columns))
+            for name in ("owner_id", "next_review_date", "withdrawn_at", "withdrawn_reason",
+                         "withdrawn_by_id"):
+                self.assertTrue(columns[name]["nullable"], name)
+            with db.engine.begin() as connection:
+                for statement in (
+                    "INSERT INTO personas (nombre) VALUES ('Ana')",
+                    # MC-1 gets a draft; PO-1 a second revision in force, approved by Ana.
+                    "INSERT INTO document_revisions (document_id, numero, estado, content) "
+                    "SELECT id, 2, 'borrador', 'Borrador A' FROM documents WHERE code = 'MC-1'",
+                    "UPDATE document_revisions SET estado = 'obsoleto' WHERE document_id = "
+                    "(SELECT id FROM documents WHERE code = 'PO-1')",
+                    "INSERT INTO document_revisions (document_id, numero, estado, content, "
+                    "approver_id, effective_from) SELECT d.id, 2, 'vigente', 'Texto B2', p.id, "
+                    "'2026-10-01' FROM documents d, personas p WHERE d.code = 'PO-1'",
+                    "INSERT INTO documents (title, code, category) VALUES ('Nuevo', 'NU-1', 'OTRO')",
+                    "INSERT INTO document_revisions (document_id, numero, estado, content) "
+                    "SELECT id, 1, 'borrador', 'Borrador D' FROM documents WHERE code = 'NU-1'",
+                ):
+                    connection.execute(text(statement))
+            for statement in (
+                "INSERT INTO document_revisions (document_id, numero, estado, content) "
+                "SELECT id, 3, 'vigente', 'x' FROM documents WHERE code = 'PO-1'",
+                "INSERT INTO document_revisions (document_id, numero, estado, content) "
+                "SELECT id, 3, 'en_revision', 'x' FROM documents WHERE code = 'MC-1'",
+                "INSERT INTO document_revisions (document_id, numero, estado, content) "
+                "SELECT id, 2, 'obsoleto', 'x' FROM documents WHERE code = 'MC-1'",
+                "UPDATE document_revisions SET estado = 'Vigente'",
+                "DELETE FROM documents WHERE code = 'AN-1'",
+                "DELETE FROM personas",
+            ):
+                with self.subTest(refused=statement):
+                    with self.assertRaises(IntegrityError):
+                        with db.engine.begin() as connection:
+                            connection.execute(text(statement))
+            downgrade(directory=MIGRATIONS_DIR, revision="f8b2d4a6c9e1")
+            self.assertNotIn("document_revisions", inspect(db.engine).get_table_names())
+            self.assertEqual([
+                ("MC-1", "Texto A", "2.1", "Dirección", "firma", date(2026, 3, 1)),
+                ("PO-1", "Texto B2", "2", "Ana", None, date(2026, 10, 1)),
+                ("AN-1", "Texto C", "1", None, None, None),
+                ("NU-1", "Borrador D", "1", None, None, None),
+            ], self._rows("SELECT code, content, version, approved_by, signature, issued_date "
+                          "FROM documents ORDER BY id"))
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual(4, self._rows("SELECT count(*) FROM document_revisions")[0][0])
             self.assertEqual([], self._schema_differences())
 
 

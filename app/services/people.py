@@ -26,13 +26,14 @@ association table has no audit row of its own, so every audit row of a person
 carries ``rol_ids`` next to the columns. Like every service this module
 flushes and never commits, and an update that changes nothing writes nothing.
 
-Trainings, nonconformities, audits, competence records and corrective actions
-cite a person through the columns in ``REFERENCES`` (decision Q4); their
+Trainings, nonconformities, audits, competence records, corrective actions,
+documents and document revisions cite a person through the columns in
+``REFERENCES`` (decision Q4); their
 services validate such a link with ``reference`` or ``check_reference``, and a
 person they still cite cannot be deleted. Trainings, nonconformities and audits also keep a
 legacy free-text name, which ``fill_name`` takes from the linked person when a
 write would leave it blank. ``choices`` and ``names`` serve the web pickers
-and lists.
+and lists; ``of_user`` finds the person linked to a user account.
 
 Errors:
 
@@ -57,8 +58,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
-    AccionCorrectiva, Auditoria, Capacitacion, CompetenceRecord, NoConformidad, Person,
-    RolResponsabilidad, User,
+    AccionCorrectiva, Auditoria, Capacitacion, CompetenceRecord, Document, DocumentRevision,
+    NoConformidad, Person, RolResponsabilidad, User,
 )
 from . import audit, crud, fields, policy
 from .actor import Actor
@@ -89,6 +90,8 @@ REFERENCES = (
     Capacitacion.persona_id, NoConformidad.responsable_id, Auditoria.auditor_id,
     CompetenceRecord.persona_id, CompetenceRecord.evaluador_id,
     AccionCorrectiva.responsable_id, AccionCorrectiva.verificador_id,
+    Document.owner_id, Document.withdrawn_by_id,
+    DocumentRevision.author_id, DocumentRevision.approver_id,
 )
 
 _READS = crud.Spec(
@@ -261,6 +264,13 @@ def names(session: Session, actor: Actor, ids: Iterable[int | None]) -> dict[int
         return {}
     rows = session.execute(select(Person.id, Person.nombre).where(Person.id.in_(wanted)))
     return {person_id: nombre for person_id, nombre in rows}
+
+
+def of_user(session: Session, user_id: int | None) -> int | None:
+    """Id of the person linked to the user ``user_id``, or ``None`` when there is none."""
+    if user_id is None or not _is_db_id(user_id):
+        return None
+    return session.scalar(select(Person.id).where(Person.user_id == user_id))
 
 
 def check_reference(

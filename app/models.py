@@ -672,19 +672,102 @@ class DocumentCategory(enum.Enum):
     OTRO = 'Otro'
 
 class Document(RecordMetadataMixin, db.Model):
+    """A controlled document (ISO 9001 clause 7.5, ``document-control``).
+
+    It keeps its identity, owner and next review date (decision DC5); its text
+    lives in numbered revisions (``DocumentRevision``). Documents are withdrawn
+    (``withdrawn_*``, DC6), never deleted, and a withdrawn one is read-only.
+    ``owner_id`` is required by the service; documents older than it keep none.
+    """
+
     __tablename__ = 'documents'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     code = db.Column(db.String(50), nullable=False, unique=True, index=True)
     category = db.Column(db.Enum(DocumentCategory), nullable=False)
-    version = db.Column(db.String(10), nullable=False, default="1.0")
-    issued_date = db.Column(db.Date, default=datetime.utcnow)
-    approved_by = db.Column(db.String(100), nullable=True)
-    signature = db.Column(db.String(255), nullable=True)
-    content = db.Column(db.Text, nullable=False)
+    owner_id = person_link('documents', 'owner_id')
+    next_review_date = db.Column(db.Date)
+    withdrawn_at = db.Column(db.Date)
+    withdrawn_reason = db.Column(db.Text)
+    withdrawn_by_id = person_link('documents', 'withdrawn_by_id')
 
     def __repr__(self):
-        return f'<Document {self.title} - {self.version}>'
+        return f'<Document {self.code}>'
+
+
+class EstadoRevision(enum.Enum):
+    """Where a document revision stands (decision DC2 of ``document-control``).
+
+    Only ``services.document_revisions`` changes it; ``vigente`` and
+    ``obsoleto`` revisions never change again (DC3).
+    """
+
+    borrador = 'Borrador'
+    en_revision = 'En revisión'
+    aprobado = 'Aprobado'
+    vigente = 'Vigente'
+    obsoleto = 'Obsoleto'
+
+
+# DC1: at most one revision in preparation and one in force per document.
+_PENDING_REVISION = db.text("estado IN ('borrador', 'en_revision', 'aprobado')")
+_EFFECTIVE_REVISION = db.text("estado = 'vigente'")
+
+
+class DocumentRevision(RecordMetadataMixin, db.Model):
+    """One numbered revision of a document's text (decisions DC1-DC3, DC8).
+
+    ``author_id`` is required by the service; revisions converted from the
+    documents that predate revisions have none and keep the old version text,
+    approver and signature in the ``legacy_*`` columns.
+    """
+
+    __tablename__ = 'document_revisions'
+    __table_args__ = (
+        db.ForeignKeyConstraint(
+            ['document_id'], ['documents.id'],
+            name='fk_document_revisions_document_id_documents', ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['author_id'], ['personas.id'],
+            name='fk_document_revisions_author_id_personas', ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['approver_id'], ['personas.id'],
+            name='fk_document_revisions_approver_id_personas', ondelete='RESTRICT',
+        ),
+        db.UniqueConstraint('document_id', 'numero', name='uq_document_revisions_document_id_numero'),
+        db.Index('ix_document_revisions_author_id', 'author_id'),
+        db.Index('ix_document_revisions_approver_id', 'approver_id'),
+        db.Index('uq_document_revisions_pending', 'document_id', unique=True,
+                 postgresql_where=_PENDING_REVISION, sqlite_where=_PENDING_REVISION),
+        db.Index('uq_document_revisions_effective', 'document_id', unique=True,
+                 postgresql_where=_EFFECTIVE_REVISION, sqlite_where=_EFFECTIVE_REVISION),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    document_id = db.Column(db.Integer, nullable=False)
+    numero = db.Column(db.Integer, nullable=False)
+    estado = db.Column(
+        text_enum(EstadoRevision, 'ck_document_revisions_estado'),
+        nullable=False,
+        default=EstadoRevision.borrador,
+        server_default=EstadoRevision.borrador.name,
+    )
+    content = db.Column(db.Text, nullable=False)
+    change_summary = db.Column(db.Text)  # required to submit the revision for review
+    author_id = db.Column(db.Integer, nullable=True)
+    approver_id = db.Column(db.Integer, nullable=True)
+    approved_at = db.Column(db.Date)
+    effective_from = db.Column(db.Date)
+    obsolete_from = db.Column(db.Date)
+    review_comment = db.Column(db.Text)  # the latest rejection's reason
+    legacy_version = db.Column(db.String(10))
+    legacy_approved_by = db.Column(db.String(100))
+    legacy_signature = db.Column(db.String(255))
+
+    def __repr__(self):
+        return f'<DocumentRevision {self.document_id}#{self.numero}>'
 
 
 # Registro de auditoría append-only: quién cambió qué y cuándo (ISO 9001 7.5.3)

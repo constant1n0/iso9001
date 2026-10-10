@@ -13,8 +13,6 @@ from app.extensions import db
 from app.models import (
     Auditoria,
     Capacitacion,
-    Document,
-    DocumentCategory,
     Mejora,
     NoConformidad,
     ParteInteresada,
@@ -39,10 +37,7 @@ MODULES = (
      lambda: SatisfaccionCliente(fecha_encuesta=DAY, cliente="C", puntuacion=8)),
     ("/mejoras/", Mejora, lambda: Mejora(no_conformidad="NC")),
     ("/partes_interesadas/", ParteInteresada, lambda: ParteInteresada(nombre="Cliente")),
-    ("/documents/", Document,
-     lambda: Document(title="Manual", code="MC-01", category=DocumentCategory.MANUAL_CALIDAD,
-                      content="Texto")),
-)
+)  # documents are withdrawn, never deleted (DC6 of document-control)
 
 
 class _PostForms(HTMLParser):

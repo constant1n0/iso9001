@@ -16,7 +16,8 @@ from test_nonconformity_service import ServiceBase, actor, errors
 
 from app.extensions import db
 from app.models import (
-    Capacitacion, Document, DocumentCategory, EstadoNoConformidad, GravedadNoConformidad,
+    Capacitacion, Document, DocumentCategory, DocumentRevision, EstadoNoConformidad,
+    EstadoRevision, GravedadNoConformidad,
     NoConformidad, OrigenNoConformidad, ParteInteresada, RoleEnum, SatisfaccionCliente,
 )
 from app.services import crud
@@ -155,18 +156,23 @@ class DocumentListPageTestCase(ListPageContract, ServiceBase):
 
     def seed_ordered(self) -> list[int]:
         def doc(code):
-            return self.insert(title=f"Doc {code}", code=code, version="1",
-                               category=DocumentCategory.PROCEDIMIENTO_OPERATIVO,
-                               issued_date=OCT, content="Texto")
+            return self.insert(title=f"Doc {code}", code=code,
+                               category=DocumentCategory.PROCEDIMIENTO_OPERATIVO)
 
         ids = {code: doc(code) for code in ("PR-02", "MC-01", "PR-10", "IT-05", "PR-01")}
         # ``code`` is unique, so the code order alone is total.
         return [ids[code] for code in ("IT-05", "MC-01", "PR-01", "PR-02", "PR-10")]
 
-    def test_only_roles_allowed_to_read_documents_get_a_page(self) -> None:
-        self.seed_ordered()
-        with self.assertRaises(errors().PermissionDenied):
-            self.page(1, 2, who=actor(role=RoleEnum.OPERATIVO))
+    def test_operativos_page_through_documents_in_force_only(self) -> None:
+        ids = self.seed_ordered()
+        for document_id in ids[1:4]:  # MC-01, PR-01 and PR-02 are in force
+            db.session.execute(DocumentRevision.__table__.insert().values(
+                document_id=document_id, numero=1, estado=EstadoRevision.vigente,
+                content="Texto", effective_from=OCT))
+        db.session.commit()
+        who = actor(role=RoleEnum.OPERATIVO)
+        self.assertEqual((ids[1:3], 3), self.page(1, 2, who=who))
+        self.assertEqual((ids[3:4], 3), self.page(2, 2, who=who))
 
 
 class TrainingListPageTestCase(FilteredListPageContract, ServiceBase):

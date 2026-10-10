@@ -209,8 +209,8 @@ class ErrorTestCase(McpDbCase):
         self.assertIn("No tienes permiso", error_text(denied))
 
     async def test_policy_still_applies_to_the_role(self) -> None:
-        self.seed("documentos")
-        denied = await self.call(mcp_actor(OPERATIVO), "qms_list", {"module": "documentos"})
+        self.seed("auditorias")
+        denied = await self.call(mcp_actor(OPERATIVO), "qms_list", {"module": "auditorias"})
         self.assertTrue(denied.is_error)
         self.assertIn("No tienes permiso", error_text(denied))
 
