@@ -82,12 +82,21 @@ Baseline at `4bd9cdf`: 889 tests. Migrations are tested on PostgreSQL (`TEST_POS
 | 1 | [#88](https://github.com/constant1n0/iso9001/pull/88) | tracker, NC-1 | `6faad03` | standing Wave 1 `size:exception` |
 | 2 | [#89](https://github.com/constant1n0/iso9001/pull/89) | NC-2 | `25eef61` | |
 | 3 | [#90](https://github.com/constant1n0/iso9001/pull/90) | NC-3 | `57e24e5` | |
-| 4 | Pending | NC-4, this closing update | — | Final slice |
+| 4 | [#91](https://github.com/constant1n0/iso9001/pull/91) | NC-4, closing update | `420f499` | |
 
-## Production deployment (pending authorization)
+## Production deployment (2026-10-10)
 
-Two migrations (`e7a9c1d3f5b8` nonconformity fields and states, `f8b2d4a6c9e1` corrective actions) on top of `c9e3a5b7d1f4`: back up the database, fast-forward, `flask db upgrade` (its log reports how many states were rewritten), `flask db check`, then the user restarts the services; smoke tests: the nonconformity list and detail, `qms_modules` lists 16 modules.
+`main@420f499` runs on `vulcano`. The user authorized this deployment over SSH as `dcm`, with no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `3206275`, clean, migration `c9e3a5b7d1f4`; 0 nonconformities stored |
+| Backups | `~/work/backups/calidad-*-pre-420f499.dump` (`pg_dump -Fc`, 217 entries listed by `pg_restore -l`) and `iso9001-code-*-pre-420f499.tar.gz`, both mode 600 |
+| Code | Incremental git bundle `3206275..main`, fast-forward to `420f499`; `pip check` clean, no dependency changes |
+| Database | `flask db upgrade` `c9e3a5b7d1f4` → `e7a9c1d3f5b8` (log: "Rewrote 0 nonconformity states … 0 unrecognised") → `f8b2d4a6c9e1`; `flask db check` clean |
+| Restart (user, with sudo) | All four services, right after the migration |
+| Smoke tests | Services active, no error entries in the journal; `/login` 200; the nonconformity list and detail and the competence matrix redirect to the login; `/mcp` 401 with `WWW-Authenticate: Bearer`; the MCP registry has 16 modules |
 
 ## Next step
 
-**Feature complete** once slice 4 merges. Next: the production deployment above, after explicit authorization; then Wave 1 continues with document control.
+**Feature complete and deployed.** Next: Wave 1 continues with document control.
