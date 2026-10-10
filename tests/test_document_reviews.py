@@ -216,6 +216,24 @@ class ReviewAlertTestCase(ScreensBase):
         self.assertRegex(output, rf"person {self.eva}\b.*no user")
         self.assertNotIn("auditor@example.com", output)
 
+    def test_a_failed_letter_is_logged_and_the_others_are_still_sent(self) -> None:
+        from app import audit_notifications as notifications
+
+        delivered = []
+
+        def flaky_send(message):
+            if message.recipients == ["operativo@example.com"]:
+                raise OSError("smtp down")
+            delivered.append(message.recipients[0])
+
+        with (self.app.app_context(),
+              patch.object(notifications.mail, "send", side_effect=flaky_send),
+              self.assertLogs(notifications.logger, "ERROR") as logs,
+              self.assertRaises(notifications.NotificationDeliveryError)):
+            notifications.send_document_review_alert(today=TODAY)
+        self.assertEqual({"administrador@example.com", "auditor@example.com"}, set(delivered))
+        self.assertIn("operativo@example.com", "\n".join(logs.output))
+
     def test_nothing_overdue_sends_nothing(self) -> None:
         self.assertEqual((0, {}, 0), self.send(today=date(2026, 9, 1)))
 
