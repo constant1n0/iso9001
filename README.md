@@ -333,6 +333,45 @@ The MCP server reads and writes nonconformities and corrective actions with
 the same rules, but verifying, closing, cancelling and reopening are web-only
 (see `docs/mcp.md`). Every change is written to the audit log.
 
+**2f. Document attachments**
+
+Each document revision may carry one file: PDF, DOCX, XLSX or ODT. The type is
+checked by content as well as by extension, so a renamed executable or web page
+is refused. Administrators and auditors attach, replace or remove the file of a
+draft (*Borrador*) on the document's page. They can also discard a later draft
+with its file. Revision 1 of a document that has never been in force cannot be
+discarded; withdraw the document instead. Once a revision is in force, it and
+its file never change.
+
+- **Storage**: files live on the server's disk in `DOCUMENT_STORAGE_DIR`. It
+  defaults to `instance/documents`, is created at start-up and is never under
+  `static/`. Each file gets a random name; the original name, size, SHA-256 and
+  type are kept in the database. Files are served only through the download
+  route. Every role downloads the file of the revision in force; only
+  administrators and auditors download the files of other revisions.
+- **Size**: `DOCUMENT_MAX_BYTES` (default `20971520`, 20 MB) is the largest
+  file accepted. Requests above it plus 1 MB for the form get a 413 response.
+  If a reverse proxy sits in front, its own body limit must be at least as
+  large (for Nginx, `client_max_body_size 21m;`).
+- **Backups**: the database only records which file belongs to which revision.
+  Back up `DOCUMENT_STORAGE_DIR` together with the database dump, and restore
+  both together. Set the variable to a persistent path outside the code
+  checkout in production.
+- **Cleanup**: a replaced or removed file is deleted after the change is
+  saved. If that delete fails, or the database is restored to an earlier
+  point, unreferenced files can remain. Remove them with:
+
+  ```bash
+  venv/bin/flask --app run.py cleanup-document-files --dry-run   # report only
+  venv/bin/flask --app run.py cleanup-document-files
+  ```
+
+  The command only reads the database. It keeps files changed in the last hour
+  (an upload may still be saving) and anything that is not a stored file.
+
+Uploads, removals and discarded drafts are written to the security log with the
+user, document, revision, file name, size and SHA-256.
+
 **3. Iniciar Redis y Celery para las Notificaciones Programadas**
 
 Celery envía tres avisos por correo; la aplicación web funciona sin él.

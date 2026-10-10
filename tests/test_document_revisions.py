@@ -11,7 +11,7 @@ import json
 import os
 import threading
 import unittest
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import patch
 
 import test_auth_bootstrap as bootstrap
@@ -424,6 +424,199 @@ class AuditAndLockTestCase(RevisionBase):
                 spy.assert_called_once()
                 self.assertEqual(doc.id, spy.call_args.args[1])
         self.assertIsNotNone(first.obsolete_from)
+
+
+def stored_file(name: str = "a" * 32, **overrides):
+    """A file record as ``document_files.store`` returns it (no file on disk needed)."""
+    from app.services.document_files import StoredFile
+
+    values = {"stored_name": name, "display_name": "Plan.pdf", "size": 1234,
+              "sha256": "f" * 64, "mime": "application/pdf"} | overrides
+    return StoredFile(**values)
+
+
+ATTACHMENT_FIELDS = ("attachment_name", "attachment_path", "attachment_size",
+                     "attachment_sha256", "attachment_mime")
+
+
+def attachment(rev):
+    return tuple(getattr(rev, name) for name in ATTACHMENT_FIELDS)
+
+
+class AttachmentTestCase(RevisionBase):
+    def test_attach_records_the_file_and_returns_the_one_it_replaces(self) -> None:
+        doc, _first = self.in_force()
+        draft = self.drafted(doc)
+        self.assertIsNone(self.step(revisions().attach, draft.id, stored_file()))
+        self.assertEqual(("Plan.pdf", "a" * 32, 1234, "f" * 64, "application/pdf"),
+                         attachment(draft))
+        audited = self.audit_rows()[-1]
+        self.assertEqual(("document_revisions", draft.id, "update"),
+                         (audited.entity_type, audited.entity_id, audited.action))
+        self.assertEqual({"attachment_name": "Plan.pdf", "attachment_path": "a" * 32,
+                          "attachment_size": 1234, "attachment_sha256": "f" * 64,
+                          "attachment_mime": "application/pdf"},
+                         {k: v for k, v in audited.after.items() if k in ATTACHMENT_FIELDS})
+        replaced = self.step(revisions().attach, draft.id,
+                             stored_file("b" * 32, display_name="Plan v2.docx", size=9))
+        self.assertEqual("a" * 32, replaced)
+        self.assertEqual(("Plan v2.docx", "b" * 32, 9), attachment(draft)[:3])
+
+    def test_revision_1_of_a_new_document_takes_an_attachment_too(self) -> None:
+        first = revision(self.new_document().id, 1)
+        self.step(revisions().attach, first.id, stored_file(), who=actor(AUDITOR))
+        self.assertEqual("a" * 32, first.attachment_path)
+
+    def test_detach_clears_the_attachment_and_returns_its_stored_name(self) -> None:
+        first = revision(self.new_document().id, 1)
+        self.step(revisions().attach, first.id, stored_file())
+        self.assertEqual("a" * 32, self.step(revisions().detach, first.id))
+        self.assertEqual((None,) * 5, attachment(first))
+        written = len(self.audit_rows())
+        self.assertIsNone(self.step(revisions().detach, first.id))
+        self.assertEqual(written, len(self.audit_rows()), "detaching nothing writes nothing")
+
+    def test_only_drafts_of_active_documents_change_their_attachment(self) -> None:
+        doc, first = self.in_force()
+        self.step(revisions().attach, self.drafted(doc).id, stored_file("c" * 32))
+        for write in (revisions().attach, revisions().detach):
+            args = (stored_file(),) if write is revisions().attach else ()
+            with self.subTest(write=write.__name__, state="vigente"):
+                self.assertEqual(revisions().IMMUTABLE,
+                                 self.refused("ValidationError", write, first.id, *args))
+        submitted = revision(doc.id, 2)
+        self.step(revisions().submit, submitted.id)
+        self.assertEqual(revisions().NOT_A_DRAFT,
+                         self.refused("ValidationError", revisions().attach, submitted.id,
+                                      stored_file()))
+        self.step(revisions().withdraw, doc.id, "Sustituido", today=LATER)
+        self.assertEqual(revisions().WITHDRAWN,
+                         self.refused("ValidationError", revisions().detach, submitted.id))
+        self.assertEqual("c" * 32, submitted.attachment_path)
+        self.assertIsNone(first.attachment_path)
+
+    def test_operativos_never_attach_or_detach(self) -> None:
+        first = revision(self.new_document().id, 1)
+        for write, args in ((revisions().attach, (stored_file(),)), (revisions().detach, ())):
+            with self.subTest(write=write.__name__):
+                self.refused("PermissionDenied", write, first.id, *args, who=actor(OPERATIVO))
+        self.assertIsNone(first.attachment_path)
+
+    def test_a_malformed_file_record_is_a_programming_error(self) -> None:
+        first = revision(self.new_document().id, 1)
+        for bad in (stored_file("../etc/passwd"), stored_file(size=0), "a" * 32, None):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    revisions().attach(db.session, actor(ADMIN), first.id, bad)
+                db.session.rollback()
+
+    def test_a_new_draft_starts_without_the_effective_attachment(self) -> None:
+        doc = self.new_document()
+        self.step(revisions().attach, revision(doc.id, 1).id, stored_file())
+        effective = put_in_force(actor(ADMIN), doc.id, self.eva)
+        draft = self.drafted(doc)
+        self.assertEqual("a" * 32, effective.attachment_path)
+        self.assertEqual((None,) * 5, attachment(draft))
+
+    def test_two_revisions_never_share_a_stored_file(self) -> None:
+        doc, _first = self.in_force()
+        self.step(revisions().attach, self.drafted(doc).id, stored_file())
+        other = self.new_document(code="MC-002")
+        with self.assertRaises(errors().Conflict):
+            revisions().attach(db.session, actor(ADMIN), revision(other.id, 1).id, stored_file())
+        db.session.rollback()
+
+
+class DiscardTestCase(RevisionBase):
+    def test_discard_deletes_a_later_draft_and_returns_its_stored_name(self) -> None:
+        doc, first = self.in_force()
+        draft = self.drafted(doc)
+        draft_id = draft.id
+        self.step(revisions().attach, draft_id, stored_file())
+        self.assertEqual("a" * 32, self.step(revisions().discard_draft, draft_id,
+                                             who=actor(AUDITOR)))
+        self.assertEqual([first], revisions().list_(db.session, actor(ADMIN), doc.id))
+        deleted = self.audit_rows()[-1]
+        self.assertEqual(("document_revisions", draft_id, "delete", None),
+                         (deleted.entity_type, deleted.entity_id, deleted.action, deleted.after))
+        self.assertEqual(("Plan.pdf", 1234, "f" * 64, 2),
+                         tuple(deleted.before[k] for k in ("attachment_name", "attachment_size",
+                                                           "attachment_sha256", "numero")))
+        self.assertEqual(2, self.drafted(doc).numero, "the number is free again")
+
+    def test_a_rejected_draft_without_attachment_is_discarded(self) -> None:
+        doc, _first = self.in_force()
+        draft = self.drafted(doc)
+        self.step(revisions().submit, draft.id)
+        self.step(revisions().reject, draft.id, "Rehacer")
+        self.assertIsNone(self.step(revisions().discard_draft, draft.id))
+
+    def test_the_only_revision_of_a_document_never_in_force_is_kept(self) -> None:
+        first = revision(self.new_document().id, 1)
+        self.assertEqual(revisions().FIRST_DRAFT,
+                         self.refused("ValidationError", revisions().discard_draft, first.id))
+        self.assertIsNotNone(db.session.get(models().DocumentRevision, first.id))
+
+    def test_discard_refuses_other_states_withdrawn_documents_and_operativos(self) -> None:
+        doc, first = self.in_force()
+        draft = self.drafted(doc)
+        self.refused("PermissionDenied", revisions().discard_draft, draft.id,
+                     who=actor(OPERATIVO))
+        self.assertEqual(revisions().IMMUTABLE,
+                         self.refused("ValidationError", revisions().discard_draft, first.id))
+        self.step(revisions().submit, draft.id)
+        self.assertEqual(revisions().NOT_A_DRAFT,
+                         self.refused("ValidationError", revisions().discard_draft, draft.id))
+        self.step(revisions().withdraw, doc.id, "Baja", today=LATER)
+        self.assertEqual(revisions().WITHDRAWN,
+                         self.refused("ValidationError", revisions().discard_draft, draft.id))
+        self.refused("NotFound", revisions().discard_draft, 999)
+        self.assertEqual(2, len(revisions().list_(db.session, actor(ADMIN), doc.id)))
+
+
+class WorkflowGuardsTestCase(RevisionBase):
+    def test_workflow_dates_refuse_a_datetime(self) -> None:
+        doc = self.new_document()
+        first = revision(doc.id, 1)
+        moment = datetime(2026, 10, 10, 9, 30)
+        self.step(revisions().submit, first.id)
+        with self.assertRaises(ValueError):
+            revisions().approve(db.session, actor(ADMIN), first.id, approver_id=self.eva,
+                                today=moment)
+        db.session.rollback()
+        self.step(revisions().approve, first.id, approver_id=self.eva, today=TODAY)
+        for write, args in ((revisions().publish, (first.id,)),
+                            (revisions().withdraw, (doc.id, "Baja"))):
+            with self.subTest(write=write.__name__):
+                with self.assertRaises(ValueError):
+                    write(db.session, actor(ADMIN), *args, today=moment)
+                db.session.rollback()
+        self.assertEqual((models().EstadoRevision.aprobado, TODAY, None),
+                         (first.estado, first.approved_at, doc.withdrawn_at))
+
+    def test_an_integrity_error_on_a_revision_write_is_a_conflict(self) -> None:
+        doc, _first = self.in_force()
+        draft = self.drafted(doc)
+        clash = IntegrityError("INSERT", {}, Exception("duplicate key"))
+        writes = (
+            ("start_draft", revisions().start_draft, self.new_in_force_id(),
+             {"author_id": self.eva}),
+            ("submit", revisions().submit, draft.id),
+            ("attach", revisions().attach, draft.id, stored_file()),
+        )
+        for name, write, *args in writes:
+            with self.subTest(write=name):
+                with patch.object(db.session, "flush", side_effect=clash):
+                    message = self.refused("Conflict", write, *args)
+                self.assertEqual(revisions().CONFLICT, message)
+                self.assertEqual(
+                    "Otra revisión del documento ha cambiado a la vez; vuelve a intentarlo.",
+                    message)
+
+    def new_in_force_id(self) -> int:
+        doc = self.new_document(code="MC-077")
+        put_in_force(actor(ADMIN), doc.id, self.eva)
+        return doc.id
 
 
 # In CI a missing database must fail loudly instead of skipping silently.

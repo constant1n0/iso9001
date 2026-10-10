@@ -18,15 +18,28 @@
 # the list and each document's page show the revision in force; creating a
 # document writes its draft revision 1. The workflow screens come later (DC-3).
 # Documents are withdrawn, never deleted, so there is no delete route.
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+#
+# Attachments (DC7): a draft's file is uploaded, replaced, removed or discarded
+# with the draft; the file is stored first and recorded after, and a file no
+# committed revision references any more is deleted only after the commit
+# (a failure leaves it to ``flask cleanup-document-files``). Downloads follow
+# the reading rules: the revision in force for every role, the others for
+# administrators and auditors only.
+import logging
+
+from flask import (Blueprint, abort, current_app, flash, redirect, render_template, request,
+                   send_file, url_for)
 from ..forms import CHOOSE_PERSON, DocumentForm, NewDocumentForm, person_choices
 from ..extensions import db
 from flask_login import login_required
-from ..services import document_revisions, documents, people
+from ..services import document_files, document_revisions, documents, people
+from ..services.errors import NotFound, ValidationError
+from ..utils import security_logger
 from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
 
 bp = Blueprint('document', __name__, url_prefix='/documents')
+logger = logging.getLogger(__name__)
 
 FORM_FIELDS = ('title', 'code', 'category', 'owner_id', 'next_review_date')
 FIRST_REVISION_FIELDS = ('author_id', 'content')
@@ -57,8 +70,11 @@ def view_document(document_id):
     vigente = document_revisions.effective(db.session, actor, [document.id]).get(document.id)
     cited = (document.owner_id, document.withdrawn_by_id,
              vigente.author_id if vigente else None, vigente.approver_id if vigente else None)
-    return render_template('documents/view.html', document=document, vigente=vigente,
-                           personas=people.names(db.session, actor, cited))
+    return render_template(
+        'documents/view.html', document=document, vigente=vigente,
+        pendiente=document_revisions.in_preparation(db.session, actor, document.id),
+        personas=people.names(db.session, actor, cited), accept=document_files.ACCEPT,
+        max_size=document_files.megabytes(current_app.config['DOCUMENT_MAX_BYTES']))
 
 
 @bp.route('/new', methods=['GET', 'POST'])
@@ -95,3 +111,127 @@ def edit_document(document_id):
         flash('Documento actualizado exitosamente', 'success')
         return redirect(url_for('document.list_documents'))
     return render_template('documents/edit.html', form=form, document=document)
+
+
+def _revision_of(actor, document_id, revision_id):
+    """Revision ``revision_id`` of document ``document_id`` if the actor reads it, else 404."""
+    revision = document_revisions.get(db.session, actor, revision_id)
+    if revision.document_id != document_id:
+        raise NotFound(document_revisions.NOT_FOUND)
+    return revision
+
+
+def _storage():
+    return current_app.config['DOCUMENT_STORAGE_DIR']
+
+
+def _delete_file(stored_name):
+    """Delete a stored file nothing references; a failure leaves it for the cleanup command."""
+    if stored_name is None:
+        return
+    try:
+        document_files.remove(_storage(), stored_name)
+    except OSError:
+        logger.warning('Stored document file %s could not be deleted; '
+                       'flask cleanup-document-files will remove it.', stored_name)
+
+
+def _back_to(document_id):
+    return redirect(url_for('document.view_document', document_id=document_id))
+
+
+def _attachment(revision):
+    return revision.attachment_name, revision.attachment_size, revision.attachment_sha256
+
+
+@bp.route('/<int:document_id>/revisions/<int:revision_id>/attachment', methods=['POST'])
+@login_required
+@require_permission('update', 'documents')
+def upload_attachment(document_id, revision_id):
+    """Attach the uploaded ``file`` to a draft revision, replacing its previous file."""
+    actor = current_actor()
+    _revision_of(actor, document_id, revision_id)
+    upload = request.files.get('file')
+    if upload is None or not upload.filename:
+        flash('Selecciona un fichero.', 'danger')
+        return _back_to(document_id)
+    try:
+        stored = document_files.store(_storage(), upload.stream, upload.filename,
+                                      max_bytes=current_app.config['DOCUMENT_MAX_BYTES'])
+        try:
+            replaced = document_revisions.attach(db.session, actor, revision_id, stored)
+            db.session.commit()
+        except BaseException:
+            db.session.rollback()
+            _delete_file(stored.stored_name)
+            raise
+    except ValidationError as error:
+        security_logger.log_document_file_rejected(
+            actor.label, document_id, revision_id, document_files.display_name(upload.filename),
+            error.message)
+        raise
+    _delete_file(replaced)
+    security_logger.log_document_file('DOCUMENT_ATTACHMENT_UPLOADED', actor.label, document_id,
+                                      revision_id, stored.display_name, stored.size,
+                                      stored.sha256)
+    flash('Fichero adjuntado.', 'success')
+    return _back_to(document_id)
+
+
+@bp.route('/<int:document_id>/revisions/<int:revision_id>/attachment/delete',
+          methods=['POST'])
+@login_required
+@require_permission('update', 'documents')
+def detach_attachment(document_id, revision_id):
+    """Remove a draft revision's file."""
+    actor = current_actor()
+    described = _attachment(_revision_of(actor, document_id, revision_id))
+    replaced = document_revisions.detach(db.session, actor, revision_id)
+    db.session.commit()
+    if replaced is None:
+        flash('La revisión no tiene ningún fichero adjunto.', 'info')
+        return _back_to(document_id)
+    _delete_file(replaced)
+    security_logger.log_document_file('DOCUMENT_ATTACHMENT_DETACHED', actor.label, document_id,
+                                      revision_id, *described)
+    flash('Fichero quitado.', 'success')
+    return _back_to(document_id)
+
+
+@bp.route('/<int:document_id>/revisions/<int:revision_id>/discard', methods=['POST'])
+@login_required
+@require_permission('update', 'documents')
+def discard_draft(document_id, revision_id):
+    """Delete a draft revision and its file (``document_revisions.discard_draft``)."""
+    actor = current_actor()
+    described = _attachment(_revision_of(actor, document_id, revision_id))
+    replaced = document_revisions.discard_draft(db.session, actor, revision_id)
+    db.session.commit()
+    _delete_file(replaced)
+    security_logger.log_document_file('DOCUMENT_DRAFT_DISCARDED', actor.label, document_id,
+                                      revision_id, *described)
+    flash('Borrador descartado.', 'success')
+    return _back_to(document_id)
+
+
+@bp.route('/<int:document_id>/revisions/<int:revision_id>/attachment', methods=['GET'])
+@login_required
+@require_permission('read', 'documents')
+def download_attachment(document_id, revision_id):
+    """Send a revision's file as a download, never rendered by the browser."""
+    revision = _revision_of(current_actor(), document_id, revision_id)
+    if revision.attachment_path is None:
+        abort(404)
+    try:
+        handle = document_files.open_stored(_storage(), revision.attachment_path)
+    except (ValueError, FileNotFoundError):
+        logger.error('The stored file of document revision %s is missing.', revision.id)
+        abort(404)
+    response = send_file(handle, mimetype=revision.attachment_mime, conditional=False,
+                         etag=False, max_age=None)
+    response.headers['Content-Disposition'] = document_files.content_disposition(
+        revision.attachment_name)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    frozen = revision.estado in document_revisions.FROZEN_STATES
+    response.headers['Cache-Control'] = 'private, no-cache' if frozen else 'no-store'
+    return response

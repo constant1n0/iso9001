@@ -712,14 +712,24 @@ class EstadoRevision(enum.Enum):
 # DC1: at most one revision in preparation and one in force per document.
 _PENDING_REVISION = db.text("estado IN ('borrador', 'en_revision', 'aprobado')")
 _EFFECTIVE_REVISION = db.text("estado = 'vigente'")
+# An attachment is recorded whole (all five columns) or not at all (DC7).
+_ATTACHMENT_COLUMNS = ('attachment_name', 'attachment_path', 'attachment_size',
+                       'attachment_sha256', 'attachment_mime')
+_ATTACHMENT_COMPLETE = (
+    '(' + ' AND '.join(f'{c} IS NULL' for c in _ATTACHMENT_COLUMNS) + ') OR ('
+    + ' AND '.join(f'{c} IS NOT NULL' for c in _ATTACHMENT_COLUMNS) + ' AND attachment_size > 0)'
+)
 
 
 class DocumentRevision(RecordMetadataMixin, db.Model):
-    """One numbered revision of a document's text (decisions DC1-DC3, DC8).
+    """One numbered revision of a document's text (decisions DC1-DC3, DC7, DC8).
 
     ``author_id`` is required by the service; revisions converted from the
     documents that predate revisions have none and keep the old version text,
-    approver and signature in the ``legacy_*`` columns.
+    approver and signature in the ``legacy_*`` columns. The optional attachment
+    is a file in the document storage directory (``services.document_files``):
+    ``attachment_path`` is its random stored name, unique so that no two
+    revisions share a file, and the other ``attachment_*`` columns describe it.
     """
 
     __tablename__ = 'document_revisions'
@@ -743,6 +753,8 @@ class DocumentRevision(RecordMetadataMixin, db.Model):
                  postgresql_where=_PENDING_REVISION, sqlite_where=_PENDING_REVISION),
         db.Index('uq_document_revisions_effective', 'document_id', unique=True,
                  postgresql_where=_EFFECTIVE_REVISION, sqlite_where=_EFFECTIVE_REVISION),
+        db.UniqueConstraint('attachment_path', name='uq_document_revisions_attachment_path'),
+        db.CheckConstraint(_ATTACHMENT_COMPLETE, name='ck_document_revisions_attachment'),
     )
 
     id = db.Column(db.Integer, primary_key=True)
@@ -765,6 +777,11 @@ class DocumentRevision(RecordMetadataMixin, db.Model):
     legacy_version = db.Column(db.String(10))
     legacy_approved_by = db.Column(db.String(100))
     legacy_signature = db.Column(db.String(255))
+    attachment_name = db.Column(db.String(255))  # sanitized display name
+    attachment_path = db.Column(db.String(32))  # stored name: uuid4().hex, never a path
+    attachment_size = db.Column(db.Integer)  # bytes
+    attachment_sha256 = db.Column(db.String(64))  # hex digest
+    attachment_mime = db.Column(db.String(100))  # detected from the content
 
     def __repr__(self):
         return f'<DocumentRevision {self.document_id}#{self.numero}>'

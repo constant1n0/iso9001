@@ -613,6 +613,38 @@ class MigrationsTestCase(unittest.TestCase):
             self.assertEqual(4, self._rows("SELECT count(*) FROM document_revisions")[0][0])
             self.assertEqual([], self._schema_differences())
 
+    def test_revision_attachments_are_complete_unique_and_downgrade(self) -> None:
+        attachment = ("attachment_name", "attachment_path", "attachment_size",
+                      "attachment_sha256", "attachment_mime")
+        insert = ("INSERT INTO document_revisions (document_id, numero, estado, content, "
+                  + ", ".join(attachment) + ") SELECT id, 1, 'borrador', 'x', 'a.pdf', '"
+                  + "a" * 32 + "', 10, '" + "f" * 64 + "', 'application/pdf' FROM documents "
+                  "WHERE code = '{code}'")
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR)
+            with db.engine.begin() as connection:
+                connection.execute(text("INSERT INTO documents (title, code, category) "
+                                        "VALUES ('M', 'M-1', 'OTRO'), ('N', 'N-1', 'OTRO')"))
+                connection.execute(text(insert.format(code="M-1")))
+            for statement in (
+                insert.format(code="N-1"),  # two revisions sharing one stored file
+                "UPDATE document_revisions SET attachment_sha256 = NULL",
+                "UPDATE document_revisions SET attachment_name = NULL",
+                "UPDATE document_revisions SET attachment_size = 0",
+            ):
+                with self.subTest(refused=statement):
+                    with self.assertRaises(IntegrityError):
+                        with db.engine.begin() as connection:
+                            connection.execute(text(statement))
+            with db.engine.begin() as connection:
+                connection.execute(text("UPDATE document_revisions SET "
+                                        + ", ".join(f"{c} = NULL" for c in attachment)))
+            downgrade(directory=MIGRATIONS_DIR, revision="a7d3f5b9c2e4")
+            columns = {c["name"] for c in inspect(db.engine).get_columns("document_revisions")}
+            self.assertFalse(set(attachment) & columns)
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
 
 if __name__ == "__main__":
     unittest.main()

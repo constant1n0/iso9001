@@ -220,3 +220,26 @@ def log_email_change_failed(username, reason):
         f"EMAIL_CHANGE_FAILED | user={_field(username)} "
         f"| reason={_field(reason)} | ip={_client_ip_or_dash()}"
     )
+
+
+def log_document_file(event, username, document_id, revision_id, name=None, size=None,
+                      sha256=None):
+    """Registra un cambio de adjunto de una revisión (subida, retirada, borrador descartado).
+
+    ``event`` es DOCUMENT_ATTACHMENT_UPLOADED, DOCUMENT_ATTACHMENT_DETACHED o
+    DOCUMENT_DRAFT_DISCARDED. Nunca incluye el contenido del fichero.
+    """
+    security_logger.info(
+        f"{_field(event)} | user={_field(username)} | document={_field(document_id)} "
+        f"| revision={_field(revision_id)} | name={_field(name)} | size={_field(size)} "
+        f"| sha256={_field(sha256)} | ip={_client_ip_or_dash()}"
+    )
+
+
+def log_document_file_rejected(username, document_id, revision_id, name, reason):
+    """Registra un adjunto rechazado (tipo, extensión, tamaño o estado de la revisión)."""
+    security_logger.warning(
+        f"DOCUMENT_ATTACHMENT_REJECTED | user={_field(username)} "
+        f"| document={_field(document_id)} | revision={_field(revision_id)} "
+        f"| name={_field(name)} | reason={_field(reason)} | ip={_client_ip_or_dash()}"
+    )

@@ -278,6 +278,8 @@ def _run_worker_probe(**overrides: str) -> subprocess.CompletedProcess[str]:
         "FLASK_DEBUG": "False",
         "SECURITY_LOG_ENABLED": "False",
         "CELERY_BROKER_URL": "memory://",
+        # the app creates its attachment directory at start-up (DC7)
+        "DOCUMENT_STORAGE_DIR": bootstrap.DOCUMENT_TEST_STORAGE,
         **SECRET_SENTINELS,
         **overrides,
     }

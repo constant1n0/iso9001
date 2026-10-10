@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 import getpass
+import os
 import re
+import time
 from datetime import datetime, timezone
 
 import click
 from flask import Flask, current_app
 from flask.cli import with_appcontext
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import generate_password_hash
 
 from .extensions import db
-from .models import RoleEnum, User
-from .services import api_tokens
+from .models import DocumentRevision, RoleEnum, User
+from .services import api_tokens, document_files
 from .services.actor import Actor
 from .services.errors import Conflict, DomainError, NotFound
 from .utils import security_logger
@@ -232,9 +235,58 @@ def revoke_api_token(prefix: str) -> None:
     click.echo(f"API token {token.prefix} revoked.")
 
 
+# A stored file younger than this may belong to an upload whose revision is
+# not committed yet, so the cleanup leaves it for a later run.
+ORPHAN_GRACE_SECONDS = 3600
+
+
+@click.command("cleanup-document-files")
+@click.option("--dry-run", is_flag=True, help="Report what would be deleted; delete nothing.")
+@with_appcontext
+def cleanup_document_files(dry_run: bool) -> None:
+    """Delete stored attachment files that no document revision references.
+
+    The database is only read. Files changed within the last hour are kept, and
+    entries that are not stored files (such as uploads in progress) are never
+    touched.
+    """
+    base = current_app.config["DOCUMENT_STORAGE_DIR"]
+    if not os.path.isdir(base):
+        raise click.ClickException(f"Document storage directory not found: {base}")
+    listing = document_files.stored_names(base)  # before reading the references
+    try:
+        referenced = set(db.session.scalars(
+            select(DocumentRevision.attachment_path)
+            .where(DocumentRevision.attachment_path.is_not(None))))
+    except SQLAlchemyError as error:
+        db.session.rollback()
+        raise click.ClickException("The referenced files could not be read.") from error
+    cutoff = time.time() - ORPHAN_GRACE_SECONDS
+    unreferenced = [entry for entry in listing.stored if entry.name not in referenced]
+    orphans = [entry.name for entry in unreferenced if entry.modified <= cutoff]
+    click.echo(
+        f"{len(listing.stored) - len(unreferenced)} referenced, {len(orphans)} orphaned, "
+        f"{len(unreferenced) - len(orphans)} too recent, {listing.ignored} ignored."
+    )
+    if dry_run:
+        click.echo(f"Dry run: would delete {len(orphans)} orphaned file(s)"
+                   + (f": {', '.join(orphans)}" if orphans else "."))
+        return
+    failed = []
+    for name in orphans:
+        try:
+            document_files.remove(base, name)
+        except OSError:
+            failed.append(name)
+    click.echo(f"Deleted {len(orphans) - len(failed)} orphaned file(s).")
+    if failed:
+        raise click.ClickException(f"Could not delete: {', '.join(failed)}")
+
+
 def register_commands(app: Flask) -> None:
     """Register local administration commands on the application."""
     app.cli.add_command(create_admin)
+    app.cli.add_command(cleanup_document_files)
     app.cli.add_command(create_api_token)
     app.cli.add_command(list_api_tokens)
     app.cli.add_command(revoke_api_token)
