@@ -12,13 +12,16 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from sqlalchemy.orm import object_session
+
 from ..models import (
-    CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAccionCorrectiva,
+    CompetenceEvaluation, CompetenceType, EstadoAccionCorrectiva,
     EstadoAuditoriaEnum, EstadoNoConformidad, GravedadNoConformidad, OrigenNoConformidad,
     TipoEnum,
 )
 from ..services import (
-    audit_indicators, audits, competence, corrective_actions, documents, improvements,
+    audit_indicators, audits, competence, corrective_actions, document_revisions, documents,
+    improvements,
     nonconformities, people, process_operations, risks_opportunities,
     roles_responsibilities, satisfaction, stakeholders, training, training_resources,
 )
@@ -71,6 +74,15 @@ def _action_extras(action: Any) -> dict[str, Any]:
     return {"estado": action.estado}  # derived, never stored
 
 
+def _document_extras(document: Any) -> dict[str, Any]:
+    """The revision in force, which every role reads; drafts never leave the web."""
+    revision = document_revisions.in_force(object_session(document), document.id)
+    return {"effective_revision": None if revision is None else {
+        "numero": revision.numero, "content": revision.content,
+        "effective_from": revision.effective_from, "legacy_version": revision.legacy_version,
+    }}
+
+
 def _f(name: str, type: str = "string", required: bool = False, allowed=(), members=None,
        note: str = "") -> FieldDef:
     if members is not None:
@@ -114,12 +126,11 @@ _MODULES = (
         _f("estado", "enum", members=EstadoAuditoriaEnum),
     ), (_f("area"), _f("auditor"), _f("estado", "enum", members=EstadoAuditoriaEnum),
         _f("fecha_inicio", "date"), _f("fecha_fin", "date"))),
-    Module("documentos", "Documents", Resource.DOCUMENTS, documents, (
-        _f("title", required=True), _f("code", required=True),
-        _f("category", "enum", True, DocumentCategory.__members__),
-        _f("version", required=True), _f("issued_date", "date", True),
-        _f("approved_by"), _f("content", required=True),
-    )),
+    # Read-only here (DC-1 of ``document-control``): every role reads the documents
+    # it may see with their revision in force, and the policy refuses ``qms_create``
+    # and ``qms_update`` on the mcp channel, so no field is writable.
+    Module("documentos", "Documents", Resource.DOCUMENTS, documents, (),
+           extras=_document_extras),
     Module("capacitaciones", "Training", Resource.TRAINING, training, (
         _f("tema", required=True), _f("fecha", "date", True),
         _legacy_name("personal", "persona_id"),

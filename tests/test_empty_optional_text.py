@@ -16,7 +16,7 @@ from test_nonconformity_service import actor, errors
 
 from app.extensions import db
 from app.models import RoleEnum
-from app.services import audits, documents, fields, nonconformities
+from app.services import audits, document_revisions, fields, nonconformities
 
 
 class FieldsTextTestCase(unittest.TestCase):
@@ -49,13 +49,14 @@ class AuditsTestCase(AuditWriteBase):
 
 
 class DocumentsTestCase(DocumentWriteBase):
-    def test_blank_approver_is_stored_as_none_and_a_blank_edit_writes_nothing(self) -> None:
-        doc = self.create(approved_by=" ")
-        self.assertIsNone(doc.approved_by)
-        documents.update(db.session, actor(RoleEnum.ADMINISTRADOR), doc.id,
-                         DOCUMENT_VALID | {"approved_by": ""})
+    def test_blank_change_summary_is_stored_as_none_and_a_blank_edit_writes_nothing(self) -> None:
+        doc = self.create(change_summary=" ")
+        (first,) = document_revisions.list_(db.session, actor(RoleEnum.ADMINISTRADOR), doc.id)
+        self.assertIsNone(first.change_summary)
+        document_revisions.edit_draft(db.session, actor(RoleEnum.ADMINISTRADOR), first.id,
+                                      {"content": DOCUMENT_VALID["content"], "change_summary": ""})
         db.session.commit()
-        self.assertEqual(1, len(self.audit_rows()))
+        self.assertEqual(2, len(self.audit_rows()))  # the document and its revision 1
 
 
 class NonconformitiesTestCase(NcWriteBase):

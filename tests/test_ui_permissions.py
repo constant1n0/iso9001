@@ -18,7 +18,9 @@ from app.models import (
     CompetenceType,
     Document,
     DocumentCategory,
+    DocumentRevision,
     EstadoNoConformidad,
+    EstadoRevision,
     Mejora,
     NoConformidad,
     ParteInteresada,
@@ -42,7 +44,7 @@ MODULES = (
     ("/capacitaciones/", "nueva", "/editar/", "/eliminar/", EVERYONE, EVERYONE, {ADMIN}),
     ("/partes_interesadas/", "nueva", "/editar/", "/eliminar/", EVERYONE, EVERYONE, {ADMIN}),
     ("/auditorias/", "nueva", "/editar/", "/eliminar/", {ADMIN, AUDITOR}, {ADMIN, AUDITOR}, {ADMIN}),
-    ("/documents/", "new", "/edit/", "/delete/", {ADMIN}, {ADMIN}, {ADMIN}),
+    ("/documents/", "new", "/edit/", "/delete/", EVERYONE, {ADMIN, AUDITOR}, set()),
     ("/usuarios/", "nuevo", "/editar", "/eliminar", {ADMIN, AUDITOR}, {ADMIN}, set()),
     ("/personas/", "nueva", "/editar", "/eliminar", EVERYONE, {ADMIN, AUDITOR}, {ADMIN}),
     ("/competencias/requisitos/", "nuevo", "/editar", "/eliminar", EVERYONE, {ADMIN, AUDITOR},
@@ -65,7 +67,7 @@ class UiPermissionsTestCase(unittest.TestCase):
                 Capacitacion(tema="T", fecha=DAY, personal="P"),
                 ParteInteresada(nombre="Parte"),
                 Auditoria(area_auditada="A", fecha=DAY, auditor="x", resultado="r"),
-                Document(title="T", code="DOC-1", category=DocumentCategory.OTRO, content="c"),
+                Document(title="T", code="DOC-1", category=DocumentCategory.OTRO),
                 RolResponsabilidad(rol="Rol"),
             ])
             owner = Person(nombre="Persona")
@@ -73,6 +75,8 @@ class UiPermissionsTestCase(unittest.TestCase):
             db.session.flush()
             db.session.add(CompetenceRequirement(rol_id=1, tipo=CompetenceType.formacion,
                                                  descripcion="Requisito"))
+            db.session.add(DocumentRevision(document_id=1, numero=1, content="c",
+                                            estado=EstadoRevision.vigente, effective_from=DAY))
             db.session.commit()
             self.ids = {u.role: u.id for u in User.query.all()}
             self.owner_id = owner.id
@@ -177,7 +181,7 @@ class UiPermissionsTestCase(unittest.TestCase):
                         self.assertEqual(role in deciders, verify_done in html)
 
     def test_navigation_links_follow_the_read_permission(self) -> None:
-        expected = {"/auditorias/": {ADMIN, AUDITOR}, "/documents/": {ADMIN}, "/no_conformidades/": set(RoleEnum),
+        expected = {"/auditorias/": {ADMIN, AUDITOR}, "/documents/": set(RoleEnum), "/no_conformidades/": set(RoleEnum),
                     "/usuarios/": {ADMIN, AUDITOR}, "/perfil/": set(RoleEnum),
                     "/personas/": set(RoleEnum), "/competencias/requisitos/": set(RoleEnum),
                     "/competencias/matriz": set(RoleEnum)}

@@ -55,14 +55,14 @@ class RegistryTestCase(unittest.TestCase):
         self.assertNotIn(Resource.COMPETENCE, resources)
 
     def test_declared_fields_match_what_each_service_requires(self) -> None:
-        from app.services import audits, documents, nonconformities, people
+        from app.services import audits, nonconformities, people
 
         bespoke = {
             "personas": (people.WRITABLE_FIELDS, people.REQUIRED_ON_CREATE),
             "no_conformidades": (nonconformities.WRITABLE_FIELDS,
                                  frozenset({"descripcion", "fecha_detectada"})),
             "auditorias": (audits.WRITABLE_FIELDS, audits.REQUIRED_ON_CREATE),
-            "documentos": (documents.WRITABLE_FIELDS, documents.REQUIRED_ON_CREATE),
+            "documentos": (frozenset(), frozenset()),  # read-only through MCP (DC-1)
         }
         for slug, module in registry().MODULES.items():
             with self.subTest(module=slug):
@@ -125,13 +125,12 @@ class RegistryTestCase(unittest.TestCase):
 
     def test_enum_fields_list_the_values_the_services_accept(self) -> None:
         from app.models import (
-            CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAuditoriaEnum, TipoEnum,
+            CompetenceEvaluation, CompetenceType, EstadoAuditoriaEnum, TipoEnum,
         )
 
         modules = registry().MODULES
         expected = {
             ("auditorias", "estado"): EstadoAuditoriaEnum,
-            ("documentos", "category"): DocumentCategory,
             ("riesgos_oportunidades", "tipo"): TipoEnum,
             ("competencias_requeridas", "tipo"): CompetenceType,
             ("competencias_acreditadas", "evaluacion_eficacia"): CompetenceEvaluation,
@@ -202,8 +201,8 @@ class ModulesToolTestCase(McpDbCase):
 
     async def test_reports_what_the_caller_may_do(self) -> None:
         cases = [
-            (mcp_actor(ADMIN), "documentos", dict(read=True, create=True, update=True)),
-            (mcp_actor(OPERATIVO), "documentos", dict(read=False, create=False, update=False)),
+            (mcp_actor(ADMIN), "documentos", dict(read=True, create=False, update=False)),
+            (mcp_actor(OPERATIVO), "documentos", dict(read=True, create=False, update=False)),
             (mcp_actor(OPERATIVO), "no_conformidades", dict(read=True, create=True, update=True)),
             (mcp_actor(OPERATIVO), "procesos", dict(read=True, create=False, update=False)),
             (mcp_actor(OPERATIVO), "personas", dict(read=True, create=False, update=False)),

@@ -26,6 +26,8 @@ from app.models import (
     CompetenceType,
     Document,
     DocumentCategory,
+    DocumentRevision,
+    EstadoRevision,
     Mejora,
     NoConformidad,
     ParteInteresada,
@@ -77,9 +79,9 @@ DOC = dict(
     title="Manual",
     code="DOC-NEW",
     category="MANUAL_CALIDAD",
-    version="1.0",
-    issued_date="2026-10-05",
-    approved_by="Dirección",
+    owner_id="1",
+    next_review_date="",
+    author_id="1",
     content="Texto",
 )
 IMPROVEMENT = dict(no_conformidad="NC", accion_correctiva="a", accion_preventiva="b")
@@ -160,7 +162,10 @@ ENDPOINTS = [
              "/no_conformidades/1/acciones/1/eliminar", 302),
     *_html("AUDITS", "/auditorias/", ("nueva", AUDIT), ("editar/1", AUDIT),
            "eliminar/1"),
-    *_html("DOCUMENTS", "/documents/", ("new", DOC), ("edit/1", DOC), "delete/1"),
+    # Documents are withdrawn, never deleted (DC6); document 1 is in force, so
+    # every role reads its page. The workflow narrows roles in its service.
+    *_html("DOCUMENTS", "/documents/", ("new", DOC), ("edit/1", DOC), None),
+    Endpoint("DOCUMENTS", "read", "GET", "/documents/1", 200),
     *_html("IMPROVEMENTS", "/mejoras/", ("nueva", IMPROVEMENT),
            ("editar/1", IMPROVEMENT), "eliminar/1"),
     *_html("CUSTOMER_SATISFACTION", "/satisfaccion_cliente/", ("nueva", SURVEY),
@@ -218,7 +223,7 @@ ALLOWED = {
     "TRAINING": (ALL, ALL, {ADMIN}),
     "INTERESTED_PARTIES": (ALL, ALL, {ADMIN}),
     "AUDITS": (ADMIN_AUDITOR, ADMIN_AUDITOR, {ADMIN}),
-    "DOCUMENTS": ({ADMIN}, {ADMIN}, {ADMIN}),
+    "DOCUMENTS": (ALL, ADMIN_AUDITOR, set()),  # DC4 and DC6 of document-control
     "USERS": (ADMIN_AUDITOR, {ADMIN}, set()),  # nobody deletes; test_policy pins it
     "AUDIT_INDICATORS": JSON_REGISTER,
     "ROLES_RESPONSIBILITIES": JSON_REGISTER,
@@ -274,10 +279,7 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                         area_auditada="A", fecha=date(2026, 10, 5), auditor="x",
                         resultado="r",
                     ),
-                    Document(
-                        title="T", code="DOC-1", category=DocumentCategory.OTRO,
-                        content="c",
-                    ),
+                    Document(title="T", code="DOC-1", category=DocumentCategory.OTRO),
                     Mejora(no_conformidad="NC"),
                     SatisfaccionCliente(
                         cliente="C", fecha_encuesta=date(2026, 10, 5), puntuacion=5
@@ -306,6 +308,10 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                     AccionCorrectiva(
                         no_conformidad_id=1, descripcion="Seed", responsable_id=1,
                         fecha_prevista=date(2026, 10, 20),
+                    ),
+                    DocumentRevision(
+                        document_id=1, numero=1, estado=EstadoRevision.vigente,
+                        content="c", effective_from=date(2026, 10, 5),
                     ),
                 ]
             )

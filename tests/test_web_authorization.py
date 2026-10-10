@@ -95,8 +95,8 @@ class WebAuthorizationTestCase(unittest.TestCase):
         template = "{{ can('delete', 'nonconformities') }}/{{ can('read', 'audits') }}/{{ can('read', 'documents') }}"
         with self.app.app_context():
             self.assertEqual("True/True/True", self._render(RoleEnum.ADMINISTRADOR, template))
-            self.assertEqual("False/True/False", self._render(RoleEnum.AUDITOR, template))
-            self.assertEqual("False/False/False", self._render(RoleEnum.OPERATIVO, template))
+            self.assertEqual("False/True/True", self._render(RoleEnum.AUDITOR, template))
+            self.assertEqual("False/False/True", self._render(RoleEnum.OPERATIVO, template))
 
     def test_can_is_false_when_nobody_is_logged_in_and_rejects_typos_loudly(self) -> None:
         with self.app.app_context():

@@ -13,7 +13,7 @@ from app.extensions import db
 from app.mcp_server import context
 from app.mcp_server.server import build_server
 from app.mcp_server.registry import MODULES
-from app.models import EstadoNoConformidad, NoConformidad, RoleEnum, User
+from app.models import EstadoNoConformidad, NoConformidad, Person, RoleEnum, User
 from app.services import api_tokens
 from app.services.actor import Actor
 
@@ -29,8 +29,6 @@ def mcp_actor(role=ADMIN, scopes=("read", "write"), user_id=7) -> Actor:
 SEEDS = {
     "no_conformidades": {"descripcion": "Pieza fuera de tolerancia", "fecha_detectada": "2026-10-01"},
     "auditorias": {"area_auditada": "Calidad", "fecha": "2026-10-01", "auditor": "Ana", "resultado": "Sin hallazgos"},
-    "documentos": {"title": "Manual", "code": "MC-1", "category": "MANUAL_CALIDAD", "version": "1",
-                   "issued_date": "2026-10-01", "content": "Texto"},
     "capacitaciones": {"tema": "Seguridad", "fecha": "2026-10-01", "personal": "Ana"},
     "satisfaccion_clientes": {"cliente": "ACME", "fecha_encuesta": "2026-10-01", "puntuacion": 8},
     "partes_interesadas": {"nombre": "Clientes"},
@@ -41,6 +39,10 @@ SEEDS = {
     "procesos": {"proceso": "Compras"},
     "indicadores_auditoria": {"area_auditoria": "Calidad"},
     "personas": {"nombre": "Ana Pérez"},
+    # Documents are not written through MCP; ``seed`` creates them through the service,
+    # citing the person above (or creating it first when seeded alone).
+    "documentos": {"title": "Manual", "code": "MC-1", "category": "MANUAL_CALIDAD",
+                   "owner_id": 1, "author_id": 1, "content": "Texto"},
     # Competence cites the role and the person created above: modules are seeded in
     # this order on an empty database, so both have id 1.
     "competencias_requeridas": {"rol_id": 1, "tipo": "formacion", "descripcion": "Curso de seguridad"},
@@ -86,6 +88,8 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
     def seed(self, slug: str, **overrides) -> int:
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
+        if slug == "documentos" and db.session.get(Person, 1) is None:
+            self.seed("personas")
         data = SEEDS[slug] | overrides
         for field in module.fields:
             if field.type == "date" and field.name in data:

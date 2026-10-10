@@ -43,7 +43,9 @@ class WriteToolsRegistrationTestCase(McpDbCase):
 class EveryModuleTestCase(McpDbCase):
     async def test_every_module_creates_and_updates_with_audit_and_stamping(self) -> None:
         actor = mcp_actor(ADMIN)
-        for slug, module in MODULES.items():
+        writable = {slug: module for slug, module in MODULES.items() if module.fields}
+        self.assertEqual({"documentos"}, MODULES.keys() - writable.keys())  # web only (DC-1)
+        for slug, module in writable.items():
             with self.subTest(module=slug):
                 created = await self.call(actor, "qms_create", {"module": slug, "data": SEEDS[slug]})
                 self.assertFalse(created.is_error, created.content)
@@ -59,7 +61,7 @@ class EveryModuleTestCase(McpDbCase):
         db.session.expire_all()
         rows = audit_rows()
         # Plus the nonconformity's move to "Acción planificada" on its first action.
-        self.assertEqual(2 * len(MODULES) + 1, len(rows))
+        self.assertEqual(2 * len(writable) + 1, len(rows))
         self.assertEqual({"mcp"}, {r.channel for r in rows})
         self.assertEqual({7}, {r.actor_user_id for r in rows})
         self.assertEqual({"create", "update"}, {r.action for r in rows})
@@ -300,7 +302,7 @@ class ErrorTestCase(McpDbCase):
                             "data": SEEDS["no_conformidades"] | {"fecha_detectada": "ayer"}},
              "fecha_detectada"),
             ("qms_create", {"module": "documentos", "data": SEEDS["documentos"]},
-             "Ya existe un documento con ese código."),
+             "No tienes permiso"),
             ("qms_update", {"module": "no_conformidades", "id": 999, "data": {}},
              "No conformidad no encontrada."),
             ("qms_create", {"module": "no_conformidades",

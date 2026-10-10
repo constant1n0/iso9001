@@ -21,7 +21,10 @@ The approved role-by-action matrix (decision D1). Roles may read, write
 - Nonconformities, improvements, surveys, training, stakeholders: every role
   reads and writes; only administrators delete.
 - Audits: administrators and auditors read and write; administrators delete.
-- Documents: administrators only, for everything.
+- Documents: every role reads, administrators and auditors write, nobody
+  deletes (decisions DC4 and DC6 of ``document-control``). The document
+  services narrow it further: other roles read only revisions in force, and
+  only administrators approve or withdraw.
 - JSON registers (roles, risks and opportunities, training resources, process
   operations, audit indicators): every role reads; administrators and auditors
   write; administrators delete.
@@ -36,7 +39,8 @@ The approved role-by-action matrix (decision D1). Roles may read, write
 - Corrective actions follow nonconformities; verifying one is further limited
   to administrators and auditors by its service (decision N4 of ``nc-capa-loop``).
 
-Seams: the ``mcp`` channel never deletes, and token scopes intersect the role.
+Seams: the ``mcp`` channel never deletes and never writes documents (they are
+written in the web only), and token scopes intersect the role.
 """
 
 from __future__ import annotations
@@ -110,7 +114,7 @@ _MATRIX: dict[Resource, Grant] = {
     Resource.TRAINING: _OPEN_REGISTER,
     Resource.INTERESTED_PARTIES: _OPEN_REGISTER,
     Resource.AUDITS: Grant(_ADMIN_AUDITOR, _ADMIN_AUDITOR, _ADMIN),
-    Resource.DOCUMENTS: Grant(_ADMIN, _ADMIN, _ADMIN),
+    Resource.DOCUMENTS: Grant(_ALL, _ADMIN_AUDITOR, _NOBODY),
     Resource.AUDIT_INDICATORS: _JSON_REGISTER,
     Resource.ROLES_RESPONSIBILITIES: _JSON_REGISTER,
     Resource.RISKS_OPPORTUNITIES: _JSON_REGISTER,
@@ -134,6 +138,8 @@ def can(actor: Actor, action: Action, resource: Resource) -> bool:
         action is Action.DELETE or resource is Resource.API_TOKENS
     ):
         return False  # an agent never deletes and never manages its own credentials
+    if actor.channel == "mcp" and resource is Resource.DOCUMENTS and action is not Action.READ:
+        return False  # documents are written in the web only
     if actor.scopes is not None:
         needed = "read" if action is Action.READ else "write"
         if needed not in actor.scopes:

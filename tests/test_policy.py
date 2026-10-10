@@ -28,7 +28,7 @@ EXPECTED = {
     "TRAINING": (ALL_ROLES, ALL_ROLES, ADMIN_ONLY),
     "INTERESTED_PARTIES": (ALL_ROLES, ALL_ROLES, ADMIN_ONLY),
     "AUDITS": (ADMIN_AUDITOR, ADMIN_AUDITOR, ADMIN_ONLY),
-    "DOCUMENTS": (ADMIN_ONLY, ADMIN_ONLY, ADMIN_ONLY),
+    "DOCUMENTS": (ALL_ROLES, ADMIN_AUDITOR, NOBODY),  # DC4 and DC6 of document-control
     "AUDIT_INDICATORS": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),
     "ROLES_RESPONSIBILITIES": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),
     "RISKS_OPPORTUNITIES": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),
@@ -150,11 +150,11 @@ class PolicyMatrixTestCase(unittest.TestCase):
             (ADMIN, read_only, Action.UPDATE, Resource.DOCUMENTS, False),
             (ADMIN, read_only, Action.DELETE, Resource.DOCUMENTS, False),
             (ADMIN, write_only, Action.READ, Resource.DOCUMENTS, False),
-            (ADMIN, write_only, Action.DELETE, Resource.DOCUMENTS, True),
+            (ADMIN, write_only, Action.DELETE, Resource.NONCONFORMITIES, True),
             (ADMIN, frozenset(), Action.READ, Resource.DOCUMENTS, False),
             (ADMIN, both, Action.UPDATE, Resource.DOCUMENTS, True),
             # Scopes never widen the role.
-            (OPERATIVO, both, Action.READ, Resource.DOCUMENTS, False),
+            (OPERATIVO, both, Action.CREATE, Resource.DOCUMENTS, False),
             (OPERATIVO, both, Action.DELETE, Resource.NONCONFORMITIES, False),
             (OPERATIVO, both, Action.CREATE, Resource.NONCONFORMITIES, True),
             (OPERATIVO, both, Action.CREATE, Resource.RISKS_OPPORTUNITIES, False),
@@ -181,6 +181,17 @@ class PolicyMatrixTestCase(unittest.TestCase):
             with self.subTest(action=action):
                 self.assertFalse(can(actor, action, Resource.API_TOKENS))
         self.assertTrue(can(make_actor(ADMIN, channel="cli"), Action.CREATE, Resource.API_TOKENS))
+
+    def test_the_mcp_channel_reads_documents_but_never_writes_them(self) -> None:
+        from app.services.policy import Action, Resource, can
+
+        for role in RoleEnum:
+            actor = make_actor(role, channel="mcp", scopes=frozenset({"read", "write"}))
+            with self.subTest(role=role.name):
+                self.assertTrue(can(actor, Action.READ, Resource.DOCUMENTS))
+                for action in (Action.CREATE, Action.UPDATE, Action.DELETE):
+                    self.assertFalse(can(actor, action, Resource.DOCUMENTS))
+        self.assertTrue(can(make_actor(AUDITOR), Action.UPDATE, Resource.DOCUMENTS))
 
     def test_mcp_with_full_scopes_still_cannot_delete(self) -> None:
         from app.services.policy import Action, Resource, can

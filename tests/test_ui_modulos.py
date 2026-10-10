@@ -14,6 +14,8 @@ from app.models import (
     Capacitacion,
     Document,
     DocumentCategory,
+    DocumentRevision,
+    EstadoRevision,
     ParteInteresada,
     RoleEnum,
     SatisfaccionCliente,
@@ -39,9 +41,12 @@ class ModuleScreensTestCase(unittest.TestCase):
                 ParteInteresada(nombre="Proveedores"),
                 Capacitacion(tema="ISO", fecha=DAY, personal="Equipo", duracion_horas=4),
                 Document(title="Control de registros", code="PO-04",
-                         category=DocumentCategory.PROCEDIMIENTO_OPERATIVO,
-                         version="2.1", issued_date=DAY, content="Texto"),
+                         category=DocumentCategory.PROCEDIMIENTO_OPERATIVO),
             ])
+            db.session.flush()
+            db.session.add(DocumentRevision(document_id=1, numero=1, content="Texto",
+                                            estado=EstadoRevision.vigente,
+                                            legacy_version="2.1", effective_from=DAY))
             db.session.commit()
         response = self.client.post("/login", data={"username": "admin", "password": PASSWORD})
         self.assertEqual(302, response.status_code)
@@ -56,7 +61,7 @@ class ModuleScreensTestCase(unittest.TestCase):
             "/satisfaccion_cliente/", "/satisfaccion_cliente/nueva", "/satisfaccion_cliente/editar/1",
             "/partes_interesadas/", "/partes_interesadas/nueva", "/partes_interesadas/editar/1",
             "/capacitaciones/", "/capacitaciones/nueva", "/capacitaciones/editar/1",
-            "/documents/", "/documents/new", "/documents/edit/1",
+            "/documents/", "/documents/new", "/documents/edit/1", "/documents/1",
         ):
             with self.subTest(path=path):
                 html = self.client.get(path).get_data(as_text=True)

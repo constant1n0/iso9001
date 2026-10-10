@@ -15,7 +15,7 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
 {% extends "base.html" %}
-{% from "_partials/ui.html" import page_header, delete_form, empty_state %}
+{% from "_partials/ui.html" import page_header, empty_state %}
 {% block title %}Documentos{% endblock %}
 {% block crumb %}Documentación · Documentos{% endblock %}
 {% block content %}
@@ -33,28 +33,26 @@
                 <th scope="col">Código</th>
                 <th scope="col">Título</th>
                 <th scope="col">Categoría</th>
-                <th scope="col">Versión</th>
-                <th scope="col">Emisión</th>
-                <th scope="col">Aprobado por</th>
+                <th scope="col">Revisión</th>
+                <th scope="col">En vigor desde</th>
+                <th scope="col">Estado</th>
                 <th scope="col"><span class="visually-hidden">Acciones</span></th>
             </tr>
         </thead>
         <tbody>
             {% for document in documents %}
+            {% set vigente = vigentes.get(document.id) %}
             <tr>
                 <td class="mono">{{ document.code }}</td>
-                <td>{{ document.title }}</td>
+                <td><a href="{{ url_for('document.view_document', document_id=document.id) }}">{{ document.title }}</a></td>
                 <td><span class="badge">{{ document.category.value }}</span></td>
-                <td class="mono">v{{ document.version }}</td>
-                <td class="date">{{ document.issued_date.strftime('%d/%m/%Y') }}</td>
-                <td>{{ document.approved_by or '—' }}</td>
+                <td class="mono">{% if vigente %}Rev. {{ vigente.numero }}{% if vigente.legacy_version %} (v{{ vigente.legacy_version }}){% endif %}{% else %}—{% endif %}</td>
+                <td class="date">{{ vigente.effective_from.strftime('%d/%m/%Y') if vigente and vigente.effective_from else '—' }}</td>
+                <td><span class="badge">{% if document.withdrawn_at %}De baja{% elif vigente %}Vigente{% else %}En preparación{% endif %}</span></td>
                 <td>
                     <div class="table__actions">
-                        {% if can('update', 'documents') %}
+                        {% if can('update', 'documents') and not document.withdrawn_at %}
                         <a class="btn btn--sm" href="{{ url_for('document.edit_document', document_id=document.id) }}">Editar</a>
-                        {% endif %}
-                        {% if can('delete', 'documents') %}
-                        {{ delete_form(url_for('document.delete_document', document_id=document.id), '¿Eliminar el documento ' ~ document.code ~ '?') }}
                         {% endif %}
                     </div>
                 </td>

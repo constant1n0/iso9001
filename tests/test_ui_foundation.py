@@ -172,7 +172,7 @@ class UiFoundationTestCase(unittest.TestCase):
         self.assertIn('href="/no_conformidades/"', html)
         self.assertIn('href="/capacitaciones/"', html)
         self.assertNotIn('href="/auditorias/"', html)
-        self.assertNotIn('href="/documents/"', html)
+        self.assertIn('href="/documents/"', html)  # every role reads documents (DC4)
         self.assertRegex(html, r'href="/dashboard/"\s+aria-current="page"')
 
         self.client.get("/logout")
