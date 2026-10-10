@@ -26,9 +26,11 @@ from app.extensions import db
 from app.models import (AuditLog, Document, DocumentCategory, DocumentRevision, Person,
                         RoleEnum, User)
 from app.services import audit, document_files, document_revisions, errors
+from app.utils import security_logger
 
 PASSWORD_HASH = generate_password_hash("StrongPassword123!")
 BASE = "/documents"
+ROUTES_LOGGER = "app.routes.document_routes"
 FORM = {
     "title": "Manual de calidad",
     "code": "MC-001",
@@ -284,6 +286,21 @@ class AttachmentRoutesBase(DocumentRoutesBase):
         self.assertEqual(302, self.upload(doc_id, rev_id, content).status_code)
         return doc_id, rev_id
 
+    def later_draft(self, doc_id: int) -> int:
+        """Start revision 2, a draft, of a document in force; return its id."""
+        from app.services.actor import Actor
+
+        with self.app.app_context():
+            who = Actor(1, "seed", RoleEnum.ADMINISTRADOR, "system")
+            draft = document_revisions.start_draft(
+                db.session, who, doc_id, {"author_id": 1, "change_summary": "Cambio"})
+            db.session.commit()
+            return draft.id
+
+    def failing_commit(self):
+        """Make the next commit raise, as a lost connection would."""
+        return patch.object(db.session, "commit", side_effect=SQLAlchemyError("down"))
+
 
 class AttachmentRoutesTestCase(AttachmentRoutesBase):
     """Uploading, downloading and discarding attachments of revisions (DC7)."""
@@ -389,14 +406,92 @@ class AttachmentRoutesTestCase(AttachmentRoutesBase):
         self.assertNotEqual(old, new)
         self.assertEqual([new], self.stored())
 
-    def test_a_failed_commit_keeps_the_old_file_and_deletes_the_new_one(self) -> None:
+    def test_a_failed_commit_keeps_both_files_and_logs_the_new_one(self) -> None:
+        # The commit may have succeeded with its acknowledgement lost: the new
+        # file stays, and the cleanup command removes it if nothing references it.
         doc_id, rev_id = self.draft_with_file()
         old = self.revision(doc_id).attachment_path
-        with patch.object(db.session, "commit", side_effect=SQLAlchemyError("down")):
+        with self.failing_commit(), self.assertLogs(ROUTES_LOGGER, "ERROR") as logged:
             response = self.upload(doc_id, rev_id, docx_bytes(), "Plan.docx")
         self.assertEqual(500, response.status_code)
-        self.assertEqual([old], self.stored())
+        self.assertEqual(2, len(self.stored()))
         self.assertEqual(old, self.revision(doc_id).attachment_path)
+        (new,) = set(self.stored()) - {old}
+        self.assertIn(new, logged.output[0])
+
+    def test_a_refusal_before_the_commit_deletes_the_new_file(self) -> None:
+        doc_id, rev_id = self.draft_with_file()
+        old = self.revision(doc_id).attachment_path
+        refusal = errors.ValidationError(document_revisions.NOT_A_DRAFT)
+        with patch.object(document_revisions, "attach", side_effect=refusal):
+            response = self.upload(doc_id, rev_id, docx_bytes(), "Plan.docx")
+        self.assertEqual(302, response.status_code)
+        self.assertIn(("danger", document_revisions.NOT_A_DRAFT), self.flashes())
+        self.assertEqual([old], self.stored())
+
+    def test_a_failed_commit_of_detach_or_discard_deletes_no_file(self) -> None:
+        doc_id = self.seed()
+        self.put_in_force(doc_id)
+        draft_id = self.later_draft(doc_id)
+        self.login()
+        self.assertEqual(302, self.upload(doc_id, draft_id).status_code)
+        kept = self.revision(doc_id, 2).attachment_path
+        for action in ("attachment/delete", "discard"):
+            with self.subTest(action=action):
+                with self.failing_commit(), self.assertLogs(ROUTES_LOGGER, "ERROR") as logged:
+                    response = self.client.post(self.url(doc_id, draft_id, action))
+                self.assertEqual(500, response.status_code)
+                self.assertIn(kept, logged.output[0])
+                self.assertEqual([kept], self.stored())
+                self.assertEqual(kept, self.revision(doc_id, 2).attachment_path)
+
+    def test_an_upload_to_a_revision_that_is_not_a_draft_is_never_stored(self) -> None:
+        doc_id = self.seed()
+        self.put_in_force(doc_id)
+        effective = self.revision(doc_id).id
+        submitted = self.later_draft(doc_id)
+        from app.services.actor import Actor
+
+        with self.app.app_context():
+            who = Actor(1, "seed", RoleEnum.ADMINISTRADOR, "system")
+            document_revisions.submit(db.session, who, submitted)
+            db.session.commit()
+        self.login()
+        cases = [(effective, document_revisions.IMMUTABLE),
+                 (submitted, document_revisions.NOT_A_DRAFT)]
+        with patch.object(document_files, "store", wraps=document_files.store) as store:
+            for rev_id, message in cases:
+                with self.subTest(message=message), \
+                        self.assertLogs("security", "WARNING") as logged:
+                    self.assertEqual(302, self.upload(doc_id, rev_id).status_code)
+                    self.assertIn(("danger", message), self.flashes())
+                    self.assertIn("DOCUMENT_ATTACHMENT_REJECTED", logged.output[0])
+            with self.app.app_context():
+                document_revisions.withdraw(db.session, who, doc_id, "Baja",
+                                            today=date(2026, 10, 9))
+                db.session.commit()
+            self.upload(doc_id, submitted)
+            self.assertIn(("danger", document_revisions.WITHDRAWN), self.flashes())
+        store.assert_not_called()
+        self.assertEqual([], self.stored())
+
+    def test_user_supplied_names_cannot_forge_log_fields(self) -> None:
+        doc_id = self.seed()
+        rev_id = self.revision(doc_id).id
+        self.login()
+        with self.assertLogs("security", "INFO") as logged:
+            self.upload(doc_id, rev_id, PDF, "plan | sha256=0000 | user=root.pdf")
+            self.upload(doc_id, rev_id, b"MZ\x90\x00", "x | reason=ok | user=root.pdf")
+        lines = [line.split(":", 2)[2] for line in logged.output]
+        parsed = [dict(part.partition("=")[::2] for part in line.split(" | ")[1:])
+                  for line in lines]
+        self.assertEqual([8, 7], [len(line.split(" | ")) for line in lines])
+        self.assertEqual(("administrador", hashlib.sha256(PDF).hexdigest(),
+                          "plan _ sha256=0000 _ user=root.pdf"),
+                         (parsed[0]["user"], parsed[0]["sha256"], parsed[0]["name"]))
+        self.assertEqual(("administrador", document_files.UNRECOGNIZED),
+                         (parsed[1]["user"], parsed[1]["reason"]))
+        self.assertEqual("a_b_c", security_logger._field("a|b\nc"))
 
     def test_a_file_that_cannot_be_deleted_after_the_commit_is_left_for_cleanup(self) -> None:
         doc_id, rev_id = self.draft_with_file()
@@ -524,9 +619,72 @@ class AttachmentRoutesTestCase(AttachmentRoutesBase):
         self.assertEqual(404, self.client.get(self.url(doc_id, rev_id)).status_code)
         self.assertEqual(404, self.client.get(self.url(doc_id, 999)).status_code)
 
+    def test_downloads_answer_conditional_and_range_requests(self) -> None:
+        doc_id, rev_id = self.draft_with_file()
+        url, etag = self.url(doc_id, rev_id), f'"{hashlib.sha256(PDF).hexdigest()}"'
+        draft = self.client.get(url)
+        self.assertEqual((200, etag, "no-store"),
+                         (draft.status_code, draft.headers["ETag"],
+                          draft.headers["Cache-Control"]))
+        self.put_in_force(doc_id)
+        self.login(RoleEnum.OPERATIVO)
+        unchanged = self.client.get(url, headers={"If-None-Match": etag})
+        self.assertEqual((304, b""), (unchanged.status_code, unchanged.get_data()))
+        changed = self.client.get(url, headers={"If-None-Match": '"other"'})
+        self.assertEqual((200, PDF, len(PDF)),
+                         (changed.status_code, changed.get_data(), changed.content_length))
+        part = self.client.get(url, headers={"Range": "bytes=0-4"})
+        self.assertEqual((206, b"%PDF-", f"bytes 0-4/{len(PDF)}"),
+                         (part.status_code, part.get_data(), part.headers["Content-Range"]))
+
+    def test_operativos_never_see_a_pending_draft_or_its_file(self) -> None:
+        doc_id = self.seed()
+        self.put_in_force(doc_id)
+        draft_id = self.later_draft(doc_id)
+        content = docx_bytes()
+        self.login()
+        self.assertEqual(302, self.upload(doc_id, draft_id, content, "Borrador reservado.docx")
+                         .status_code)
+        secrets = ("en preparación", "Borrador reservado.docx",
+                   document_files.human_size(len(content)), hashlib.sha256(content).hexdigest())
+        page = self.client.get(f"{BASE}/{doc_id}").get_data(as_text=True)
+        for secret in secrets:
+            self.assertIn(secret, page)  # what an administrator sees
+        self.login(RoleEnum.OPERATIVO)
+        response = self.client.get(f"{BASE}/{doc_id}")
+        self.assertEqual(200, response.status_code)
+        for secret in secrets:
+            with self.subTest(secret=secret):
+                self.assertNotIn(secret, response.get_data(as_text=True))
+        self.assertEqual(404, self.client.get(self.url(doc_id, draft_id)).status_code)
+        from app.services.actor import Actor
+
+        with self.app.app_context():
+            operativo = Actor(self.ids[RoleEnum.OPERATIVO], "operativo", RoleEnum.OPERATIVO,
+                              "web")
+            self.assertIsNone(document_revisions.in_preparation(db.session, operativo, doc_id))
+
+    def test_a_corrupted_stored_name_is_logged_apart_from_a_missing_file(self) -> None:
+        doc_id, rev_id = self.draft_with_file()
+        os.unlink(os.path.join(self.storage, self.revision(doc_id).attachment_path))
+        with self.assertLogs(ROUTES_LOGGER, "ERROR") as missing:
+            self.assertEqual(404, self.client.get(self.url(doc_id, rev_id)).status_code)
+        with self.app.app_context():
+            db.session.execute(DocumentRevision.__table__.update()
+                               .where(DocumentRevision.id == rev_id)
+                               .values(attachment_path="../../etc/passwd"))
+            db.session.commit()
+        with self.assertLogs(ROUTES_LOGGER, "ERROR") as corrupted:
+            self.assertEqual(404, self.client.get(self.url(doc_id, rev_id)).status_code)
+        self.assertIn("is missing", missing.output[0])
+        self.assertIn("invalid stored file name", corrupted.output[0])
+        self.assertNotIn("../", corrupted.output[0])
+
     def test_the_detail_page_offers_the_draft_controls_to_writers_only(self) -> None:
         doc_id, rev_id = self.draft_with_file()
         page = self.client.get(f"{BASE}/{doc_id}").get_data(as_text=True)
+        self.assertIn("máximo 195,3 KB", page)
+        self.assertIn(f"Plan técnico.pdf</a> · {len(PDF)} B", page)
         self.assertIn('enctype="multipart/form-data"', page)
         self.assertIn(f'action="{self.url(doc_id, rev_id)}"', page)
         self.assertIn(self.url(doc_id, rev_id, "attachment/delete"), page)
@@ -601,6 +759,31 @@ class CleanupCommandTestCase(AttachmentRoutesBase):
         self.assertIn("Deleted 1 orphaned file(s).", real.output)
         self.assertEqual(sorted([".upload-x.tmp", referenced, recent]), self.stored())
         self.assertEqual(rows, len(self.rows()))
+
+    def test_a_database_error_aborts_before_any_deletion(self) -> None:
+        old = self.orphan("a" * 32, 2 * 3600)
+        with patch.object(db.session, "scalars", side_effect=SQLAlchemyError("down")):
+            result = self.app.test_cli_runner().invoke(args=["cleanup-document-files"])
+        self.assertNotEqual(0, result.exit_code)
+        self.assertIn("The referenced files could not be read.", result.output)
+        self.assertEqual([old], self.stored())
+
+    def test_a_file_that_cannot_be_removed_is_reported_with_a_failing_exit(self) -> None:
+        stuck, gone = self.orphan("a" * 32, 2 * 3600), self.orphan("c" * 32, 2 * 3600)
+        remove = document_files.remove
+
+        def flaky(base: str, name: str) -> bool:
+            if name == stuck:
+                raise PermissionError("busy")
+            return remove(base, name)
+
+        with patch.object(document_files, "remove", side_effect=flaky):
+            result = self.app.test_cli_runner().invoke(args=["cleanup-document-files"])
+        self.assertNotEqual(0, result.exit_code)
+        self.assertIn("Deleted 1 orphaned file(s).", result.output)
+        self.assertIn(f"Could not delete: {stuck}", result.output)
+        self.assertEqual([stuck], self.stored())
+        self.assertNotIn(gone, self.stored())
 
     def test_a_missing_storage_directory_is_an_error(self) -> None:
         shutil.rmtree(self.storage)

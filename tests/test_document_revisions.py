@@ -22,7 +22,7 @@ from sqlalchemy.exc import IntegrityError
 from test_nonconformity_service import ADMIN, AUDITOR, OPERATIVO, ServiceBase, actor, errors
 
 from app.extensions import db
-from app.models import AuditLog, Person, RoleEnum
+from app.models import ATTACHMENT_COLUMNS, AuditLog, Person, RoleEnum
 from app.services.actor import Actor
 
 POSTGRES_URI = os.environ.get("TEST_POSTGRES_URI")
@@ -435,12 +435,8 @@ def stored_file(name: str = "a" * 32, **overrides):
     return StoredFile(**values)
 
 
-ATTACHMENT_FIELDS = ("attachment_name", "attachment_path", "attachment_size",
-                     "attachment_sha256", "attachment_mime")
-
-
 def attachment(rev):
-    return tuple(getattr(rev, name) for name in ATTACHMENT_FIELDS)
+    return tuple(getattr(rev, name) for name in ATTACHMENT_COLUMNS)
 
 
 class AttachmentTestCase(RevisionBase):
@@ -456,7 +452,7 @@ class AttachmentTestCase(RevisionBase):
         self.assertEqual({"attachment_name": "Plan.pdf", "attachment_path": "a" * 32,
                           "attachment_size": 1234, "attachment_sha256": "f" * 64,
                           "attachment_mime": "application/pdf"},
-                         {k: v for k, v in audited.after.items() if k in ATTACHMENT_FIELDS})
+                         {k: v for k, v in audited.after.items() if k in ATTACHMENT_COLUMNS})
         replaced = self.step(revisions().attach, draft.id,
                              stored_file("b" * 32, display_name="Plan v2.docx", size=9))
         self.assertEqual("a" * 32, replaced)

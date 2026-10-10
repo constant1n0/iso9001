@@ -25,10 +25,10 @@ The file's extension must name the same type. The user's file name never
 reaches the path: it is kept, sanitized, as the display name.
 
 ZIP archives are inspected without being extracted. The end-of-central-
-directory record is checked before parsing, so a huge central directory or
-too many entries are refused cheaply; an archive declaring too large an
-uncompressed total is refused as a likely ZIP bomb, and at most a few bytes
-of one entry (ODT's ``mimetype``) are ever decompressed.
+directory record is checked before parsing, so a huge central directory, too
+many entries or ZIP64 counts and sizes are refused cheaply; an archive
+declaring too large an uncompressed total is refused as a likely ZIP bomb, and
+at most a few bytes of one entry (ODT's ``mimetype``) are ever decompressed.
 
 ``open_stored`` and ``remove`` accept only a plain stored name, so no path,
 traversal or symbolic link reaches the file system.
@@ -73,8 +73,17 @@ STORED_NAME = re.compile(r"[0-9a-f]{32}")
 _ODT_MIMETYPE = ODT.encode("ascii")
 _PDF_MAGIC = b"%PDF-"
 _ZIP_LOCAL_HEADER = b"PK\x03\x04"
+# The end-of-central-directory record (PKWARE APPNOTE 4.3.16): its fixed part,
+# then a comment of at most 0xFFFF bytes. Fields as (offset, length) in it.
 _ZIP_END_RECORD = b"PK\x05\x06"
 _ZIP_END_SIZE = 22
+_ZIP_END_MAX_COMMENT = 0xFFFF
+_ZIP_END_DISK_ENTRIES = (8, 2)  # entries on this disk
+_ZIP_END_ENTRIES = (10, 2)  # entries in the whole archive
+_ZIP_END_DIRECTORY_SIZE = (12, 4)
+# A field too small for its value holds all ones and defers to the ZIP64 records.
+_ZIP64_MARKERS = ((_ZIP_END_DISK_ENTRIES, 0xFFFF), (_ZIP_END_ENTRIES, 0xFFFF),
+                  (_ZIP_END_DIRECTORY_SIZE, 0xFFFFFFFF))
 _UNSAFE_FALLBACK = re.compile(r"[^A-Za-z0-9._ ()-]")
 
 
@@ -105,14 +114,18 @@ class Listing:
     ignored: int
 
 
-def megabytes(size: int) -> str:
-    """``size`` bytes in megabytes for people: ``20``, ``0,1``."""
-    return f"{size / (1024 * 1024):.1f}".rstrip("0").rstrip(".").replace(".", ",")
+def human_size(size: int) -> str:
+    """``size`` bytes for people, with a decimal comma: ``48 B``, ``1,5 KB``, ``20 MB``."""
+    for unit, scale in (("MB", 1024 * 1024), ("KB", 1024)):
+        if size >= scale:
+            number = f"{size / scale:.1f}".rstrip("0").rstrip(".").replace(".", ",")
+            return f"{number} {unit}"
+    return f"{size} B"
 
 
 def too_large(max_bytes: int) -> str:
     """The message for a file above ``max_bytes``."""
-    return f"El fichero supera el tamaño máximo de {megabytes(max_bytes)} MB."
+    return f"El fichero supera el tamaño máximo de {human_size(max_bytes)}."
 
 
 def display_name(original_name: str | None) -> str:
@@ -250,19 +263,26 @@ def _zip_directory_is_small(handle: BinaryIO) -> bool:
     """Whether the end record announces few entries and a small central directory.
 
     Read before ``zipfile`` parses (and keeps in memory) the whole directory.
-    ZIP64 archives (an entry count of 0xFFFF) are refused: no accepted
-    document needs them.
     """
     size = handle.seek(0, os.SEEK_END)
-    tail_size = min(size, _ZIP_END_SIZE + 0xFFFF)  # the record plus its longest comment
+    tail_size = min(size, _ZIP_END_SIZE + _ZIP_END_MAX_COMMENT)
     handle.seek(size - tail_size)
     tail = handle.read(tail_size)
     at = tail.rfind(_ZIP_END_RECORD)
     if at < 0 or len(tail) - at < _ZIP_END_SIZE:
         return False
-    entries = int.from_bytes(tail[at + 10:at + 12], "little")
-    directory = int.from_bytes(tail[at + 12:at + 16], "little")
-    return 0 < entries <= MAX_ZIP_ENTRIES and entries != 0xFFFF and directory <= MAX_ZIP_DIRECTORY
+    record = tail[at:at + _ZIP_END_SIZE]
+    if any(_number(record, field) == marker for field, marker in _ZIP64_MARKERS):
+        return False  # no accepted document needs ZIP64, whatever the limits
+    entries = _number(record, _ZIP_END_ENTRIES)
+    return (0 < entries <= MAX_ZIP_ENTRIES
+            and _number(record, _ZIP_END_DIRECTORY_SIZE) <= MAX_ZIP_DIRECTORY)
+
+
+def _number(record: bytes, field: tuple[int, int]) -> int:
+    """The little-endian number stored at ``field`` (offset, length) of ``record``."""
+    offset, length = field
+    return int.from_bytes(record[offset:offset + length], "little")
 
 
 def _office_type(archive: zipfile.ZipFile) -> str | None:
