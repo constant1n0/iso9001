@@ -85,12 +85,23 @@ Baseline at `420f499`: 993 tests. Migrations are tested on PostgreSQL (`TEST_POS
 | 3 | [#95](https://github.com/constant1n0/iso9001/pull/95) | DC-2 attachments | merged | |
 | 4 | [#96](https://github.com/constant1n0/iso9001/pull/96) | DC-2 review findings | `606b5c1` | |
 | 5 | [#97](https://github.com/constant1n0/iso9001/pull/97) | DC-3 | `e1bedad` | |
-| 6 | Pending | DC-4, this closing update | — | Final slice |
+| 6 | [#98](https://github.com/constant1n0/iso9001/pull/98) | DC-4, closing update | `88cd706` | |
 
-## Production deployment (pending authorization)
+## Production deployment (2026-10-10)
 
-Two migrations: `a7d3f5b9c2e4` moves each document's content into revision 1 (back up first) and `c3e8a1f6d4b2` adds the attachment columns. Steps: back up the database and the code, fast-forward, `flask db upgrade`, `flask db check`; the storage directory `instance/documents` is created at start-up (mode 0700) and must be added to the server's backups; the user restarts the four services (Celery beat picks up the weekly review alert). Smoke tests: document list and detail, `qms_modules`, the beat schedule includes `document-review-alert-weekly`.
+`main@88cd706` runs on `vulcano`. The user authorized this deployment over SSH as `dcm`, with no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `420f499`, clean, migration `f8b2d4a6c9e1`; 0 documents stored |
+| Backups | `~/work/backups/calidad-*-pre-88cd706.dump` (`pg_dump -Fc`, 232 entries listed by `pg_restore -l`) and `iso9001-code-*-pre-88cd706.tar.gz`, both mode 600 |
+| Code | Incremental git bundle `420f499..main`, fast-forward to `88cd706`; `pip check` clean, no dependency changes |
+| Database | `flask db upgrade` `f8b2d4a6c9e1` → `a7d3f5b9c2e4` → `c3e8a1f6d4b2`; `flask db check` clean; 0 revisions (nothing to convert) |
+| Restart (user, with sudo) | All four services, right after the migration |
+| Smoke tests | Services active, no error entries in the journal; `instance/documents` created with mode 700; the beat schedule includes `document-review-alert-weekly`; `/login` 200; document list and detail redirect to the login; `/mcp` 401 with `WWW-Authenticate: Bearer`; 16 MCP modules |
+
+Pending for the user: add `~/work/iso9001/instance/documents` to the server's backups.
 
 ## Next step
 
-**Feature complete** once slice 6 merges. Next: the production deployment above, after explicit authorization; then Wave 1 continues with the audit programme.
+**Feature complete and deployed.** Next: Wave 1 continues with the audit programme.
