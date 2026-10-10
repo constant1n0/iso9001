@@ -636,6 +636,8 @@ class AttachmentRoutesTestCase(AttachmentRoutesBase):
         part = self.client.get(url, headers={"Range": "bytes=0-4"})
         self.assertEqual((206, b"%PDF-", f"bytes 0-4/{len(PDF)}"),
                          (part.status_code, part.get_data(), part.headers["Content-Range"]))
+        unsatisfiable = self.client.get(url, headers={"Range": f"bytes={len(PDF) + 10}-"})
+        self.assertEqual(416, unsatisfiable.status_code)
 
     def test_operativos_never_see_a_pending_draft_or_its_file(self) -> None:
         doc_id = self.seed()

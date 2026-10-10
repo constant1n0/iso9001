@@ -599,6 +599,7 @@ class WorkflowGuardsTestCase(RevisionBase):
              {"author_id": self.eva}),
             ("submit", revisions().submit, draft.id),
             ("attach", revisions().attach, draft.id, stored_file()),
+            ("discard_draft", revisions().discard_draft, draft.id),
         )
         for name, write, *args in writes:
             with self.subTest(write=name):

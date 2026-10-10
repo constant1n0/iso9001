@@ -356,9 +356,10 @@ def discard_draft(session: Session, actor: Actor, revision_id: int) -> str | Non
     orphaned = revision.attachment_path
     audit.record(session, actor, "delete", revision)
     session.delete(revision)
-    # Nothing references a revision, so deleting one trips no constraint: an
-    # IntegrityError here would be a bug, not a concurrent change (``Conflict``).
-    session.flush()
+    try:
+        session.flush()
+    except IntegrityError as exc:  # nothing should reference a draft; stay typed if it does
+        raise Conflict(CONFLICT) from exc
     return orphaned
 
 

@@ -33,7 +33,6 @@ import os
 
 from flask import (Blueprint, abort, current_app, flash, redirect, render_template, request,
                    send_file, url_for)
-from werkzeug.exceptions import RequestedRangeNotSatisfiable
 from ..forms import CHOOSE_PERSON, DocumentForm, NewDocumentForm, person_choices
 from ..extensions import db
 from flask_login import login_required
@@ -259,17 +258,18 @@ def download_attachment(document_id, revision_id):
     except FileNotFoundError:
         logger.error('The stored file of document revision %s is missing.', revision.id)
         abort(404)
-    size = os.fstat(handle.fileno()).st_size
-    response = send_file(handle, mimetype=revision.attachment_mime, conditional=False,
-                         etag=revision.attachment_sha256, max_age=None)
-    response.content_length = size
-    response.headers['Content-Disposition'] = document_files.content_disposition(
-        revision.attachment_name)
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    frozen = revision.estado in document_revisions.FROZEN_STATES
-    response.headers['Cache-Control'] = 'private, no-cache' if frozen else 'no-store'
-    try:  # send_file cannot serve ranges of an open file: it does not know its size
+    try:
+        size = os.fstat(handle.fileno()).st_size
+        response = send_file(handle, mimetype=revision.attachment_mime, conditional=False,
+                             etag=revision.attachment_sha256, max_age=None)
+        response.content_length = size
+        response.headers['Content-Disposition'] = document_files.content_disposition(
+            revision.attachment_name)
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        frozen = revision.estado in document_revisions.FROZEN_STATES
+        response.headers['Cache-Control'] = 'private, no-cache' if frozen else 'no-store'
+        # send_file cannot serve ranges of an open file: it does not know its size
         return response.make_conditional(request, accept_ranges=True, complete_length=size)
-    except RequestedRangeNotSatisfiable:
+    except BaseException:  # the response never took the handle over: close it here
         handle.close()
         raise
