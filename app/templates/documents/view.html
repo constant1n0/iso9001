@@ -15,86 +15,164 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
 {% extends "base.html" %}
-{% from "_partials/ui.html" import page_header, action_form %}
+{% from "_partials/ui.html" import page_header, action_form, empty_state %}
+{% from "documents/_macros.html" import fecha, estado_badge, attachment_link %}
 {# human_size is document_files.human_size, which also words the upload limit. #}
 {% macro attachment_item(revision) %}
 <li class="list__item"><span class="list__primary">Fichero</span><span class="list__secondary">
     {%- if revision.attachment_path -%}
-    <a href="{{ url_for('document.download_attachment', document_id=revision.document_id, revision_id=revision.id) }}">{{ revision.attachment_name }}</a> · {{ human_size(revision.attachment_size) }} · SHA-256 {{ revision.attachment_sha256 }}
+    {{ attachment_link(revision) }} · {{ human_size(revision.attachment_size) }} · SHA-256 {{ revision.attachment_sha256 }}
     {%- else -%}—{%- endif -%}
 </span></li>
 {% endmacro %}
+{# A withdrawn document is read-only (DC6): no control is offered on it. #}
+{% set active = not document.withdrawn_at %}
+{% set writes = active and can('update', 'documents') %}
 {% block title %}Documento {{ document.code }}{% endblock %}
 {% block crumb %}Documentación · Documentos{% endblock %}
 {% block content %}
 {% call page_header('Cláusula 7.5 · Información documentada', document.code ~ ' · ' ~ document.title) %}
-    {% if can('update', 'documents') and not document.withdrawn_at %}
-    <a class="btn" href="{{ url_for('document.edit_document', document_id=document.id) }}">Editar</a>
+    {% if writes %}
+    <a class="btn" href="{{ url_for('document.edit_document', document_id=document.id) }}">Editar datos</a>
+    {% endif %}
+    {% if active and vigente and not pendiente and can('create', 'documents') %}
+    <a class="btn btn--primary" href="{{ url_for('document.new_revision', document_id=document.id) }}">+ Nueva revisión</a>
+    {% endif %}
+    {% if active and may_withdraw %}
+    <a class="btn btn--danger" href="{{ url_for('document.withdraw_document', document_id=document.id) }}">Dar de baja</a>
     {% endif %}
 {% endcall %}
 
 <article class="card">
     <header class="card__header">
         <h2 class="card__title">Datos</h2>
+        {% if not active %}<span class="badge">De baja</span>{% endif %}
     </header>
     <ul class="list">
         <li class="list__item"><span class="list__primary">Categoría</span><span class="list__secondary">{{ document.category.value }}</span></li>
         <li class="list__item"><span class="list__primary">Propietario</span><span class="list__secondary">{{ personas.get(document.owner_id, '—') }}</span></li>
-        <li class="list__item"><span class="list__primary">Próxima revisión</span><span class="list__secondary">{{ document.next_review_date.strftime('%d/%m/%Y') if document.next_review_date else '—' }}</span></li>
-        {% if document.withdrawn_at %}
-        <li class="list__item"><span class="list__primary">De baja</span><span class="list__secondary">{{ document.withdrawn_at.strftime('%d/%m/%Y') }} · {{ document.withdrawn_reason }}{% if document.withdrawn_by_id %} · {{ personas.get(document.withdrawn_by_id) }}{% endif %}</span></li>
-        {% endif %}
+        <li class="list__item"><span class="list__primary">Próxima revisión</span><span class="list__secondary{% if overdue %} date--overdue{% endif %}">{{ fecha(document.next_review_date) }}{% if overdue %} · vencida{% endif %}</span></li>
     </ul>
+    {% if not active %}
+    <div class="card__body">
+        <p class="card__text">Dado de baja el {{ fecha(document.withdrawn_at) }}{% if document.withdrawn_by_id %} por {{ personas.get(document.withdrawn_by_id, '—') }}{% endif %}. Motivo: {{ document.withdrawn_reason }}</p>
+        <p class="card__text muted">Un documento dado de baja no se puede modificar.</p>
+    </div>
+    {% endif %}
 </article>
 
 <article class="card">
     {% if vigente %}
     <header class="card__header">
         <h2 class="card__title">Revisión {{ vigente.numero }}{% if vigente.legacy_version %} (v{{ vigente.legacy_version }}){% endif %}</h2>
-        <span class="badge">Vigente</span>
+        {{ estado_badge(vigente) }}
     </header>
     <ul class="list">
-        <li class="list__item"><span class="list__primary">En vigor desde</span><span class="list__secondary">{{ vigente.effective_from.strftime('%d/%m/%Y') if vigente.effective_from else '—' }}</span></li>
+        <li class="list__item"><span class="list__primary">En vigor desde</span><span class="list__secondary">{{ fecha(vigente.effective_from) }}</span></li>
         <li class="list__item"><span class="list__primary">Autor</span><span class="list__secondary">{{ personas.get(vigente.author_id, '—') }}</span></li>
-        <li class="list__item"><span class="list__primary">Aprobada por</span><span class="list__secondary">{{ personas.get(vigente.approver_id) or vigente.legacy_approved_by or '—' }}</span></li>
-        <li class="list__item"><span class="list__primary">Contenido</span><span class="list__secondary">{{ vigente.content }}</span></li>
+        <li class="list__item"><span class="list__primary">Aprobada por</span><span class="list__secondary">{{ personas.get(vigente.approver_id) or vigente.legacy_approved_by or '—' }}{% if vigente.approved_at %} · {{ fecha(vigente.approved_at) }}{% endif %}</span></li>
         {{ attachment_item(vigente) }}
     </ul>
+    <div class="card__body"><p class="card__text document-text">{{ vigente.content }}</p></div>
     {% else %}
-    <p class="card__text">Este documento no tiene ninguna revisión vigente.</p>
+    <p class="empty">Este documento no tiene ninguna revisión vigente.</p>
     {% endif %}
 </article>
 
 {% if pendiente %}
-{# Minimal draft controls (DC-2); the full revision screens come with DC-3. #}
+{% set state = pendiente.estado.name %}
 <article class="card">
     <header class="card__header">
         <h2 class="card__title">Revisión {{ pendiente.numero }} en preparación</h2>
-        <span class="badge">{{ pendiente.estado.value }}</span>
+        {{ estado_badge(pendiente) }}
     </header>
     <ul class="list">
+        <li class="list__item"><span class="list__primary">Autor</span><span class="list__secondary">{{ personas.get(pendiente.author_id, '—') }}</span></li>
+        <li class="list__item"><span class="list__primary">Resumen de cambios</span><span class="list__secondary">{{ pendiente.change_summary or '—' }}</span></li>
+        {% if pendiente.review_comment and state == 'borrador' %}
+        <li class="list__item"><span class="list__primary">Motivo del último rechazo</span><span class="list__secondary">{{ pendiente.review_comment }}</span></li>
+        {% endif %}
+        {% if pendiente.approver_id %}
+        <li class="list__item"><span class="list__primary">Aprobada por</span><span class="list__secondary">{{ personas.get(pendiente.approver_id, '—') }} · {{ fecha(pendiente.approved_at) }}</span></li>
+        {% endif %}
         {{ attachment_item(pendiente) }}
     </ul>
-    {% if pendiente.estado.name == 'borrador' and can('update', 'documents') and not document.withdrawn_at %}
+    <div class="card__body"><p class="card__text document-text">{{ pendiente.content }}</p></div>
+    {% if writes %}
     <div class="card__body">
+        {% if state == 'borrador' %}
         <form action="{{ url_for('document.upload_attachment', document_id=document.id, revision_id=pendiente.id) }}" method="post" enctype="multipart/form-data">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="field">
                 <label for="attachment-file">Fichero PDF, DOCX, XLSX u ODT (máximo {{ max_size }}){% if pendiente.attachment_path %}; sustituye al actual{% endif %}</label>
                 <input id="attachment-file" type="file" name="file" accept="{{ accept }}" required>
             </div>
-            <button type="submit" class="btn btn--sm btn--primary">Adjuntar</button>
+            <button type="submit" class="btn btn--sm">Adjuntar</button>
         </form>
+        {% endif %}
         <div class="form-actions">
+            {% if state == 'borrador' %}
+            <a class="btn btn--sm" href="{{ url_for('document.edit_draft', document_id=document.id, revision_id=pendiente.id) }}">Editar borrador</a>
+            {{ action_form(url_for('document.submit_revision', document_id=document.id, revision_id=pendiente.id), 'Enviar a revisión', '¿Enviar la revisión ' ~ pendiente.numero ~ ' a revisión?', 'primary') }}
             {% if pendiente.attachment_path %}
             {{ action_form(url_for('document.detach_attachment', document_id=document.id, revision_id=pendiente.id), 'Quitar fichero', '¿Quitar el fichero de esta revisión?') }}
             {% endif %}
             {% if vigente %}
             {{ action_form(url_for('document.discard_draft', document_id=document.id, revision_id=pendiente.id), 'Descartar borrador', '¿Descartar la revisión ' ~ pendiente.numero ~ ' y su fichero?', 'danger') }}
             {% endif %}
+            {% elif state == 'en_revision' %}
+            {% if may_approve %}
+            <a class="btn btn--sm btn--primary" href="{{ url_for('document.approve_revision', document_id=document.id, revision_id=pendiente.id) }}">Aprobar</a>
+            {% endif %}
+            <a class="btn btn--sm btn--danger" href="{{ url_for('document.reject_revision', document_id=document.id, revision_id=pendiente.id) }}">Rechazar</a>
+            {% elif state == 'aprobado' %}
+            {{ action_form(url_for('document.publish_revision', document_id=document.id, revision_id=pendiente.id), 'Publicar', '¿Publicar la revisión ' ~ pendiente.numero ~ '? Estará vigente desde hoy' ~ ((' y la revisión ' ~ vigente.numero ~ ' quedará obsoleta') if vigente else '') ~ '.', 'primary') }}
+            {% endif %}
         </div>
     </div>
     {% endif %}
 </article>
 {% endif %}
+
+<section aria-labelledby="historial">
+    <div class="section-header">
+        <h2 id="historial">Historial de revisiones</h2>
+    </div>
+    {% if history %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Rev.</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col">Autor</th>
+                    <th scope="col">Aprobada por</th>
+                    <th scope="col">Aprobada</th>
+                    <th scope="col">En vigor desde</th>
+                    <th scope="col">Obsoleta desde</th>
+                    <th scope="col">Resumen de cambios</th>
+                    <th scope="col">Fichero</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for revision in history %}
+                <tr>
+                    <td class="mono">{{ revision.numero }}{% if revision.legacy_version %} (v{{ revision.legacy_version }}){% endif %}</td>
+                    <td>{{ estado_badge(revision) }}</td>
+                    <td>{{ personas.get(revision.author_id, '—') }}</td>
+                    <td>{{ personas.get(revision.approver_id) or revision.legacy_approved_by or '—' }}</td>
+                    <td class="date">{{ fecha(revision.approved_at) }}</td>
+                    <td class="date">{{ fecha(revision.effective_from) }}</td>
+                    <td class="date">{{ fecha(revision.obsolete_from) }}</td>
+                    <td>{{ revision.change_summary or '—' }}{% if revision.review_comment %}<br><span class="muted">Último rechazo: {{ revision.review_comment }}</span>{% endif %}</td>
+                    <td>{{ attachment_link(revision) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        {{ empty_state('No hay revisiones que puedas consultar.') }}
+    {% endif %}
+</section>
 {% endblock %}

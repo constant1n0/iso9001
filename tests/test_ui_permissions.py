@@ -180,6 +180,92 @@ class UiPermissionsTestCase(unittest.TestCase):
                     with self.subTest(role=role.name, control="verify done action"):
                         self.assertEqual(role in deciders, verify_done in html)
 
+    def test_document_page_controls_follow_role_and_state(self) -> None:
+        """Administrators and auditors edit, draft, submit, reject and publish;
+        administrators approve and withdraw; a withdrawn document offers nothing."""
+        from app.services import document_revisions as revisions
+        from app.services import documents
+        from app.services.actor import Actor
+
+        system = Actor(None, "seed", ADMIN, "system")
+        with self.app.app_context():
+            approver = Person(nombre="Aprobadora")
+            db.session.add(approver)
+            db.session.flush()
+
+            def document(code: str, steps: tuple[str, ...]) -> tuple[int, int]:
+                """A document whose revisions went through ``steps``; its last revision's id."""
+                doc_id = documents.create(db.session, system, {
+                    "title": code, "code": code, "category": DocumentCategory.OTRO,
+                    "owner_id": self.owner_id, "author_id": self.owner_id,
+                    "content": "Texto", "change_summary": "Alta"}).id
+                (rev,) = (r.id for r in revisions.list_(db.session, system, doc_id))
+                for step in steps:
+                    if step == "submit":
+                        revisions.submit(db.session, system, rev)
+                    elif step == "approve":
+                        revisions.approve(db.session, system, rev, approver_id=approver.id,
+                                          today=DAY)
+                    elif step == "publish":
+                        revisions.publish(db.session, system, rev, today=DAY)
+                    elif step == "redraft":
+                        rev = revisions.start_draft(
+                            db.session, system, doc_id,
+                            {"author_id": self.owner_id, "change_summary": "Cambio"}).id
+                    else:
+                        revisions.withdraw(db.session, system, doc_id, "Baja", today=DAY)
+                return doc_id, rev
+
+            in_force = ("submit", "approve", "publish")
+            states = {
+                "first draft": document("D-1", ()),
+                "draft": document("D-2", (*in_force, "redraft")),
+                "in review": document("D-3", (*in_force, "redraft", "submit")),
+                "approved": document("D-4", (*in_force, "redraft", "submit", "approve")),
+                "in force": document("D-5", in_force),
+                "withdrawn": document("D-6", (*in_force, "redraft", "withdraw")),
+            }
+            db.session.commit()
+
+        writers, admins, nobody = {ADMIN, AUDITOR}, {ADMIN}, set()
+        drafting = {"edit": writers, "withdraw": admins, "edit draft": writers,
+                    "upload": writers, "submit": writers, "discard": writers}
+        expected = {
+            "first draft": drafting | {"discard": nobody},
+            "draft": drafting,
+            "in review": {"edit": writers, "withdraw": admins, "approve": admins,
+                          "reject": writers},
+            "approved": {"edit": writers, "withdraw": admins, "publish": writers},
+            "in force": {"edit": writers, "withdraw": admins, "new revision": writers},
+            "withdrawn": {},
+        }
+        for state, (doc_id, rev_id) in states.items():
+            base, rev = f"/documents/{doc_id}", f"/documents/{doc_id}/revisions/{rev_id}"
+            controls = {
+                "edit": f'href="/documents/edit/{doc_id}"',
+                "new revision": f'href="{base}/revisions/new"',
+                "withdraw": f'href="{base}/withdraw"',
+                "edit draft": f'href="{rev}/edit"',
+                "upload": f'action="{rev}/attachment"',
+                "submit": f'action="{rev}/submit"',
+                "discard": f'action="{rev}/discard"',
+                "approve": f'href="{rev}/approve"',
+                "reject": f'href="{rev}/reject"',
+                "publish": f'action="{rev}/publish"',
+            }
+            for role in RoleEnum:
+                response = self._page(role, base)
+                if response.status_code == 404:  # nothing in force: drafts readers only
+                    with self.subTest(state=state, role=role.name):
+                        self.assertEqual((OPERATIVO, True),
+                                         (role, state in ("first draft", "withdrawn")))
+                    continue
+                html = response.get_data(as_text=True)
+                for name, marker in controls.items():
+                    with self.subTest(state=state, role=role.name, control=name):
+                        self.assertEqual(role in expected[state].get(name, nobody),
+                                         marker in html)
+
     def test_navigation_links_follow_the_read_permission(self) -> None:
         expected = {"/auditorias/": {ADMIN, AUDITOR}, "/documents/": set(RoleEnum), "/no_conformidades/": set(RoleEnum),
                     "/usuarios/": {ADMIN, AUDITOR}, "/perfil/": set(RoleEnum),

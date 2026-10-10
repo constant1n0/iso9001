@@ -40,11 +40,12 @@ Route for every task: **delegated direct**.
 - [x] **DC-2 — File attachments.** Forecast 400-700.
   - Storage module (configurable directory, size and type checks by magic bytes, safe names, SHA-256, atomic write), upload on draft revisions, authorized download, immutability, cleanup of an unreferenced file when a draft is replaced or discarded; a way to discard a draft.
   - Also (DC-1 review): the workflow dates refuse a `datetime` like `next_review_date` does; a test proves the `IntegrityError` → `Conflict` message of revision writes.
-- [ ] **DC-3 — Screens.** Forecast 700-1,200.
+- [x] **DC-3 — Screens.** Forecast 700-1,200.
   - Document list (effective revisions, filters), detail with revision history, draft editor with attachment, workflow actions, withdrawal; role-based visibility.
   - Also (DC-1 review): the edit route of a withdrawn document refuses cleanly (tested); tests render the withdrawn and no-effective-revision branches of the detail page and the list's "De baja" badge.
 - [ ] **DC-4 — Periodic review, docs and deployment notes.** Forecast 250-450.
   - Dashboard flag and notification for overdue reviews; README and `docs/mcp.md`; backup procedure for the storage directory.
+  - Also (DC-3 notes and review): move the list filters (category, owner, status, overdue review) into `documents.list_`/`list_page` so they run in the database; the document code becomes read-only once a revision has been published; the approve and reject GET pages refuse a revision that is not `en_revision` (no dead-end form); tests for the edit success redirect and for publish on a withdrawn document.
 
 ## Checks
 
@@ -60,7 +61,8 @@ Baseline at `420f499`: 993 tests. Migrations are tested on PostgreSQL (`TEST_POS
 |---|---|---|---|---|
 | DC-1 | Done | `19c1ec2` (`document_revisions`, migration `a7d3f5b9c2e4` converting each document into revision 1 in force, `app/services/document_revisions.py` with start_draft, edit_draft, submit, approve, reject, publish, withdraw; documents readable by every role, drafts by ADMIN and AUDITOR; no hard delete; MCP reads the revision in force and refuses document writes; minimal detail page) | RED: 58 tests (2 failures, 48 errors: required `issued_date`/`version`, `documents.content` NOT NULL, missing table and enum, delete still allowed). GREEN: 1,016 tests incl. PostgreSQL; removing the row lock makes the race test fail | Range `2a59ef3..19c1ec2`: **medium**, `slice_budget_reached` (2,044 lines; the user approved one PR above the 1,500 cap, 2026-10-10); consent granted; reliability review `review-d18afc86d8994c48` **approved** and acknowledged; its warning (edit route of a withdrawn document untested) and three suggestions moved into DC-2 and DC-3 |
 | DC-2 | Done | `0657e6b` (framework-free storage module `app/services/document_files.py`), `8c78eab` (attachment columns, migration `c3e8a1f6d4b2`, attach, detach, `discard_draft`, upload and download routes, `flask cleanup-document-files`, README), review follow-ups `c28e1bf` and `b8cefdd` | RED: `ImportError: document_files`; 16 service errors and 1 failure (`attach`, `discard_draft`, `FIRST_DRAFT`, datetime accepted); 27 route failures; follow-ups: new file deleted on a commit failure, storage written before the state check, no ETag, an `IntegrityError` on discard escaping untyped. GREEN: 1,077, then 1,088 tests incl. PostgreSQL; `0657e6b` alone passed 1,039 | Range `f850bf8..8c78eab`: **high** (file uploads); consent granted; 4-lens review `review-8b4d0055900bd1f5` **approved** and acknowledged; findings applied in `c28e1bf` (no delete after a possibly-committed transaction, one attachment column list, drafts hidden from OPERATIVO proved, cleanup command aborts on database errors, state pre-check before disk I/O, ETag/304 and Range, log fields escaped, clarity fixes). That commit (**medium**) got reliability review `review-02afabdd405332a8`, **approved** and acknowledged; its warnings fixed in `b8cefdd` (discard stays a typed `Conflict`, the download closes its file handle on any failure) |
-| DC-3..DC-4 | Pending | — | — | — |
+| DC-3 | Done | `1a53c12` (list with filters and overdue highlight, new document with first draft, detail page with the revision in force, the revision in preparation and its workflow actions, revision history, withdrawal, edit refused for withdrawn documents) | RED: 12 screen tests (20 failures, 16 errors: missing routes, default author, history, withdrawn edit `200 != 302`, status badge). GREEN: 1,101 tests incl. PostgreSQL | Range `606b5c1..1a53c12`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-7967950071a10101` **approved** and acknowledged; its warning (approve and reject pages reachable for revisions in other states) and two suggestions moved into DC-4 |
+| DC-4 | Pending | — | — | — |
 
 ## Findings during implementation
 
@@ -73,4 +75,4 @@ Baseline at `420f499`: 993 tests. Migrations are tested on PostgreSQL (`TEST_POS
 
 ## Next step
 
-DC-3.
+DC-4.

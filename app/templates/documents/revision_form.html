@@ -1,0 +1,42 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% from "documents/_macros.html" import estado_badge %}
+{# One workflow form (new revision, draft, approval, rejection, withdrawal)
+   under a summary of the document and, when there is one, the revision. #}
+{% block title %}{{ title }}{% endblock %}
+{% block crumb %}Documentación · Documentos{% endblock %}
+{% block content %}
+{{ page_header('Cláusula 7.5 · ' ~ document.code ~ ' · ' ~ document.title, title) }}
+{% if revision or note %}
+<article class="card">
+    {% if revision %}
+    <header class="card__header">
+        <h2 class="card__title">Revisión {{ revision.numero }}</h2>
+        {{ estado_badge(revision) }}
+    </header>
+    <ul class="list">
+        <li class="list__item"><span class="list__primary">Autor</span><span class="list__secondary">{{ personas.get(revision.author_id, '—') }}</span></li>
+        <li class="list__item"><span class="list__primary">Resumen de cambios</span><span class="list__secondary">{{ revision.change_summary or '—' }}</span></li>
+    </ul>
+    {% endif %}
+    {% if note %}<div class="card__body"><p class="card__text muted">{{ note }}</p></div>{% endif %}
+</article>
+{% endif %}
+{{ form_card(form, url_for('document.view_document', document_id=document.id), submit_label) }}
+{% endblock %}

@@ -405,6 +405,11 @@ select[multiple] { min-height: 128px; }
 .section-header h2 { margin: 0; }
 .card__text { margin: 0; white-space: pre-line; }
 
+/* Document control: a revision's text keeps its layout; overdue reviews stand out. */
+.document-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+td.date--overdue, .date--overdue { color: var(--danger); }
+.field--check label { display: flex; align-items: center; gap: var(--space-2); }
+
 .pagination { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-4); color: var(--bone-mute); font: 400 13px/1 var(--font-mono); }
 
 .flashes { margin: 0 0 var(--space-5); padding: 0; list-style: none; }
