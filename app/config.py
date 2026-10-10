@@ -86,6 +86,17 @@ class Config:
         os.environ.get('MCP_AUTH_FAILURE_RATE_LIMIT', '').strip() or '20/minute'
     )
 
+    # Attachments of document revisions (decision DC7): files live on the
+    # server outside static/ and are served only by the authorized download
+    # route. Empty directory = <instance path>/documents; it is created at
+    # start-up and must be included in the backups. DOCUMENT_MAX_BYTES is the
+    # largest file accepted (20 MB by default); MAX_CONTENT_LENGTH follows it
+    # with room for the form, so larger requests get a 413.
+    DOCUMENT_STORAGE_DIR = os.environ.get('DOCUMENT_STORAGE_DIR', '').strip() or None
+    DOCUMENT_MAX_BYTES = (
+        os.environ.get('DOCUMENT_MAX_BYTES', '').strip() or 20 * 1024 * 1024
+    )
+
     # Configuración de correo
     MAIL_SERVER = 'smtp.gmail.com'
     MAIL_PORT = 587

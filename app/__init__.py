@@ -13,6 +13,7 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
+import os
 from collections.abc import Mapping
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -50,6 +51,37 @@ from .utils.permissions import can
 from .utils.security_logger import init_security_logging
 from .utils.trusted_proxies import TrustedProxyMiddleware, parse_trusted_proxies
 
+# Room for the form fields and multipart framing around one attachment.
+MULTIPART_ALLOWANCE = 1024 * 1024
+
+
+def configure_document_storage(app: Flask) -> None:
+    """Resolve the attachment directory and limits (decision DC7); create the directory.
+
+    ``DOCUMENT_STORAGE_DIR`` defaults to ``<instance path>/documents`` and
+    never lies under ``static/``; ``DOCUMENT_MAX_BYTES`` must be a positive
+    number of bytes. Unless set explicitly, ``MAX_CONTENT_LENGTH`` is that
+    limit plus ``MULTIPART_ALLOWANCE``, so a larger request gets a clean 413.
+    """
+    raw = app.config.get('DOCUMENT_MAX_BYTES')
+    try:
+        max_bytes = 0 if isinstance(raw, bool) else int(raw)
+    except (TypeError, ValueError):
+        max_bytes = 0
+    if max_bytes <= 0:
+        raise RuntimeError("DOCUMENT_MAX_BYTES debe ser un número positivo de bytes.")
+    app.config['DOCUMENT_MAX_BYTES'] = max_bytes
+    if app.config.get('MAX_CONTENT_LENGTH') is None:
+        app.config['MAX_CONTENT_LENGTH'] = max_bytes + MULTIPART_ALLOWANCE
+
+    configured = app.config.get('DOCUMENT_STORAGE_DIR')
+    directory = os.path.realpath(configured or os.path.join(app.instance_path, 'documents'))
+    static = os.path.realpath(app.static_folder) if app.static_folder else None
+    if static is not None and os.path.commonpath([directory, static]) == static:
+        raise RuntimeError("DOCUMENT_STORAGE_DIR no puede estar dentro de static/.")
+    os.makedirs(directory, mode=0o700, exist_ok=True)
+    app.config['DOCUMENT_STORAGE_DIR'] = directory
+
 
 def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
     """Create and configure the Flask application."""
@@ -64,6 +96,9 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
 
     if not app.config.get('SQLALCHEMY_DATABASE_URI'):
         raise RuntimeError("DATABASE_URI no está configurada. Configure la variable de entorno DATABASE_URI.")
+
+    # Attachments: storage directory and request size limit (DC7)
+    configure_document_storage(app)
 
     # Real client behind trusted proxies; '*' or an invalid entry stops start-up
     trusted_proxies = parse_trusted_proxies(app.config.get('TRUSTED_PROXIES'))

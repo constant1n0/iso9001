@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import logging
 import os
 import shutil
@@ -75,8 +76,14 @@ with (
     from app.models import RoleEnum, User
 
 
+# Attachments of every test app land in one throw-away directory (decision DC7);
+# tests that inspect the stored files pass a directory of their own.
+DOCUMENT_TEST_STORAGE = tempfile.mkdtemp(prefix="iso9001-test-documents-")
+atexit.register(shutil.rmtree, DOCUMENT_TEST_STORAGE, ignore_errors=True)
+
 BASE_TEST_CONFIG = {
     "CELERY_BROKER_URL": None,
+    "DOCUMENT_STORAGE_DIR": DOCUMENT_TEST_STORAGE,
     "MAIL_SUPPRESS_SEND": True,
     "RATELIMIT_ENABLED": False,
     "RATELIMIT_STORAGE_URI": "memory://",

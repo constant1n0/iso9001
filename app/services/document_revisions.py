@@ -33,6 +33,16 @@ document withdrawn, which makes it read-only; a revision still in preparation
 stays frozen as it was. Only a ``borrador`` is edited (``edit_draft``);
 effective and obsolete revisions never change again (DC3).
 
+Attachments (DC7): ``attach`` records a file kept by ``document_files.store``
+on a ``borrador`` and ``detach`` clears it; both return the stored name of the
+file they replace, which the adapter deletes only after committing. A new
+draft starts without the effective revision's file, so no two revisions share
+one (``attachment_path`` is unique). ``discard_draft`` deletes a ``borrador``
+when its document has a revision in force to fall back on: revision 1 of a
+document never put in force is its only text and stays (withdraw the document
+instead). The discarded number is free again; the deletion's audit row keeps
+the revision's full snapshot, attachment name, size and SHA-256 included.
+
 Reading (DC4): administrators and auditors see every revision; other roles
 only the effective one. Writing follows the policy (``DOCUMENTS``:
 administrators and auditors), narrowed to administrators for approving and
@@ -45,8 +55,9 @@ own audit row; dates come from the adapter, never from the server clock.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Mapping
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import func, select
@@ -57,6 +68,7 @@ from ..models import Document, DocumentRevision, EstadoRevision, RoleEnum
 from . import audit, fields, people, policy
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
+from .document_files import MIME_BY_EXTENSION, STORED_NAME, StoredFile
 from .errors import Conflict, NotFound, PermissionDenied, ValidationError
 from .policy import Action, Resource
 
@@ -68,6 +80,8 @@ DRAFT_READERS = frozenset({RoleEnum.ADMINISTRADOR, RoleEnum.AUDITOR})  # DC4
 APPROVE_ROLES = frozenset({RoleEnum.ADMINISTRADOR})
 WITHDRAW_ROLES = APPROVE_ROLES
 DRAFT_FIELDS = frozenset({"content", "change_summary", "author_id"})
+ATTACHMENT_FIELDS = ("attachment_name", "attachment_path", "attachment_size",
+                     "attachment_sha256", "attachment_mime")
 NEW_DRAFT_FIELDS = frozenset({"change_summary", "author_id"})  # the text is copied
 
 DOCUMENT_NOT_FOUND = "Documento no encontrado."
@@ -85,6 +99,9 @@ AUTHOR_APPROVES = "El autor de una revisión no puede aprobarla."
 COMMENT_REQUIRED = "El motivo del rechazo es obligatorio."
 REASON_REQUIRED = "El motivo de la baja es obligatorio."
 CONFLICT = "Otra revisión del documento ha cambiado a la vez; vuelve a intentarlo."
+FIRST_DRAFT = ("La primera revisión de un documento que nunca ha estado vigente no se puede "
+               "descartar; da de baja el documento si ya no se necesita.")
+_SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
 def may_see_drafts(actor: Actor) -> bool:
@@ -142,6 +159,14 @@ def effective(
     rows = session.scalars(select(DocumentRevision).where(
         DocumentRevision.document_id.in_(wanted), DocumentRevision.estado == R.vigente))
     return {row.document_id: row for row in rows}
+
+
+def in_preparation(
+    session: Session, actor: Actor, document_id: int
+) -> DocumentRevision | None:
+    """The document's revision in preparation, for actors who read drafts (else ``None``)."""
+    policy.require(actor, Action.READ, Resource.DOCUMENTS)
+    return _pending(session, document_id) if may_see_drafts(actor) else None
 
 
 def in_force(session: Session, document_id: int) -> DocumentRevision | None:
@@ -281,6 +306,68 @@ def withdraw(
     return document
 
 
+def attach(
+    session: Session, actor: Actor, revision_id: int, stored: StoredFile
+) -> str | None:
+    """Record ``stored`` as the attachment of a ``borrador``, replacing any previous one.
+
+    Returns the stored name of the replaced file (or ``None``) for the adapter
+    to delete once the change is committed, never before.
+    """
+    policy.require(actor, Action.UPDATE, Resource.DOCUMENTS)
+    values = _attachment_values(stored)
+    revision = _locked(session, revision_id, R.borrador, NOT_A_DRAFT)
+    replaced = revision.attachment_path
+    _change(session, actor, revision, **values)
+    return replaced
+
+
+def detach(session: Session, actor: Actor, revision_id: int) -> str | None:
+    """Remove a ``borrador``'s attachment; returns its stored name, ``None`` if it had none."""
+    policy.require(actor, Action.UPDATE, Resource.DOCUMENTS)
+    revision = _locked(session, revision_id, R.borrador, NOT_A_DRAFT)
+    replaced = revision.attachment_path
+    if replaced is not None:
+        _change(session, actor, revision, **dict.fromkeys(ATTACHMENT_FIELDS))
+    return replaced
+
+
+def discard_draft(session: Session, actor: Actor, revision_id: int) -> str | None:
+    """Delete a ``borrador`` whose document has a revision in force (``FIRST_DRAFT``).
+
+    Returns the stored name of its attachment (or ``None``) for the adapter to
+    delete once the deletion is committed.
+    """
+    policy.require(actor, Action.UPDATE, Resource.DOCUMENTS)
+    revision = _locked(session, revision_id, R.borrador, NOT_A_DRAFT)
+    if in_force(session, revision.document_id) is None:
+        raise ValidationError(FIRST_DRAFT)
+    replaced = revision.attachment_path
+    audit.record(session, actor, "delete", revision)
+    session.delete(revision)
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        raise Conflict(CONFLICT) from exc
+    return replaced
+
+
+def _attachment_values(stored: Any) -> dict[str, Any]:
+    """The columns recording ``stored``; anything but a well-formed record is a bug."""
+    valid = (
+        isinstance(stored, StoredFile)
+        and isinstance(stored.stored_name, str) and STORED_NAME.fullmatch(stored.stored_name)
+        and isinstance(stored.display_name, str) and 0 < len(stored.display_name) <= 255
+        and type(stored.size) is int and stored.size > 0
+        and isinstance(stored.sha256, str) and _SHA256.fullmatch(stored.sha256)
+        and stored.mime in MIME_BY_EXTENSION.values()
+    )
+    if not valid:
+        raise ValueError("An attachment must be a StoredFile returned by document_files.store.")
+    return dict(zip(ATTACHMENT_FIELDS, (stored.display_name, stored.stored_name, stored.size,
+                                        stored.sha256, stored.mime)))
+
+
 def _load(session: Session, revision_id: int) -> DocumentRevision:
     found = session.get(DocumentRevision, revision_id) if people.is_db_id(revision_id) else None
     if found is None:
@@ -380,7 +467,7 @@ def _require_role(actor: Actor, roles: frozenset[RoleEnum]) -> None:
 
 
 def _date(value: Any) -> date:
-    """The adapter's date; there is no server-clock fallback."""
-    if not isinstance(value, date):
+    """The adapter's date (never a ``datetime``); there is no server-clock fallback."""
+    if not isinstance(value, date) or isinstance(value, datetime):
         raise ValueError("A workflow date must come from the adapter.")
     return value
