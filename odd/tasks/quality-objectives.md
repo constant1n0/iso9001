@@ -31,10 +31,11 @@ Plan measurable quality objectives with an owner, a target, a deadline and resou
 
 Route for every task: **delegated direct**.
 
-- [ ] **QO-1 — Objectives and measurements (service).** Forecast 700-1,100.
+- [x] **QO-1 — Objectives and measurements (service).** Forecast 700-1,100.
   - Models, migration, services with QO1–QO4 rules, target evaluation, overdue rule, policy resource `QUALITY_OBJECTIVES`, MCP modules.
 - [ ] **QO-2 — Screens and dashboard.** Forecast 800-1,300.
   - Objectives list with filters and status badges, objective detail with measurements table and trend chart (CSP-clean, existing chart library), forms, dashboard card.
+  - Also: deleting a process referenced by an objective gives a specific Spanish `Conflict` with an explicit check (today only the foreign key refuses it, with the generic message; `app/services/process_operations.py`); QO-1 review: a no-op update of a measurement of a closed objective writes nothing instead of refusing (pin which rule wins).
 - [ ] **QO-3 — Reports and docs.** Forecast 200-400.
   - Objectives PDF (yearly summary), monthly report figures, README and `docs/mcp.md`.
 
@@ -50,8 +51,15 @@ Baseline at `1b40054`: 1,225 tests. Migrations are tested on PostgreSQL (`TEST_P
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| QO-1..QO-3 | Pending | — | — | — |
+| QO-1 | Done | `5697670` (models `objetivos_calidad`, `mediciones_objetivo`, migration `b4d6f8a1c3e5`, policy `QUALITY_OBJECTIVES`, people delete protection), `dd461f0` (`app/services/quality_objectives.py` with `meets`, `summary`, `off_track`, MCP modules `objetivos_calidad`, `mediciones_objetivo`: 20 modules) | RED: 26 `ImportError: quality_objectives`, missing enums, `NoSuchTableError: objetivos_calidad`. GREEN: 1,253 tests incl. PostgreSQL; `5697670` alone passed 1,226 | Range `9271ac0..dd461f0`: **medium**, `slice_budget_reached` (delivered as two pull requests under 1,500 lines each); consent granted; reliability review `review-9cea81a3cc019ec8` **approved** and acknowledged; one suggestion moved into QO-2; the other (the MCP measurement seed uses the real clock) only matters before 2026-01-31 |
+| QO-2..QO-3 | Pending | — | — | — |
+
+## Findings during implementation
+
+- MCP numbers are decimal strings with four decimals (`"95.0000"`), through `audit.json_safe`. The generic MCP tools call `create` without a date, so the registry wraps measurement writes with `local_today()`.
+- Added rules: `sentido` and `frecuencia` are required; `anio` defaults to the start date's year; the next due date is capped at `fecha_limite`; a measurement never moves to another objective; an objective's period must keep its measurements inside; a target or direction change is refused once measurements exist.
+- Test adaptations (standing approval): `tests/test_attribution.py`, `tests/test_mcp_http.py`, `tests/test_mcp_modules.py`, `tests/test_access_characterization.py`, `tests/test_policy.py`, `tests/test_mcp_write_tools.py`, `tests/test_migrations.py`, `tests/mcp_support.py`.
 
 ## Next step
 
-QO-1.
+QO-2.
