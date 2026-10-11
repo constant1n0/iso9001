@@ -1,0 +1,117 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form, empty_state %}
+{% from "auditorias/_macros.html" import estado_badge, tipo_badge %}
+{% block title %}Auditoría n.º {{ auditoria.id }}{% endblock %}
+{% block crumb %}Calidad · Auditorías{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 9.2 · Auditoría interna', 'Auditoría n.º ' ~ auditoria.id ~ ' · ' ~ auditoria.area_auditada) %}
+    {% if can('update', 'audits') %}
+    <a class="btn" href="{{ url_for('auditoria.editar_auditoria', id=auditoria.id) }}">Editar</a>
+    {% endif %}
+    <a class="btn" href="{{ url_for('auditoria.exportar_pdf', id=auditoria.id) }}" target="_blank" rel="noopener">PDF</a>
+{% endcall %}
+
+<article class="card">
+    <header class="card__header">
+        <h2 class="card__title">Planificación</h2>
+        {{ estado_badge(auditoria) }}
+    </header>
+    <ul class="list">
+        <li class="list__item"><span class="list__primary">Programa</span><span class="list__secondary">
+            {%- if programa %}<a href="{{ url_for('programa_auditoria.ver_programa', id=programa.id) }}">Programa {{ programa.anio }}</a> · {{ programa.estado.value }}{% else %}—{% endif -%}
+        </span></li>
+        <li class="list__item"><span class="list__primary">Fecha</span><span class="list__secondary">{{ auditoria.fecha.strftime('%d/%m/%Y') }}</span></li>
+        <li class="list__item"><span class="list__primary">Área auditada</span><span class="list__secondary">{{ auditoria.area_auditada }}</span></li>
+        <li class="list__item"><span class="list__primary">Responsable del área</span><span class="list__secondary">{{ personas.get(auditoria.responsable_area_id, '—') }}</span></li>
+        {% set lead = personas.get(auditoria.auditor_id) %}
+        <li class="list__item"><span class="list__primary">Auditor jefe</span><span class="list__secondary">{{ auditoria.auditor }}{% if lead %} · Persona: {{ lead }}{% endif %}</span></li>
+        <li class="list__item"><span class="list__primary">Equipo auditor</span><span class="list__secondary">
+            {%- for persona in auditoria.equipo %}{{ persona.nombre }}{% if not persona.activo %} (desactivada){% endif %}{% if not loop.last %}, {% endif %}{% else %}—{% endfor -%}
+        </span></li>
+    </ul>
+</article>
+
+<section class="grid grid--2" aria-label="Alcance, criterios y resultado">
+    <article class="card">
+        <header class="card__header"><h2 class="card__title">Alcance y criterios</h2></header>
+        <div class="card__body">
+            <p class="card__text"><strong>Alcance:</strong> {{ auditoria.alcance or '—' }}</p>
+            <p class="card__text"><strong>Criterios:</strong> {{ auditoria.criterios or '—' }}</p>
+        </div>
+    </article>
+    <article class="card">
+        <header class="card__header"><h2 class="card__title">Resultado</h2></header>
+        <div class="card__body">
+            <p class="card__text">{{ auditoria.resultado }}</p>
+            {% if auditoria.accion_correctiva %}<p class="card__text"><strong>Acción correctiva:</strong> {{ auditoria.accion_correctiva }}</p>{% endif %}
+        </div>
+    </article>
+</section>
+
+<section aria-labelledby="hallazgos">
+    <div class="section-header">
+        <h2 id="hallazgos">Hallazgos</h2>
+        {% if not cancelada and can('create', 'audits') %}
+        <a class="btn btn--primary btn--sm" href="{{ url_for('auditoria.nuevo_hallazgo', id=auditoria.id) }}">+ Añadir hallazgo</a>
+        {% endif %}
+    </div>
+    {% if cancelada %}<p class="muted">Una auditoría cancelada no admite hallazgos nuevos ni cambios.</p>{% endif %}
+    {% if hallazgos %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Tipo</th>
+                    <th scope="col">Cláusula</th>
+                    <th scope="col">Descripción</th>
+                    <th scope="col">Evidencia</th>
+                    <th scope="col">No conformidad</th>
+                    <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for hallazgo in hallazgos %}
+                <tr>
+                    <td>{{ tipo_badge(hallazgo.tipo) }}</td>
+                    <td class="mono">{{ hallazgo.clausula or '—' }}</td>
+                    <td>{{ hallazgo.descripcion }}</td>
+                    <td>{{ hallazgo.evidencia or '—' }}</td>
+                    <td>{% if hallazgo.no_conformidad_id %}<a href="{{ url_for('no_conformidad.ver_no_conformidad', id=hallazgo.no_conformidad_id) }}">N.º {{ hallazgo.no_conformidad_id }}</a>{% else %}—{% endif %}</td>
+                    <td>
+                        <div class="table__actions">
+                            {% if not cancelada %}
+                                {% if can('update', 'audits') %}
+                                <a class="btn btn--sm" href="{{ url_for('auditoria.editar_hallazgo', id=auditoria.id, hallazgo_id=hallazgo.id) }}">Editar</a>
+                                {% endif %}
+                                {% if can('delete', 'audits') %}
+                                {{ delete_form(url_for('auditoria.eliminar_hallazgo', id=auditoria.id, hallazgo_id=hallazgo.id), '¿Eliminar este hallazgo? Su no conformidad, si la tiene, se conserva.') }}
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        {{ empty_state('Todavía no hay hallazgos.') }}
+    {% endif %}
+</section>
+{% endblock %}

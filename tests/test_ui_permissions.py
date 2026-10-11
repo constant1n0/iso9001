@@ -25,6 +25,7 @@ from app.models import (
     NoConformidad,
     ParteInteresada,
     Person,
+    ProgramaAuditoria,
     RoleEnum,
     ResultadoVerificacion,
     RolResponsabilidad,
@@ -44,6 +45,8 @@ MODULES = (
     ("/capacitaciones/", "nueva", "/editar/", "/eliminar/", EVERYONE, EVERYONE, {ADMIN}),
     ("/partes_interesadas/", "nueva", "/editar/", "/eliminar/", EVERYONE, EVERYONE, {ADMIN}),
     ("/auditorias/", "nueva", "/editar/", "/eliminar/", {ADMIN, AUDITOR}, {ADMIN, AUDITOR}, {ADMIN}),
+    ("/programas-auditoria/", "nuevo", "/editar", "/eliminar", {ADMIN, AUDITOR},
+     {ADMIN, AUDITOR}, {ADMIN}),
     ("/documents/", "new", "/edit/", "/delete/", EVERYONE, {ADMIN, AUDITOR}, set()),
     ("/usuarios/", "nuevo", "/editar", "/eliminar", {ADMIN, AUDITOR}, {ADMIN}, set()),
     ("/personas/", "nueva", "/editar", "/eliminar", EVERYONE, {ADMIN, AUDITOR}, {ADMIN}),
@@ -67,6 +70,7 @@ class UiPermissionsTestCase(unittest.TestCase):
                 Capacitacion(tema="T", fecha=DAY, personal="P"),
                 ParteInteresada(nombre="Parte"),
                 Auditoria(area_auditada="A", fecha=DAY, auditor="x", resultado="r"),
+                ProgramaAuditoria(anio=2026, objetivos="O", alcance="A"),
                 Document(title="T", code="DOC-1", category=DocumentCategory.OTRO),
                 RolResponsabilidad(rol="Rol"),
             ])
@@ -266,8 +270,80 @@ class UiPermissionsTestCase(unittest.TestCase):
                         self.assertEqual(role in expected[state].get(name, nobody),
                                          marker in html)
 
+    def test_programme_page_controls_follow_role_and_state(self) -> None:
+        """Administrators and auditors edit programmes and add audits to them;
+        administrators approve drafts and delete programmes without audits."""
+        from app.services import audit_programmes, audits
+        from app.services.actor import Actor
+
+        system = Actor(None, "seed", ADMIN, "system")
+        with self.app.app_context():
+            draft = ProgramaAuditoria.query.one().id
+            approved = audit_programmes.create(db.session, system, {
+                "anio": 2025, "objetivos": "O", "alcance": "A"}).id
+            audit_programmes.approve(db.session, system, approved,
+                                     aprobado_por_id=self.owner_id, today=DAY)
+            audits.create(db.session, system, {
+                "area_auditada": "Compras", "fecha": date(2025, 5, 5), "auditor": "x",
+                "resultado": "r", "programa_id": approved})
+            db.session.commit()
+        writers, admins, nobody = {ADMIN, AUDITOR}, {ADMIN}, set()
+        expected = {
+            draft: {"edit": writers, "approve": admins, "delete": admins, "audit": writers},
+            approved: {"edit": writers, "approve": nobody, "delete": nobody, "audit": writers},
+        }
+        for pid, allowed in expected.items():
+            base = f"/programas-auditoria/{pid}"
+            controls = {"edit": f'href="{base}/editar"', "approve": f'href="{base}/aprobar"',
+                        "delete": f'action="{base}/eliminar"',
+                        "audit": f'href="/auditorias/nueva?programa_id={pid}"'}
+            for role in RoleEnum:
+                html = self._page(role, base).get_data(as_text=True)
+                for name, marker in controls.items():
+                    with self.subTest(programme=pid, role=role.name, control=name):
+                        self.assertEqual(role in allowed[name], marker in html)
+
+    def test_audit_page_controls_follow_role_and_state(self) -> None:
+        """Administrators and auditors add and edit findings, administrators delete
+        them; a cancelled audit shows its findings without any finding control."""
+        from app.services import audit_findings, audits
+        from app.services.actor import Actor
+
+        system = Actor(None, "seed", ADMIN, "system")
+        with self.app.app_context():
+            open_id = Auditoria.query.one().id
+            cancelled_id = audits.create(db.session, system, {
+                "area_auditada": "Ventas", "fecha": DAY, "auditor": "x",
+                "resultado": "r"}).id
+            finding = {"tipo": "observacion", "descripcion": "Hallazgo"}
+            findings = {audit_id: audit_findings.create(
+                db.session, system, finding | {"auditoria_id": audit_id}).id
+                for audit_id in (open_id, cancelled_id)}
+            audits.update(db.session, system, cancelled_id, {"estado": "CANCELADA"})
+            db.session.commit()
+        writers, admins, nobody = {ADMIN, AUDITOR}, {ADMIN}, set()
+        expected = {
+            open_id: {"edit audit": writers, "add": writers, "edit": writers,
+                      "delete": admins},
+            cancelled_id: {"edit audit": writers, "add": nobody, "edit": nobody,
+                           "delete": nobody},
+        }
+        for audit_id, allowed in expected.items():
+            base = f"/auditorias/{audit_id}"
+            finding_url = f"{base}/hallazgos/{findings[audit_id]}"
+            controls = {"edit audit": f'href="/auditorias/editar/{audit_id}"',
+                        "add": f'href="{base}/hallazgos/nuevo"',
+                        "edit": f'href="{finding_url}/editar"',
+                        "delete": f'action="{finding_url}/eliminar"'}
+            for role in RoleEnum:
+                html = self._page(role, base).get_data(as_text=True)
+                for name, marker in controls.items():
+                    with self.subTest(audit=audit_id, role=role.name, control=name):
+                        self.assertEqual(role in allowed[name], marker in html)
+
     def test_navigation_links_follow_the_read_permission(self) -> None:
-        expected = {"/auditorias/": {ADMIN, AUDITOR}, "/documents/": set(RoleEnum), "/no_conformidades/": set(RoleEnum),
+        expected = {"/auditorias/": {ADMIN, AUDITOR}, "/programas-auditoria/": {ADMIN, AUDITOR},
+                    "/documents/": set(RoleEnum), "/no_conformidades/": set(RoleEnum),
                     "/usuarios/": {ADMIN, AUDITOR}, "/perfil/": set(RoleEnum),
                     "/personas/": set(RoleEnum), "/competencias/requisitos/": set(RoleEnum),
                     "/competencias/matriz": set(RoleEnum)}

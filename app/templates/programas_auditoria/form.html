@@ -1,0 +1,30 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% set titulo = 'Editar el programa ' ~ programa.anio if programa else 'Nuevo programa de auditoría' %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block crumb %}Calidad · Programas de auditoría{% endblock %}
+{% block content %}
+{{ page_header('Cláusula 9.2.2 · Programa de auditoría', titulo) }}
+{% if programa and programa.estado.name == 'aprobado' %}
+<article class="card">
+    <div class="card__body"><p class="card__text muted">El programa está aprobado: su año ya no se puede cambiar.</p></div>
+</article>
+{% endif %}
+{{ form_card(form, url_for('programa_auditoria.ver_programa', id=programa.id) if programa else url_for('programa_auditoria.listar_programas'), 'Guardar cambios' if programa else 'Crear programa') }}
+{% endblock %}

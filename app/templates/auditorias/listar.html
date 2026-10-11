@@ -15,6 +15,7 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
 {% extends "base.html" %}
+{% from "auditorias/_macros.html" import estado_badge %}
 {% block title %}Auditorías{% endblock %}
 {% block crumb %}Calidad · Auditorías{% endblock %}
 {% set filtros = ['area', 'auditor', 'estado', 'fecha_inicio', 'fecha_fin'] %}
@@ -72,13 +73,12 @@
         </thead>
         <tbody>
             {% for auditoria in auditorias %}
-            {% set estado = auditoria.estado.value if auditoria.estado else '' %}
             <tr>
                 <td class="date">{{ auditoria.fecha.strftime('%d/%m/%Y') }}</td>
-                <td>{{ auditoria.area_auditada }}</td>
+                <td><a href="{{ url_for('auditoria.ver_auditoria', id=auditoria.id) }}">{{ auditoria.area_auditada }}</a></td>
                 {% set persona = personas.get(auditoria.auditor_id) %}
                 <td>{{ auditoria.auditor }}{% if persona %}<br><span class="muted">Persona: {{ persona }}</span>{% endif %}</td>
-                <td><span class="badge {{ {'Pendiente': 'badge--warn', 'En Proceso': 'badge--solid', 'Completada': 'badge--ok', 'Cancelada': ''}.get(estado, '') }}">{{ estado or '—' }}</span></td>
+                <td>{{ estado_badge(auditoria) }}</td>
                 <td>{{ auditoria.resultado | truncate(80) }}</td>
                 <td>
                     <div class="table__actions">

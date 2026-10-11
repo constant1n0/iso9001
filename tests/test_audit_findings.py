@@ -426,6 +426,9 @@ class PolicyTestCase(Helpers, ServiceBase):
 class ForeignKeyCases:
     """The schema backs the service; shared by the SQLite and PostgreSQL cases."""
 
+    # PostgreSQL names the violated constraint; SQLite only says a foreign key failed.
+    names_violated_constraints = True
+
     def enforce_foreign_keys(self) -> None:
         """PostgreSQL always enforces them; SQLite overrides this."""
 
@@ -437,9 +440,34 @@ class ForeignKeyCases:
             with self.assertRaises(errors().Conflict) as caught:
                 audits().delete(db.session, CLI, found.id)
         self.assertIsInstance(caught.exception.__cause__, IntegrityError)
-        self.assertIn("elimina antes sus hallazgos", caught.exception.message)
+        expected = (audits().HAS_FINDINGS if self.names_violated_constraints
+                    else audits().DELETE_CONFLICT)
+        self.assertEqual(expected, caught.exception.message)
         db.session.rollback()
         self.assertEqual(1, self.count(Auditoria))
+
+    def test_a_delete_refused_by_another_constraint_never_claims_findings(self) -> None:
+        # AP-2 review: the audit row of a delete by a user who no longer exists
+        # breaks ``fk_audit_logs_actor_user_id_users``, not the findings key.
+        self.enforce_foreign_keys()
+        found = self.new_audit()
+        ghost = Actor(user_id=424242, label="ghost", role=ADMIN, channel="cli")
+        with self.assertRaises(errors().Conflict) as caught:
+            audits().delete(db.session, ghost, found.id)
+        self.assertIsInstance(caught.exception.__cause__, IntegrityError)
+        self.assertEqual(audits().DELETE_CONFLICT, caught.exception.message)
+        db.session.rollback()
+        self.assertEqual(1, self.count(Auditoria))
+
+    def test_an_nc_finding_on_a_future_audit_with_a_long_text_opens_its_nc(self) -> None:
+        # AP-2 review: ``nonconformities.create`` takes a future detection date
+        # and a description of any length, so findings need no check of their own.
+        found = self.new_audit(fecha=date(2099, 12, 31))
+        long_text = "Pedido sin aprobar. " * 2000
+        created = self.add(found.id, tipo="nc_menor", descripcion=long_text)
+        nc = self.nc(created.no_conformidad_id)
+        self.assertEqual(date(2099, 12, 31), nc.fecha_detectada)
+        self.assertTrue(nc.descripcion.endswith(long_text.strip()))
 
     def test_the_link_is_cleared_by_the_database_and_never_shared(self) -> None:
         self.enforce_foreign_keys()
@@ -459,6 +487,8 @@ class ForeignKeyCases:
 
 
 class SqliteForeignKeyTestCase(ForeignKeyCases, Helpers, ServiceBase):
+    names_violated_constraints = False
+
     def enforce_foreign_keys(self) -> None:
         db.session.commit()
         db.session.execute(text("PRAGMA foreign_keys=ON"))

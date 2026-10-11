@@ -20,6 +20,7 @@
 {% block crumb %}Calidad · Auditorías{% endblock %}
 {% block content %}
 {% call page_header('Cláusula 9.2 · Auditoría interna', 'Editar auditoría') %}
+    <a class="btn" href="{{ url_for('auditoria.ver_auditoria', id=auditoria.id) }}">Ver</a>
     <a class="btn" href="{{ url_for('auditoria.exportar_pdf', id=auditoria.id) }}" target="_blank" rel="noopener">PDF</a>
 {% endcall %}
 {{ form_card(form, url_for('auditoria.listar_auditorias'), 'Guardar cambios') }}

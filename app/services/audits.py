@@ -41,7 +41,10 @@ People must exist; an inactive person is refused only when newly chosen.
 Findings (``audit_findings``, decision AP4) hold links to their
 nonconformities, so an audit with findings cannot be deleted: ``delete``
 raises ``Conflict`` asking to delete them first, and the foreign key
-(``ON DELETE RESTRICT``) refuses one recorded after that check.
+(``ON DELETE RESTRICT``) refuses one recorded after that check. When the
+database refuses a delete, the message mentions findings only if the refusal
+names that foreign key (PostgreSQL does, SQLite names no constraint);
+otherwise it is ``DELETE_CONFLICT``.
 """
 
 from __future__ import annotations
@@ -71,6 +74,11 @@ NOT_A_MAPPING = "Los datos deben ser un objeto con campos."
 HAS_FINDINGS = (
     "No se puede eliminar una auditoría que tiene hallazgos; elimina antes sus hallazgos."
 )
+DELETE_CONFLICT = (
+    "No se ha podido eliminar la auditoría porque sus datos han cambiado entretanto; "
+    "vuelve a intentarlo."
+)
+FINDINGS_FK = "fk_hallazgos_auditoria_auditoria_id_auditorias"  # see HallazgoAuditoria
 
 
 def get(session: Session, actor: Actor, audit_id: int) -> Auditoria:
@@ -266,6 +274,11 @@ def _flush(session: Session, message: str | None = None) -> None:
         raise Conflict(message) from exc
 
 
+def _violated_constraint(exc: IntegrityError) -> str | None:
+    """The constraint the database names in ``exc`` (psycopg2 ``diag``), if any."""
+    return getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+
+
 def _has_findings(session: Session, audit_id: int) -> bool:
     return bool(session.scalar(
         select(exists().where(HallazgoAuditoria.auditoria_id == audit_id))))
@@ -326,4 +339,8 @@ def delete(session: Session, actor: Actor, audit_id: int) -> None:
         raise Conflict(HAS_FINDINGS)
     audit.record(session, actor, "delete", found, before=_snapshot(found))
     session.delete(found)
-    _flush(session, HAS_FINDINGS)
+    try:
+        session.flush()
+    except IntegrityError as exc:  # e.g. a finding recorded after the check
+        findings = _violated_constraint(exc) == FINDINGS_FK
+        raise Conflict(HAS_FINDINGS if findings else DELETE_CONFLICT) from exc

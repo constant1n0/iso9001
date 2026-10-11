@@ -17,7 +17,7 @@ import enum
 
 from .models import (
     CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAuditoriaEnum,
-    GravedadNoConformidad, OrigenNoConformidad, ResultadoVerificacion, RoleEnum,
+    GravedadNoConformidad, OrigenNoConformidad, ResultadoVerificacion, RoleEnum, TipoHallazgo,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -357,3 +357,23 @@ class CompetenceRecordForm(BaseForm):
     )
     fecha_evaluacion = DateField('Fecha de evaluación', validators=[Optional()])
     evaluador_id = person_field('Evaluador')
+
+
+# Audit programmes and findings (``audit-programme``, AP-3). The services
+# validate again; these checks only give field-level messages.
+class ProgramaAuditoriaForm(BaseForm):
+    anio = IntegerField('Año', validators=[DataRequired(), NumberRange(min=2000, max=2100)])
+    objetivos = TextAreaField('Objetivos', validators=[DataRequired()])
+    alcance = TextAreaField('Alcance', validators=[DataRequired()])
+
+
+class AprobarProgramaForm(BaseForm):
+    aprobado_por_id = required_person_field('Aprobado por')
+
+
+class HallazgoForm(BaseForm):
+    tipo = SelectField('Tipo', coerce=member_name, validators=[DataRequired()],
+                       choices=[(t.name, t.value) for t in TipoHallazgo])
+    clausula = StringField('Cláusula de la norma (p. ej. 8.5.1)', validators=[Length(max=20)])
+    descripcion = TextAreaField('Descripción', validators=[DataRequired()])
+    evidencia = TextAreaField('Evidencia')

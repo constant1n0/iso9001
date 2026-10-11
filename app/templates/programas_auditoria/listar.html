@@ -1,0 +1,67 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form, empty_state %}
+{% from "programas_auditoria/_macros.html" import estado_badge, aprobacion %}
+{% block title %}Programas de auditoría{% endblock %}
+{% block crumb %}Calidad · Programas de auditoría{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 9.2.2 · Programa de auditoría', 'Programas de auditoría') %}
+    {% if can('create', 'audits') %}
+    <a class="btn btn--primary" href="{{ url_for('programa_auditoria.nuevo_programa') }}">+ Nuevo programa</a>
+    {% endif %}
+{% endcall %}
+
+{% if programas %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Año</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Aprobación</th>
+                <th scope="col">Auditorías</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for programa in programas %}
+            {% set cuenta = auditorias[programa.id] %}
+            <tr>
+                <td><a href="{{ url_for('programa_auditoria.ver_programa', id=programa.id) }}">{{ programa.anio }}</a></td>
+                <td>{{ estado_badge(programa) }}</td>
+                <td>{{ aprobacion(programa, personas) }}</td>
+                <td>{{ cuenta }} {{ 'auditoría' if cuenta == 1 else 'auditorías' }}</td>
+                <td>
+                    <div class="table__actions">
+                        {% if can('update', 'audits') %}
+                        <a class="btn btn--sm" href="{{ url_for('programa_auditoria.editar_programa', id=programa.id) }}">Editar</a>
+                        {% endif %}
+                        {% if cuenta == 0 and can('delete', 'audits') %}
+                        {{ delete_form(url_for('programa_auditoria.eliminar_programa', id=programa.id), '¿Eliminar el programa de auditoría ' ~ programa.anio ~ '?') }}
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    {{ empty_state('Todavía no hay programas de auditoría.') }}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,8 @@
+{# Shared by the programme pages. #}
+{% macro estado_badge(programa) %}
+<span class="badge {{ 'badge--ok' if programa.estado.name == 'aprobado' else 'badge--warn' }}">{{ programa.estado.value }}</span>
+{%- endmacro %}
+
+{% macro aprobacion(programa, personas) %}
+{%- if programa.aprobado_en %}{{ programa.aprobado_en.strftime('%d/%m/%Y') }} · {{ personas.get(programa.aprobado_por_id, '—') }}{% else %}—{% endif -%}
+{%- endmacro %}
