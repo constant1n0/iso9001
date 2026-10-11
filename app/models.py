@@ -761,6 +761,51 @@ class Auditoria(RecordMetadataMixin, db.Model):
     def __repr__(self):
         return f'<Auditoria {self.area_auditada}>'
 
+
+class TipoHallazgo(enum.Enum):
+    """How an audit finding is classified (decision AP4 of ``audit-programme``)."""
+
+    nc_mayor = 'No conformidad mayor'
+    nc_menor = 'No conformidad menor'
+    observacion = 'Observación'
+    oportunidad_mejora = 'Oportunidad de mejora'
+
+
+class HallazgoAuditoria(RecordMetadataMixin, db.Model):
+    """A finding of an internal audit (ISO 9001 clause 9.2.2, decisions AP4 and AP5).
+
+    A nonconformity finding gets its own ``NoConformidad`` when it is recorded
+    (``services.audit_findings``) and keeps the link, at most one finding per
+    nonconformity. An audit with findings cannot be deleted; deleting the
+    nonconformity clears the link.
+    """
+
+    __tablename__ = 'hallazgos_auditoria'
+    __table_args__ = (
+        db.ForeignKeyConstraint(
+            ['auditoria_id'], ['auditorias.id'],
+            name='fk_hallazgos_auditoria_auditoria_id_auditorias', ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['no_conformidad_id'], ['no_conformidades.id'],
+            name='fk_hallazgos_auditoria_no_conformidad_id_no_conformidades',
+            ondelete='SET NULL',
+        ),
+        db.UniqueConstraint('no_conformidad_id', name='uq_hallazgos_auditoria_no_conformidad_id'),
+        db.Index('ix_hallazgos_auditoria_auditoria_id', 'auditoria_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    auditoria_id = db.Column(db.Integer, nullable=False)
+    tipo = db.Column(text_enum(TipoHallazgo, 'ck_hallazgos_auditoria_tipo'), nullable=False)
+    descripcion = db.Column(db.Text, nullable=False)
+    clausula = db.Column(db.String(20))  # ISO 9001 clause, e.g. "8.5.1"
+    evidencia = db.Column(db.Text)
+    no_conformidad_id = db.Column(db.Integer, nullable=True)
+
+    def __repr__(self):
+        return f'<HallazgoAuditoria {self.id} {self.tipo.name if self.tipo else None}>'
+
 # Modelo para Control Documental
 class DocumentCategory(enum.Enum):
     MANUAL_CALIDAD = 'Manual de Calidad'

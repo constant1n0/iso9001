@@ -27,7 +27,8 @@ MIGRATIONS_DIR = str(bootstrap.PROJECT_ROOT / "migrations")
 # Audited tables created after the record-metadata migration (c4d8e1f2a9b7).
 LATER_AUDITED_TABLES = frozenset(
     {"personas", "competencias_requeridas", "competencias_acreditadas",
-     "acciones_correctivas", "document_revisions", "programas_auditoria"}
+     "acciones_correctivas", "document_revisions", "programas_auditoria",
+     "hallazgos_auditoria"}
 )
 
 
@@ -715,6 +716,59 @@ class MigrationsTestCase(unittest.TestCase):
             self.assertFalse({"programas_auditoria", "auditoria_equipo"}
                              & set(inspector.get_table_names()))
             self.assertFalse(planning & {c["name"] for c in inspector.get_columns("auditorias")})
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+
+    def test_audit_findings_guard_their_links_and_downgrade(self) -> None:
+        table = "hallazgos_auditoria"
+        expected = {
+            "fk_hallazgos_auditoria_auditoria_id_auditorias": ("auditorias", "RESTRICT"),
+            "fk_hallazgos_auditoria_no_conformidad_id_no_conformidades":
+                ("no_conformidades", "SET NULL"),
+        }
+        finding = ("INSERT INTO hallazgos_auditoria (auditoria_id, tipo, descripcion, "
+                   "no_conformidad_id) SELECT a.id, '{tipo}', 'Firma ausente', {link} "
+                   "FROM auditorias a")
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision="d7f1b3a5c9e2")
+            with db.engine.begin() as connection:
+                connection.execute(text(
+                    "INSERT INTO auditorias (area_auditada, fecha, auditor, resultado, estado) "
+                    "VALUES ('Compras', '2026-03-01', 'Luis', 'OK', 'PENDIENTE')"))
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            foreign_keys = {fk["name"]: (fk["referred_table"], fk["options"].get("ondelete"))
+                            for fk in inspector.get_foreign_keys(table)}
+            self.assertLessEqual(expected.items(), foreign_keys.items())
+            self.assertIn(f"ix_{table}_auditoria_id",
+                          {index["name"] for index in inspector.get_indexes(table)})
+            self.assertEqual([["no_conformidad_id"]],
+                             [u["column_names"] for u in inspector.get_unique_constraints(table)])
+            with db.engine.begin() as connection:
+                connection.execute(text(
+                    "INSERT INTO no_conformidades (descripcion, fecha_detectada) "
+                    "VALUES ('Firma ausente', '2026-03-01')"))
+                connection.execute(text(finding.format(
+                    tipo="nc_mayor", link="(SELECT id FROM no_conformidades)")))
+                connection.execute(text(finding.format(tipo="observacion", link="NULL")))
+            for statement in (
+                finding.format(tipo="nc_mayor", link="(SELECT id FROM no_conformidades)"),
+                finding.format(tipo="No conformidad mayor", link="NULL"),
+                "UPDATE hallazgos_auditoria SET descripcion = NULL",
+                "UPDATE hallazgos_auditoria SET auditoria_id = NULL",
+                "DELETE FROM auditorias",
+            ):
+                with self.subTest(refused=statement):
+                    with self.assertRaises(IntegrityError):
+                        with db.engine.begin() as connection:
+                            connection.execute(text(statement))
+            with db.engine.begin() as connection:
+                connection.execute(text("DELETE FROM no_conformidades"))  # clears the link
+            self.assertEqual([(None,), (None,)], self._rows(
+                "SELECT no_conformidad_id FROM hallazgos_auditoria ORDER BY id"))
+            downgrade(directory=MIGRATIONS_DIR, revision="d7f1b3a5c9e2")
+            self.assertNotIn(table, inspect(db.engine).get_table_names())
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 

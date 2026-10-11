@@ -37,6 +37,11 @@ Planning fields (decisions AP2 and AP3 of ``audit-programme``), all optional:
   audited-area owner (``ValidationError``).
 
 People must exist; an inactive person is refused only when newly chosen.
+
+Findings (``audit_findings``, decision AP4) hold links to their
+nonconformities, so an audit with findings cannot be deleted: ``delete``
+raises ``Conflict`` asking to delete them first, and the foreign key
+(``ON DELETE RESTRICT``) refuses one recorded after that check.
 """
 
 from __future__ import annotations
@@ -45,11 +50,13 @@ from collections.abc import Mapping
 from datetime import date
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..models import Auditoria, EstadoAuditoriaEnum, Person, ProgramaAuditoria
+from ..models import (
+    Auditoria, EstadoAuditoriaEnum, HallazgoAuditoria, Person, ProgramaAuditoria,
+)
 from . import audit, crud, fields, people, policy
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
@@ -60,6 +67,10 @@ UNKNOWN_PROGRAMME = "El campo «programa_id» no corresponde a ningún programa 
 TEAM_IDS = "El campo «equipo_ids» debe ser una lista de identificadores de persona."
 LEAD_OWNS_AREA = "El auditor jefe no puede ser el responsable del área auditada."
 TEAM_OWNS_AREA = "Ningún miembro del equipo auditor puede ser el responsable del área auditada."
+NOT_A_MAPPING = "Los datos deben ser un objeto con campos."
+HAS_FINDINGS = (
+    "No se puede eliminar una auditoría que tiene hallazgos; elimina antes sus hallazgos."
+)
 
 
 def get(session: Session, actor: Actor, audit_id: int) -> Auditoria:
@@ -134,7 +145,7 @@ def _clean(
     programme year and independence rules run on the result (``_check``).
     """
     if not isinstance(data, Mapping):
-        raise ValidationError("Los datos deben ser un objeto con campos.")
+        raise ValidationError(NOT_A_MAPPING)
     fields.reject_unknown(data, WRITABLE_FIELDS)
     clean: dict[str, Any] = {}
     if "area_auditada" in data:
@@ -248,16 +259,23 @@ def _fill_auditor(
                             max_length=AUDITOR_MAX)
 
 
-def _flush(session: Session) -> None:
+def _flush(session: Session, message: str | None = None) -> None:
     try:
         session.flush()
     except IntegrityError as exc:
-        raise Conflict() from exc
+        raise Conflict(message) from exc
+
+
+def _has_findings(session: Session, audit_id: int) -> bool:
+    return bool(session.scalar(
+        select(exists().where(HallazgoAuditoria.auditoria_id == audit_id))))
 
 
 def create(session: Session, actor: Actor, data: Mapping[str, Any]) -> Auditoria:
     """Create an audit; area, date, result and the auditor (name or person) are required."""
     policy.require(actor, Action.CREATE, Resource.AUDITS)
+    if not isinstance(data, Mapping):
+        raise ValidationError(NOT_A_MAPPING)
     data = _fill_auditor(session, data)
     fields.require_keys(data, REQUIRED_ON_CREATE | {NAME_OR_PERSON})
     values, team = _clean(session, data)
@@ -301,9 +319,11 @@ def update(
 
 
 def delete(session: Session, actor: Actor, audit_id: int) -> None:
-    """Hard-delete an audit, keeping its full snapshot in the audit log."""
+    """Hard-delete an audit without findings, keeping its full snapshot in the audit log."""
     policy.require(actor, Action.DELETE, Resource.AUDITS)
     found = _load(session, audit_id)
+    if _has_findings(session, found.id):
+        raise Conflict(HAS_FINDINGS)
     audit.record(session, actor, "delete", found, before=_snapshot(found))
     session.delete(found)
-    _flush(session)
+    _flush(session, HAS_FINDINGS)

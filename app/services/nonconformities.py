@@ -43,6 +43,10 @@ nonconformity is read-only until it is reopened.
 Writes that can move the state take the nonconformity's row lock first
 (``lock``), so concurrent ones serialize on PostgreSQL and the second sees
 the first one's outcome.
+
+An audit finding may cite the nonconformity it created (``audit_findings``);
+``delete`` clears that link with an audit row on the finding before the row goes
+(the foreign key would set it NULL anyway, unaudited).
 """
 
 from __future__ import annotations
@@ -56,8 +60,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
-    AccionCorrectiva, EstadoNoConformidad, GravedadNoConformidad, NoConformidad,
-    OrigenNoConformidad, ResultadoVerificacion, RoleEnum,
+    AccionCorrectiva, EstadoNoConformidad, GravedadNoConformidad, HallazgoAuditoria,
+    NoConformidad, OrigenNoConformidad, ResultadoVerificacion, RoleEnum,
 )
 from . import audit, crud, fields, people, policy
 from .actor import Actor
@@ -511,12 +515,22 @@ def _set_state(
 
 
 def delete(session: Session, actor: Actor, nc_id: int) -> None:
-    """Hard-delete a nonconformity and its corrective actions, with full audit snapshots."""
+    """Hard-delete a nonconformity and its corrective actions, with full audit snapshots.
+
+    The audit finding that cites it keeps existing, without the link.
+    """
     policy.require(actor, Action.DELETE, Resource.NONCONFORMITIES)
     nc = lock(session, nc_id)
     for action in _actions(session, nc.id):
         audit.record(session, actor, "delete", action)
         session.delete(action)
+    for finding in session.scalars(
+        select(HallazgoAuditoria).where(HallazgoAuditoria.no_conformidad_id == nc.id)
+    ):
+        before = audit.snapshot(finding)
+        finding.no_conformidad_id = None
+        stamp_updated(finding, actor)
+        audit.record(session, actor, "update", finding, before=before)
     _flush(session)  # the actions' rows go before the row they reference
     audit.record(session, actor, "delete", nc)
     session.delete(nc)

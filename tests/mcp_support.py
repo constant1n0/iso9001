@@ -53,6 +53,9 @@ SEEDS = {
                              "responsable_id": 1, "fecha_prevista": "2026-10-15"},
     "programas_auditoria": {"anio": 2026, "objetivos": "Auditar todos los procesos",
                             "alcance": "Todo el SGC"},
+    # Cites the audit seeded above (id 1); an observation creates no non-conformity.
+    "hallazgos_auditoria": {"auditoria_id": 1, "tipo": "observacion",
+                            "descripcion": "Registro de compras sin firmar"},
 }
 
 

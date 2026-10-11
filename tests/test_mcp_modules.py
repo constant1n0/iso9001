@@ -16,12 +16,12 @@ SLUGS = {
     "roles_responsabilidades", "riesgos_oportunidades", "recursos_capacitacion",
     "procesos", "indicadores_auditoria", "personas",
     "competencias_requeridas", "competencias_acreditadas", "acciones_correctivas",
-    "programas_auditoria",
+    "programas_auditoria", "hallazgos_auditoria",
 }
 # The two competence registers share one policy resource (decision Q1 of qms-people),
-# and so do audits and their programmes (decision AP7 of audit-programme).
+# and so do audits, their programmes and their findings (decision AP7 of audit-programme).
 SHARED_RESOURCE = ("competencias_requeridas", "competencias_acreditadas")
-SHARED_AUDITS = ("auditorias", "programas_auditoria")
+SHARED_AUDITS = ("auditorias", "programas_auditoria", "hallazgos_auditoria")
 # (module, legacy free-text name, person link that can fill it)
 LEGACY_NAMES = (("capacitaciones", "personal", "persona_id"),
                 ("auditorias", "auditor", "auditor_id"),
@@ -45,7 +45,7 @@ class LayoutTestCase(unittest.TestCase):
 
 
 class RegistryTestCase(unittest.TestCase):
-    def test_registry_holds_the_seventeen_modules(self) -> None:
+    def test_registry_holds_the_eighteen_modules(self) -> None:
         self.assertEqual(SLUGS, set(registry().MODULES))
 
     def test_each_module_maps_to_its_own_policy_resource(self) -> None:
@@ -60,7 +60,9 @@ class RegistryTestCase(unittest.TestCase):
         self.assertFalse({Resource.COMPETENCE, Resource.AUDITS} & set(resources))
 
     def test_declared_fields_match_what_each_service_requires(self) -> None:
-        from app.services import audit_programmes, audits, nonconformities, people
+        from app.services import (
+            audit_findings, audit_programmes, audits, nonconformities, people,
+        )
 
         bespoke = {
             "personas": (people.WRITABLE_FIELDS, people.REQUIRED_ON_CREATE),
@@ -69,6 +71,8 @@ class RegistryTestCase(unittest.TestCase):
             "auditorias": (audits.WRITABLE_FIELDS, audits.REQUIRED_ON_CREATE),
             "programas_auditoria": (audit_programmes.WRITABLE_FIELDS,
                                     audit_programmes.REQUIRED_ON_CREATE),
+            "hallazgos_auditoria": (audit_findings.WRITABLE_FIELDS,
+                                    audit_findings.REQUIRED_ON_CREATE),
             "documentos": (frozenset(), frozenset()),  # read-only through MCP (DC-1)
         }
         for slug, module in registry().MODULES.items():

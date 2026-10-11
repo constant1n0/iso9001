@@ -228,6 +228,18 @@ class ApprovalTestCase(Helpers, ServiceBase):
         self.refused(errors().NotFound, programmes().approve, actor(ADMIN), 999,
                      aprobado_por_id=ana, today=TODAY)
 
+    def test_a_database_conflict_on_approval_is_a_spanish_conflict(self) -> None:
+        ana = self.person()
+        found = self.programme()
+        with patch.object(db.session, "flush",
+                          side_effect=IntegrityError("stmt", {}, Exception("fk"))):
+            message = self.refused(errors().Conflict, programmes().approve, actor(ADMIN),
+                                   found.id, aprobado_por_id=ana, today=TODAY)
+        self.assertEqual(programmes().APPROVE_CONFLICT, message)
+        self.assertIn("aprobar el programa", message)
+        db.session.refresh(found)
+        self.assertIs(draft(), found.estado)
+
     def test_the_approval_date_comes_from_the_adapter(self) -> None:
         found = self.programme()
         ana = self.person()
@@ -584,6 +596,35 @@ class McpTestCase(McpDbCase):
         self.assertEqual({"anio", "objetivos", "alcance"}, {f["name"] for f in described["fields"]})
         self.assertEqual({"anio", "estado"}, {f["name"] for f in described["filters"]})
 
+    async def test_programmes_update_and_get_through_mcp(self) -> None:
+        plan = self.seed("programas_auditoria")
+        who = mcp_actor(AUDITOR)
+        updated = await self.call(who, "qms_update", {
+            "module": "programas_auditoria", "id": plan,
+            "data": {"anio": 2027, "objetivos": "Auditar compras"}})
+        self.assertFalse(updated.is_error, updated.content)
+        self.assertEqual((plan, 2027, "Auditar compras", "Borrador"),
+                         tuple(updated.structured_content[k]
+                               for k in ("id", "anio", "objetivos", "estado")))
+        got = await self.call(who, "qms_get", {"module": "programas_auditoria", "id": plan})
+        self.assertFalse(got.is_error, got.content)
+        self.assertEqual((2027, "Auditar compras", "Todo el SGC"),
+                         tuple(got.structured_content[k]
+                               for k in ("anio", "objetivos", "alcance")))
+        for arguments, word in (({"id": plan, "data": {"anio": 1999}}, "2000"),
+                                ({"id": 999, "data": {"anio": 2028}}, "no encontrado")):
+            with self.subTest(arguments=arguments):
+                refused = await self.call(who, "qms_update",
+                                          {"module": "programas_auditoria"} | arguments)
+                self.assertTrue(refused.is_error)
+                self.assertIn(word, refused.content[0].text)
+        missing = await self.call(who, "qms_get", {"module": "programas_auditoria", "id": 999})
+        self.assertTrue(missing.is_error)
+        self.assertIn("Programa de auditoría no encontrado.", missing.content[0].text)
+        hidden = await self.call(mcp_actor(OPERATIVO), "qms_get",
+                                 {"module": "programas_auditoria", "id": plan})
+        self.assertTrue(hidden.is_error)
+
     async def test_audits_carry_planning_fields_and_filter_by_programme(self) -> None:
         ana = self.seed("personas")
         luis = self.seed("personas", nombre="Luis")
@@ -675,6 +716,31 @@ class AuditFormTestCase(RegisterRoutesBase):
                                     data=self.FORM | {"equipo_ids": [self.ana, self.eva]})
         self.assertEqual(302, response.status_code)
         self.assertEqual(sorted([self.ana, self.eva]), self.fetch(Auditoria, audit_id).equipo_ids)
+
+    def test_editing_keeps_a_team_member_who_became_inactive(self) -> None:
+        from app.services import audits as service
+
+        audit_id = self.seed_with(service, {
+            "area_auditada": "Compras", "fecha": date(2026, 10, 1), "auditor": "Luis",
+            "resultado": "OK", "equipo_ids": [self.eva]})
+        with self.app.app_context():
+            table = Person.__table__
+            db.session.execute(table.update().where(table.c.id == self.eva).values(activo=False))
+            db.session.commit()
+        self.login(AUDITOR)
+        page = self.client.get(f"{self.BASE}/editar/{audit_id}").get_data(as_text=True)
+        self.assertRegex(page, rf'<option selected value="{self.eva}">|'
+                               rf'<option value="{self.eva}" selected>')
+        self.assertNotIn("Olga Ruiz", page)
+        response = self.client.post(f"{self.BASE}/editar/{audit_id}", data=self.FORM | {
+            "resultado": "Revisado", "equipo_ids": [self.eva]})
+        self.assertEqual(302, response.status_code)
+        found = self.fetch(Auditoria, audit_id)
+        self.assertEqual(([self.eva], "Revisado"), (found.equipo_ids, found.resultado))
+        response = self.client.post(f"{self.BASE}/editar/{audit_id}", data=self.FORM | {
+            "equipo_ids": [self.eva, self.olga]})
+        self.assertEqual(200, response.status_code)
+        self.assertEqual([self.eva], self.fetch(Auditoria, audit_id).equipo_ids)
 
 
 if __name__ == "__main__":
