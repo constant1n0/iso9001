@@ -31,8 +31,9 @@ update, administrators delete, and the ``mcp`` channel never deletes.
   (origin ``auditoria``, severity ``mayor``/``menor``, the audit's area, date
   and description, the audited-area owner as responsible when that person is
   active, otherwise no responsible) and keeps the link (``no_conformidad_id``,
-  never written by callers). A finding that becomes a nonconformity creates it
-  then, unless it still holds the link from an earlier type, which it reuses.
+  never written by callers). A type change into a nonconformity type reuses
+  the link the finding still holds and otherwise creates a new nonconformity,
+  also when its earlier one was deleted.
 - Downgrading such a finding keeps the nonconformity and the link; the type
   change shows on the finding's audit row. While the finding is a
   nonconformity its severity follows the type, but only while the linked
@@ -191,7 +192,7 @@ def update(
     if "tipo" in changes and changes["tipo"] in NC_SEVERITY:
         if found.no_conformidad_id is not None:
             _follow_severity(session, actor, found.no_conformidad_id, changes["tipo"])
-        elif found.tipo not in NC_SEVERITY:  # becomes a nonconformity now
+        else:  # a nonconformity finding without a link (new, or its NC was deleted) gets one
             changes["no_conformidad_id"] = _nonconformity(
                 session, actor, parent, changes.get("descripcion", found.descripcion),
                 changes["tipo"]).id

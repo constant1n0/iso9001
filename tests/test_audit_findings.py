@@ -359,6 +359,20 @@ class DeleteTestCase(Helpers, ServiceBase):
                                                    row.after["no_conformidad_id"]))
 
 
+    def test_a_nonconformity_type_without_a_link_gets_a_new_nonconformity(self) -> None:
+        # Whatever the previous type, a nonconformity finding without a link gets one.
+        found = self.new_audit()
+        created = self.add(found.id, tipo="nc_mayor")
+        nonconformities().delete(db.session, actor(ADMIN), created.no_conformidad_id)
+        db.session.commit()
+        updated = findings().update(db.session, actor(AUDITOR), created.id, {"tipo": "nc_menor"})
+        db.session.commit()
+        self.assertIsNotNone(updated.no_conformidad_id)
+        from app.models import NoConformidad
+
+        nc = db.session.get(NoConformidad, updated.no_conformidad_id)
+        self.assertEqual("menor", nc.gravedad.name)
+
 class PolicyTestCase(Helpers, ServiceBase):
     def test_administrators_and_auditors_work_and_operativo_is_refused(self) -> None:
         found = self.new_audit()
