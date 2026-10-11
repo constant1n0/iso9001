@@ -35,11 +35,12 @@ Route for every task: **delegated direct**.
 
 - [x] **AP-1 — Programme and audit planning fields.** Forecast 600-1,000.
   - `ProgramaAuditoria` model, service and approval; `Auditoria` gains programme, scope, criteria, team, audited-area owner; independence check; migration; MCP module and fields.
-- [ ] **AP-2 — Findings and automatic nonconformities.** Forecast 500-900.
+- [x] **AP-2 — Findings and automatic nonconformities.** Forecast 500-900.
   - `HallazgoAuditoria` model and service; automatic nonconformity for NC findings (AP5) through the nonconformity service; MCP module; decide and document what deleting an audit does to its findings (they hold nonconformity links).
   - Also (AP-1 review): `audit_programmes.approve` maps an `IntegrityError` to a Spanish `Conflict` (not `Conflict(None)`); tests for a non-mapping payload to `audits.create`/`update`, for editing an audit whose team member became inactive, and for MCP `qms_update`/`qms_get` on `programas_auditoria`.
 - [ ] **AP-3 — Screens.** Forecast 800-1,300.
   - Programme list and detail with its audits; audit form with the new fields and pickers; audit detail with findings and links to their nonconformities; approval action.
+  - Also (AP-2 review): an NC finding on a future-dated audit or with a long description must not fail with a nonconformity-service message (test it, or check before creating); an audit delete refused by a constraint other than the findings foreign key should not claim "has findings".
 - [ ] **AP-4 — Reports and docs.** Forecast 250-500.
   - Audit PDF with scope, criteria, team and findings; programme PDF or summary; README and `docs/mcp.md`.
 
@@ -56,7 +57,8 @@ Baseline at `88cd706`: 1,126 tests. Migrations are tested on PostgreSQL (`TEST_P
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
 | AP-1 | Done | `f16eb68` (`programas_auditoria`, `auditoria_equipo`, audit `programa_id`, `alcance`, `criterios`, `responsable_area_id`, migration `d7f1b3a5c9e2`, `app/services/audit_programmes.py` with `approve`, independence and year checks, person delete protection, MCP module `programas_auditoria` (17 modules), audit form fields) | RED: 59 tests (`ImportError: audit_programmes`, `KeyError: 'programa_id'`, unknown module, counts). GREEN: 1,164 tests incl. PostgreSQL | Range `0864670..f16eb68`: **medium**, `slice_budget_reached` (1,498 code lines plus the tracker); consent granted; reliability review `review-4561977c88243678` **approved** and acknowledged; its warning (editing an audit whose team member became inactive is untested) and three suggestions moved into AP-2 |
-| AP-2..AP-4 | Pending | — | — | — |
+| AP-2 | Done | `e6c3c58` (`hallazgos_auditoria`, migration `e9c2a4f6b8d1`, `app/services/audit_findings.py`, automatic nonconformity for NC findings with origin `auditoria`, severity, audit date and the active area owner, audit delete refused while it has findings, MCP module `hallazgos_auditoria` (18 modules), AP-1 review items), review follow-up `efda549` | RED: 61 `ImportError: audit_findings`, missing models and table, `APPROVE_CONFLICT`, counts, non-mapping payloads raising `TypeError`; follow-up: a re-typed finding whose nonconformity was deleted got none. GREEN: 1,191, then 1,192 tests incl. PostgreSQL | Range `80d663d..e6c3c58`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-086d9ff4a030a937` **approved** and acknowledged; its warning fixed in `efda549` (every NC finding without a link gets a nonconformity, whatever the previous type); two suggestions moved into AP-3 |
+| AP-3..AP-4 | Pending | — | — | — |
 
 ## Findings during implementation
 
@@ -65,6 +67,9 @@ Baseline at `88cd706`: 1,126 tests. Migrations are tested on PostgreSQL (`TEST_P
 - Programmes share the `AUDITS` resource; `tests/test_mcp_modules.py` lists `auditorias` and `programas_auditoria` as sharing it.
 - Test adaptations (standing approval): `tests/test_attribution.py`, `tests/test_mcp_http.py`, `tests/test_mcp_modules.py`, `tests/mcp_support.py`, `tests/test_migrations.py`.
 
+- **Findings (AP-2):** a `COMPLETADA` audit still takes findings, only `CANCELADA` refuses them; a finding never moves to another audit; clauses match `4–10(.1–99){0,3}`; the automatic nonconformity has the area owner as responsible only when that person is active; a severity change follows the nonconformity only while it is `abierta`; deleting a nonconformity clears its finding's link with an audit row.
+- The local test database container `iso-pg-test` had disappeared during AP-2; the writer recreated it (`postgres:17-alpine`, 127.0.0.1:55432, new random password). Reported to the user (2026-10-11).
+
 ## Next step
 
-AP-2.
+AP-3.
