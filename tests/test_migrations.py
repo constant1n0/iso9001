@@ -27,7 +27,7 @@ MIGRATIONS_DIR = str(bootstrap.PROJECT_ROOT / "migrations")
 # Audited tables created after the record-metadata migration (c4d8e1f2a9b7).
 LATER_AUDITED_TABLES = frozenset(
     {"personas", "competencias_requeridas", "competencias_acreditadas",
-     "acciones_correctivas", "document_revisions"}
+     "acciones_correctivas", "document_revisions", "programas_auditoria"}
 )
 
 
@@ -642,6 +642,79 @@ class MigrationsTestCase(unittest.TestCase):
             downgrade(directory=MIGRATIONS_DIR, revision="a7d3f5b9c2e4")
             columns = {c["name"] for c in inspect(db.engine).get_columns("document_revisions")}
             self.assertFalse(set(attachment) & columns)
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+
+    def test_audit_programmes_and_planning_fields_guard_their_links_and_downgrade(self) -> None:
+        planning = {"programa_id", "alcance", "criterios", "responsable_area_id"}
+        expected = {
+            "fk_auditorias_programa_id_programas_auditoria": ("programas_auditoria", "RESTRICT"),
+            "fk_auditorias_responsable_area_id_personas": ("personas", "RESTRICT"),
+            "fk_programas_auditoria_aprobado_por_id_personas": ("personas", "RESTRICT"),
+            "fk_auditoria_equipo_auditoria_id_auditorias": ("auditorias", "CASCADE"),
+            "fk_auditoria_equipo_persona_id_personas": ("personas", "RESTRICT"),
+        }
+        programme = ("INSERT INTO programas_auditoria (anio, objetivos, alcance) "
+                     "VALUES ({anio}, 'Objetivos', 'Alcance')")
+        team = ("INSERT INTO auditoria_equipo (auditoria_id, persona_id) "
+                "SELECT a.id, p.id FROM auditorias a, personas p")
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision="c3e8a1f6d4b2")
+            with db.engine.begin() as connection:
+                connection.execute(text(
+                    "INSERT INTO auditorias (area_auditada, fecha, auditor, resultado, estado) "
+                    "VALUES ('Compras', '2026-03-01', 'Luis', 'OK', 'PENDIENTE')"))
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            columns = {c["name"]: c for c in inspector.get_columns("auditorias")}
+            for name in planning:
+                self.assertTrue(columns[name]["nullable"], name)
+            self.assertEqual([(None, None, None, None)], self._rows(
+                "SELECT programa_id, alcance, criterios, responsable_area_id FROM auditorias"))
+            foreign_keys = {
+                fk["name"]: (fk["referred_table"], fk["options"].get("ondelete"))
+                for table in ("auditorias", "programas_auditoria", "auditoria_equipo")
+                for fk in inspector.get_foreign_keys(table)
+            }
+            self.assertLessEqual(expected.items(), foreign_keys.items())
+            with db.engine.begin() as connection:
+                for statement in (
+                    "INSERT INTO personas (nombre) VALUES ('Ana')",
+                    programme.format(anio=2026),
+                    "UPDATE auditorias SET programa_id = (SELECT id FROM programas_auditoria), "
+                    "responsable_area_id = (SELECT id FROM personas)",
+                    team,
+                ):
+                    connection.execute(text(statement))
+            self.assertEqual([("borrador",)], self._rows("SELECT estado FROM programas_auditoria"))
+            for statement in (
+                programme.format(anio=2026),  # one programme per year
+                programme.format(anio=1999),
+                programme.format(anio=2101),
+                "UPDATE programas_auditoria SET estado = 'Aprobado'",
+                "UPDATE programas_auditoria SET estado = 'aprobado'",  # no date nor approver
+                "UPDATE programas_auditoria SET objetivos = NULL",
+                team,  # the same person twice in one team
+                "DELETE FROM programas_auditoria",
+                "DELETE FROM personas",
+            ):
+                with self.subTest(refused=statement):
+                    with self.assertRaises(IntegrityError):
+                        with db.engine.begin() as connection:
+                            connection.execute(text(statement))
+            with db.engine.begin() as connection:
+                connection.execute(text(
+                    "UPDATE programas_auditoria SET estado = 'aprobado', "
+                    "aprobado_en = '2026-01-15', aprobado_por_id = (SELECT id FROM personas)"))
+                connection.execute(text("DELETE FROM auditorias"))  # cascades to the team
+                self.assertEqual(0, connection.execute(text(
+                    "SELECT count(*) FROM auditoria_equipo")).scalar_one())
+            downgrade(directory=MIGRATIONS_DIR, revision="c3e8a1f6d4b2")
+            inspector = inspect(db.engine)
+            self.assertFalse({"programas_auditoria", "auditoria_equipo"}
+                             & set(inspector.get_table_names()))
+            self.assertFalse(planning & {c["name"] for c in inspector.get_columns("auditorias")})
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 

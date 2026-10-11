@@ -17,11 +17,26 @@
 
 Authorization comes from ``policy`` (resource ``AUDITS``); validation mirrors
 ``AuditoriaForm``. Services flush and never commit. ``auditor_id`` cites the
-auditor (``personas``, see ``people.check_reference``); ``auditor`` keeps the
+lead auditor (``personas``, see ``people.check_reference``); ``auditor`` keeps the
 legacy free-text name. ``auditor`` is required unless a person is cited: a
 write that leaves it blank takes the person's name (``people.fill_name``), so
 it is not in ``REQUIRED_ON_CREATE`` (which the MCP registry mirrors) but
 ``create`` requires it once that name is filled in.
+
+Planning fields (decisions AP2 and AP3 of ``audit-programme``), all optional:
+
+- ``programa_id`` puts the audit in a programme (``audit_programmes``); the
+  audit's date must fall in the programme's year. The programme row is read
+  with a shared lock so its year cannot change meanwhile.
+- ``alcance`` and ``criterios`` are free text; ``responsable_area_id`` cites the
+  audited-area owner.
+- ``equipo_ids`` is a list of people that replaces the team. The association
+  table has no audit row of its own, so every audit row carries ``equipo_ids``
+  next to the columns; a record exposes ``equipo`` and ``equipo_ids``.
+- Independence: neither the lead auditor nor any team member may be the
+  audited-area owner (``ValidationError``).
+
+People must exist; an inactive person is refused only when newly chosen.
 """
 
 from __future__ import annotations
@@ -34,12 +49,17 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..models import Auditoria, EstadoAuditoriaEnum
+from ..models import Auditoria, EstadoAuditoriaEnum, Person, ProgramaAuditoria
 from . import audit, crud, fields, people, policy
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
-from .errors import Conflict, NotFound
+from .errors import Conflict, NotFound, ValidationError
 from .policy import Action, Resource
+
+UNKNOWN_PROGRAMME = "El campo «programa_id» no corresponde a ningún programa de auditoría."
+TEAM_IDS = "El campo «equipo_ids» debe ser una lista de identificadores de persona."
+LEAD_OWNS_AREA = "El auditor jefe no puede ser el responsable del área auditada."
+TEAM_OWNS_AREA = "Ningún miembro del equipo auditor puede ser el responsable del área auditada."
 
 
 def get(session: Session, actor: Actor, audit_id: int) -> Auditoria:
@@ -64,12 +84,15 @@ def list_page(
     estado: EstadoAuditoriaEnum | None = None,
     fecha_inicio: date | None = None,
     fecha_fin: date | None = None,
+    programa_id: int | None = None,
     page: int = 1,
     per_page: int = 10,
 ) -> tuple[list[Auditoria], int]:
     """One page of audits in id order plus the total matching the filters."""
     policy.require(actor, Action.READ, Resource.AUDITS)
     conditions = []
+    if programa_id is not None:
+        conditions.append(Auditoria.programa_id == programa_id)
     if area:
         conditions.append(Auditoria.area_auditada.ilike(f"%{area}%"))
     if auditor:
@@ -96,7 +119,7 @@ AREA_MAX = 50  # mirrors Auditoria.area_auditada and the web form
 AUDITOR_MAX = 50  # mirrors Auditoria.auditor and the web form
 WRITABLE_FIELDS = frozenset({
     "area_auditada", "fecha", "auditor", "auditor_id", "resultado", "accion_correctiva",
-    "estado",
+    "estado", "programa_id", "alcance", "criterios", "responsable_area_id", "equipo_ids",
 })
 REQUIRED_ON_CREATE = frozenset({"area_auditada", "fecha", "resultado"})
 NAME_OR_PERSON = "auditor"  # required on create unless ``auditor_id`` fills it
@@ -104,11 +127,14 @@ NAME_OR_PERSON = "auditor"  # required on create unless ``auditor_id`` fills it
 
 def _clean(
     session: Session, data: Mapping[str, Any], current: Auditoria | None = None
-) -> dict[str, Any]:
-    """Validate the keys present in ``data`` and return the normalized values.
+) -> tuple[dict[str, Any], list[Person] | None]:
+    """Validated column values and the team (``None`` when ``equipo_ids`` is absent).
 
-    ``current`` is the audit being updated (``None`` when creating).
+    ``current`` is the audit being updated (``None`` when creating). The
+    programme year and independence rules run on the result (``_check``).
     """
+    if not isinstance(data, Mapping):
+        raise ValidationError("Los datos deben ser un objeto con campos.")
     fields.reject_unknown(data, WRITABLE_FIELDS)
     clean: dict[str, Any] = {}
     if "area_auditada" in data:
@@ -125,11 +151,93 @@ def _clean(
         clean["accion_correctiva"] = fields.text(data, "accion_correctiva", strip=False)
     if "estado" in data:
         clean["estado"] = fields.enum_member(data, "estado", EstadoAuditoriaEnum)
-    if "auditor_id" in data:  # last: it queries the database
-        clean["auditor_id"] = people.reference(
-            session, data, "auditor_id", current.auditor_id if current is not None else None
+    for key in ("alcance", "criterios"):
+        if key in data:
+            clean[key] = fields.text(data, key, strip=False)
+    if "programa_id" in data:
+        clean["programa_id"] = fields.integer(data, "programa_id")
+    # Last: these query the database.
+    for key in ("auditor_id", "responsable_area_id"):
+        if key in data:
+            clean[key] = people.reference(session, data, key, getattr(current, key, None))
+    team = None
+    if "equipo_ids" in data:
+        team = _team(session, data["equipo_ids"],
+                     set(current.equipo_ids) if current is not None else set())
+    return clean, team
+
+
+def _team(session: Session, value: Any, current: set[int]) -> list[Person]:
+    """The people named by ``value``: known ids (duplicates ignored), active when new."""
+    if value is None:
+        return []
+    if not isinstance(value, (list, tuple)) or not all(
+        isinstance(item, int) and not isinstance(item, bool) for item in value
+    ):
+        raise ValidationError(TEAM_IDS)
+    wanted = set(value)
+    searchable = [item for item in wanted if people.is_db_id(item)]
+    found = list(session.scalars(
+        select(Person).where(Person.id.in_(searchable)).order_by(Person.nombre, Person.id)
+    )) if searchable else []
+    missing = sorted(wanted - {person.id for person in found})
+    if missing:
+        raise ValidationError(
+            f"Personas desconocidas en «equipo_ids»: {', '.join(map(str, missing))}."
         )
-    return clean
+    inactive = [person.nombre for person in found
+                if not person.activo and person.id not in current]
+    if inactive:
+        raise ValidationError(
+            f"Personas desactivadas en «equipo_ids»: {', '.join(inactive)}; "
+            "elige personas activas."
+        )
+    return found
+
+
+def _check(
+    session: Session, values: Mapping[str, Any], team: list[Person] | None,
+    current: Auditoria | None = None,
+) -> None:
+    """The rules across fields, on the values the audit will hold after the write."""
+
+    def final(key: str) -> Any:
+        return values[key] if key in values else getattr(current, key, None)
+
+    owner = final("responsable_area_id")
+    if owner is not None:
+        if final("auditor_id") == owner:
+            raise ValidationError(LEAD_OWNS_AREA)
+        members = ({person.id for person in team} if team is not None
+                   else set(current.equipo_ids) if current is not None else set())
+        if owner in members:
+            raise ValidationError(TEAM_OWNS_AREA)
+    programme_id = final("programa_id")
+    if programme_id is not None and ("programa_id" in values or "fecha" in values):
+        anio = _programme_year(session, programme_id)
+        fecha = final("fecha")
+        if fecha is not None and fecha.year != anio:
+            raise ValidationError(
+                f"La fecha de la auditoría debe estar en {anio}, el año de su programa."
+            )
+
+
+def _programme_year(session: Session, programme_id: int) -> int:
+    """The programme's year, its row read with a shared lock (``FOR SHARE``)."""
+    anio = None
+    if people.is_db_id(programme_id):
+        anio = session.scalar(
+            select(ProgramaAuditoria.anio).where(ProgramaAuditoria.id == programme_id)
+            .with_for_update(read=True)
+        )
+    if anio is None:
+        raise ValidationError(UNKNOWN_PROGRAMME)
+    return anio
+
+
+def _snapshot(found: Auditoria) -> dict[str, Any]:
+    """Column values plus ``equipo_ids``, as stored on the audit's audit rows."""
+    return audit.snapshot(found) | {"equipo_ids": found.equipo_ids}
 
 
 def _fill_auditor(
@@ -152,31 +260,42 @@ def create(session: Session, actor: Actor, data: Mapping[str, Any]) -> Auditoria
     policy.require(actor, Action.CREATE, Resource.AUDITS)
     data = _fill_auditor(session, data)
     fields.require_keys(data, REQUIRED_ON_CREATE | {NAME_OR_PERSON})
-    values = {"estado": EstadoAuditoriaEnum.PENDIENTE} | _clean(session, data)
-    created = Auditoria(**values)
+    values, team = _clean(session, data)
+    _check(session, values, team)
+    created = Auditoria(**({"estado": EstadoAuditoriaEnum.PENDIENTE} | values),
+                        equipo=team or [])
     stamp_created(created, actor)
     session.add(created)
     try:
-        audit.record(session, actor, "create", created)  # flushes to obtain the id
+        row = audit.record(session, actor, "create", created)  # flushes to obtain the id
     except IntegrityError as exc:
         raise Conflict() from exc
+    row.after = _snapshot(created)  # the row is still pending: add the team
     return created
 
 
 def update(
     session: Session, actor: Actor, audit_id: int, data: Mapping[str, Any]
 ) -> Auditoria:
-    """Apply the given fields; a call that changes nothing writes nothing."""
+    """Apply the given fields; ``equipo_ids`` replaces the team.
+
+    A call that changes nothing writes nothing.
+    """
     policy.require(actor, Action.UPDATE, Resource.AUDITS)
     found = _load(session, audit_id)
-    values = _clean(session, _fill_auditor(session, data, found), current=found)
-    before = audit.snapshot(found)
-    if all(getattr(found, key) == value for key, value in values.items()):
+    values, team = _clean(session, _fill_auditor(session, data, found), current=found)
+    if team is not None and {person.id for person in team} == set(found.equipo_ids):
+        team = None
+    if team is None and all(getattr(found, key) == value for key, value in values.items()):
         return found
+    _check(session, values, team, found)
+    before = _snapshot(found)
     for key, value in values.items():
         setattr(found, key, value)
+    if team is not None:
+        found.equipo = team
     stamp_updated(found, actor)
-    audit.record(session, actor, "update", found, before=before)
+    audit.record(session, actor, "update", found, before=before, after=_snapshot(found))
     _flush(session)
     return found
 
@@ -185,6 +304,6 @@ def delete(session: Session, actor: Actor, audit_id: int) -> None:
     """Hard-delete an audit, keeping its full snapshot in the audit log."""
     policy.require(actor, Action.DELETE, Resource.AUDITS)
     found = _load(session, audit_id)
-    audit.record(session, actor, "delete", found)
+    audit.record(session, actor, "delete", found, before=_snapshot(found))
     session.delete(found)
     _flush(session)

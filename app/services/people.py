@@ -26,7 +26,8 @@ association table has no audit row of its own, so every audit row of a person
 carries ``rol_ids`` next to the columns. Like every service this module
 flushes and never commits, and an update that changes nothing writes nothing.
 
-Trainings, nonconformities, audits, competence records, corrective actions,
+Trainings, nonconformities, audits (lead auditor, audited-area owner and
+team), audit programmes (approver), competence records, corrective actions,
 documents and document revisions cite a person through the columns in
 ``REFERENCES`` (decision Q4); their
 services validate such a link with ``reference`` or ``check_reference``, and a
@@ -59,7 +60,7 @@ from sqlalchemy.orm import Session
 
 from ..models import (
     AccionCorrectiva, Auditoria, Capacitacion, CompetenceRecord, Document, DocumentRevision,
-    NoConformidad, Person, RolResponsabilidad, User,
+    NoConformidad, Person, ProgramaAuditoria, RolResponsabilidad, User, auditoria_equipo,
 )
 from . import audit, crud, fields, policy
 from .actor import Actor
@@ -92,6 +93,8 @@ REFERENCES = (
     AccionCorrectiva.responsable_id, AccionCorrectiva.verificador_id,
     Document.owner_id, Document.withdrawn_by_id,
     DocumentRevision.author_id, DocumentRevision.approver_id,
+    Auditoria.responsable_area_id, auditoria_equipo.c.persona_id,
+    ProgramaAuditoria.aprobado_por_id,
 )
 
 _READS = crud.Spec(

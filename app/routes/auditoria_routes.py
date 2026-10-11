@@ -18,9 +18,9 @@ from math import ceil
 from flask import Blueprint, current_app, render_template, redirect, url_for, flash, request
 from flask_login import login_required
 from ..models import EstadoAuditoriaEnum
-from ..forms import AuditoriaForm, person_choices
+from ..forms import AuditoriaForm, person_choices, programme_choices
 from ..extensions import db
-from ..services import audits, people
+from ..services import audit_programmes, audits, people
 from ..services.errors import ValidationError
 from ..utils.permissions import require_permission
 from ..utils.pdf import pdf_response, render_pdf
@@ -30,12 +30,25 @@ from ..utils.web_args import date_arg
 bp = Blueprint('auditoria', __name__, url_prefix='/auditorias')
 
 FORM_FIELDS = ('area_auditada', 'fecha', 'auditor', 'auditor_id', 'resultado',
-               'accion_correctiva', 'estado')
+               'accion_correctiva', 'estado', 'programa_id', 'alcance', 'criterios',
+               'responsable_area_id', 'equipo_ids')
 
 
 def _form_data(form):
     """Whitelisted service payload taken from a validated form."""
     return {name: getattr(form, name).data for name in FORM_FIELDS}
+
+
+def _with_choices(form, actor, auditoria=None):
+    """Fill the programme and people pickers; people the audit cites stay offered."""
+    form.programa_id.choices = programme_choices(audit_programmes.list_(db.session, actor))
+    for name in ('auditor_id', 'responsable_area_id'):
+        getattr(form, name).choices = person_choices(
+            people.choices(db.session, actor, include=getattr(auditoria, name, None)))
+    team = people.choices(db.session, actor) + [
+        p for p in getattr(auditoria, 'equipo', []) if not p.activo]
+    form.equipo_ids.choices = person_choices(team)[1:]  # no empty choice in a multi-select
+    return form
 
 
 def _saved(write):
@@ -103,8 +116,7 @@ def nueva_auditoria():
     en la base de datos al enviarlo.
     """
     actor = current_actor()
-    form = AuditoriaForm()
-    form.auditor_id.choices = person_choices(people.choices(db.session, actor))
+    form = _with_choices(AuditoriaForm(), actor)
     if form.validate_on_submit() and _saved(
         lambda: audits.create(db.session, actor, _form_data(form))
     ):
@@ -128,8 +140,7 @@ def editar_auditoria(id):
     if request.method == 'GET' and auditoria.estado:
         form.estado.data = auditoria.estado.name
 
-    form.auditor_id.choices = person_choices(
-        people.choices(db.session, actor, include=auditoria.auditor_id))
+    _with_choices(form, actor, auditoria)
     if form.validate_on_submit() and _saved(
         lambda: audits.update(db.session, actor, id, _form_data(form))
     ):

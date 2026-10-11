@@ -16,12 +16,12 @@ from sqlalchemy.orm import object_session
 
 from ..models import (
     CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAccionCorrectiva,
-    EstadoAuditoriaEnum, EstadoNoConformidad, GravedadNoConformidad, OrigenNoConformidad,
-    TipoEnum,
+    EstadoAuditoriaEnum, EstadoNoConformidad, EstadoProgramaAuditoria, GravedadNoConformidad,
+    OrigenNoConformidad, TipoEnum,
 )
 from ..services import (
-    audit_indicators, audits, competence, corrective_actions, document_revisions, documents,
-    improvements,
+    audit_indicators, audit_programmes, audits, competence, corrective_actions,
+    document_revisions, documents, improvements,
     nonconformities, people, process_operations, risks_opportunities,
     roles_responsibilities, satisfaction, stakeholders, training, training_resources,
 )
@@ -68,6 +68,10 @@ class Module:
 
 def _person_extras(person: Any) -> dict[str, Any]:
     return {"rol_ids": person.rol_ids}
+
+
+def _audit_extras(found: Any) -> dict[str, Any]:
+    return {"equipo_ids": found.equipo_ids}
 
 
 def _action_extras(action: Any) -> dict[str, Any]:
@@ -119,13 +123,31 @@ _MODULES = (
     ), (_f("descripcion"), _f("estado", "enum", members=EstadoNoConformidad),
         _f("fecha_detectada", "date"), _f("origen", "enum", members=OrigenNoConformidad),
         _f("gravedad", "enum", members=GravedadNoConformidad))),
+    # ``auditor_id`` is the lead auditor. No auditor (lead or team) may be the
+    # audited-area owner, and the date must fall in the programme's year.
     Module("auditorias", "Audits", Resource.AUDITS, audits, (
         _f("area_auditada", required=True), _f("fecha", "date", True),
         _legacy_name("auditor", "auditor_id"), _f("auditor_id", "integer"),
         _f("resultado", required=True), _f("accion_correctiva"),
         _f("estado", "enum", members=EstadoAuditoriaEnum),
+        _f("programa_id", "integer", note=(
+            "Audit programme (programas_auditoria); the audit date must fall in its year.")),
+        _f("alcance"), _f("criterios", note="E.g. «ISO 9001:2026, procedimientos internos»."),
+        _f("responsable_area_id", "integer", note=(
+            "Person (personas) who owns the audited area; never the lead auditor or a "
+            "team member.")),
+        _f("equipo_ids", "integer_list", note="People (personas) in the audit team; replaces it."),
     ), (_f("area"), _f("auditor"), _f("estado", "enum", members=EstadoAuditoriaEnum),
-        _f("fecha_inicio", "date"), _f("fecha_fin", "date"))),
+        _f("fecha_inicio", "date"), _f("fecha_fin", "date"), _f("programa_id", "integer")),
+        extras=_audit_extras),
+    # Shares the ``AUDITS`` grant (AP7). Records show ``estado`` (Spanish label;
+    # the filter takes the member name) and the approval columns, which no tool
+    # writes: approving is web-only, for administrators. An approved programme's
+    # year never changes.
+    Module("programas_auditoria", "Audit programmes", Resource.AUDITS, audit_programmes, (
+        _f("anio", "integer", True, note="Year of the programme (2000-2100), one per year."),
+        _f("objetivos", required=True), _f("alcance", required=True),
+    ), (_f("anio", "integer"), _f("estado", "enum", members=EstadoProgramaAuditoria))),
     # Read-only here (DC-1 of ``document-control``): every role reads the documents
     # it may see with their revision in force, and the policy refuses ``qms_create``
     # and ``qms_update`` on the mcp channel, so no field is writable. The filters
