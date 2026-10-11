@@ -33,10 +33,11 @@ Plan internal audits in an approved yearly programme, give each audit its scope,
 
 Route for every task: **delegated direct**.
 
-- [ ] **AP-1 — Programme and audit planning fields.** Forecast 600-1,000.
+- [x] **AP-1 — Programme and audit planning fields.** Forecast 600-1,000.
   - `ProgramaAuditoria` model, service and approval; `Auditoria` gains programme, scope, criteria, team, audited-area owner; independence check; migration; MCP module and fields.
 - [ ] **AP-2 — Findings and automatic nonconformities.** Forecast 500-900.
-  - `HallazgoAuditoria` model and service; automatic nonconformity for NC findings (AP5) through the nonconformity service; MCP module.
+  - `HallazgoAuditoria` model and service; automatic nonconformity for NC findings (AP5) through the nonconformity service; MCP module; decide and document what deleting an audit does to its findings (they hold nonconformity links).
+  - Also (AP-1 review): `audit_programmes.approve` maps an `IntegrityError` to a Spanish `Conflict` (not `Conflict(None)`); tests for a non-mapping payload to `audits.create`/`update`, for editing an audit whose team member became inactive, and for MCP `qms_update`/`qms_get` on `programas_auditoria`.
 - [ ] **AP-3 — Screens.** Forecast 800-1,300.
   - Programme list and detail with its audits; audit form with the new fields and pickers; audit detail with findings and links to their nonconformities; approval action.
 - [ ] **AP-4 — Reports and docs.** Forecast 250-500.
@@ -54,8 +55,16 @@ Baseline at `88cd706`: 1,126 tests. Migrations are tested on PostgreSQL (`TEST_P
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| AP-1..AP-4 | Pending | — | — | — |
+| AP-1 | Done | `f16eb68` (`programas_auditoria`, `auditoria_equipo`, audit `programa_id`, `alcance`, `criterios`, `responsable_area_id`, migration `d7f1b3a5c9e2`, `app/services/audit_programmes.py` with `approve`, independence and year checks, person delete protection, MCP module `programas_auditoria` (17 modules), audit form fields) | RED: 59 tests (`ImportError: audit_programmes`, `KeyError: 'programa_id'`, unknown module, counts). GREEN: 1,164 tests incl. PostgreSQL | Range `0864670..f16eb68`: **medium**, `slice_budget_reached` (1,498 code lines plus the tracker); consent granted; reliability review `review-4561977c88243678` **approved** and acknowledged; its warning (editing an audit whose team member became inactive is untested) and three suggestions moved into AP-2 |
+| AP-2..AP-4 | Pending | — | — | — |
+
+## Findings during implementation
+
+- A draft programme's year cannot change once it has audits (each audit's date must fall in its programme's year); saving an audit reads the programme row with a shared lock (`with_for_update(read=True)`) so a concurrent year change cannot slip in.
+- `approve` refuses the `mcp` channel in the service; a CHECK constraint keeps a draft without approval data and an approved programme with both.
+- Programmes share the `AUDITS` resource; `tests/test_mcp_modules.py` lists `auditorias` and `programas_auditoria` as sharing it.
+- Test adaptations (standing approval): `tests/test_attribution.py`, `tests/test_mcp_http.py`, `tests/test_mcp_modules.py`, `tests/mcp_support.py`, `tests/test_migrations.py`.
 
 ## Next step
 
-AP-1.
+AP-2.
