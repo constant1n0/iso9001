@@ -16,12 +16,14 @@ SLUGS = {
     "roles_responsabilidades", "riesgos_oportunidades", "recursos_capacitacion",
     "procesos", "indicadores_auditoria", "personas",
     "competencias_requeridas", "competencias_acreditadas", "acciones_correctivas",
-    "programas_auditoria", "hallazgos_auditoria",
+    "programas_auditoria", "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo",
 }
 # The two competence registers share one policy resource (decision Q1 of qms-people),
 # and so do audits, their programmes and their findings (decision AP7 of audit-programme).
 SHARED_RESOURCE = ("competencias_requeridas", "competencias_acreditadas")
 SHARED_AUDITS = ("auditorias", "programas_auditoria", "hallazgos_auditoria")
+# Quality objectives and their measurements (decision QO4 of quality-objectives).
+SHARED_OBJECTIVES = ("objetivos_calidad", "mediciones_objetivo")
 # (module, legacy free-text name, person link that can fill it)
 LEGACY_NAMES = (("capacitaciones", "personal", "persona_id"),
                 ("auditorias", "auditor", "auditor_id"),
@@ -45,19 +47,22 @@ class LayoutTestCase(unittest.TestCase):
 
 
 class RegistryTestCase(unittest.TestCase):
-    def test_registry_holds_the_eighteen_modules(self) -> None:
+    def test_registry_holds_the_twenty_modules(self) -> None:
         self.assertEqual(SLUGS, set(registry().MODULES))
 
     def test_each_module_maps_to_its_own_policy_resource(self) -> None:
         from app.services.policy import Resource
 
         modules = registry().MODULES
-        shared = SHARED_RESOURCE + SHARED_AUDITS
+        shared = SHARED_RESOURCE + SHARED_AUDITS + SHARED_OBJECTIVES
         resources = [m.resource for slug, m in modules.items() if slug not in shared]
         self.assertEqual(len(resources), len(set(resources)))
         self.assertEqual({Resource.COMPETENCE}, {modules[s].resource for s in SHARED_RESOURCE})
         self.assertEqual({Resource.AUDITS}, {modules[s].resource for s in SHARED_AUDITS})
-        self.assertFalse({Resource.COMPETENCE, Resource.AUDITS} & set(resources))
+        self.assertEqual({Resource.QUALITY_OBJECTIVES},
+                         {modules[s].resource for s in SHARED_OBJECTIVES})
+        self.assertFalse({Resource.COMPETENCE, Resource.AUDITS, Resource.QUALITY_OBJECTIVES}
+                         & set(resources))
 
     def test_declared_fields_match_what_each_service_requires(self) -> None:
         from app.services import (

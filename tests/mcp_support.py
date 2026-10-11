@@ -13,7 +13,9 @@ from app.extensions import db
 from app.mcp_server import context
 from app.mcp_server.server import build_server
 from app.mcp_server.registry import MODULES
-from app.models import EstadoNoConformidad, NoConformidad, Person, RoleEnum, User
+from app.models import (
+    EstadoNoConformidad, NoConformidad, ObjetivoCalidad, Person, RoleEnum, User,
+)
 from app.services import api_tokens
 from app.services.actor import Actor
 
@@ -56,6 +58,13 @@ SEEDS = {
     # Cites the audit seeded above (id 1); an observation creates no non-conformity.
     "hallazgos_auditoria": {"auditoria_id": 1, "tipo": "observacion",
                             "descripcion": "Registro de compras sin firmar"},
+    # Cites the person seeded above (id 1).
+    "objetivos_calidad": {"titulo": "Entregas a tiempo", "indicador": "% de pedidos a tiempo",
+                          "meta": 95, "sentido": "mayor_igual", "responsable_id": 1,
+                          "fecha_inicio": "2026-01-01", "fecha_limite": "2026-12-31",
+                          "frecuencia": "mensual"},
+    # Cites the objective above (id 1), on a past date inside its period.
+    "mediciones_objetivo": {"objetivo_id": 1, "fecha": "2026-01-31", "valor": 92.5},
 }
 
 
@@ -93,8 +102,10 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
     def seed(self, slug: str, **overrides) -> int:
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
-        if slug == "documentos" and db.session.get(Person, 1) is None:
+        if slug in ("documentos", "objetivos_calidad") and db.session.get(Person, 1) is None:
             self.seed("personas")
+        if slug == "mediciones_objetivo" and db.session.get(ObjetivoCalidad, 1) is None:
+            self.seed("objetivos_calidad")
         data = SEEDS[slug] | overrides
         for field in module.fields:
             if field.type == "date" and field.name in data:

@@ -14,15 +14,17 @@ from typing import Any
 
 from sqlalchemy.orm import object_session
 
+from ..audit_notifications import local_today
 from ..models import (
     CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAccionCorrectiva,
-    EstadoAuditoriaEnum, EstadoNoConformidad, EstadoProgramaAuditoria, GravedadNoConformidad,
-    OrigenNoConformidad, TipoEnum, TipoHallazgo,
+    EstadoAuditoriaEnum, EstadoNoConformidad, EstadoObjetivo, EstadoProgramaAuditoria,
+    FrecuenciaMedicion, GravedadNoConformidad, OrigenNoConformidad, SentidoObjetivo, TipoEnum,
+    TipoHallazgo,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, competence, corrective_actions,
     document_revisions, documents, improvements,
-    nonconformities, people, process_operations, risks_opportunities,
+    nonconformities, people, process_operations, quality_objectives, risks_opportunities,
     roles_responsibilities, satisfaction, stakeholders, training, training_resources,
 )
 from ..services.policy import Resource
@@ -33,11 +35,13 @@ class FieldDef:
     """One writable field or list filter, as described to an agent.
 
     ``type`` is ``string``, ``date`` (YYYY-MM-DD), ``datetime`` (ISO 8601),
-    ``integer``, ``integer_list`` (a JSON array of integers), ``boolean`` or
-    ``enum`` (one of ``allowed``). ``members`` names the Python enum a filter
-    must be turned into before the service sees it; without it an enum filter
-    is passed on as the plain string. ``note`` is a short hint shown to the
-    agent when the type and flags do not say enough.
+    ``integer``, ``integer_list`` (a JSON array of integers), ``number`` (a
+    JSON number or decimal text; records return it as decimal text with four
+    decimals, e.g. ``"95.0000"``), ``boolean`` or ``enum`` (one of ``allowed``).
+    ``members`` names the Python enum a filter must be turned into before the
+    service sees it; without it an enum filter is passed on as the plain string.
+    ``note`` is a short hint shown to the agent when the type and flags do not
+    say enough.
     """
 
     name: str
@@ -85,6 +89,44 @@ def _document_extras(document: Any) -> dict[str, Any]:
         "numero": revision.numero, "content": revision.content,
         "effective_from": revision.effective_from, "legacy_version": revision.legacy_version,
     }}
+
+
+def _objective_extras(objective: Any) -> dict[str, Any]:
+    """The objective's latest value, target met, trend and next measurement (QO2, QO3)."""
+    session = object_session(objective)
+    return quality_objectives.summary(
+        objective, quality_objectives.measurements_of(session, objective.id), today=local_today())
+
+
+def _measurement_extras(measurement: Any) -> dict[str, Any]:
+    return {"cumple": quality_objectives.measurement_meets(object_session(measurement),
+                                                           measurement)}
+
+
+@dataclass(frozen=True)
+class _DatedWrites:
+    """A register whose writes take the adapter's date (``local_today``), used like a service."""
+
+    register: Any
+
+    @property
+    def SPEC(self) -> Any:  # noqa: N802 - named like the services' constant
+        return self.register.SPEC
+
+    def get(self, session: Any, actor: Any, record_id: int) -> Any:
+        return self.register.get(session, actor, record_id)
+
+    def list_(self, session: Any, actor: Any, **filters: Any) -> list[Any]:
+        return self.register.list_(session, actor, **filters)
+
+    def list_page(self, session: Any, actor: Any, **kwargs: Any) -> tuple[list[Any], int]:
+        return self.register.list_page(session, actor, **kwargs)
+
+    def create(self, session: Any, actor: Any, data: Any) -> Any:
+        return self.register.create(session, actor, data, today=local_today())
+
+    def update(self, session: Any, actor: Any, record_id: int, data: Any) -> Any:
+        return self.register.update(session, actor, record_id, data, today=local_today())
 
 
 def _f(name: str, type: str = "string", required: bool = False, allowed=(), members=None,
@@ -258,6 +300,44 @@ _MODULES = (
     ), (_f("no_conformidad_id", "integer"), _f("responsable_id", "integer"),
         _f("estado", "enum", members=EstadoAccionCorrectiva)),
         extras=_action_extras),
+    # Both share ``QUALITY_OBJECTIVES`` (QO4). Enums show the Spanish label (``sentido``
+    # shows «≥» or «≤»); the filters take the member name. Numbers come back as decimal
+    # text. Objective records add ``ultimo_valor``, ``ultima_fecha``, ``cumple``,
+    # ``tendencia`` (sube, baja, estable), ``medicion_vencida`` and ``proxima_medicion``;
+    # measurement records add ``cumple``.
+    Module("objetivos_calidad", "Quality objectives", Resource.QUALITY_OBJECTIVES,
+           quality_objectives.objectives, (
+        _f("titulo", required=True), _f("descripcion"),
+        _f("proceso_id", "integer", note="Process (procesos) the objective belongs to."),
+        _f("indicador", required=True, note="What is measured, e.g. «% de pedidos a tiempo»."),
+        _f("unidad", note="Unit of the indicator, e.g. «%»."),
+        _f("meta", "number", True, note=(
+            "Target value. With sentido, fixed once the objective has measurements.")),
+        _f("sentido", "enum", True, members=SentidoObjetivo, note=(
+            "mayor_igual: met when the value is at or above meta; menor_igual: at or below.")),
+        _f("valor_inicial", "number", note="Baseline value."),
+        _f("responsable_id", "integer", True, note="Person (personas) who owns the objective."),
+        _f("anio", "integer", note="Year (2000-2100); defaults to the year of fecha_inicio."),
+        _f("fecha_inicio", "date", True),
+        _f("fecha_limite", "date", True, note="Deadline; not before fecha_inicio."),
+        _f("frecuencia", "enum", True, members=FrecuenciaMedicion,
+           note="How often it is measured; a measurement is overdue one period after the last."),
+        _f("recursos", note="Resources needed."),
+        _f("evaluacion", note="How the results are evaluated."),
+        _f("estado", "enum", members=EstadoObjetivo,
+           note="Starts activo; measurements are recorded only while activo."),
+    ), (_f("anio", "integer"), _f("estado", "enum", members=EstadoObjetivo),
+        _f("responsable_id", "integer"), _f("proceso_id", "integer")),
+        extras=_objective_extras),
+    Module("mediciones_objetivo", "Quality objective measurements",
+           Resource.QUALITY_OBJECTIVES, _DatedWrites(quality_objectives.measurements), (
+        _f("objetivo_id", "integer", True, note=(
+            "Objective (objetivos_calidad); it must be activo and cannot change later.")),
+        _f("fecha", "date", True, note=(
+            "Inside the objective's period and not in the future; one per objective and date.")),
+        _f("valor", "number", True), _f("comentario"),
+        _f("registrado_por_id", "integer", note="Person (personas) who recorded it."),
+    ), (_f("objetivo_id", "integer"),), extras=_measurement_extras),
 )
 
 MODULES: dict[str, Module] = {module.slug: module for module in _MODULES}

@@ -52,7 +52,9 @@ class EveryModuleTestCase(McpDbCase):
                 record = created.structured_content
                 self.assertTrue(all(not audit.is_sensitive(key) for key in record))
                 json.dumps(record)
-                field = next(f.name for f in module.fields if f.required and f.type == "string")
+                # A required text field, or any text field when none is required.
+                field = next(f.name for f in sorted(module.fields, key=lambda f: not f.required)
+                             if f.type == "string")
                 updated = await self.call(actor, "qms_update", {
                     "module": slug, "id": record["id"], "data": {field: "Cambiado"}})
                 self.assertFalse(updated.is_error, updated.content)
