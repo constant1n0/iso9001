@@ -28,6 +28,7 @@
     {% if puede_aprobar %}
     <a class="btn btn--primary" href="{{ url_for('programa_auditoria.aprobar_programa', id=programa.id) }}">Aprobar</a>
     {% endif %}
+    <a class="btn" href="{{ url_for('programa_auditoria.exportar_pdf', id=programa.id) }}" target="_blank" rel="noopener">PDF</a>
     {% if total_auditorias == 0 and can('delete', 'audits') %}
     {{ delete_form(url_for('programa_auditoria.eliminar_programa', id=programa.id), '¿Eliminar el programa de auditoría ' ~ programa.anio ~ '?') }}
     {% endif %}

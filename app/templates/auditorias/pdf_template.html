@@ -20,12 +20,45 @@
 {% block clause %}Cláusula 9.2 · Auditoría interna{% endblock %}
 {% block subtitle %}Auditoría n.º {{ auditoria.id }} · {{ auditoria.area_auditada }}{% endblock %}
 {% block content %}
+{# PDF-only template (never served to a browser, so the CSP does not apply):
+   the findings table is a multi-column table the print theme lacks. #}
+<style>
+.hallazgos { width: 100%; border-collapse: collapse; margin-bottom: 6mm; font-size: 8pt; line-height: 1.35; }
+.hallazgos th, .hallazgos td { padding: 1.8mm 2mm; border-bottom: 0.3mm solid #d9d4c8; text-align: left; vertical-align: top; }
+.hallazgos thead th { border-top: 0.6mm solid #0a0a0a; color: #6b675f; font: 500 6.5pt "IBM Plex Mono"; letter-spacing: 0.06em; text-transform: uppercase; }
+.hallazgos tr { page-break-inside: avoid; }
+</style>
+{% set lead = personas.get(auditoria.auditor_id) %}
+{% set equipo -%}
+{% for persona in auditoria.equipo | sort(attribute='nombre') %}{{ persona.nombre }}{% if not persona.activo %} (desactivada){% endif %}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}
+{%- endset %}
 {{ fields([
+    ('Programa', 'Programa %s · %s' | format(programa.anio, programa.estado.value) if programa else '—'),
     ('Área auditada', auditoria.area_auditada),
-    ('Auditor', auditoria.auditor),
+    ('Responsable del área', personas.get(auditoria.responsable_area_id, '—')),
+    ('Auditor jefe', auditoria.auditor ~ (' · Persona: ' ~ lead if lead else '')),
+    ('Equipo auditor', equipo),
     ('Fecha', auditoria.fecha.strftime('%d/%m/%Y')),
     ('Estado', auditoria.estado.value if auditoria.estado else '—'),
 ]) }}
+{{ section('Alcance', auditoria.alcance, 'No indicado') }}
+{{ section('Criterios', auditoria.criterios, 'No indicado') }}
 {{ section('Resultado', auditoria.resultado) }}
 {{ section('Acción correctiva', auditoria.accion_correctiva) }}
+<div class="section">
+    <h2>Hallazgos</h2>
+    {% if not hallazgos %}<p class="muted">Sin hallazgos.</p>{% endif %}
+</div>
+{% if hallazgos %}
+<table class="hallazgos">
+    <thead>
+        <tr><th>Tipo</th><th>Cláusula</th><th>Descripción</th><th>Evidencia</th><th>No conformidad</th></tr>
+    </thead>
+    <tbody>
+        {% for hallazgo in hallazgos %}
+        <tr><td>{{ hallazgo.tipo.value }}</td><td>{{ hallazgo.clausula or '—' }}</td><td>{{ hallazgo.descripcion }}</td><td>{{ hallazgo.evidencia or '—' }}</td><td>{{ 'N.º %s' | format(hallazgo.no_conformidad_id) if hallazgo.no_conformidad_id else '—' }}</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
 {% endblock %}

@@ -11,6 +11,10 @@ cancelled audit shows its findings read-only). Programmes and findings share
 the ``AUDITS`` grant: administrators and auditors read and write,
 administrators approve and delete, ``OPERATIVO`` sees nothing. Every test runs
 with the audit flush guard, so a web write that skips its audit row fails.
+
+The audit and programme PDFs (task AP-4) are checked on the HTML their views
+render: ``render_pdf`` is replaced so the test keeps that HTML
+(``test_pdf_exports`` renders the real PDFs).
 """
 
 from __future__ import annotations
@@ -36,7 +40,8 @@ SYSTEM = Actor(None, "seed", ADMIN, "system")
 PROG = "/programas-auditoria"
 AUD = "/auditorias"
 TODAY = date(2026, 10, 30)
-TODAY_IN_ROUTES = "app.routes.audit_programme_routes.local_today"
+AUDIT_ROUTES, PROG_ROUTES = "app.routes.auditoria_routes", "app.routes.audit_programme_routes"
+TODAY_IN_ROUTES = f"{PROG_ROUTES}.local_today"
 DENIED = ("danger", "No tienes permiso para acceder a esta página.")
 AUDIT_FORM = {
     "area_auditada": "Compras",
@@ -157,6 +162,28 @@ class ScreensBase(unittest.TestCase):
 
     def audit_rows(self) -> int:
         return self.count(AuditLog)
+
+    def pdf_html(self, url: str, routes: str) -> str:
+        """The HTML the PDF view of ``routes`` renders for ``url``, instead of the PDF."""
+        from flask import render_template
+
+        rendered: list[str] = []
+
+        def as_html(template: str, **context) -> bytes:
+            rendered.append(render_template(template, generado=TODAY, **context))
+            return b"%PDF-1.7"
+
+        with patch(f"{routes}.render_pdf", side_effect=as_html):
+            response = self.client.get(url)
+        self.assertEqual(200, response.status_code, url)
+        self.assertEqual("application/pdf", response.mimetype)
+        (html,) = rendered
+        return html
+
+    @staticmethod
+    def pdf_fields(html: str) -> dict[str, str]:
+        """The label/value rows of the PDF's key/value tables."""
+        return dict(re.findall(r"<tr><th>([^<]+)</th><td>([^<]*)</td></tr>", html))
 
     @staticmethod
     def select(html: str, name: str) -> str:
@@ -353,15 +380,20 @@ class ProgrammeScreensTestCase(ScreensBase):
         self.assertIsNotNone(self.load(ProgramaAuditoria, used))
 
     def test_a_programme_page_says_when_it_shows_only_its_first_audits(self) -> None:
+        # AP-3 review: which audit comes first is not part of this contract, so
+        # the test counts the audit links instead of naming the one left out.
         pid = self.programme(2026)
         for area in ("Compras", "Ventas"):
             self.audit(programa_id=pid, area_auditada=area)
         self.login(AUDITOR)
+        audit_links = rf'href="{AUD}/\d+"'
         with patch("app.services.crud.MAX_PER_PAGE", 1):
             page = self.html(f"{PROG}/{pid}")
         self.assertIn("Se muestran las 1 primeras de 2 auditorías.", page)
-        self.assertNotIn("Ventas", page)
-        self.assertNotIn("primeras", self.html(f"{PROG}/{pid}"))
+        self.assertEqual(1, len(re.findall(audit_links, page)))
+        page = self.html(f"{PROG}/{pid}")
+        self.assertNotIn("primeras", page)
+        self.assertEqual(2, len(re.findall(audit_links, page)))
 
     def test_missing_programmes_answer_404(self) -> None:
         self.login(ADMIN)
@@ -423,6 +455,23 @@ class FindingScreensTestCase(ScreensBase):
         self.assertEqual("Registro sin firmar",
                          self.load(HallazgoAuditoria, finding_id).descripcion)
 
+    def test_the_edit_page_shows_the_finding_as_stored(self) -> None:
+        # AP-3 review: the stored type is preselected (the last choice, so not
+        # the browser's default) and the clause and evidence come back.
+        audit_id = self.audit()
+        finding_id, _ = self.finding(audit_id, tipo="oportunidad_mejora", clausula="7.1.5",
+                                     evidencia="Calibración vencida")
+        self.login(AUDITOR)
+        page = self.html(self.finding_url(audit_id, finding_id, "editar"))
+        tipo = self.select(page, "tipo")
+        self.assertIn('<option selected value="oportunidad_mejora">Oportunidad de mejora</option>',
+                      tipo)
+        self.assertEqual(1, tipo.count("selected"))
+        self.assertRegex(page, r'<input[^>]*name="clausula"[^>]*value="7\.1\.5"')
+        self.assertRegex(page,
+                         r'<textarea[^>]*name="evidencia"[^>]*>\s*Calibración vencida</textarea>')
+        self.assertIn("Registro sin firmar", page)
+
     def test_an_invalid_clause_shows_the_form_again_with_the_input(self) -> None:
         audit_id = self.audit()
         finding_id, _ = self.finding(audit_id)
@@ -478,6 +527,116 @@ class FindingScreensTestCase(ScreensBase):
         self.post(f"{AUD}/eliminar/{audit_id}", expect=self.detail(audit_id))
         self.assertIn(("danger", audits.HAS_FINDINGS), self.flashes())
         self.assertIsNotNone(self.load(Auditoria, audit_id))
+
+
+class PdfTestCase(ScreensBase):
+    def test_the_audit_pdf_holds_its_planning_fields_and_findings(self) -> None:
+        pid = self.programme(2026, approved=True)
+        audit_id = self.audit(programa_id=pid, auditor_id=self.luis,
+                              responsable_area_id=self.ana, equipo_ids=[self.ines, self.eva],
+                              alcance="Proceso de compras", criterios="ISO 9001:2026",
+                              estado="EN_PROCESO", accion_correctiva="Revisar el registro")
+        _, nc_id = self.finding(audit_id, tipo="nc_mayor", clausula="8.5.1",
+                                descripcion="Pedido sin aprobar", evidencia="Pedido 431")
+        self.finding(audit_id)  # an observation without clause or evidence
+        self.login(AUDITOR)
+        html = self.pdf_html(f"{AUD}/exportar_pdf/{audit_id}", AUDIT_ROUTES)
+        self.assertEqual({
+            "Programa": "Programa 2026 · Aprobado",
+            "Área auditada": "Compras",
+            "Responsable del área": "Ana Pérez",
+            "Auditor jefe": "Luis · Persona: Luis Gil",
+            "Equipo auditor": "Eva Ruiz, Inés Mora",
+            "Fecha": "01/10/2026",
+            "Estado": "En Proceso",
+        }, self.pdf_fields(html))
+        for text in ("Proceso de compras", "ISO 9001:2026", "Correcta", "Revisar el registro"):
+            with self.subTest(text=text):
+                self.assertIn(text, html)
+        self.assertIn("<tr><td>No conformidad mayor</td><td>8.5.1</td><td>Pedido sin aprobar</td>"
+                      f"<td>Pedido 431</td><td>N.º {nc_id}</td></tr>", html)
+        self.assertIn("<tr><td>Observación</td><td>—</td><td>Registro sin firmar</td>"
+                      "<td>—</td><td>—</td></tr>", html)
+
+    def test_an_audit_pdf_without_planning_or_findings_says_so(self) -> None:
+        audit_id = self.audit()
+        self.login(ADMIN)
+        html = self.pdf_html(f"{AUD}/exportar_pdf/{audit_id}", AUDIT_ROUTES)
+        fields = self.pdf_fields(html)
+        for label in ("Programa", "Responsable del área", "Equipo auditor"):
+            with self.subTest(label=label):
+                self.assertEqual("—", fields[label])
+        self.assertEqual("Luis", fields["Auditor jefe"])
+        self.assertIn("Sin hallazgos.", html)
+        self.assertEqual(2, html.count("No indicado"))  # scope and criteria
+
+    def test_the_programme_pdf_holds_its_approval_and_its_audits_by_date(self) -> None:
+        pid = self.programme(2026, approved=True)  # approved by Luis on 15/01/2026
+        later = self.audit(programa_id=pid, area_auditada="Ventas", fecha=date(2026, 11, 3),
+                           auditor="", auditor_id=self.eva, estado="COMPLETADA")
+        earlier = self.audit(programa_id=pid, area_auditada="Almacén", fecha=date(2026, 3, 2))
+        for tipo in ("nc_menor", "observacion", "observacion"):
+            self.finding(later, tipo=tipo)
+        self.finding(earlier, tipo="oportunidad_mejora")
+        self.audit(area_auditada="Fuera del programa")
+        self.login(AUDITOR)
+        html = self.pdf_html(f"{PROG}/{pid}/pdf", PROG_ROUTES)
+        self.assertEqual({"Año": "2026", "Estado": "Aprobado", "Aprobado por": "Luis Gil",
+                          "Fecha de aprobación": "15/01/2026"}, self.pdf_fields(html))
+        self.assertIn("Objetivos 2026", html)
+        self.assertIn("Alcance 2026", html)
+        headers = re.findall(r'<th class="num">([^<]+)</th>', html)
+        self.assertEqual([tipo.value for tipo in TipoHallazgo], headers)
+        rows = re.findall(r"<tr><td>.*?</tr>", html)
+        self.assertEqual([
+            "<tr><td>02/03/2026</td><td>Almacén</td><td>Luis</td><td>Pendiente</td>"
+            '<td class="num">0</td><td class="num">0</td><td class="num">0</td>'
+            '<td class="num">1</td></tr>',
+            "<tr><td>03/11/2026</td><td>Ventas</td><td>Eva Ruiz</td><td>Completada</td>"
+            '<td class="num">0</td><td class="num">1</td><td class="num">2</td>'
+            '<td class="num">0</td></tr>',
+        ], rows)
+
+    def test_a_programme_pdf_that_cannot_be_rendered_returns_to_the_programme(self) -> None:
+        pid = self.programme(2026)
+        self.login(AUDITOR)
+        with patch(f"{PROG_ROUTES}.render_pdf", side_effect=RuntimeError("weasyprint")):
+            response = self.client.get(f"{PROG}/{pid}/pdf")
+        self.assertEqual(302, response.status_code)
+        self.assertTrue(response.headers["Location"].endswith(f"{PROG}/{pid}"))
+
+    def test_a_programme_pdf_lists_every_audit_and_a_draft_shows_no_approval(self) -> None:
+        pid = self.programme(2026)
+        for area in ("Compras", "Ventas", "Almacén"):
+            self.audit(programa_id=pid, area_auditada=area)
+        self.login(ADMIN)
+        with patch("app.services.crud.MAX_PER_PAGE", 1):
+            html = self.pdf_html(f"{PROG}/{pid}/pdf", PROG_ROUTES)
+        for area in ("Compras", "Ventas", "Almacén"):
+            with self.subTest(area=area):
+                self.assertIn(f"<td>{area}</td>", html)
+        fields = self.pdf_fields(html)
+        self.assertEqual(("Borrador", "—", "—"), (
+            fields["Estado"], fields["Aprobado por"], fields["Fecha de aprobación"]))
+        empty = self.pdf_html(f"{PROG}/{self.programme(2027)}/pdf", PROG_ROUTES)
+        self.assertIn("Este programa todavía no tiene auditorías.", empty)
+
+    def test_the_programme_pdf_has_the_access_of_the_programme_page(self) -> None:
+        pid = self.programme(2026)
+        url = f"{PROG}/{pid}/pdf"
+        for role in (ADMIN, AUDITOR):
+            with self.subTest(role=role.name):
+                self.login(role)
+                response = self.client.get(url)
+                self.assertEqual(200, response.status_code)
+                self.assertEqual("application/pdf", response.mimetype)
+                self.assertIn("programa_auditoria_2026.pdf",
+                              response.headers["Content-Disposition"])
+                self.assertIn(f'href="{url}"', self.html(f"{PROG}/{pid}"))
+        self.login(OPERATIVO)
+        self.denied("get", url)
+        self.login(ADMIN)
+        self.assertEqual(404, self.client.get(f"{PROG}/999/pdf").status_code)
 
 
 class RoleVisibilityTestCase(ScreensBase):

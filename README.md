@@ -412,6 +412,76 @@ its file never change.
 Uploads, removals and discarded drafts are written to the security log with the
 user, document, revision, file name, size and SHA-256.
 
+**2g. Programa de auditorías y hallazgos**
+
+Internal audits (`/auditorias/`, ISO 9001 clause 9.2) are planned in a yearly
+programme and record classified findings. Nonconformity findings feed the
+corrective-action loop of section 2e.
+
+- **Programme** (`/programas-auditoria/`, clause 9.2.2): one per year
+  (2000-2100), with objectives and scope. It starts as *Borrador*.
+  - An administrator approves it on its page, naming the approving person.
+    The picker starts on the person linked to the user, and the approval date
+    is today in `APP_TIMEZONE`.
+  - An approved programme's year never changes, nor does a draft's once it
+    has audits.
+  - The programme's page lists its audits with their findings counted by
+    type.
+- **Audit planning**: an audit may belong to a programme. This is optional, so
+  older audits stay valid; the audit's date must fall in the programme's year.
+  The audit also records:
+  - scope and criteria (for example *ISO 9001:2026, procedimientos
+    internos*);
+  - the lead auditor, a person (the legacy free-text name stays);
+  - the audit team (people) and the audited-area owner (a person).
+
+  An audit's page (`/auditorias/<id>`) shows these fields and its findings.
+- **Independence**: neither the lead auditor nor any team member may be the
+  audited-area owner. The form is shown again with the reason.
+- **Findings** are recorded on the audit's page:
+  - the type: *No conformidad mayor*, *No conformidad menor*, *Observación*
+    or *Oportunidad de mejora*;
+  - a description, an optional ISO 9001 clause (dotted numbers from 4 to 10,
+    such as `8.5.1`) and the evidence.
+
+  A finding never moves to another audit. A completed audit still takes
+  findings; a cancelled audit's findings are read-only.
+- **Automatic nonconformities**: a major or minor nonconformity finding opens
+  its nonconformity in the same save. The nonconformity takes:
+  - origin *Auditoría* and severity *Mayor* or *Menor*;
+  - the audit's date as detection date, and a description naming the audit's
+    area and date followed by the finding's description;
+  - the audited-area owner as responsible, when that person is active.
+
+  The finding links to the nonconformity, and the confirmation names its
+  number. Afterwards:
+  - a change between *mayor* and *menor* changes the severity only while the
+    nonconformity is *Abierta*; otherwise it is refused;
+  - downgrading the finding keeps the nonconformity and the link; changing it
+    back reuses the link, or opens a new nonconformity if the earlier one was
+    deleted;
+  - other edits never touch the nonconformity, which is a record of its own.
+- **Deleting** is for administrators:
+  - deleting a finding never deletes its nonconformity, and deleting the
+    nonconformity clears the finding's link;
+  - an audit with findings cannot be deleted: delete its findings first;
+  - a programme with audits cannot be deleted.
+- **Access**: administrators and auditors read and write programmes, audits
+  and findings; only administrators approve and delete. *Operativo* users see
+  none of them.
+- **PDFs**:
+  - an audit's PDF holds its fields, its programme, scope, criteria, lead
+    auditor, team, area owner and state, and a table of its findings (type,
+    clause, description, evidence and nonconformity number);
+  - a programme's PDF (`/programas-auditoria/<id>/pdf`, button *PDF* on its
+    page) holds its year, state, approver and approval date, objectives and
+    scope, and every audit by date with its area, lead auditor, state and
+    findings by type.
+
+The MCP server reads and writes programmes, audits and findings with the same
+rules; approving a programme and deleting are web-only (see `docs/mcp.md`).
+Every change is written to the audit log.
+
 **3. Iniciar Redis y Celery para las Notificaciones Programadas**
 
 Celery envía cuatro avisos por correo; la aplicación web funciona sin él.
@@ -427,8 +497,10 @@ Las horas son locales a `APP_TIMEZONE` (por defecto `Europe/Madrid`). El aviso
 diario incluye las auditorías pendientes o en proceso de los próximos 7 días;
 el informe semanal, las pendientes; el informe mensual adjunta un PDF con
 el total de auditorías, no conformidades y capacitaciones y la satisfacción media
-registrados en el mes, las no conformidades del mes por estado y las acciones
-correctivas verificadas en el mes (eficaces y no eficaces). El aviso de revisión
+registrados en el mes, las no conformidades del mes por estado, las acciones
+correctivas verificadas en el mes (eficaces y no eficaces), las auditorías del
+mes completadas y los hallazgos registrados en el mes por tipo (por la fecha de
+su auditoría). El aviso de revisión
 documental lista los documentos en uso cuya fecha de próxima revisión ya ha
 llegado: cada propietario recibe los suyos a través del usuario vinculado a su
 persona (un usuario Operativo, solo los vigentes) y los administradores reciben

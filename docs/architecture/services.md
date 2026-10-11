@@ -54,6 +54,7 @@ bounded: the page is clamped to `1..crud.MAX_PAGE` and the size to
 | `nonconformities.py` | Nonconformities (the reference pattern) and their states (see below) |
 | `corrective_actions.py` | Corrective actions of a nonconformity and their verification (see below) |
 | `audits.py`, `documents.py` | Audits, documents (bespoke) |
+| `audit_programmes.py`, `audit_findings.py` | Yearly audit programmes and their approval; audit findings and their nonconformities (see below) |
 | `document_revisions.py`, `document_files.py` | Document revisions and their workflow; attachment storage (see below) |
 | `crud.py` | Generic helper driven by a `Spec` (model, resource, fields, ordering) |
 | `training.py`, `satisfaction.py`, `stakeholders.py`, `improvements.py` | Plain HTML registers on `crud` |
@@ -79,7 +80,7 @@ checked first (`mcp` never deletes), then the role.
 | Resource | Read | Create / update | Delete |
 |---|---|---|---|
 | Nonconformities, corrective actions, improvements, surveys, training, stakeholders | all roles | all roles | ADMIN |
-| Audits | ADMIN, AUDITOR | ADMIN, AUDITOR | ADMIN |
+| Audits, audit programmes, audit findings | ADMIN, AUDITOR | ADMIN, AUDITOR (approve a programme: ADMIN) | ADMIN |
 | Documents | all roles (drafts: ADMIN, AUDITOR) | ADMIN, AUDITOR (approve and withdraw: ADMIN) | nobody (withdrawn instead) |
 | Roles, risks and opportunities, training resources, process operations, audit indicators | all roles | ADMIN, AUDITOR | ADMIN |
 | Users; audit log (policy only, no routes yet) | ADMIN, AUDITOR | ADMIN | nobody |
@@ -138,6 +139,48 @@ verifier is an active person other than the action's owner, and the evidence
 is required. A verified action is read-only (`update` refuses it), though an
 administrator may still delete it while the nonconformity is open. The MCP
 adapter exposes neither `verify` nor the state functions: they are web-only.
+
+## Audit programmes and findings
+
+Decisions AP1-AP7 of `audit-programme` (ISO 9001 clause 9.2). Programmes,
+audits and findings share the `AUDITS` resource.
+
+- `audit_programmes.approve(session, actor, programme_id, *, aprobado_por_id,
+  today)` moves a `borrador` to `aprobado`. It is for ADMIN only and refused on
+  the `mcp` channel (`PermissionDenied`, checked after the grant).
+  - It locks the programme's row (`lock`, `SELECT … FOR UPDATE`) and requires
+    an active approving person.
+  - `today` is a `date` from the adapter (`local_today()`); a `datetime` is a
+    `ValueError`.
+  - A lost race is a `Conflict` with `APPROVE_CONFLICT`.
+  - A CHECK constraint keeps a draft without approval data and an approved
+    programme with both.
+- `audit_programmes.update` never changes the year of an approved programme,
+  nor of a draft that has audits; `delete` refuses a programme with audits.
+  `audits` reads the programme's year with a shared lock (`FOR SHARE`) when an
+  audit joins a programme or changes date, and checks independence: neither
+  the lead auditor nor a team member may own the audited area.
+- `audit_findings.create` and `update` keep a finding on its audit and refuse
+  writes while the audit is `CANCELADA`. They read the audit row with a shared
+  lock.
+  - A `nc_mayor` or `nc_menor` finding creates its nonconformity in the same
+    transaction through `nonconformities.create`: origin `auditoria`, the
+    severity of the type, the audit's date, and the audited-area owner as
+    responsible when active.
+  - The finding keeps the link (`no_conformidad_id`, never written by callers).
+    A finding of a nonconformity type without a link gets a new
+    nonconformity.
+  - While the finding is a nonconformity, its severity follows the type
+    (`_follow_severity`) only while the nonconformity is `abierta`; otherwise
+    the change is refused.
+- Deletes: `audit_findings.delete` (ADMIN) never deletes the nonconformity,
+  and `nonconformities.delete` clears its finding's link with an audit row.
+  `audits.delete` refuses an audit with findings (`HAS_FINDINGS`). When the
+  database refuses the delete instead, the message names findings only if the
+  violated constraint is `FINDINGS_FK`, a name read from `HallazgoAuditoria`'s
+  foreign key to `auditorias`; otherwise it is `DELETE_CONFLICT`.
+- The MCP adapter exposes the three modules without `approve` and without
+  deletes. The web adapter adds the audit and programme PDFs.
 
 ## Document control
 

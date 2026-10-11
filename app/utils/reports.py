@@ -23,8 +23,8 @@ from flask import render_template
 
 from ..extensions import db
 from ..models import (
-    AccionCorrectiva, Auditoria, Capacitacion, EstadoNoConformidad, NoConformidad,
-    ResultadoVerificacion, SatisfaccionCliente,
+    AccionCorrectiva, Auditoria, Capacitacion, EstadoAuditoriaEnum, EstadoNoConformidad,
+    HallazgoAuditoria, NoConformidad, ResultadoVerificacion, SatisfaccionCliente, TipoHallazgo,
 )
 from .pdf import render_pdf
 
@@ -38,14 +38,18 @@ def _month_bounds(fecha: date) -> tuple[date, date]:
     return start, end
 
 
-def _count_by(column: Any, enum_cls: type[E], condition: Any) -> dict[E, int]:
+def _count_by(
+    column: Any, enum_cls: type[E], condition: Any, join: tuple[Any, Any] | None = None
+) -> dict[E, int]:
     """Rows matching ``condition``, counted by ``column``, for every member of ``enum_cls``.
 
-    Members come in the enum's order, with zero when no row has them.
+    ``join`` is an optional ``(target, onclause)`` the condition needs. Members
+    come in the enum's order, with zero when no row has them.
     """
-    found = dict(
-        db.session.query(column, db.func.count()).filter(condition).group_by(column).all()
-    )
+    query = db.session.query(column, db.func.count())
+    if join is not None:
+        query = query.join(*join)
+    found = dict(query.filter(condition).group_by(column).all())
     return {member: found.get(member, 0) for member in enum_cls}
 
 
@@ -54,6 +58,9 @@ def _monthly_report_context(fecha: date) -> dict:
 
     Nonconformities count by their detection date (split by their current
     state) and corrective actions by their verification date (split by result).
+    Audits completed are those of the month in state ``COMPLETADA``; audit
+    findings count by their audit's date (the detection date of the
+    nonconformity a nonconformity finding opens), split by type.
     """
     start, end = _month_bounds(fecha)
 
@@ -70,9 +77,15 @@ def _monthly_report_context(fecha: date) -> dict:
                            in_month(NoConformidad.fecha_detectada))
     verificadas = _count_by(AccionCorrectiva.resultado_verificacion, ResultadoVerificacion,
                             in_month(AccionCorrectiva.fecha_verificacion))
+    hallazgos = _count_by(HallazgoAuditoria.tipo, TipoHallazgo, in_month(Auditoria.fecha),
+                          join=(Auditoria, HallazgoAuditoria.auditoria_id == Auditoria.id))
     return dict(
         fecha=fecha,
         total_auditorias=Auditoria.query.filter(in_month(Auditoria.fecha)).count(),
+        auditorias_completadas=Auditoria.query.filter(
+            in_month(Auditoria.fecha), Auditoria.estado == EstadoAuditoriaEnum.COMPLETADA
+        ).count(),
+        hallazgos_por_tipo=hallazgos,
         total_no_conformidades=sum(por_estado.values()),
         no_conformidades_por_estado=por_estado,
         acciones_verificadas=sum(verificadas.values()),

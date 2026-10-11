@@ -26,6 +26,9 @@ read-only (the service refuses writes to them too).
 A service ``ValidationError`` or ``Conflict`` is rolled back and flashed on the
 re-rendered form, which keeps what was typed; on a delete it is flashed on the
 audit's page.
+
+The audit's PDF (task AP-4) holds the legacy fields, the planning fields and a
+table of the findings with their nonconformity numbers.
 """
 
 from collections.abc import Callable
@@ -188,6 +191,19 @@ def eliminar_auditoria(id):
     return _audit_page(id)
 
 
+def _audit_context(actor: Actor, auditoria: Auditoria) -> dict:
+    """What the audit's page and PDF show next to the audit: programme, findings, names."""
+    programa = (audit_programmes.get(db.session, actor, auditoria.programa_id)
+                if auditoria.programa_id is not None else None)
+    return dict(
+        auditoria=auditoria,
+        programa=programa,
+        hallazgos=audit_findings.list_(db.session, actor, auditoria_id=auditoria.id),
+        personas=people.names(db.session, actor,
+                              (auditoria.auditor_id, auditoria.responsable_area_id)),
+    )
+
+
 @bp.route('/<int:id>', methods=['GET'])
 @login_required
 @require_permission('read', 'audits')
@@ -195,15 +211,9 @@ def ver_auditoria(id: int) -> ResponseReturnValue:
     """An audit's page: its planning fields and its findings."""
     actor = current_actor()
     auditoria = audits.get(db.session, actor, id)
-    programa = (audit_programmes.get(db.session, actor, auditoria.programa_id)
-                if auditoria.programa_id is not None else None)
     return render_template(
         'auditorias/detalle.html',
-        auditoria=auditoria,
-        programa=programa,
-        hallazgos=audit_findings.list_(db.session, actor, auditoria_id=id),
-        personas=people.names(db.session, actor,
-                              (auditoria.auditor_id, auditoria.responsable_area_id)),
+        **_audit_context(actor, auditoria),
         cancelada=auditoria.estado is EstadoAuditoriaEnum.CANCELADA,
     )
 
@@ -295,12 +305,14 @@ def eliminar_hallazgo(id: int, hallazgo_id: int) -> ResponseReturnValue:
 @require_permission('read', 'audits')
 def exportar_pdf(id):
     """
-    Genera un PDF para una auditoría específica usando su ID.
+    Genera el PDF de una auditoría: sus campos, su planificación y sus hallazgos.
     """
-    auditoria = audits.get(db.session, current_actor(), id)
+    actor = current_actor()
+    context = _audit_context(actor, audits.get(db.session, actor, id))
 
     try:
-        return pdf_response(render_pdf('auditorias/pdf_template.html', auditoria=auditoria), f'auditoria_{id}.pdf')
+        return pdf_response(render_pdf('auditorias/pdf_template.html', **context),
+                            f'auditoria_{id}.pdf')
     except Exception:
         current_app.logger.exception('Error generating PDF for audit %s', id)
         flash('Error al generar el PDF de la auditoría.', 'danger')

@@ -43,8 +43,8 @@ nonconformities, so an audit with findings cannot be deleted: ``delete``
 raises ``Conflict`` asking to delete them first, and the foreign key
 (``ON DELETE RESTRICT``) refuses one recorded after that check. When the
 database refuses a delete, the message mentions findings only if the refusal
-names that foreign key (PostgreSQL does, SQLite names no constraint);
-otherwise it is ``DELETE_CONFLICT``.
+names that foreign key (``FINDINGS_FK``, read from the model; PostgreSQL names
+it, SQLite names no constraint); otherwise it is ``DELETE_CONFLICT``.
 """
 
 from __future__ import annotations
@@ -78,7 +78,16 @@ DELETE_CONFLICT = (
     "No se ha podido eliminar la auditoría porque sus datos han cambiado entretanto; "
     "vuelve a intentarlo."
 )
-FINDINGS_FK = "fk_hallazgos_auditoria_auditoria_id_auditorias"  # see HallazgoAuditoria
+
+
+def _findings_foreign_key() -> str:
+    """Name of the findings' foreign key to audits, as ``HallazgoAuditoria`` declares it."""
+    (name,) = {fk.constraint.name for fk in HallazgoAuditoria.__table__.foreign_keys
+               if fk.column.table is Auditoria.__table__}
+    return name
+
+
+FINDINGS_FK = _findings_foreign_key()
 
 
 def get(session: Session, actor: Actor, audit_id: int) -> Auditoria:
