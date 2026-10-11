@@ -38,6 +38,9 @@ The approved role-by-action matrix (decision D1). Roles may read, write
   (decision Q1 of ``qms-people``).
 - Corrective actions follow nonconformities; verifying one is further limited
   to administrators and auditors by its service (decision N4 of ``nc-capa-loop``).
+- Quality objectives and their measurements: every role reads (objectives
+  are communicated, ISO 9001 clause 6.2.1 f); administrators and auditors
+  write; administrators delete (decision QO4 of ``quality-objectives``).
 
 Seams: the ``mcp`` channel never deletes and never writes documents (they are
 written in the web only), and token scopes intersect the role.
@@ -83,6 +86,7 @@ class Resource(StrEnum):
     PEOPLE = "people"
     COMPETENCE = "competence"
     CORRECTIVE_ACTIONS = "corrective_actions"
+    QUALITY_OBJECTIVES = "quality_objectives"
 
 
 _ALL = frozenset(RoleEnum)
@@ -127,6 +131,7 @@ _MATRIX: dict[Resource, Grant] = {
     Resource.PEOPLE: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
     Resource.COMPETENCE: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
     Resource.CORRECTIVE_ACTIONS: _OPEN_REGISTER,
+    Resource.QUALITY_OBJECTIVES: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
 }
 
 

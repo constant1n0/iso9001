@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import unittest
 from datetime import date
+from decimal import Decimal
 from unittest.mock import patch
 
 import test_auth_bootstrap as bootstrap
@@ -28,7 +29,7 @@ MIGRATIONS_DIR = str(bootstrap.PROJECT_ROOT / "migrations")
 LATER_AUDITED_TABLES = frozenset(
     {"personas", "competencias_requeridas", "competencias_acreditadas",
      "acciones_correctivas", "document_revisions", "programas_auditoria",
-     "hallazgos_auditoria"}
+     "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo"}
 )
 
 
@@ -769,6 +770,70 @@ class MigrationsTestCase(unittest.TestCase):
                 "SELECT no_conformidad_id FROM hallazgos_auditoria ORDER BY id"))
             downgrade(directory=MIGRATIONS_DIR, revision="d7f1b3a5c9e2")
             self.assertNotIn(table, inspect(db.engine).get_table_names())
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+
+    def test_quality_objectives_guard_their_links_and_downgrade(self) -> None:
+        objectives, measurements = "objetivos_calidad", "mediciones_objetivo"
+        expected = {
+            "fk_objetivos_calidad_proceso_id_procesos_operacion":
+                ("procesos_operacion", "RESTRICT"),
+            "fk_objetivos_calidad_responsable_id_personas": ("personas", "RESTRICT"),
+            "fk_mediciones_objetivo_objetivo_id_objetivos_calidad":
+                ("objetivos_calidad", "RESTRICT"),
+            "fk_mediciones_objetivo_registrado_por_id_personas": ("personas", "RESTRICT"),
+        }
+        objective = ("INSERT INTO objetivos_calidad (titulo, indicador, meta, sentido, "
+                     "responsable_id, anio, fecha_inicio, fecha_limite, frecuencia) "
+                     "SELECT 'Entregas', '% a tiempo', 95, '{sentido}', p.id, {anio}, "
+                     "'2026-01-01', '{limite}', 'mensual' FROM personas p")
+        measurement = ("INSERT INTO mediciones_objetivo (objetivo_id, fecha, valor) "
+                       "SELECT id, '2026-01-31', 96.5 FROM objetivos_calidad")
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision="e9c2a4f6b8d1")
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            foreign_keys = {fk["name"]: (fk["referred_table"], fk["options"].get("ondelete"))
+                            for table in (objectives, measurements)
+                            for fk in inspector.get_foreign_keys(table)}
+            self.assertLessEqual(expected.items(), foreign_keys.items())
+            self.assertIn(f"ix_{measurements}_objetivo_id",
+                          {index["name"] for index in inspector.get_indexes(measurements)})
+            self.assertEqual([["objetivo_id", "fecha"]], [
+                u["column_names"] for u in inspector.get_unique_constraints(measurements)])
+            with db.engine.begin() as connection:
+                for statement in (
+                    "INSERT INTO personas (nombre) VALUES ('Ana')",
+                    "INSERT INTO procesos_operacion (proceso) VALUES ('Compras')",
+                    objective.format(sentido="mayor_igual", anio=2026, limite="2026-12-31"),
+                    "UPDATE objetivos_calidad SET proceso_id = "
+                    "(SELECT id_proceso FROM procesos_operacion)",
+                    measurement,
+                ):
+                    connection.execute(text(statement))
+            self.assertEqual([("activo", Decimal("95.0000"), Decimal("96.5000"))], self._rows(
+                "SELECT o.estado, o.meta, m.valor FROM objetivos_calidad o "
+                "JOIN mediciones_objetivo m ON m.objetivo_id = o.id"))
+            for statement in (
+                measurement,  # one measurement per objective and date
+                objective.format(sentido="≥", anio=2026, limite="2026-12-31"),
+                objective.format(sentido="mayor_igual", anio=1999, limite="2026-12-31"),
+                objective.format(sentido="mayor_igual", anio=2026, limite="2025-12-31"),
+                "UPDATE objetivos_calidad SET estado = 'Activo'",
+                "UPDATE objetivos_calidad SET frecuencia = 'semanal'",
+                "UPDATE objetivos_calidad SET meta = NULL",
+                "DELETE FROM objetivos_calidad",
+                "DELETE FROM procesos_operacion",
+                "DELETE FROM personas",
+            ):
+                with self.subTest(refused=statement):
+                    with self.assertRaises(IntegrityError):
+                        with db.engine.begin() as connection:
+                            connection.execute(text(statement))
+            downgrade(directory=MIGRATIONS_DIR, revision="e9c2a4f6b8d1")
+            self.assertFalse({objectives, measurements}
+                             & set(inspect(db.engine).get_table_names()))
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 

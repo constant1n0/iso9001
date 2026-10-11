@@ -28,7 +28,8 @@ flushes and never commits, and an update that changes nothing writes nothing.
 
 Trainings, nonconformities, audits (lead auditor, audited-area owner and
 team), audit programmes (approver), competence records, corrective actions,
-documents and document revisions cite a person through the columns in
+documents, document revisions, quality objectives (owner) and their
+measurements (recorded by) cite a person through the columns in
 ``REFERENCES`` (decision Q4); their
 services validate such a link with ``reference`` or ``check_reference``, and a
 person they still cite cannot be deleted. Trainings, nonconformities and audits also keep a
@@ -60,7 +61,8 @@ from sqlalchemy.orm import Session
 
 from ..models import (
     AccionCorrectiva, Auditoria, Capacitacion, CompetenceRecord, Document, DocumentRevision,
-    NoConformidad, Person, ProgramaAuditoria, RolResponsabilidad, User, auditoria_equipo,
+    MedicionObjetivo, NoConformidad, ObjetivoCalidad, Person, ProgramaAuditoria,
+    RolResponsabilidad, User, auditoria_equipo,
 )
 from . import audit, crud, fields, policy
 from .actor import Actor
@@ -95,6 +97,7 @@ REFERENCES = (
     DocumentRevision.author_id, DocumentRevision.approver_id,
     Auditoria.responsable_area_id, auditoria_equipo.c.persona_id,
     ProgramaAuditoria.aprobado_por_id,
+    ObjetivoCalidad.responsable_id, MedicionObjetivo.registrado_por_id,
 )
 
 _READS = crud.Spec(
