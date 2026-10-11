@@ -341,12 +341,66 @@ class UiPermissionsTestCase(unittest.TestCase):
                     with self.subTest(audit=audit_id, role=role.name, control=name):
                         self.assertEqual(role in allowed[name], marker in html)
 
+    def test_quality_objective_controls_follow_role_and_state(self) -> None:
+        """Administrators and auditors create, edit and change the state of objectives and
+        add and edit measurements while the objective is active; administrators delete
+        measurements and objectives without measurements (decision QO4)."""
+        from app.services import quality_objectives as qo
+        from app.services.actor import Actor
+
+        system = Actor(None, "seed", ADMIN, "system")
+        with self.app.app_context():
+            def objective(titulo):
+                return qo.objectives.create(db.session, system, {
+                    "titulo": titulo, "indicador": "Indicador", "meta": 1,
+                    "sentido": "mayor_igual", "responsable_id": self.owner_id,
+                    "fecha_inicio": date(2026, 1, 1), "fecha_limite": date(2026, 12, 31),
+                    "frecuencia": "mensual"}).id
+
+            measured, empty, closed = (objective(t) for t in ("Medido", "Sin medir", "Cerrado"))
+            measurements = {oid: qo.measurements.create(db.session, system, {
+                "objetivo_id": oid, "fecha": DAY, "valor": 1}, today=DAY).id
+                for oid in (measured, closed)}
+            qo.objectives.update(db.session, system, closed, {"estado": "alcanzado"})
+            db.session.commit()
+        writers, admins, nobody = {ADMIN, AUDITOR}, {ADMIN}, set()
+        base = "/objetivos-calidad"
+        html = {role: self._page(role, f"{base}/").get_data(as_text=True) for role in RoleEnum}
+        for role in RoleEnum:
+            with self.subTest(page="list", role=role.name):
+                self.assertEqual(role in writers, f'href="{base}/nuevo"' in html[role])
+                self.assertEqual(role in writers, f'href="{base}/{empty}/editar"' in html[role])
+        expected = {
+            measured: {"edit": writers, "delete": nobody, "close": writers, "reopen": nobody,
+                       "add": writers, "edit measurement": writers,
+                       "delete measurement": admins},
+            empty: {"edit": writers, "delete": admins, "close": writers, "reopen": nobody,
+                    "add": writers},
+            closed: {"edit": writers, "delete": nobody, "close": nobody, "reopen": writers,
+                     "add": nobody, "edit measurement": nobody, "delete measurement": nobody},
+        }
+        for oid, allowed in expected.items():
+            page = f"{base}/{oid}"
+            item = f"{page}/mediciones/{measurements.get(oid)}"
+            controls = {"edit": f'href="{page}/editar"', "delete": f'action="{page}/eliminar"',
+                        "close": f'action="{page}/estado/alcanzado"',
+                        "reopen": f'action="{page}/estado/activo"',
+                        "add": f'href="{page}/mediciones/nueva"',
+                        "edit measurement": f'href="{item}/editar"',
+                        "delete measurement": f'action="{item}/eliminar"'}
+            for role in RoleEnum:
+                body = self._page(role, page).get_data(as_text=True)
+                for name, marker in controls.items():
+                    with self.subTest(objective=oid, role=role.name, control=name):
+                        self.assertEqual(role in allowed.get(name, nobody), marker in body)
+
     def test_navigation_links_follow_the_read_permission(self) -> None:
         expected = {"/auditorias/": {ADMIN, AUDITOR}, "/programas-auditoria/": {ADMIN, AUDITOR},
                     "/documents/": set(RoleEnum), "/no_conformidades/": set(RoleEnum),
                     "/usuarios/": {ADMIN, AUDITOR}, "/perfil/": set(RoleEnum),
                     "/personas/": set(RoleEnum), "/competencias/requisitos/": set(RoleEnum),
-                    "/competencias/matriz": set(RoleEnum)}
+                    "/competencias/matriz": set(RoleEnum),
+                    "/objetivos-calidad/": set(RoleEnum)}
         for role in RoleEnum:
             html = self._page(role, "/dashboard/").get_data(as_text=True)
             self.assertIn('class="nav__group">Personas y competencia<', html)

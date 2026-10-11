@@ -133,6 +133,27 @@
         {% endif %}
     </article>
     {% endif %}
+    {% if objetivos_desviados is not none %}
+    <article class="card" id="objetivos-calidad">
+        <header class="card__header">
+            <h2 class="card__title">Objetivos de calidad</h2>
+            {% if objetivos_desviados %}<span class="badge badge--danger">{{ objetivos_desviados | length }}</span>{% else %}<span class="card__meta">6.2</span>{% endif %}
+        </header>
+        {% if objetivos_desviados %}
+            <ul class="list">
+                {% for objetivo, resumen in objetivos_desviados %}
+                    <li class="list__item">
+                        <span class="list__primary"><a href="{{ url_for('objetivo_calidad.show_objective', objective_id=objetivo.id) }}">{{ objetivo.titulo }}</a><br><span class="muted">{{ objetivo.indicador }}</span></span>
+                        <span class="list__secondary">{% if resumen.cumple is false %}<span class="badge badge--danger">No cumple la meta</span>{% endif %}{% if resumen.medicion_vencida %} <span class="badge badge--warn">Medición vencida</span>{% endif %}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+            <div class="card__body"><a href="{{ url_for('objetivo_calidad.list_objectives', estado='activo') }}">Ver los objetivos activos</a></div>
+        {% else %}
+            <p class="empty">Ningún objetivo activo está fuera de meta ni tiene mediciones vencidas.</p>
+        {% endif %}
+    </article>
+    {% endif %}
 </section>
 
 <section class="grid grid--2" aria-label="Gráficas">

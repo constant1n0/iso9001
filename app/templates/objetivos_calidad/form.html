@@ -1,0 +1,49 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header %}
+{% from "_partials/forms.html" import field %}
+{% set titulo = 'Editar el objetivo de calidad' if objetivo else 'Nuevo objetivo de calidad' %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block crumb %}Calidad · Objetivos de calidad{% endblock %}
+{% block content %}
+{{ page_header('Cláusula 6.2 · Objetivos de la calidad', titulo) }}
+<form method="post" class="form-card" novalidate>
+    {{ form.hidden_tag() }}
+    <div class="form-grid">
+        {% for f in form if f.type not in ('CSRFTokenField', 'HiddenField', 'SubmitField') %}
+            {{ field(f, class_='field--wide' if f.type == 'TextAreaField' else '') }}
+            {% if bloqueada and f.name == 'unidad' %}
+            {# Measured: the service keeps the target and its direction, so they are only shown. #}
+            <div class="field">
+                <label for="meta-fija">Meta</label>
+                <input id="meta-fija" type="text" value="{{ objetivo.meta | cifra }}" disabled>
+            </div>
+            <div class="field">
+                <label for="sentido-fijo">Sentido de la meta</label>
+                <input id="sentido-fijo" type="text" value="{{ objetivo.sentido.value }}" disabled>
+            </div>
+            <p class="field field--wide muted">La meta y su sentido no se pueden cambiar porque el objetivo ya tiene mediciones.</p>
+            {% endif %}
+        {% endfor %}
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn--primary">{{ 'Guardar cambios' if objetivo else 'Crear objetivo' }}</button>
+        <a class="btn btn--ghost" href="{{ url_for('objetivo_calidad.show_objective', objective_id=objetivo.id) if objetivo else url_for('objetivo_calidad.list_objectives') }}">Cancelar</a>
+    </div>
+</form>
+{% endblock %}

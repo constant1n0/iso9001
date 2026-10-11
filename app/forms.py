@@ -14,14 +14,17 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
 import enum
+from decimal import Decimal
 
 from .models import (
     CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAuditoriaEnum,
-    GravedadNoConformidad, OrigenNoConformidad, ResultadoVerificacion, RoleEnum, TipoHallazgo,
+    FrecuenciaMedicion, GravedadNoConformidad, OrigenNoConformidad, ResultadoVerificacion,
+    RoleEnum, SentidoObjetivo, TipoHallazgo,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
-from wtforms.validators import DataRequired, Length, NumberRange, EqualTo, Email, Optional
+from wtforms import DecimalField, widgets
+from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, EqualTo, Email, Optional
 # Person pickers (``persona_id``, ``responsable_id``, ``auditor_id``): the
 # routes fill the choices with ``person_choices``; the empty choice means no
 # person. The legacy free-text name next to each picker is optional here: the
@@ -377,3 +380,79 @@ class HallazgoForm(BaseForm):
     clausula = StringField('Cláusula de la norma (p. ej. 8.5.1)', validators=[Length(max=20)])
     descripcion = TextAreaField('Descripción', validators=[DataRequired()])
     evidencia = TextAreaField('Evidencia')
+
+
+# Quality objectives and their measurements (``quality-objectives``, QO-2). The
+# routes fill the process and people pickers; the service has the last word on
+# every value (period, target fixed once measured, date never in the future).
+# Numbers are typed with a decimal point or comma and shown without trailing
+# zeros, the way ``number_text`` writes them.
+NO_PROCESS = ('', '— Sin proceso —')
+TARGET_DIRECTIONS = {
+    SentidoObjetivo.mayor_igual: 'igual o superior a la meta',
+    SentidoObjetivo.menor_igual: 'igual o inferior a la meta',
+}
+
+
+def number_text(value):
+    """A decimal as Spanish text without trailing zeros (``Decimal('88.5000')`` is ``88,5``)."""
+    if value is None:
+        return ''
+    value = Decimal(value)
+    if value == 0:
+        return '0'
+    return format(value.normalize(), 'f').replace('.', ',')
+
+
+def process_choices(processes):
+    """The empty choice, then each process (``ProcesoOperacion``) in the given order."""
+    return [NO_PROCESS, *((p.id_proceso, p.proceso) for p in processes)]
+
+
+class NumberField(DecimalField):
+    """A decimal typed with a point or a comma; shown as ``number_text`` writes it."""
+
+    widget = widgets.TextInput()
+
+    def __init__(self, label=None, validators=None, **kwargs):
+        kwargs.setdefault('render_kw', {'inputmode': 'decimal'})
+        super().__init__(label, validators, places=None, **kwargs)
+
+    def process_formdata(self, valuelist):
+        super().process_formdata([value.strip().replace(',', '.') for value in valuelist])
+
+    def _value(self):
+        if self.raw_data:
+            return self.raw_data[0]
+        return number_text(self.data)
+
+
+class ObjetivoCalidadForm(BaseForm):
+    titulo = StringField('Título', validators=[DataRequired(), Length(max=200)])
+    descripcion = TextAreaField('Descripción')
+    proceso_id = SelectField('Proceso', coerce=optional_id, choices=[NO_PROCESS])
+    responsable_id = required_person_field('Responsable')
+    indicador = StringField('Indicador', validators=[DataRequired(), Length(max=200)])
+    unidad = StringField('Unidad (p. ej. %, días)', validators=[Length(max=30)])
+    # ``meta`` names the WTForms options of every form, so the attribute is renamed.
+    target = NumberField('Meta', validators=[InputRequired()], name='meta')
+    sentido = SelectField('Sentido de la meta', coerce=member_name, validators=[DataRequired()],
+                          choices=[(s.name, f'{s.value} {label}')
+                                   for s, label in TARGET_DIRECTIONS.items()])
+    valor_inicial = NumberField('Valor inicial', validators=[Optional()])
+    frecuencia = SelectField('Frecuencia de medición', coerce=member_name,
+                             validators=[DataRequired()],
+                             choices=[(f.name, f.value) for f in FrecuenciaMedicion])
+    fecha_inicio = DateField('Fecha de inicio', validators=[DataRequired()])
+    fecha_limite = DateField('Fecha límite', validators=[DataRequired()])
+    anio = IntegerField('Año (vacío: el de la fecha de inicio)',
+                        validators=[Optional(), NumberRange(min=2000, max=2100)])
+    recursos = TextAreaField('Recursos necesarios')
+    evaluacion = TextAreaField('Cómo se evalúan los resultados')
+
+
+class MedicionObjetivoForm(BaseForm):
+    fecha = DateField('Fecha', validators=[DataRequired()])
+    valor = NumberField('Valor', validators=[InputRequired()])
+    registrado_por_id = person_field('Registrada por')
+    comentario = TextAreaField('Comentario')

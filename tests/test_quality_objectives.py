@@ -283,6 +283,30 @@ class MeasurementTestCase(Helpers, ServiceBase):
         self.edit("objectives", objective.id, {"estado": "activo"})
         self.edit("measurements", measured.id, {"comentario": "Revisado"}, today=TODAY)
 
+    def test_a_no_op_edit_of_a_closed_objectives_measurement_writes_nothing(self) -> None:
+        """The no-op rule wins over the closed-objective refusal; any change is refused."""
+        objective = self.objective()
+        measured = self.measure(objective.id, date(2026, 1, 31), 90, comentario="Enero")
+        self.edit("objectives", objective.id, {"estado": "cancelado"})
+        audit_rows, stamp = len(self.rows("mediciones_objetivo")), measured.updated_at
+        same = {"objetivo_id": objective.id, "fecha": date(2026, 1, 31), "valor": "90.00",
+                "comentario": "Enero", "registrado_por_id": None}
+        for data in (same, {"valor": 90}, {}):
+            with self.subTest(data=data):
+                found = self.edit("measurements", measured.id, data, today=TODAY)
+                self.assertEqual((Decimal("90"), stamp), (found.valor, found.updated_at))
+        self.assertEqual(audit_rows, len(self.rows("mediciones_objetivo")))
+        for data in ({"valor": 91}, {"comentario": "Revisado"}, {"valor": "noventa"},
+                     {"fecha": date(2026, 2, 28)}):
+            with self.subTest(data=data):
+                message = self.refused(errors().ValidationError, qo().measurements.update, CLI,
+                                       measured.id, data, today=TODAY)
+                self.assertEqual(qo().OBJECTIVE_NOT_ACTIVE, message)
+        message = self.refused(errors().ValidationError, qo().measurements.update, CLI,
+                               measured.id, {"objetivo_id": objective.id + 1}, today=TODAY)
+        self.assertEqual(qo().OBJECTIVE_FIXED, message)
+        self.assertEqual(audit_rows, len(self.rows("mediciones_objetivo")))
+
     def test_one_per_date_its_objective_fixed_and_existing(self) -> None:
         objective, other = self.objective(), self.objective(titulo="Otro")
         measured = self.measure(objective.id, date(2026, 1, 31), 90)
@@ -472,6 +496,22 @@ class PeopleAndProcessesTestCase(Helpers, ServiceBase):
                 self.assertEqual(people.STILL_REFERENCED, message)
         self.assertEqual(2, self.count(Person))
 
+    def test_a_process_cited_by_an_objective_is_refused_without_foreign_keys(self) -> None:
+        from app.services import process_operations
+
+        self.assertEqual(0, db.session.execute(text("PRAGMA foreign_keys")).scalar_one())
+        cited, free = self.process("Compras"), self.process("Ventas")
+        self.objective(proceso_id=cited)
+        message = self.refused(errors().Conflict, process_operations.delete, CLI, cited)
+        self.assertEqual(process_operations.CITED_BY_OBJECTIVES, message)
+        self.refused(errors().PermissionDenied, process_operations.delete, actor(OPERATIVO),
+                     cited)
+        self.refused(errors().NotFound, process_operations.delete, CLI, 999)
+        self.assertEqual(2, self.count(ProcesoOperacion))
+        process_operations.delete(db.session, CLI, free)
+        db.session.commit()
+        self.assertEqual(1, self.count(ProcesoOperacion))
+
 
 class ForeignKeyCases:
     """The schema backs the service; shared by the SQLite and PostgreSQL cases."""
@@ -501,10 +541,14 @@ class ForeignKeyCases:
         self.enforce_foreign_keys()
         process_id = self.process()
         objective = self.objective(proceso_id=process_id)
-        with self.assertRaises(errors().Conflict) as caught:
-            process_operations.delete(db.session, CLI, process_id)
+        message = self.refused(errors().Conflict, process_operations.delete, CLI, process_id)
+        self.assertEqual(process_operations.CITED_BY_OBJECTIVES, message)
+        # The foreign key refuses a citation the check did not see, with the same message.
+        with patch.object(process_operations, "_cited_by_objectives", return_value=False):
+            with self.assertRaises(errors().Conflict) as caught:
+                process_operations.delete(db.session, CLI, process_id)
         self.assertIsInstance(caught.exception.__cause__, IntegrityError)
-        self.assertIn("conflicto", caught.exception.message)
+        self.assertEqual(process_operations.CITED_BY_OBJECTIVES, caught.exception.message)
         db.session.rollback()
         db.session.expire_all()
         self.assertEqual(process_id, db.session.get(models().ObjetivoCalidad,

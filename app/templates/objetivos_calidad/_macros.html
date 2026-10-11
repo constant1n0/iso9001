@@ -1,0 +1,20 @@
+{# Shared by the quality objective pages and the dashboard card. #}
+{% macro estado_badge(objetivo) %}
+{%- set variant = {'alcanzado': ' badge--ok', 'no_alcanzado': ' badge--danger'}.get(objetivo.estado.name, '') -%}
+<span class="badge{{ variant }}">{{ objetivo.estado.value }}</span>
+{%- endmacro %}
+
+{# The target with its direction and unit, e.g. «≥ 95 %». #}
+{% macro meta(objetivo) %}{{ objetivo.sentido.value }} {{ objetivo.meta | cifra }}{% if objetivo.unidad %} {{ objetivo.unidad }}{% endif %}{% endmacro %}
+
+{# A value of the objective's indicator with its unit, or a dash. #}
+{% macro valor(objetivo, value) %}{% if value is none %}—{% else %}{{ value | cifra }}{% if objetivo.unidad %} {{ objetivo.unidad }}{% endif %}{% endif %}{% endmacro %}
+
+{# Whether a value meets the target; ``none`` when there is no measurement yet. #}
+{% macro cumple_badge(cumple) %}
+{%- if cumple is none %}<span class="badge">Sin medir</span>
+{%- elif cumple %}<span class="badge badge--ok">Cumple</span>
+{%- else %}<span class="badge badge--danger">No cumple</span>{% endif -%}
+{% endmacro %}
+
+{% macro vencida_badge(resumen) %}{% if resumen.medicion_vencida %}<span class="badge badge--warn">Medición vencida</span>{% endif %}{% endmacro %}

@@ -28,9 +28,12 @@ from app.models import (
     DocumentCategory,
     DocumentRevision,
     EstadoRevision,
+    FrecuenciaMedicion,
     HallazgoAuditoria,
+    MedicionObjetivo,
     Mejora,
     NoConformidad,
+    ObjetivoCalidad,
     ParteInteresada,
     Person,
     ProcesoOperacion,
@@ -40,6 +43,7 @@ from app.models import (
     RoleEnum,
     RolResponsabilidad,
     SatisfaccionCliente,
+    SentidoObjetivo,
     TipoEnum,
     TipoHallazgo,
     User,
@@ -130,6 +134,12 @@ RECORD = dict(
 
 ACTION = dict(descripcion="Afilar el molde", responsable_id="1", fecha_prevista="2026-10-20",
               fecha_realizada="")
+OBJECTIVE = dict(titulo="Entregas", descripcion="", proceso_id="", indicador="% a tiempo",
+                 unidad="%", meta="95", sentido="mayor_igual", valor_inicial="",
+                 responsable_id="1", anio="", fecha_inicio="2026-01-01",
+                 fecha_limite="2026-12-31", frecuencia="mensual", recursos="", evaluacion="")
+# Dated well before any day the suite runs on: a measurement is never in the future.
+MEASUREMENT = dict(fecha="2026-02-28", valor="96", comentario="", registrado_por_id="")
 
 
 def _html(resource, base, create, update, delete):
@@ -222,6 +232,19 @@ ENDPOINTS = [
     Endpoint("COMPETENCE", "update", "POST", "/competencias/1/editar", 302, RECORD),
     Endpoint("COMPETENCE", "delete", "POST", "/competencias/1/eliminar", 302),
     Endpoint("COMPETENCE", "read", "GET", "/competencias/matriz", 200),
+    # Objective 1 has measurement 1, so its target is fixed and it cannot be
+    # deleted; objective 2 has none, so deleting it succeeds (QO-2).
+    *_html("QUALITY_OBJECTIVES", "/objetivos-calidad/", ("nuevo", OBJECTIVE),
+           ("1/editar", OBJECTIVE), "2/eliminar"),
+    Endpoint("QUALITY_OBJECTIVES", "read", "GET", "/objetivos-calidad/1", 200),
+    Endpoint("QUALITY_OBJECTIVES", "update", "POST", "/objetivos-calidad/1/estado/alcanzado",
+             302),
+    Endpoint("QUALITY_OBJECTIVES", "create", "POST", "/objetivos-calidad/1/mediciones/nueva",
+             302, MEASUREMENT),
+    Endpoint("QUALITY_OBJECTIVES", "update", "POST",
+             "/objetivos-calidad/1/mediciones/1/editar", 302, MEASUREMENT),
+    Endpoint("QUALITY_OBJECTIVES", "delete", "POST",
+             "/objetivos-calidad/1/mediciones/1/eliminar", 302),
     *_json("IMPROVEMENTS", "/mejoras/api/", {"no_conformidad": "NC"},
            {"accion_correctiva": "x"}),
     *_json("AUDIT_INDICATORS", "/auditoria_indicador/",
@@ -264,12 +287,12 @@ ALLOWED = {
     "PEOPLE": JSON_REGISTER,  # decision Q1 of qms-people
     "COMPETENCE": JSON_REGISTER,
     "CORRECTIVE_ACTIONS": (ALL, ALL, {ADMIN}),
+    "QUALITY_OBJECTIVES": JSON_REGISTER,  # decision QO4 of quality-objectives
 }
 # Policy entries without routes. AUDIT_LOG has no adapter yet. The API_TOKENS
 # matrix (issue, list, revoke any token) stays CLI-only; "Mi perfil" bypasses it
 # with an ownership check, so tests/test_profile_routes.py characterizes it.
-# QUALITY_OBJECTIVES gets its screens in QO-2 of quality-objectives.
-NO_ROUTES = {"AUDIT_LOG", "API_TOKENS", "QUALITY_OBJECTIVES"}
+NO_ROUTES = {"AUDIT_LOG", "API_TOKENS"}
 
 
 def allowed_roles(endpoint: Endpoint) -> set:
@@ -362,7 +385,20 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                         document_id=2, numero=1, estado=EstadoRevision.en_revision,
                         content="c", change_summary="Alta", author_id=1,
                     ),
+                    *(
+                        ObjetivoCalidad(
+                            titulo=titulo, indicador="% a tiempo", meta=95,
+                            sentido=SentidoObjetivo.mayor_igual, responsable_id=1, anio=2026,
+                            fecha_inicio=date(2026, 1, 1), fecha_limite=date(2026, 12, 31),
+                            frecuencia=FrecuenciaMedicion.mensual,
+                        )
+                        for titulo in ("Seed", "Unmeasured")
+                    ),
                 ]
+            )
+            db.session.flush()  # the measurement cites objective 1
+            db.session.add(
+                MedicionObjetivo(objetivo_id=1, fecha=date(2026, 1, 31), valor=90)
             )
             db.session.commit()
         client = self.app.test_client()
