@@ -268,7 +268,8 @@ ALLOWED = {
 # Policy entries without routes. AUDIT_LOG has no adapter yet. The API_TOKENS
 # matrix (issue, list, revoke any token) stays CLI-only; "Mi perfil" bypasses it
 # with an ownership check, so tests/test_profile_routes.py characterizes it.
-NO_ROUTES = {"AUDIT_LOG", "API_TOKENS"}
+# QUALITY_OBJECTIVES gets its screens in QO-2 of quality-objectives.
+NO_ROUTES = {"AUDIT_LOG", "API_TOKENS", "QUALITY_OBJECTIVES"}
 
 
 def allowed_roles(endpoint: Endpoint) -> set:

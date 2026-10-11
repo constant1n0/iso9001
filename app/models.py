@@ -806,6 +806,116 @@ class HallazgoAuditoria(RecordMetadataMixin, db.Model):
     def __repr__(self):
         return f'<HallazgoAuditoria {self.id} {self.tipo.name if self.tipo else None}>'
 
+
+class SentidoObjetivo(enum.Enum):
+    """How a quality objective's target is met (decision QO1): at or above, or at or below."""
+
+    mayor_igual = '≥'
+    menor_igual = '≤'
+
+
+class FrecuenciaMedicion(enum.Enum):
+    """How often a quality objective is measured (decisions QO1 and QO3)."""
+
+    mensual = 'Mensual'
+    trimestral = 'Trimestral'
+    semestral = 'Semestral'
+    anual = 'Anual'
+
+
+class EstadoObjetivo(enum.Enum):
+    """Where a quality objective stands (decision QO1); measurements need ``activo``."""
+
+    activo = 'Activo'
+    alcanzado = 'Alcanzado'
+    no_alcanzado = 'No alcanzado'
+    cancelado = 'Cancelado'
+
+
+class ObjetivoCalidad(RecordMetadataMixin, db.Model):
+    """A measurable quality objective (ISO 9001 clause 6.2, decision QO1 of ``quality-objectives``).
+
+    ``meta`` is met when the indicator's value is at or above it (``mayor_igual``)
+    or at or below it (``menor_igual``). Its measurements (``MedicionObjetivo``)
+    keep it from being deleted, and ``services.quality_objectives`` fixes the
+    target and its direction once one exists.
+    """
+
+    __tablename__ = 'objetivos_calidad'
+    __table_args__ = (
+        db.CheckConstraint('anio BETWEEN 2000 AND 2100', name='ck_objetivos_calidad_anio'),
+        db.CheckConstraint('fecha_limite >= fecha_inicio', name='ck_objetivos_calidad_fechas'),
+        db.ForeignKeyConstraint(
+            ['proceso_id'], ['procesos_operacion.id_proceso'],
+            name='fk_objetivos_calidad_proceso_id_procesos_operacion', ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['responsable_id'], ['personas.id'],
+            name='fk_objetivos_calidad_responsable_id_personas', ondelete='RESTRICT',
+        ),
+        db.Index('ix_objetivos_calidad_proceso_id', 'proceso_id'),
+        db.Index('ix_objetivos_calidad_responsable_id', 'responsable_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    titulo = db.Column(db.String(200), nullable=False)
+    descripcion = db.Column(db.Text)
+    proceso_id = db.Column(db.Integer, nullable=True)
+    indicador = db.Column(db.String(200), nullable=False)
+    unidad = db.Column(db.String(30))
+    meta = db.Column(db.Numeric(12, 4), nullable=False)
+    sentido = db.Column(text_enum(SentidoObjetivo, 'ck_objetivos_calidad_sentido'), nullable=False)
+    valor_inicial = db.Column(db.Numeric(12, 4))
+    responsable_id = db.Column(db.Integer, nullable=False)
+    anio = db.Column(db.Integer, nullable=False)
+    fecha_inicio = db.Column(db.Date, nullable=False)
+    fecha_limite = db.Column(db.Date, nullable=False)
+    frecuencia = db.Column(
+        text_enum(FrecuenciaMedicion, 'ck_objetivos_calidad_frecuencia'), nullable=False
+    )
+    recursos = db.Column(db.Text)
+    evaluacion = db.Column(db.Text)  # how the results are evaluated (6.2.2 e)
+    estado = db.Column(
+        text_enum(EstadoObjetivo, 'ck_objetivos_calidad_estado'),
+        nullable=False,
+        default=EstadoObjetivo.activo,
+        server_default=EstadoObjetivo.activo.name,
+    )
+
+    def __repr__(self):
+        return f'<ObjetivoCalidad {self.id} {self.titulo}>'
+
+
+class MedicionObjetivo(RecordMetadataMixin, db.Model):
+    """One measurement of a quality objective's indicator (decision QO2), one per date."""
+
+    __tablename__ = 'mediciones_objetivo'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'objetivo_id', 'fecha', name='uq_mediciones_objetivo_objetivo_id_fecha'
+        ),
+        db.ForeignKeyConstraint(
+            ['objetivo_id'], ['objetivos_calidad.id'],
+            name='fk_mediciones_objetivo_objetivo_id_objetivos_calidad', ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['registrado_por_id'], ['personas.id'],
+            name='fk_mediciones_objetivo_registrado_por_id_personas', ondelete='RESTRICT',
+        ),
+        db.Index('ix_mediciones_objetivo_objetivo_id', 'objetivo_id'),
+        db.Index('ix_mediciones_objetivo_registrado_por_id', 'registrado_por_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    objetivo_id = db.Column(db.Integer, nullable=False)
+    fecha = db.Column(db.Date, nullable=False)
+    valor = db.Column(db.Numeric(12, 4), nullable=False)
+    comentario = db.Column(db.Text)
+    registrado_por_id = db.Column(db.Integer, nullable=True)
+
+    def __repr__(self):
+        return f'<MedicionObjetivo {self.objetivo_id} {self.fecha}>'
+
 # Modelo para Control Documental
 class DocumentCategory(enum.Enum):
     MANUAL_CALIDAD = 'Manual de Calidad'
