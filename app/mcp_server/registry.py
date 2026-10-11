@@ -17,10 +17,10 @@ from sqlalchemy.orm import object_session
 from ..models import (
     CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAccionCorrectiva,
     EstadoAuditoriaEnum, EstadoNoConformidad, EstadoProgramaAuditoria, GravedadNoConformidad,
-    OrigenNoConformidad, TipoEnum,
+    OrigenNoConformidad, TipoEnum, TipoHallazgo,
 )
 from ..services import (
-    audit_indicators, audit_programmes, audits, competence, corrective_actions,
+    audit_findings, audit_indicators, audit_programmes, audits, competence, corrective_actions,
     document_revisions, documents, improvements,
     nonconformities, people, process_operations, risks_opportunities,
     roles_responsibilities, satisfaction, stakeholders, training, training_resources,
@@ -148,6 +148,21 @@ _MODULES = (
         _f("anio", "integer", True, note="Year of the programme (2000-2100), one per year."),
         _f("objetivos", required=True), _f("alcance", required=True),
     ), (_f("anio", "integer"), _f("estado", "enum", members=EstadoProgramaAuditoria))),
+    # Shares the ``AUDITS`` grant (AP7). A non-conformity finding (``nc_mayor``,
+    # ``nc_menor``) creates its non-conformity in the same write (AP5); records show
+    # its id as ``no_conformidad_id``, which no tool writes. ``tipo`` shows the
+    # Spanish label; the filter takes the member name.
+    Module("hallazgos_auditoria", "Audit findings", Resource.AUDITS, audit_findings, (
+        _f("auditoria_id", "integer", True, note=(
+            "Audit (auditorias) the finding belongs to; it cannot change later and a "
+            "cancelled audit takes no findings.")),
+        _f("tipo", "enum", True, members=TipoHallazgo, note=(
+            "nc_mayor and nc_menor create a non-conformity (no_conformidades) with that "
+            "severity, returned as no_conformidad_id; changing the type never deletes it.")),
+        _f("descripcion", required=True),
+        _f("clausula", note="ISO 9001 clause: dotted numbers from 4 to 10, e.g. «8.5.1»."),
+        _f("evidencia"),
+    ), (_f("auditoria_id", "integer"), _f("tipo", "enum", members=TipoHallazgo))),
     # Read-only here (DC-1 of ``document-control``): every role reads the documents
     # it may see with their revision in force, and the policy refuses ``qms_create``
     # and ``qms_update`` on the mcp channel, so no field is writable. The filters

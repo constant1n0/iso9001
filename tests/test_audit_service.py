@@ -182,6 +182,16 @@ class CreateTestCase(WriteBase):
         self.assertEqual(0, db.session.query(Auditoria).count())
         self.assertEqual([], self.audit_rows())
 
+    def test_a_payload_that_is_not_a_mapping_is_a_spanish_validation_error(self) -> None:
+        for data in (None, 5, "texto", ["area_auditada"]):
+            with self.subTest(data=data):
+                with self.assertRaises(errors().ValidationError) as caught:
+                    service().create(db.session, actor(AUDITOR), data)
+                db.session.rollback()
+                self.assertEqual("Los datos deben ser un objeto con campos.",
+                                 caught.exception.message)
+        self.assertEqual(0, db.session.query(Auditoria).count())
+
     def test_scoped_actor_without_write_is_denied(self) -> None:
         with self.assertRaises(errors().PermissionDenied):
             service().create(db.session, actor(AUDITOR, scopes={"read"}), VALID)
@@ -242,6 +252,17 @@ class UpdateTestCase(WriteBase):
                 db.session.rollback()
         db.session.refresh(audit)
         self.assertEqual("Compras", audit.area_auditada)
+        self.assertEqual(1, len(self.audit_rows()))
+
+    def test_a_payload_that_is_not_a_mapping_is_a_spanish_validation_error(self) -> None:
+        audit = self.create()
+        for data in (None, 5, "texto", ["area_auditada"]):
+            with self.subTest(data=data):
+                with self.assertRaises(errors().ValidationError) as caught:
+                    service().update(db.session, actor(AUDITOR), audit.id, data)
+                db.session.rollback()
+                self.assertEqual("Los datos deben ser un objeto con campos.",
+                                 caught.exception.message)
         self.assertEqual(1, len(self.audit_rows()))
 
     def test_scoped_actor_without_write_cannot_update(self) -> None:

@@ -65,6 +65,10 @@ HAS_AUDITS = "No se puede eliminar un programa que tiene auditorías; quítalas 
 NOT_DRAFT = "Solo se puede aprobar un programa en borrador."
 APPROVER_REQUIRED = "Indica la persona que aprueba el programa."
 DUPLICATE = "Ya existe un programa de auditoría para ese año."
+APPROVE_CONFLICT = (
+    "No se ha podido aprobar el programa porque sus datos han cambiado entretanto; "
+    "vuelve a intentarlo."
+)
 
 _READS = crud.Spec(
     model=ProgramaAuditoria,
@@ -196,6 +200,8 @@ def approve(
         ValidationError: The programme is not a draft, or the approving
             person is missing, unknown or inactive.
         ValueError: ``today`` is not a ``date`` (a programming error).
+        Conflict: The database refused the approval, e.g. the approving
+            person was deleted meanwhile (``APPROVE_CONFLICT``).
     """
     policy.require(actor, Action.UPDATE, Resource.AUDITS)
     if actor.role not in APPROVE_ROLES or actor.channel == "mcp":
@@ -208,7 +214,7 @@ def approve(
         raise ValidationError(APPROVER_REQUIRED)
     if not isinstance(today, date) or isinstance(today, datetime):
         raise ValueError("The approval date must come from the adapter.")
-    _change(session, actor, found, None, estado=EstadoProgramaAuditoria.aprobado,
+    _change(session, actor, found, APPROVE_CONFLICT, estado=EstadoProgramaAuditoria.aprobado,
             aprobado_en=today, aprobado_por_id=approver)
     return found
 
@@ -230,7 +236,7 @@ def _clean(data: Mapping[str, Any]) -> dict[str, Any]:
     return values
 
 
-def _change(session: Session, actor: Actor, found: ProgramaAuditoria, conflict: str | None,
+def _change(session: Session, actor: Actor, found: ProgramaAuditoria, conflict: str,
             **changes: Any) -> None:
     """Apply ``changes`` with stamps and an audit row; ``conflict`` names a refused flush."""
     before = audit.snapshot(found)
