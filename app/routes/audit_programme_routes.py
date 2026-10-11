@@ -35,7 +35,7 @@ with the reason.
 
 from collections import Counter
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from flask_login import login_required
 
@@ -140,8 +140,13 @@ def exportar_pdf(id: int) -> ResponseReturnValue:
     """The programme as a PDF: its data, its approval and every audit with its findings."""
     actor = current_actor()
     programa = audit_programmes.get(db.session, actor, id)
-    pdf = render_pdf('programas_auditoria/pdf_template.html',
-                     **_audits_context(actor, programa, _every_audit(actor, id)))
+    try:
+        pdf = render_pdf('programas_auditoria/pdf_template.html',
+                         **_audits_context(actor, programa, _every_audit(actor, id)))
+    except Exception:
+        current_app.logger.exception('Error generating PDF for audit programme %s', id)
+        flash('Error al generar el PDF del programa de auditoría.', 'danger')
+        return redirect(url_for('programa_auditoria.ver_programa', id=id))
     return pdf_response(pdf, f'programa_auditoria_{programa.anio}.pdf')
 
 

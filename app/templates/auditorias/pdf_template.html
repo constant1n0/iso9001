@@ -30,7 +30,7 @@
 </style>
 {% set lead = personas.get(auditoria.auditor_id) %}
 {% set equipo -%}
-{% for persona in auditoria.equipo %}{{ persona.nombre }}{% if not persona.activo %} (desactivada){% endif %}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}
+{% for persona in auditoria.equipo | sort(attribute='nombre') %}{{ persona.nombre }}{% if not persona.activo %} (desactivada){% endif %}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}
 {%- endset %}
 {{ fields([
     ('Programa', 'Programa %s · %s' | format(programa.anio, programa.estado.value) if programa else '—'),

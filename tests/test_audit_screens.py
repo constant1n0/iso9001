@@ -597,6 +597,14 @@ class PdfTestCase(ScreensBase):
             '<td class="num">0</td></tr>',
         ], rows)
 
+    def test_a_programme_pdf_that_cannot_be_rendered_returns_to_the_programme(self) -> None:
+        pid = self.programme(2026)
+        self.login(AUDITOR)
+        with patch(f"{PROG_ROUTES}.render_pdf", side_effect=RuntimeError("weasyprint")):
+            response = self.client.get(f"{PROG}/{pid}/pdf")
+        self.assertEqual(302, response.status_code)
+        self.assertTrue(response.headers["Location"].endswith(f"{PROG}/{pid}"))
+
     def test_a_programme_pdf_lists_every_audit_and_a_draft_shows_no_approval(self) -> None:
         pid = self.programme(2026)
         for area in ("Compras", "Ventas", "Almacén"):
