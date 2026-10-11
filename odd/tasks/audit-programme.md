@@ -41,7 +41,7 @@ Route for every task: **delegated direct**.
 - [x] **AP-3 — Screens.** Forecast 800-1,300.
   - Programme list and detail with its audits; audit form with the new fields and pickers; audit detail with findings and links to their nonconformities; approval action.
   - Also (AP-2 review): an NC finding on a future-dated audit or with a long description must not fail with a nonconformity-service message (test it, or check before creating); an audit delete refused by a constraint other than the findings foreign key should not claim "has findings".
-- [ ] **AP-4 — Reports and docs.** Forecast 250-500.
+- [x] **AP-4 — Reports and docs.** Forecast 250-500.
   - Audit PDF with scope, criteria, team and findings; programme PDF or summary; README and `docs/mcp.md`.
   - Also (AP-3 review): the programme-page truncation test must not depend on the order of same-date audits; the finding edit page test asserts the current type is preselected (and clause and evidence re-rendered); derive the findings foreign-key name in `audits` from the model metadata instead of a hard-coded string.
 
@@ -60,7 +60,7 @@ Baseline at `88cd706`: 1,126 tests. Migrations are tested on PostgreSQL (`TEST_P
 | AP-1 | Done | `f16eb68` (`programas_auditoria`, `auditoria_equipo`, audit `programa_id`, `alcance`, `criterios`, `responsable_area_id`, migration `d7f1b3a5c9e2`, `app/services/audit_programmes.py` with `approve`, independence and year checks, person delete protection, MCP module `programas_auditoria` (17 modules), audit form fields) | RED: 59 tests (`ImportError: audit_programmes`, `KeyError: 'programa_id'`, unknown module, counts). GREEN: 1,164 tests incl. PostgreSQL | Range `0864670..f16eb68`: **medium**, `slice_budget_reached` (1,498 code lines plus the tracker); consent granted; reliability review `review-4561977c88243678` **approved** and acknowledged; its warning (editing an audit whose team member became inactive is untested) and three suggestions moved into AP-2 |
 | AP-2 | Done | `e6c3c58` (`hallazgos_auditoria`, migration `e9c2a4f6b8d1`, `app/services/audit_findings.py`, automatic nonconformity for NC findings with origin `auditoria`, severity, audit date and the active area owner, audit delete refused while it has findings, MCP module `hallazgos_auditoria` (18 modules), AP-1 review items), review follow-up `efda549` | RED: 61 `ImportError: audit_findings`, missing models and table, `APPROVE_CONFLICT`, counts, non-mapping payloads raising `TypeError`; follow-up: a re-typed finding whose nonconformity was deleted got none. GREEN: 1,191, then 1,192 tests incl. PostgreSQL | Range `80d663d..e6c3c58`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-086d9ff4a030a937` **approved** and acknowledged; its warning fixed in `efda549` (every NC finding without a link gets a nonconformity, whatever the previous type); two suggestions moved into AP-3 |
 | AP-3 | Done | `a6de7f3` (`/programas-auditoria/` list, new, detail with its audits and finding counts, edit, approve, delete; audit detail `/auditorias/<id>` with findings and their nonconformity links; finding forms; audit delete messages narrowed to the findings foreign key on PostgreSQL) | RED: 16 of 20 screen tests (404s, programme not preselected, no detail link, refused delete sent to the dashboard); `DELETE_CONFLICT` missing. GREEN: 1,216 tests incl. PostgreSQL | Range `a79fd3f..a6de7f3`: **medium**, `slice_budget_reached` (1,483 lines); consent granted; reliability review `review-9a6f5163fdc45e22` **approved** and acknowledged; two test warnings and one suggestion moved into AP-4 |
-| AP-4 | Pending | — | — | — |
+| AP-4 | Done | `fccd3d3` (audit PDF with programme, scope, criteria, lead auditor, team, area owner and findings; programme PDF `/programas-auditoria/<id>/pdf`; monthly report with audits completed and findings by type in the month; README, `docs/mcp.md`, `docs/architecture/services.md`; AP-3 review items), review follow-up in the next commit | RED: 13 (missing PDF fields, programme PDF 404, report keys). GREEN: 1,224, then 1,225 tests incl. PostgreSQL | Range `8151785..fccd3d3`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-95b728bc6af51d31` **approved** and acknowledged; both suggestions applied (team sorted by name in the PDF; a programme PDF that cannot be rendered returns to the programme with a message) |
 
 ## Findings during implementation
 
@@ -72,6 +72,22 @@ Baseline at `88cd706`: 1,126 tests. Migrations are tested on PostgreSQL (`TEST_P
 - **Findings (AP-2):** a `COMPLETADA` audit still takes findings, only `CANCELADA` refuses them; a finding never moves to another audit; clauses match `4–10(.1–99){0,3}`; the automatic nonconformity has the area owner as responsible only when that person is active; a severity change follows the nonconformity only while it is `abierta`; deleting a nonconformity clears its finding's link with an audit row.
 - The local test database container `iso-pg-test` had disappeared during AP-2; the writer recreated it (`postgres:17-alpine`, 127.0.0.1:55432, new random password). Reported to the user (2026-10-11).
 
+- **Reports (AP-4):** findings "recorded in the month" are counted by their audit's date (also the detection date of the nonconformity they open); "completed audits" are audits dated in the month with state `COMPLETADA` (there is no completion-date column).
+
+## Delivery
+
+| Slice | Pull request | Commits | Merged as | Note |
+|---|---|---|---|---|
+| 0 | [#100](https://github.com/constant1n0/iso9001/pull/100) | tracker | merged | |
+| 1 | [#101](https://github.com/constant1n0/iso9001/pull/101) | AP-1 | `80d663d` | 1,498 lines |
+| 2 | [#102](https://github.com/constant1n0/iso9001/pull/102) | AP-1 record, AP-2 | `a79fd3f` | |
+| 3 | [#103](https://github.com/constant1n0/iso9001/pull/103) | AP-3 | `8151785` | |
+| 4 | Pending | AP-4, this closing update | — | Final slice |
+
+## Production deployment (pending authorization)
+
+Two migrations (`d7f1b3a5c9e2` programmes and audit planning, `e9c2a4f6b8d1` findings) on top of `c3e8a1f6d4b2`: back up the database and the code, fast-forward, `flask db upgrade`, `flask db check`, then the user restarts the four services. Smoke tests: audit list and detail, programme list, `qms_modules` lists 18 modules.
+
 ## Next step
 
-AP-4.
+**Feature complete** once slice 4 merges. Next: the production deployment above, after explicit authorization; then Wave 1 continues with quality objectives and management review.
