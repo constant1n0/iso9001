@@ -82,12 +82,21 @@ Baseline at `88cd706`: 1,126 tests. Migrations are tested on PostgreSQL (`TEST_P
 | 1 | [#101](https://github.com/constant1n0/iso9001/pull/101) | AP-1 | `80d663d` | 1,498 lines |
 | 2 | [#102](https://github.com/constant1n0/iso9001/pull/102) | AP-1 record, AP-2 | `a79fd3f` | |
 | 3 | [#103](https://github.com/constant1n0/iso9001/pull/103) | AP-3 | `8151785` | |
-| 4 | Pending | AP-4, this closing update | — | Final slice |
+| 4 | [#104](https://github.com/constant1n0/iso9001/pull/104) | AP-4, closing update | `1b40054` | |
 
-## Production deployment (pending authorization)
+## Production deployment (2026-10-11)
 
-Two migrations (`d7f1b3a5c9e2` programmes and audit planning, `e9c2a4f6b8d1` findings) on top of `c3e8a1f6d4b2`: back up the database and the code, fast-forward, `flask db upgrade`, `flask db check`, then the user restarts the four services. Smoke tests: audit list and detail, programme list, `qms_modules` lists 18 modules.
+`main@1b40054` runs on `vulcano`. The user authorized this deployment over SSH as `dcm`, with no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `88cd706`, clean, migration `c3e8a1f6d4b2`; 0 audits stored |
+| Backups | `~/work/backups/calidad-*-pre-1b40054.dump` (`pg_dump -Fc`, 254 entries listed by `pg_restore -l`) and `iso9001-code-*-pre-1b40054.tar.gz` (without `instance/documents`), both mode 600 |
+| Code | Incremental git bundle `88cd706..main`, fast-forward to `1b40054`; `pip check` clean, no dependency changes |
+| Database | `flask db upgrade` `c3e8a1f6d4b2` → `d7f1b3a5c9e2` → `e9c2a4f6b8d1`; `flask db check` clean |
+| Restart (user, with sudo) | All four services |
+| Smoke tests | Services active, no error entries in the journal; `/login` 200; audits, programmes and documents redirect to the login; `/mcp` 401 with `WWW-Authenticate: Bearer`; 18 MCP modules |
 
 ## Next step
 
-**Feature complete** once slice 4 merges. Next: the production deployment above, after explicit authorization; then Wave 1 continues with quality objectives and management review.
+**Feature complete and deployed.** Next: Wave 1 continues with quality objectives and management review.
