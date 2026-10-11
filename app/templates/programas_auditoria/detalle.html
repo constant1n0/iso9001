@@ -1,0 +1,95 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form, empty_state %}
+{% from "auditorias/_macros.html" import estado_badge as auditoria_badge %}
+{% from "programas_auditoria/_macros.html" import estado_badge, aprobacion %}
+{% block title %}Programa de auditoría {{ programa.anio }}{% endblock %}
+{% block crumb %}Calidad · Programas de auditoría{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 9.2.2 · Programa de auditoría', 'Programa de auditoría ' ~ programa.anio) %}
+    {% if can('update', 'audits') %}
+    <a class="btn" href="{{ url_for('programa_auditoria.editar_programa', id=programa.id) }}">Editar</a>
+    {% endif %}
+    {% if puede_aprobar %}
+    <a class="btn btn--primary" href="{{ url_for('programa_auditoria.aprobar_programa', id=programa.id) }}">Aprobar</a>
+    {% endif %}
+    {% if total_auditorias == 0 and can('delete', 'audits') %}
+    {{ delete_form(url_for('programa_auditoria.eliminar_programa', id=programa.id), '¿Eliminar el programa de auditoría ' ~ programa.anio ~ '?') }}
+    {% endif %}
+{% endcall %}
+
+<section class="grid grid--2" aria-label="Estado y contenido">
+    <article class="card">
+        <header class="card__header">
+            <h2 class="card__title">Estado</h2>
+            {{ estado_badge(programa) }}
+        </header>
+        <ul class="list">
+            <li class="list__item"><span class="list__primary">Aprobación</span><span class="list__secondary">{{ aprobacion(programa, personas) }}</span></li>
+            <li class="list__item"><span class="list__primary">Auditorías</span><span class="list__secondary">{{ total_auditorias }}</span></li>
+        </ul>
+        {% if programa.estado.name == 'borrador' %}<p class="card__body card__text muted">Un administrador aprueba el programa; después su año ya no se puede cambiar.</p>{% endif %}
+    </article>
+    <article class="card">
+        <header class="card__header"><h2 class="card__title">Objetivos y alcance</h2></header>
+        <div class="card__body">
+            <p class="card__text"><strong>Objetivos:</strong> {{ programa.objetivos }}</p>
+            <p class="card__text"><strong>Alcance:</strong> {{ programa.alcance }}</p>
+        </div>
+    </article>
+</section>
+
+<section aria-labelledby="auditorias">
+    <div class="section-header">
+        <h2 id="auditorias">Auditorías del programa</h2>
+        {% if can('create', 'audits') %}
+        <a class="btn btn--primary btn--sm" href="{{ url_for('auditoria.nueva_auditoria', programa_id=programa.id) }}">+ Nueva auditoría</a>
+        {% endif %}
+    </div>
+    {% if auditorias %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Fecha</th>
+                    <th scope="col">Área auditada</th>
+                    <th scope="col">Auditor jefe</th>
+                    <th scope="col">Estado</th>
+                    {% for tipo in tipos %}<th scope="col" class="num">{{ tipo.value }}</th>{% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for auditoria in auditorias %}
+                {% set persona = personas.get(auditoria.auditor_id) %}
+                <tr>
+                    <td class="date">{{ auditoria.fecha.strftime('%d/%m/%Y') }}</td>
+                    <td><a href="{{ url_for('auditoria.ver_auditoria', id=auditoria.id) }}">{{ auditoria.area_auditada }}</a></td>
+                    <td>{{ auditoria.auditor }}{% if persona %}<br><span class="muted">Persona: {{ persona }}</span>{% endif %}</td>
+                    <td>{{ auditoria_badge(auditoria) }}</td>
+                    {% for tipo in tipos %}<td class="num" title="{{ tipo.value }}">{{ hallazgos[auditoria.id][tipo] }}</td>{% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if total_auditorias > auditorias | length %}<p class="muted">Se muestran las {{ auditorias | length }} primeras de {{ total_auditorias }} auditorías.</p>{% endif %}
+    {% else %}
+        {{ empty_state('Este programa todavía no tiene auditorías.') }}
+    {% endif %}
+</section>
+{% endblock %}

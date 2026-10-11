@@ -28,17 +28,20 @@ from app.models import (
     DocumentCategory,
     DocumentRevision,
     EstadoRevision,
+    HallazgoAuditoria,
     Mejora,
     NoConformidad,
     ParteInteresada,
     Person,
     ProcesoOperacion,
+    ProgramaAuditoria,
     RecursoCapacitacion,
     RiesgoOportunidad,
     RoleEnum,
     RolResponsabilidad,
     SatisfaccionCliente,
     TipoEnum,
+    TipoHallazgo,
     User,
 )
 
@@ -75,6 +78,9 @@ AUDIT = dict(
     accion_correctiva="",
     estado="PENDIENTE",
 )
+PROGRAMME = dict(anio="2027", objetivos="Objetivos", alcance="Alcance")
+PROGRAMME_EDIT = PROGRAMME | {"anio": "2026"}
+FINDING = dict(tipo="observacion", clausula="8.5.1", descripcion="Hallazgo", evidencia="")
 DOC = dict(
     title="Manual",
     code="DOC-NEW",
@@ -165,6 +171,17 @@ ENDPOINTS = [
              "/no_conformidades/1/acciones/1/eliminar", 302),
     *_html("AUDITS", "/auditorias/", ("nueva", AUDIT), ("editar/1", AUDIT),
            "eliminar/1"),
+    Endpoint("AUDITS", "read", "GET", "/auditorias/1", 200),
+    # Findings live under their audit (AP-3 of audit-programme); audit 2 holds
+    # finding 1, so audit 1 stays deletable.
+    Endpoint("AUDITS", "create", "POST", "/auditorias/2/hallazgos/nuevo", 302, FINDING),
+    Endpoint("AUDITS", "update", "POST", "/auditorias/2/hallazgos/1/editar", 302, FINDING),
+    Endpoint("AUDITS", "delete", "POST", "/auditorias/2/hallazgos/1/eliminar", 302),
+    # Programme 1 (2026) has no audits, so deleting it succeeds. Approving narrows
+    # the role to administrators, so tests/test_audit_screens.py characterizes it.
+    *_html("AUDITS", "/programas-auditoria/", ("nuevo", PROGRAMME),
+           ("1/editar", PROGRAMME_EDIT), "1/eliminar"),
+    Endpoint("AUDITS", "read", "GET", "/programas-auditoria/1", 200),
     # Documents are withdrawn, never deleted (DC6); document 1 is in force, so
     # every role reads its page. The workflow narrows roles in its service.
     *_html("DOCUMENTS", "/documents/", ("new", DOC), ("edit/1", DOC_EDIT), None),
@@ -293,6 +310,11 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                         area_auditada="A", fecha=date(2026, 10, 5), auditor="x",
                         resultado="r",
                     ),
+                    Auditoria(
+                        area_auditada="B", fecha=date(2026, 10, 6), auditor="y",
+                        resultado="r",
+                    ),
+                    ProgramaAuditoria(anio=2026, objetivos="O", alcance="A"),
                     Document(title="T", code="DOC-1", category=DocumentCategory.OTRO),
                     Document(title="T2", code="DOC-2", category=DocumentCategory.OTRO),
                     Mejora(no_conformidad="NC"),
@@ -314,6 +336,9 @@ class AccessCharacterizationTestCase(unittest.TestCase):
             db.session.flush()  # the competence rows cite role 2 and person 1
             db.session.add_all(
                 [
+                    HallazgoAuditoria(
+                        auditoria_id=2, tipo=TipoHallazgo.observacion, descripcion="Seed"
+                    ),
                     CompetenceRequirement(
                         rol_id=2, tipo=CompetenceType.formacion, descripcion="Seed"
                     ),

@@ -1,0 +1,9 @@
+{# Badges shared by the audit and programme pages. #}
+{% macro estado_badge(auditoria) %}
+{%- set estado = auditoria.estado.value if auditoria.estado else '' -%}
+<span class="badge {{ {'Pendiente': 'badge--warn', 'En Proceso': 'badge--solid', 'Completada': 'badge--ok', 'Cancelada': ''}.get(estado, '') }}">{{ estado or '—' }}</span>
+{%- endmacro %}
+
+{% macro tipo_badge(tipo) %}
+<span class="badge {{ {'nc_mayor': 'badge--danger', 'nc_menor': 'badge--warn', 'oportunidad_mejora': 'badge--ok'}.get(tipo.name, '') }}">{{ tipo.value }}</span>
+{%- endmacro %}
