@@ -43,7 +43,19 @@
     ]) }}
 </div>
 <div class="section">
+    <h2>Auditorías internas</h2>
+    {{ fields([('Auditorías completadas', auditorias_completadas)]) }}
+</div>
+<div class="section">
+    <h2>Hallazgos de auditoría por tipo</h2>
+    <table class="fields">
+        {% for tipo, total in hallazgos_por_tipo.items() %}
+        <tr><th>{{ tipo.value }}</th><td>{{ total }}</td></tr>
+        {% endfor %}
+    </table>
+</div>
+<div class="section">
     <h2>Alcance</h2>
-    <p>Indicadores del sistema de gestión de calidad registrados en el mes del informe: las no conformidades por su fecha de detección, con su estado al generar el informe, y las acciones correctivas por su fecha de verificación. La satisfacción media se expresa sobre 10.</p>
+    <p>Indicadores del sistema de gestión de calidad registrados en el mes del informe: las no conformidades por su fecha de detección, con su estado al generar el informe; las acciones correctivas por su fecha de verificación; las auditorías completadas por su fecha, y los hallazgos por la fecha de su auditoría. La satisfacción media se expresa sobre 10.</p>
 </div>
 {% endblock %}

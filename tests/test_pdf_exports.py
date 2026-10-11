@@ -16,11 +16,14 @@ from app.models import (
     Auditoria,
     Capacitacion,
     EstadoAuditoriaEnum,
+    HallazgoAuditoria,
     NoConformidad,
     Person,
+    ProgramaAuditoria,
     ResultadoVerificacion,
     RoleEnum,
     SatisfaccionCliente,
+    TipoHallazgo,
     User,
 )
 
@@ -47,6 +50,7 @@ EXPORTS = (
     ("/no_conformidades/exportar_pdf/1", "no_conformidad_1.pdf"),
     ("/capacitaciones/exportar_pdf/1", "capacitacion_1.pdf"),
     ("/satisfaccion_cliente/exportar_pdf/1", "encuesta_1.pdf"),
+    ("/programas-auditoria/1/pdf", "programa_auditoria_2026.pdf"),
 )
 
 
@@ -58,11 +62,18 @@ class PdfExportsTestCase(unittest.TestCase):
             db.create_all()
             nonconformity = NoConformidad(descripcion="Etiqueta ilegible", fecha_detectada=DAY)
             owner, verifier = Person(nombre="Ana Pérez"), Person(nombre="Eva Ruiz")
+            programme = ProgramaAuditoria(anio=2026, objetivos="Auditar los procesos clave",
+                                          alcance="Compras y ventas")
+            # The audit and programme PDFs then print their planning and findings tables.
+            auditoria = Auditoria(area_auditada="Compras", fecha=DAY, auditor="M. López",
+                                  resultado="Sin hallazgos", estado=EstadoAuditoriaEnum.EN_PROCESO,
+                                  alcance="Proceso de compras", criterios="ISO 9001:2026",
+                                  equipo=[verifier])
             db.session.add_all([
                 User(username="admin", email="admin@example.com",
                      password=generate_password_hash(PASSWORD), role=RoleEnum.ADMINISTRADOR),
-                Auditoria(area_auditada="Compras", fecha=DAY, auditor="M. López",
-                          resultado="Sin hallazgos", estado=EstadoAuditoriaEnum.EN_PROCESO),
+                programme,
+                auditoria,
                 nonconformity,
                 Capacitacion(tema="ISO 9001", fecha=DAY, personal="Equipo", duracion_horas=4),
                 SatisfaccionCliente(fecha_encuesta=DAY, cliente="Farmacia Sol", puntuacion=9),
@@ -70,6 +81,11 @@ class PdfExportsTestCase(unittest.TestCase):
                 verifier,
             ])
             db.session.flush()
+            auditoria.programa_id, auditoria.responsable_area_id = programme.id, owner.id
+            db.session.add(HallazgoAuditoria(
+                auditoria_id=auditoria.id, tipo=TipoHallazgo.nc_menor, clausula="8.5.1",
+                descripcion="Etiqueta ilegible", evidencia="Lote 12",
+                no_conformidad_id=nonconformity.id))
             # The nonconformity PDF then prints its table of corrective actions.
             db.session.add(AccionCorrectiva(
                 no_conformidad_id=nonconformity.id, descripcion="Reimprimir las etiquetas",
@@ -103,7 +119,7 @@ class PdfExportsTestCase(unittest.TestCase):
             with self.app.app_context():
                 auditoria = db.session.get(Auditoria, 1)
                 html = render_template("auditorias/pdf_template.html", auditoria=auditoria,
-                                       generado=DAY)
+                                       programa=None, hallazgos=[], personas={}, generado=DAY)
         self.assertIn("En Proceso", html)
         self.assertIn('class="doc-header"', html)
 

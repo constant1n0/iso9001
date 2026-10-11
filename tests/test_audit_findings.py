@@ -486,6 +486,16 @@ class ForeignKeyCases:
         self.assertIsNone(db.session.get(finding_model(), first.id).no_conformidad_id)
 
 
+class FindingsForeignKeyNameTestCase(unittest.TestCase):
+    """AP-3 review: ``audits`` reads the findings foreign key's name from the model."""
+
+    def test_the_name_is_the_one_the_model_gives_its_foreign_key_to_audits(self) -> None:
+        table = finding_model().__table__
+        (expected,) = {fk.constraint.name for fk in table.foreign_keys
+                       if fk.column.table is Auditoria.__table__}
+        self.assertEqual(expected, audits().FINDINGS_FK)
+
+
 class SqliteForeignKeyTestCase(ForeignKeyCases, Helpers, ServiceBase):
     names_violated_constraints = False
 

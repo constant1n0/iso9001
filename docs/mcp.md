@@ -14,7 +14,7 @@ can never delete.
 
   | Tool | Purpose |
   |---|---|
-  | `qms_modules` | The 16 modules with fields, allowed values, filters and what the caller may do |
+  | `qms_modules` | The 18 modules with fields, allowed values, filters and what the caller may do |
   | `qms_list` | One bounded page of a module, with the filters `qms_modules` lists |
   | `qms_get` | One record by `id` |
   | `qms_create` | Create a record |
@@ -35,11 +35,11 @@ can never delete.
 
 ## Modules
 
-`qms_modules` lists 16 modules: `no_conformidades`, `auditorias`,
-`documentos`, `capacitaciones`, `satisfaccion_clientes`,
-`partes_interesadas`, `mejoras`, `roles_responsabilidades`,
-`riesgos_oportunidades`, `recursos_capacitacion`, `procesos`,
-`indicadores_auditoria`, `personas`, `competencias_requeridas`,
+`qms_modules` lists 18 modules: `no_conformidades`, `auditorias`,
+`programas_auditoria`, `hallazgos_auditoria`, `documentos`,
+`capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
+`roles_responsabilidades`, `riesgos_oportunidades`, `recursos_capacitacion`,
+`procesos`, `indicadores_auditoria`, `personas`, `competencias_requeridas`,
 `competencias_acreditadas` and `acciones_correctivas`. Each field has a
 `type`, a `required` flag, `allowed` values for enums and, where the flags do
 not say enough, a short `note`.
@@ -70,6 +70,42 @@ Nonconformities and corrective actions (ISO 9001 clause 10.2):
   auditors, never the action's owner), closing a nonconformity once its
   actions proved effective, cancelling it and reopening it. `qms_update`
   refuses `estado` and the verification fields, and there is no delete tool.
+
+Internal audits (ISO 9001 clause 9.2). The three modules share the audits
+grant: administrators and auditors read and write, and no token deletes.
+
+- `programas_auditoria`: one programme per year. `anio` (2000-2100),
+  `objetivos` and `alcance` are required. Records show `estado` (`"Borrador"`
+  or `"Aprobado"`), `aprobado_en` and `aprobado_por_id`, which no tool writes.
+  An approved programme's year never changes, nor does a draft's once it has
+  audits. Filters: `anio` and `estado` (member names `borrador`,
+  `aprobado`).
+- `auditorias` adds planning fields to `area_auditada`, `fecha`, `auditor` /
+  `auditor_id` (the lead auditor), `resultado`, `accion_correctiva` and
+  `estado`:
+  - `programa_id` puts the audit in a programme; its `fecha` must fall in the
+    programme's year;
+  - `alcance` and `criterios` are text;
+  - `responsable_area_id` cites the audited-area owner (a person);
+  - `equipo_ids` is a list of people that replaces the team; records return
+    it too.
+
+  Neither the lead auditor nor a team member may be the audited-area owner.
+  Filters: `area`, `auditor`, `estado`, `fecha_inicio`, `fecha_fin` and
+  `programa_id`.
+- `hallazgos_auditoria`: `auditoria_id` (it never changes; a cancelled audit
+  takes no findings), `tipo` (`nc_mayor`, `nc_menor`, `observacion`,
+  `oportunidad_mejora`) and `descripcion` are required; `clausula` (dotted
+  numbers from 4 to 10, such as `8.5.1`) and `evidencia` are optional.
+  - A `nc_mayor` or `nc_menor` finding creates its nonconformity in the same
+    write (origin `auditoria`, severity `mayor` or `menor`, the audit's date,
+    the audited-area owner as responsible when active). Records return its id
+    as `no_conformidad_id`, which no tool writes.
+  - Changing the type never deletes that nonconformity; the severity follows
+    the type only while the nonconformity is `abierta`.
+  - Filters: `auditoria_id` and `tipo` (member names).
+- Web-only: approving a programme (administrators) and every delete. The
+  audit and programme PDFs are web pages too.
 
 Documents (ISO 9001 clause 7.5):
 

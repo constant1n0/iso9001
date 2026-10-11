@@ -24,6 +24,8 @@ counted by type.
 
 Programmes are one per year, so the list shows them all; a programme's page
 shows its first ``crud.MAX_PER_PAGE`` audits and says so when there are more.
+Its PDF (``/<id>/pdf``, task AP-4) has the same access as the page and lists
+every audit by date, with the year, state, approval, objectives and scope.
 
 A service ``ValidationError`` or ``Conflict`` is rolled back and flashed on the
 re-rendered form, which keeps what was typed; a refused delete, or the approval
@@ -40,10 +42,11 @@ from flask_login import login_required
 from ..audit_notifications import local_today
 from ..extensions import db
 from ..forms import CHOOSE_PERSON, AprobarProgramaForm, ProgramaAuditoriaForm, person_choices
-from ..models import EstadoProgramaAuditoria, TipoHallazgo
+from ..models import Auditoria, EstadoProgramaAuditoria, ProgramaAuditoria, TipoHallazgo
 from ..services import audit_findings, audit_programmes, audits, crud, people
 from ..services.actor import Actor
 from ..services.errors import PermissionDenied
+from ..utils.pdf import pdf_response, render_pdf
 from ..utils.permissions import can, require_permission
 from ..utils.web_actor import current_actor
 from .auditoria_routes import committed
@@ -66,6 +69,36 @@ def _programme_page(programme_id: int) -> ResponseReturnValue:
 
 def _audit_count(actor: Actor, programme_id: int) -> int:
     return audits.list_page(db.session, actor, programa_id=programme_id, per_page=1)[1]
+
+
+def _every_audit(actor: Actor, programme_id: int) -> list[Auditoria]:
+    """All the programme's audits, by date, read one bounded page at a time."""
+    found: list[Auditoria] = []
+    page = 1
+    while True:
+        batch, total = audits.list_page(db.session, actor, programa_id=programme_id,
+                                        page=page, per_page=crud.MAX_PER_PAGE)
+        found += batch
+        if not batch or len(found) >= total or page >= crud.MAX_PAGE:
+            return sorted(found, key=lambda a: (a.fecha, a.id))
+        page += 1
+
+
+def _audits_context(actor: Actor, programa: ProgramaAuditoria,
+                    auditorias: list[Auditoria]) -> dict:
+    """The programme's audits with their findings counted by type, and the names cited."""
+    return dict(
+        programa=programa,
+        auditorias=auditorias,
+        hallazgos={
+            a.id: Counter(f.tipo for f in audit_findings.list_(db.session, actor,
+                                                               auditoria_id=a.id))
+            for a in auditorias
+        },
+        tipos=list(TipoHallazgo),
+        personas=people.names(db.session, actor, (
+            programa.aprobado_por_id, *(a.auditor_id for a in auditorias))),
+    )
 
 
 @bp.route('/', methods=['GET'])
@@ -92,21 +125,24 @@ def ver_programa(id: int) -> ResponseReturnValue:
     programa = audit_programmes.get(db.session, actor, id)
     auditorias, total = audits.list_page(db.session, actor, programa_id=id,
                                          per_page=crud.MAX_PER_PAGE)
-    hallazgos = {
-        a.id: Counter(f.tipo for f in audit_findings.list_(db.session, actor, auditoria_id=a.id))
-        for a in auditorias
-    }
     return render_template(
         'programas_auditoria/detalle.html',
-        programa=programa,
-        auditorias=auditorias,
+        **_audits_context(actor, programa, auditorias),
         total_auditorias=total,
-        hallazgos=hallazgos,
-        tipos=list(TipoHallazgo),
-        personas=people.names(db.session, actor, (
-            programa.aprobado_por_id, *(a.auditor_id for a in auditorias))),
         puede_aprobar=may_approve() and programa.estado is EstadoProgramaAuditoria.borrador,
     )
+
+
+@bp.route('/<int:id>/pdf', methods=['GET'])
+@login_required
+@require_permission('read', 'audits')
+def exportar_pdf(id: int) -> ResponseReturnValue:
+    """The programme as a PDF: its data, its approval and every audit with its findings."""
+    actor = current_actor()
+    programa = audit_programmes.get(db.session, actor, id)
+    pdf = render_pdf('programas_auditoria/pdf_template.html',
+                     **_audits_context(actor, programa, _every_audit(actor, id)))
+    return pdf_response(pdf, f'programa_auditoria_{programa.anio}.pdf')
 
 
 @bp.route('/nuevo', methods=['GET', 'POST'])

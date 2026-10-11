@@ -12,7 +12,8 @@ from werkzeug.security import generate_password_hash
 from app.extensions import db
 from app.models import (
     AccionCorrectiva, Auditoria, Capacitacion, EstadoAuditoriaEnum, EstadoNoConformidad,
-    NoConformidad, Person, ResultadoVerificacion, RoleEnum, SatisfaccionCliente, User,
+    HallazgoAuditoria, NoConformidad, Person, ResultadoVerificacion, RoleEnum,
+    SatisfaccionCliente, TipoHallazgo, User,
 )
 from app.utils import reports
 
@@ -114,6 +115,44 @@ class MonthlyReportPeriodTestCase(unittest.TestCase):
                     "<tr><th>No eficaces</th><td>1</td></tr>"):
             self.assertIn(row, html)
 
+    def test_audits_completed_and_findings_recorded_in_the_month(self) -> None:
+        # Both go by the audit's date: a finding is recorded in its audit's month,
+        # the detection date of the nonconformity it opens.
+        S, T = EstadoAuditoriaEnum, TipoHallazgo
+        findings = {
+            (date(2026, 9, 1), S.COMPLETADA): (T.nc_mayor, T.observacion),
+            (date(2026, 9, 30), S.COMPLETADA): (T.observacion,),
+            (date(2026, 9, 15), S.EN_PROCESO): (T.oportunidad_mejora,),
+            (date(2026, 9, 16), S.CANCELADA): (),
+            (date(2026, 8, 31), S.COMPLETADA): (T.nc_menor,),
+            (date(2026, 10, 1), S.COMPLETADA): (T.nc_mayor,),
+        }
+        for (day, estado), tipos in findings.items():
+            found = Auditoria(area_auditada="A", fecha=day, auditor="X", resultado="R",
+                              estado=estado)
+            db.session.add(found)
+            db.session.flush()
+            for tipo in tipos:
+                db.session.add(HallazgoAuditoria(auditoria_id=found.id, tipo=tipo,
+                                                 descripcion=tipo.value))
+        db.session.commit()
+
+        ctx = reports._monthly_report_context(SEPT)
+
+        self.assertEqual(4, ctx["total_auditorias"])
+        self.assertEqual(2, ctx["auditorias_completadas"])
+        by_type = ctx["hallazgos_por_tipo"]
+        self.assertEqual(list(T), list(by_type))  # every type, in the enum's order
+        self.assertEqual([1, 0, 2, 1], list(by_type.values()))
+        html = reports.render_monthly_report_html(SEPT)
+        for row in ("<tr><th>Auditorías completadas</th><td>2</td></tr>",
+                    "<tr><th>No conformidad mayor</th><td>1</td></tr>",
+                    "<tr><th>No conformidad menor</th><td>0</td></tr>",
+                    "<tr><th>Observación</th><td>2</td></tr>",
+                    "<tr><th>Oportunidad de mejora</th><td>1</td></tr>"):
+            self.assertIn(row, html)
+        self.assertIn("hallazgos por la fecha de su auditoría", html)
+
     def test_an_empty_month_reports_zeros(self) -> None:
         self._seed(date(2026, 8, 15), 9)
         db.session.commit()
@@ -128,6 +167,8 @@ class MonthlyReportPeriodTestCase(unittest.TestCase):
              ctx["acciones_no_eficaces"]),
         )
         self.assertEqual({0}, set(ctx["no_conformidades_por_estado"].values()))
+        self.assertEqual(0, ctx["auditorias_completadas"])
+        self.assertEqual({0}, set(ctx["hallazgos_por_tipo"].values()))
         self.assertIn("0.0", reports.render_monthly_report_html(SEPT))
 
     def test_the_e_mail_sent_on_the_first_reports_the_previous_month(self) -> None:

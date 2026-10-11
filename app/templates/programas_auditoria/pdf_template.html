@@ -1,0 +1,56 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "_partials/pdf_base.html" %}
+{% from "_partials/pdf.html" import fields, section %}
+{% block title %}Programa de auditoría {{ programa.anio }}{% endblock %}
+{% block clause %}Cláusula 9.2.2 · Programa de auditoría{% endblock %}
+{% block subtitle %}Programa de auditoría interna del año {{ programa.anio }}{% endblock %}
+{% block content %}
+{# PDF-only template (never served to a browser, so the CSP does not apply):
+   the audits table is a multi-column table the print theme lacks. #}
+<style>
+.auditorias { width: 100%; border-collapse: collapse; margin-bottom: 6mm; font-size: 8pt; line-height: 1.35; }
+.auditorias th, .auditorias td { padding: 1.8mm 2mm; border-bottom: 0.3mm solid #d9d4c8; text-align: left; vertical-align: top; }
+.auditorias thead th { border-top: 0.6mm solid #0a0a0a; color: #6b675f; font: 500 6.5pt "IBM Plex Mono"; letter-spacing: 0.06em; text-transform: uppercase; }
+.auditorias .num { text-align: right; }
+.auditorias tr { page-break-inside: avoid; }
+</style>
+{{ fields([
+    ('Año', programa.anio),
+    ('Estado', programa.estado.value),
+    ('Aprobado por', personas.get(programa.aprobado_por_id, '—')),
+    ('Fecha de aprobación', programa.aprobado_en.strftime('%d/%m/%Y') if programa.aprobado_en else '—'),
+]) }}
+{{ section('Objetivos', programa.objetivos) }}
+{{ section('Alcance', programa.alcance) }}
+<div class="section">
+    <h2>Auditorías del programa</h2>
+    {% if not auditorias %}<p class="muted">Este programa todavía no tiene auditorías.</p>{% endif %}
+</div>
+{% if auditorias %}
+<table class="auditorias">
+    <thead>
+        <tr><th>Fecha</th><th>Área auditada</th><th>Auditor jefe</th><th>Estado</th>{% for tipo in tipos %}<th class="num">{{ tipo.value }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+        {% for auditoria in auditorias %}
+        <tr><td>{{ auditoria.fecha.strftime('%d/%m/%Y') }}</td><td>{{ auditoria.area_auditada }}</td><td>{{ personas.get(auditoria.auditor_id) or auditoria.auditor }}</td><td>{{ auditoria.estado.value if auditoria.estado else '—' }}</td>{% for tipo in tipos %}<td class="num">{{ hallazgos[auditoria.id][tipo] }}</td>{% endfor %}</tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}
