@@ -1,0 +1,96 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% from "revisiones_direccion/_macros.html" import estado_accion, vencida_badge, dia %}
+{% block title %}Acciones de la revisión por la dirección{% endblock %}
+{% block crumb %}Calidad · Revisión por la dirección{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 9.3.3 · Salidas de la revisión', 'Acciones de la revisión por la dirección') %}
+    <a class="btn" href="{{ url_for('revision_direccion.list_reviews') }}">Revisiones</a>
+{% endcall %}
+
+<details class="filters"{% if applied %} open{% endif %}>
+    <summary>Filtros{% if applied %} <span class="badge badge--warn">{{ applied }} {{ 'activo' if applied == 1 else 'activos' }}</span>{% endif %}</summary>
+    <form method="get" action="{{ url_for('revision_direccion.list_actions') }}" class="filters__body">
+        <div class="field"><label for="estado">Estado</label>
+            <select name="estado" id="estado">
+                <option {% if not filtros.estado %}selected {% endif %}value="">Todos</option>
+                {% for estado in estados %}
+                <option {% if estado.name == filtros.estado %}selected {% endif %}value="{{ estado.name }}">{{ estado.value }}</option>
+                {% endfor %}
+            </select></div>
+        <div class="field"><label for="responsable_id">Responsable</label>
+            <select name="responsable_id" id="responsable_id">
+                <option {% if filtros.responsable_id is none %}selected {% endif %}value="">Todos</option>
+                {% for person_id, nombre in responsables %}
+                <option {% if person_id == filtros.responsable_id %}selected {% endif %}value="{{ person_id }}">{{ nombre }}</option>
+                {% endfor %}
+            </select></div>
+        <div class="field"><label for="tipo">Tipo</label>
+            <select name="tipo" id="tipo">
+                <option {% if not filtros.tipo %}selected {% endif %}value="">Todos</option>
+                {% for tipo in tipos %}
+                <option {% if tipo.name == filtros.tipo %}selected {% endif %}value="{{ tipo.name }}">{{ tipo.value }}</option>
+                {% endfor %}
+            </select></div>
+        <div class="field"><label for="vencida">Vencidas</label>
+            <select name="vencida" id="vencida">
+                {% for value, label, flag in (('', 'Todas', none), ('1', 'Solo vencidas', true), ('0', 'Sin vencer', false)) %}
+                <option {% if filtros.vencida is sameas flag %}selected {% endif %}value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+            </select></div>
+        <div class="filters__actions">
+            <button type="submit" class="btn btn--primary">Buscar</button>
+            <a class="btn btn--ghost" href="{{ url_for('revision_direccion.list_actions') }}">Limpiar</a>
+        </div>
+    </form>
+</details>
+
+{% if acciones %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Revisión</th>
+                <th scope="col">Tipo</th>
+                <th scope="col">Descripción</th>
+                <th scope="col">Responsable</th>
+                <th scope="col">Fecha límite</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Finalizada</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for accion in acciones %}
+            <tr id="accion-{{ accion.id }}">
+                <td><a href="{{ url_for('revision_direccion.show_review', review_id=accion.revision_id) }}">{{ dia(fechas.get(accion.revision_id)) }}</a></td>
+                <td>{{ accion.tipo.value }}</td>
+                <td>{{ accion.descripcion }}</td>
+                <td>{{ personas.get(accion.responsable_id, '—') }}</td>
+                <td class="date">{{ dia(accion.fecha_limite) }} {{ vencida_badge(accion.id in vencidas) }}</td>
+                <td>{{ estado_accion(accion) }}</td>
+                <td class="date">{{ dia(accion.fecha_completada) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    {{ empty_state('Ninguna acción coincide con los filtros.' if applied else 'Todavía no hay acciones de la revisión por la dirección.') }}
+{% endif %}
+{% endblock %}

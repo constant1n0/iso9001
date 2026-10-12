@@ -263,6 +263,7 @@ ENDPOINTS = [
     *_html("MANAGEMENT_REVIEW", "/revisiones-direccion/", ("nueva", REVIEW),
            ("1/editar", REVIEW), "2/eliminar"),
     Endpoint("MANAGEMENT_REVIEW", "read", "GET", "/revisiones-direccion/1", 200),
+    Endpoint("MANAGEMENT_REVIEW", "read", "GET", "/revisiones-direccion/acciones", 200),
     Endpoint("MANAGEMENT_REVIEW", "update", "POST", "/revisiones-direccion/3/conclusiones",
              302, dict(conclusiones="Conforme")),
     Endpoint("MANAGEMENT_REVIEW", "create", "POST", "/revisiones-direccion/1/acciones/nueva",

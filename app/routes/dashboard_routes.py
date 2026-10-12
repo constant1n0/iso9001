@@ -23,7 +23,7 @@ from ..extensions import db
 from ..models import (
     Auditoria, Capacitacion, EstadoNoConformidad, NoConformidad, SatisfaccionCliente,
 )
-from ..services import documents, quality_objectives
+from ..services import documents, management_reviews, people, quality_objectives
 from ..services.nonconformities import OPEN_STATES
 from ..utils.permissions import can
 from ..utils.web_actor import current_actor
@@ -72,6 +72,16 @@ def dashboard():
     if can('read', 'quality_objectives'):
         objetivos_desviados = quality_objectives.off_track(db.session, current_actor(), today=hoy)
 
+    # Overdue management review actions (MR3 of management-review), read by
+    # administrators and auditors; None hides the card.
+    acciones_revision = None
+    responsables_acciones = {}
+    if can('read', 'management_review'):
+        acciones_revision = management_reviews.overdue_actions(db.session, current_actor(),
+                                                               today=hoy)
+        responsables_acciones = people.names(db.session, current_actor(), (
+            accion.responsable_id for accion in acciones_revision))
+
     # Puntuación media de satisfacción por mes
     # (year, month) grouping, last 12 calendar months including the current one
     indice_actual = hoy.year * 12 + hoy.month - 1
@@ -112,6 +122,8 @@ def dashboard():
         proximas_capacitaciones=proximas_capacitaciones,
         revisiones_documentales=revisiones_documentales,
         objetivos_desviados=objetivos_desviados,
+        acciones_revision=acciones_revision,
+        responsables_acciones=responsables_acciones,
         review_window_days=REVIEW_WINDOW_DAYS,
         chart_data=chart_data,
     )

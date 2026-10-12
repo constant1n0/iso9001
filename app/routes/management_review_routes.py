@@ -34,6 +34,9 @@ are refused (policy ``MANAGEMENT_REVIEW``).
 - Actions live under their review; one asked for under another review is a
   404. Once the review is closed, an action's form keeps only the follow-up
   fields (state, completion date, result) and shows the rest.
+- The action register (``/acciones``) filters by state, owner, type and
+  ``vencida`` (``1`` or ``0``) and links each action to its review; a filter
+  value that names nothing is ignored.
 
 A service ``ValidationError`` or ``Conflict`` is rolled back and flashed on the
 re-rendered form, which keeps what was typed; a refused hold, close or delete
@@ -461,3 +464,41 @@ def delete_action(review_id: int, action_id: int) -> ResponseReturnValue:
     if committed(lambda: mr.actions.delete(db.session, actor, action_id)):
         flash('Acción eliminada.', 'success')
     return _review_page(review_id)
+
+
+# -- action register -------------------------------------------------------------------
+
+ACTION_STATES = frozenset(member.name for member in EstadoAccionRevision)
+ACTION_TYPES = frozenset(member.name for member in TipoAccionRevision)
+OVERDUE_FLAGS = {'1': True, '0': False}
+
+
+@bp.route('/acciones', methods=['GET'])
+@login_required
+@require_permission('read', 'management_review')
+def list_actions() -> ResponseReturnValue:
+    """Every review's actions matching the state, owner, type and overdue filters."""
+    actor = current_actor()
+    today = local_today()
+    every = mr.actions.list_(db.session, actor)
+    owners = people.names(db.session, actor, (a.responsable_id for a in every))
+    estado, tipo = request.args.get('estado', ''), request.args.get('tipo', '')
+    owner = request.args.get('responsable_id', type=int)
+    filters = {'estado': estado if estado in ACTION_STATES else None,
+               'responsable_id': owner if owner in owners else None,
+               'tipo': tipo if tipo in ACTION_TYPES else None,
+               'vencida': OVERDUE_FLAGS.get(request.args.get('vencida', ''))}
+    applied = sum(value is not None for value in filters.values())
+    found = mr.actions.list_(db.session, actor, today=today, **filters) if applied else every
+    return render_template(
+        'revisiones_direccion/actions.html',
+        acciones=found,
+        vencidas={a.id for a in found if mr.is_overdue(a, today=today)},
+        fechas={r.id: r.fecha for r in mr.reviews.list_(db.session, actor)},
+        personas=owners,
+        responsables=sorted(owners.items(), key=lambda item: item[1].casefold()),
+        estados=list(EstadoAccionRevision),
+        tipos=list(TipoAccionRevision),
+        filtros=filters,
+        applied=applied,
+    )

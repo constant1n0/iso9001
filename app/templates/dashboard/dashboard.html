@@ -154,6 +154,27 @@
         {% endif %}
     </article>
     {% endif %}
+    {% if acciones_revision is not none %}
+    <article class="card" id="acciones-revision">
+        <header class="card__header">
+            <h2 class="card__title">Acciones de la revisión por la dirección</h2>
+            {% if acciones_revision %}<span class="badge badge--danger">{{ acciones_revision | length }} {{ 'vencida' if acciones_revision | length == 1 else 'vencidas' }}</span>{% else %}<span class="card__meta">9.3.3</span>{% endif %}
+        </header>
+        {% if acciones_revision %}
+            <ul class="list">
+                {% for accion in acciones_revision %}
+                    <li class="list__item">
+                        <span class="list__primary"><a href="{{ url_for('revision_direccion.show_review', review_id=accion.revision_id) }}">{{ accion.descripcion | truncate(60) }}</a><br><span class="muted">{{ responsables_acciones.get(accion.responsable_id, '—') }}</span></span>
+                        <span class="list__secondary">{{ accion.fecha_limite.strftime('%d/%m') }} <span class="badge badge--danger">Vencida</span></span>
+                    </li>
+                {% endfor %}
+            </ul>
+            <div class="card__body"><a href="{{ url_for('revision_direccion.list_actions', vencida=1) }}">Ver las acciones vencidas</a></div>
+        {% else %}
+            <p class="empty">Ninguna acción de la revisión por la dirección está vencida.</p>
+        {% endif %}
+    </article>
+    {% endif %}
 </section>
 
 <section class="grid grid--2" aria-label="Gráficas">
