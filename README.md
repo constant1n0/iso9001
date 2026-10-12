@@ -542,6 +542,82 @@ rules (modules `objetivos_calidad` and `mediciones_objetivo`); deleting and
 the PDF are web-only (see `docs/mcp.md`). Every change is written to the
 audit log.
 
+**2i. Revisión por la dirección**
+
+Management reviews (`/revisiones-direccion/`, ISO 9001 clause 9.3) record
+each review of the QMS by top management: what was presented, what was
+concluded and what was decided.
+
+- **Review**: the meeting date, the period reviewed (it ends on or before
+  the meeting), the attendees (people), a comment for each input and the
+  conclusions on the suitability, adequacy and effectiveness of the QMS.
+- **States**: *Borrador* → *Celebrada* → *Cerrada*, with no way back.
+  - Only administrators hold a review (its date must not be in the future
+    and it needs an attendee) and close it (it needs the conclusions).
+    Holding records the administrator's person as *Celebrada por*; closing
+    records the closing date.
+  - A draft is edited freely; a held review takes only its comments and
+    conclusions; a closed one, nothing.
+  - Only a draft without actions can be deleted (administrators).
+- **Inputs (9.3.2)**: drawn from the registers for the period, each next to
+  its comment:
+  - a) the actions of earlier reviews: open at the end of the period,
+    overdue, and completed in the period;
+  - b) interested parties and risks and opportunities created or changed in
+    the period;
+  - c) customer satisfaction, quality objectives (on target, off target,
+    unmeasured, overdue), process indicators, nonconformities by severity
+    and origin with the effectiveness of their corrective actions, and audits
+    with their findings by type;
+  - d) training sessions and hours; f) improvements implemented. Inputs
+    without a register (such as external providers, or e) the effectiveness
+    of actions on risks) are covered by the comments.
+
+  The period is cut off at its end, or today when earlier. In a draft the
+  inputs are computed live and marked as provisional. Holding the review
+  freezes them, so the review and its minutes keep showing what was
+  presented even when the registers change later.
+- **Actions (9.3.3)**: improvement opportunities, QMS changes and resource
+  needs, each with a description, an owner (a person), a deadline, a state
+  (*Pendiente*, *En curso*, *Completada*, *Cancelada*), a completion date
+  and a result.
+  - They are added, edited and deleted while the review is a draft or held.
+    Once it is closed, only their follow-up changes: state, completion date
+    and result.
+  - A completed action needs its completion date, never in the future nor
+    before the review's date; the review's date cannot move past a
+    completed action.
+  - An action is overdue when it is *Pendiente* or *En curso* after its
+    deadline.
+- **Access**: administrators and auditors read and write reviews and
+  actions; only administrators hold, close and delete. *Operativo* users have
+  no access.
+- **Screens**:
+  - the list filters by year and state, and counts each review's attendees
+    and its open, overdue and total actions;
+  - a review's page shows the meeting, the conclusions, each input with its
+    comment and the actions with an *overdue* badge, with the hold and close
+    buttons for administrators;
+  - the *Registro de acciones* (`/revisiones-direccion/acciones`) lists every
+    review's actions and filters by state, owner, type and overdue.
+- **Dashboard**: the card *Acciones de la revisión por la dirección* lists
+  the overdue actions, for administrators and auditors.
+- **Minutes PDF**: the button *Acta PDF* on a review's page
+  (`/revisiones-direccion/<id>/pdf`). The minutes hold:
+  - the meeting: date, period, state, attendees by name, who held it, the
+    closing date and the cut-off date of the data;
+  - each input with its figures and its comment, marked *BORRADOR — datos
+    provisionales* while the review is a draft;
+  - the conclusions;
+  - the actions: type, description, owner, deadline (and whether overdue),
+    state, completion date and result;
+  - the date the PDF was generated.
+
+The MCP server reads and writes reviews and actions with the same rules
+(modules `revisiones_direccion` and `acciones_revision`); holding, closing,
+deleting and the minutes PDF are web-only (see `docs/mcp.md`). Every change is
+written to the audit log.
+
 **3. Iniciar Redis y Celery para las Notificaciones Programadas**
 
 Celery envía cuatro avisos por correo; la aplicación web funciona sin él.

@@ -264,6 +264,10 @@ ENDPOINTS = [
            ("1/editar", REVIEW), "2/eliminar"),
     Endpoint("MANAGEMENT_REVIEW", "read", "GET", "/revisiones-direccion/1", 200),
     Endpoint("MANAGEMENT_REVIEW", "read", "GET", "/revisiones-direccion/acciones", 200),
+    # The minutes PDF (MR-3) is rendered for real: draft 1 computes its inputs
+    # live, held review 3 shows its frozen ones.
+    Endpoint("MANAGEMENT_REVIEW", "read", "GET", "/revisiones-direccion/1/pdf", 200),
+    Endpoint("MANAGEMENT_REVIEW", "read", "GET", "/revisiones-direccion/3/pdf", 200),
     Endpoint("MANAGEMENT_REVIEW", "update", "POST", "/revisiones-direccion/3/conclusiones",
              302, dict(conclusiones="Conforme")),
     Endpoint("MANAGEMENT_REVIEW", "create", "POST", "/revisiones-direccion/1/acciones/nueva",

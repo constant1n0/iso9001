@@ -1,0 +1,103 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "_partials/pdf_base.html" %}
+{% from "_partials/pdf.html" import fields, section %}
+{% from "revisiones_direccion/_macros.html" import dia %}
+{% block title %}Acta de revisión por la dirección{% endblock %}
+{% block clause %}Cláusula 9.3 · Revisión por la dirección{% endblock %}
+{% block subtitle %}Reunión del {{ dia(revision.fecha) }} · periodo {{ dia(revision.periodo_desde) }} – {{ dia(revision.periodo_hasta) }}{% endblock %}
+{% block content %}
+{# PDF-only template (never served to a browser, so the CSP does not apply):
+   the input and action tables are multi-column tables the print theme lacks. #}
+<style>
+.entradas { margin-bottom: 4mm; }
+.entradas > h2, .salidas > h2 { margin: 0 0 3mm; font: 700 16pt/1.2 "Barlow Condensed"; }
+.entrada { margin-bottom: 7mm; }
+.entrada h3 { margin: 0 0 3mm; font: 700 13pt/1.2 "Barlow Condensed"; }
+.entrada h4 { margin: 3mm 0 1.5mm; color: #6b675f; font: 500 7.5pt "IBM Plex Mono"; letter-spacing: 0.08em; text-transform: uppercase; }
+.entrada .fields { margin-bottom: 3mm; }
+.entrada .texto { margin: 0 0 3mm; white-space: pre-wrap; }
+.aviso { display: inline-block; margin: 0 0 4mm; padding: 1mm 3mm; background: #0a0a0a; color: #fff000; font: 500 8pt "IBM Plex Mono"; letter-spacing: 0.08em; }
+.tabla { width: 100%; border-collapse: collapse; margin-bottom: 4mm; font-size: 8pt; line-height: 1.35; }
+.tabla th, .tabla td { padding: 1.8mm 2mm; border-bottom: 0.3mm solid #d9d4c8; text-align: left; vertical-align: top; }
+.tabla thead th { border-top: 0.6mm solid #0a0a0a; color: #6b675f; font: 500 6.5pt "IBM Plex Mono"; letter-spacing: 0.06em; text-transform: uppercase; }
+.tabla tr { page-break-inside: avoid; }
+.pie { margin-top: 8mm; padding-top: 2mm; border-top: 0.3mm solid #d9d4c8; color: #6b675f; font: 400 7.5pt "IBM Plex Mono"; }
+</style>
+{{ fields([
+    ('Fecha de la reunión', dia(revision.fecha)),
+    ('Periodo revisado', dia(revision.periodo_desde) ~ ' – ' ~ dia(revision.periodo_hasta)),
+    ('Estado', revision.estado.value),
+    ('Asistentes', revision.asistentes | sort(attribute='nombre') | map(attribute='nombre') | join(', ') or '—'),
+    ('Celebrada por', personas.get(revision.celebrada_por_id, '—')),
+    ('Fecha de cierre', dia(revision.fecha_cierre)),
+    ('Fecha de corte de los datos', corte),
+]) }}
+
+<div class="entradas">
+    <h2>Entradas (9.3.2)</h2>
+    {% if revision.estado.name == 'borrador' %}
+    <p class="aviso">BORRADOR — datos provisionales</p>
+    {% else %}
+    <p class="muted">Datos congelados al celebrar la revisión: los que se presentaron en la reunión.</p>
+    {% endif %}
+</div>
+{% for seccion in secciones %}
+<section class="entrada">
+    <h3>{{ seccion.titulo }}</h3>
+    {% for bloque in seccion.bloques %}
+    <h4>{{ bloque.titulo }}</h4>
+    {{ fields(bloque.cifras) }}
+    {% if bloque.filas %}
+    <table class="tabla">
+        <thead><tr>{% for columna in bloque.columnas %}<th>{{ columna }}</th>{% endfor %}</tr></thead>
+        <tbody>
+            {% for fila in bloque.filas %}
+            <tr>{% for celda in fila %}<td>{{ celda if celda is not none else '—' }}</td>{% endfor %}</tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    {% else %}
+    <p class="texto muted">Sin datos de los registros: se valora en el comentario.</p>
+    {% endfor %}
+    <h4>Comentario</h4>
+    {% if revision[seccion.comentario] %}<p class="texto">{{ revision[seccion.comentario] }}</p>{% else %}<p class="texto muted">Sin comentario.</p>{% endif %}
+</section>
+{% endfor %}
+
+{{ section('Conclusiones sobre la conveniencia, adecuación y eficacia del SGC', revision.conclusiones, 'Sin conclusiones todavía.') }}
+
+<div class="salidas">
+    <h2>Salidas: acciones (9.3.3)</h2>
+    {% if not acciones %}<p class="muted">Sin acciones.</p>{% endif %}
+</div>
+{% if acciones %}
+<table class="tabla">
+    <thead>
+        <tr><th>Tipo</th><th>Descripción</th><th>Responsable</th><th>Fecha límite</th><th>Estado</th><th>Finalizada</th><th>Resultado</th></tr>
+    </thead>
+    <tbody>
+        {% for accion in acciones %}
+        <tr class="accion"><td>{{ accion.tipo.value }}</td><td>{{ accion.descripcion }}</td><td>{{ personas.get(accion.responsable_id, '—') }}</td><td>{{ dia(accion.fecha_limite) }}{% if accion.id in vencidas %} · vencida{% endif %}</td><td>{{ accion.estado.value }}</td><td>{{ dia(accion.fecha_completada) }}</td><td>{{ accion.resultado or '—' }}</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<p class="pie">Acta generada el {{ generado.strftime('%d/%m/%Y') }}.</p>
+{% endblock %}

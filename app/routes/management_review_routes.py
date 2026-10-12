@@ -37,6 +37,11 @@ are refused (policy ``MANAGEMENT_REVIEW``).
 - The action register (``/acciones``) filters by state, owner, type and
   ``vencida`` (``1`` or ``0``) and links each action to its review; a filter
   value that names nothing is ignored.
+- The minutes (``/<id>/pdf``, task MR-3) have the page's access and content:
+  the meeting with its attendees by name, each input with its figures and its
+  comment (live and marked as a draft until held), the conclusions and the
+  actions with their follow-up. A PDF that cannot be rendered is logged and
+  flashed on the review's page.
 
 A service ``ValidationError`` or ``Conflict`` is rolled back and flashed on the
 re-rendered form, which keeps what was typed; a refused hold, close or delete
@@ -48,7 +53,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from flask_login import login_required
 
@@ -67,6 +72,7 @@ from ..services import management_reviews as mr
 from ..services import people
 from ..services.actor import Actor
 from ..services.errors import NotFound, PermissionDenied
+from ..utils.pdf import pdf_response, render_pdf
 from ..utils.permissions import can, require_permission
 from ..utils.web_actor import current_actor
 from .auditoria_routes import committed
@@ -266,27 +272,51 @@ def list_reviews() -> ResponseReturnValue:
     )
 
 
-@bp.route('/<int:review_id>', methods=['GET'])
-@login_required
-@require_permission('read', 'management_review')
-def show_review(review_id: int) -> ResponseReturnValue:
-    """A review's page: the meeting, the inputs with their comments, conclusions, actions."""
-    actor = current_actor()
+def _review_context(actor: Actor, review_id: int) -> dict[str, Any]:
+    """What a review's page and its minutes show, judged on ``local_today``.
+
+    The review, its actions (soonest deadline first) with the overdue ones, the
+    inputs as ``input_sections`` with their cut-off date, and the names of the
+    person who held it and of the actions' owners.
+    """
     today = local_today()
     revision = mr.reviews.get(db.session, actor, review_id)
     acciones = mr.actions.list_(db.session, actor, revision_id=review_id)
     datos = mr.preview(db.session, actor, revision, today=today)
-    return render_template(
-        'revisiones_direccion/detail.html',
+    return dict(
         revision=revision,
         acciones=acciones,
         vencidas={a.id for a in acciones if mr.is_overdue(a, today=today)},
         secciones=input_sections(datos),
         corte=_day(_at(datos, 'fecha_corte')),
-        puede_decidir=may_decide(),
         personas=people.names(db.session, actor, (
             revision.celebrada_por_id, *(a.responsable_id for a in acciones))),
     )
+
+
+@bp.route('/<int:review_id>', methods=['GET'])
+@login_required
+@require_permission('read', 'management_review')
+def show_review(review_id: int) -> ResponseReturnValue:
+    """A review's page: the meeting, the inputs with their comments, conclusions, actions."""
+    return render_template('revisiones_direccion/detail.html',
+                           **_review_context(current_actor(), review_id),
+                           puede_decidir=may_decide())
+
+
+@bp.route('/<int:review_id>/pdf', methods=['GET'])
+@login_required
+@require_permission('read', 'management_review')
+def export_pdf(review_id: int) -> ResponseReturnValue:
+    """The review's minutes as a PDF: the meeting, inputs, conclusions and actions."""
+    context = _review_context(current_actor(), review_id)
+    try:
+        pdf = render_pdf('revisiones_direccion/pdf_template.html', **context)
+    except Exception:
+        current_app.logger.exception('Error generating PDF for management review %s', review_id)
+        flash('Error al generar el acta de la revisión por la dirección.', 'danger')
+        return _review_page(review_id)
+    return pdf_response(pdf, f"acta_revision_direccion_{context['revision'].fecha:%Y-%m-%d}.pdf")
 
 
 def _review_form(actor: Actor, revision: RevisionDireccion | None = None

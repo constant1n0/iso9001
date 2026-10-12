@@ -5,16 +5,17 @@ This report assesses whether the application provides the documented information
 - **Baseline:** `main@b794952` (2026-10-02).
 - **Method:** read-only review of models, forms, routes, templates, reports and scheduled tasks. File and line references point to that commit.
 - **Framing:** software cannot comply with ISO 9001; the organization does. Each clause is judged on whether the app can hold the evidence and support the process.
+- **Status (2026-10-13):** Wave 1 of the roadmap is complete, and clause 9.3 is covered. The other assessments still reflect the baseline.
 
 ## Summary
 
-**No clause is fully covered.** The application is a set of independent CRUD registers: records are not linked, versioned, approved, or attributed to a person.
+**At the baseline no clause was fully covered.** The application is a set of independent CRUD registers: records are not linked, versioned, approved, or attributed to a person.
 
 | Status | Clauses |
 |---|---|
-| Covered | 0 |
+| Covered | 1 (9.3) |
 | Partial | 21 |
-| Not covered | 9 (6.3, 7.1.5, 7.1.6, 7.4, 7.5.3, 8.3, 8.5, 8.6, 9.3) |
+| Not covered | 8 (6.3, 7.1.5, 7.1.6, 7.4, 7.5.3, 8.3, 8.5, 8.6) |
 | Documentary support only | 4 (4.1, 4.3, 5.1, 7.3) |
 
 Findings an auditor would raise with near certainty:
@@ -91,7 +92,7 @@ Legend: **C** covered, **P** partial, **N** not covered, **D** documentary suppo
 | 9.1.2 Customer satisfaction | P | `SatisfaccionCliente` models.py:251-257; satisfaccion_cliente_routes.py:25-109 | Customer is free text; no survey type, channel or target |
 | 9.1.3 Analysis and evaluation | P | dashboard_routes.py:28-81 | Counts and averages only; no trends or objective-versus-actual |
 | 9.2 Internal audit | P | `Auditoria` models.py:277-285; auditoria_routes.py:27-160; audit_notifications.py:51-105 | No programme, criteria, scope, team or classified findings; corrective action is free text |
-| 9.3 Management review | N | Document category `INFORME_REVISION` models.py:298 | No review entity, inputs, outputs, decisions or follow-up |
+| 9.3 Management review | C | `RevisionDireccion`, `AccionRevision` (app/models.py); `app/services/management_reviews.py`; management_review_routes.py | None. Reviews hold the period's inputs drawn from the registers (frozen when held), comments and conclusions, and actions with owner, deadline and follow-up; minutes PDF |
 | 10.1 Improvement | P | `Mejora` models.py:108-114 | Free-text list, no pipeline |
 | 10.2 Nonconformity and corrective action | P | `NoConformidad` models.py:240-248; states in forms.py:73 | No root cause, action entity or effectiveness check; `estado` and `fecha_cierre` are independent |
 | 10.3 Continual improvement | P | `Mejora` models.py:108-114; dashboard trend | `fecha_implementacion` defaults to creation time; no link to objectives or management review |
@@ -217,7 +218,7 @@ Each wave adds MCP tools for the modules it completes, on top of the shared serv
 | Wave | Scope | MCP outcome |
 |---|---|---|
 | 0. Foundations | Service layer, `AuditLog` and record metadata, `Person`, permission policy, API tokens, fix the three verified defects | Token authentication and read-only tools for existing registers |
-| 1. Audit-critical | Document control, nonconformity → corrective action → effectiveness, audit programme and findings, quality objectives, then management review (it consumes the others) | Read and write tools for these modules, no delete tools |
+| 1. Audit-critical (**complete**) | Five modules: document control, nonconformity → corrective action → effectiveness, audit programme and findings, quality objectives, then management review (it consumes the others) | Read and write tools for these modules, no delete tools |
 | 2. Core QMS | Suppliers, customers and complaints, competence matrix, separate risks and opportunities, context, change management | Tools per module as delivered |
 | 3. Organization-dependent | Calibration, design and development, production and release, communication, organizational knowledge | Only for modules the organization does not exclude |
 

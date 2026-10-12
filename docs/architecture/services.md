@@ -57,6 +57,7 @@ bounded: the page is clamped to `1..crud.MAX_PAGE` and the size to
 | `audit_programmes.py`, `audit_findings.py` | Yearly audit programmes and their approval; audit findings and their nonconformities (see below) |
 | `document_revisions.py`, `document_files.py` | Document revisions and their workflow; attachment storage (see below) |
 | `quality_objectives.py` | Quality objectives and their measurements, target checks and overdue measurements (see below) |
+| `management_reviews.py` | Management reviews, their inputs drawn from the registers, holding and closing, and their actions (see below) |
 | `crud.py` | Generic helper driven by a `Spec` (model, resource, fields, ordering) |
 | `training.py`, `satisfaction.py`, `stakeholders.py`, `improvements.py` | Plain HTML registers on `crud` |
 | `roles_responsibilities.py`, `risks_opportunities.py`, `training_resources.py`, `process_operations.py`, `audit_indicators.py` | JSON registers on `crud` |
@@ -85,6 +86,7 @@ checked first (`mcp` never deletes), then the role.
 | Documents | all roles (drafts: ADMIN, AUDITOR) | ADMIN, AUDITOR (approve and withdraw: ADMIN) | nobody (withdrawn instead) |
 | Roles, risks and opportunities, training resources, process operations, audit indicators | all roles | ADMIN, AUDITOR | ADMIN |
 | Quality objectives and their measurements | all roles | ADMIN, AUDITOR | ADMIN |
+| Management reviews and their actions | ADMIN, AUDITOR | ADMIN, AUDITOR (hold and close: ADMIN, never `mcp`) | ADMIN |
 | Users; audit log (policy only, no routes yet) | ADMIN, AUDITOR | ADMIN | nobody |
 | API tokens (list, issue, revoke) | ADMIN | ADMIN | nobody |
 
@@ -232,6 +234,74 @@ Decisions QO1-QO4 of `quality-objectives` (ISO 9001:2026 clause 6.2).
   `mediciones_objetivo` (no deletes); and the monthly report, which judges the
   active objectives with `summary` on the month's last day, or on today when
   earlier.
+
+## Management reviews
+
+Decisions MR1-MR6 of `management-review` (ISO 9001 clause 9.3).
+`management_reviews` offers two registers, `reviews` (bespoke writes) and
+`actions` (on `crud`), which share the `MANAGEMENT_REVIEW` resource.
+
+- **MR1, the review**: `fecha` (the meeting), `periodo_desde` and
+  `periodo_hasta` are required, and the period starts on or before its end,
+  which is on or before the meeting (`PERIOD_ORDER`, `PERIOD_AFTER_MEETING`;
+  a CHECK constraint repeats it).
+  - `asistente_ids` replaces the attendees: known people, active when newly
+    chosen. The association table has no audit row of its own, so every audit
+    row of a review carries `asistente_ids`.
+  - One free-text comment per input (`COMMENT_FIELDS`) and `conclusiones`.
+  - `create` and `update` never write `estado`, `datos_entrada`,
+    `celebrada_por_id` or `fecha_cierre`. A draft takes every field, a held
+    review only the comments and conclusions (`ONLY_COMMENTS`), a closed one
+    nothing (`REVIEW_CLOSED`). An edit that changes nothing writes nothing.
+- **MR2, the inputs**: `inputs(session, actor, desde, hasta, *, today,
+  review=None)` draws the inputs of 9.3.2 from the registers as JSON-safe
+  data, every list capped at `LIST_LIMIT` items.
+  - `fecha_corte` is `hasta`, or `today` when earlier; each section counts
+    the period up to it, and timestamps count by UTC day.
+  - Earlier reviews' actions come from every review dated before this one,
+    drafts included. Objectives overlapping the period, except cancelled
+    ones, are judged with `quality_objectives.summary` on the cut-off.
+  - `preview` (read grant) and `preview_of` (no check, for adapters that
+    already read the review) give the frozen inputs of a held review and the
+    live ones of a draft. "No data" is SQL NULL, so the CHECK that a draft
+    holds no frozen inputs (and a held review does) fires.
+- **MR3, the actions**: `tipo` (`mejora`, `cambio_sgc`, `recursos`),
+  `descripcion`, `responsable_id` (a person, active when newly chosen) and
+  `fecha_limite` are required; `estado` starts `pendiente`.
+  - Actions are added, edited and deleted while their review is a draft or
+    held. Once it is closed only `estado`, `fecha_completada` and `resultado`
+    change (`FOLLOW_UP_ONLY`) and none is added or deleted
+    (`REVIEW_CLOSED_FOR_ACTIONS`). An action never moves to another review
+    (`REVIEW_FIXED`).
+  - `fecha_completada` is given exactly when the action is `completada`
+    (a CHECK constraint repeats it), never after `today` nor before the
+    review's date. Moving an action away from `completada` without clearing
+    the date is refused, not cleared silently; moving the review's date past
+    a completed action is refused too (`ACTIONS_COMPLETED_BEFORE`).
+  - `is_overdue(action, *, today)`: `pendiente` or `en_curso` past
+    `fecha_limite`. The same rule drives the `vencida` filter,
+    `overdue_actions` (the dashboard card) and `action_counts` (the list).
+- **MR4, holding and closing**: `hold(session, actor, review_id, *, today)`
+  and `close(…)` are the only moves, `borrador` → `celebrada` → `cerrada`,
+  with no reopening. Both need an administrator (`TRANSITION_ROLES`) and are
+  refused on the `mcp` channel.
+  - Holding needs a meeting not after `today` and an attendee; it freezes the
+    inputs into `datos_entrada` and records the actor's person, if any, as
+    `celebrada_por_id`.
+  - Closing needs the conclusions and records `fecha_cierre` (`today`).
+- **MR5, access**: ADMIN and AUDITOR read and write reviews and actions,
+  ADMIN deletes, `OPERATIVO` has no access, and `mcp` never deletes, holds or
+  closes.
+- **MR6, deleting**: only a draft without actions is deleted (`HAS_ACTIONS`,
+  `DELETE_NOT_DRAFT`); an action added after the check meets the foreign key
+  at the flush, reported as `HAS_ACTIONS` when the violated constraint is
+  `ACTIONS_FK`. People named by a review or an action are not deleted.
+- **Locks**: a review row is locked before it changes (`FOR UPDATE`) and
+  before its actions do (`FOR SHARE`), so its state holds during the write.
+- Adapters: the web screens, the action register and the dashboard card, the
+  minutes PDF (`/revisiones-direccion/<id>/pdf`); the MCP modules
+  `revisiones_direccion` and `acciones_revision` (no deletes, holds or
+  closes).
 
 ## Document control
 
