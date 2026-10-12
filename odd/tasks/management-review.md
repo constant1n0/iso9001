@@ -27,12 +27,13 @@ Hold management reviews for a period with the inputs of ISO 9001:2026 clause 9.3
 | Delivery | `auto-chain`, `stacked-to-main`; push, PR and merge when CI is green; standing Wave 1 `size:exception` (ask only above 1,500 lines); production deployment needs migrations and explicit authorization | User authorizations (2026-10-02, 2026-10-09) |
 | Test adaptations | Standing Wave 1 approval: existing tests that only need adapting to an approved design may join a writer's surface, reported here and in the PR | User (2026-10-10) |
 | RDD | On (global); assess every work-unit commit | `gentle-ai review mode status` |
+| Size MR-1 | One-off `size:exception` for the service pull request (1,941 lines) | User (2026-10-12) |
 
 ## Tasks
 
 Route for every task: **delegated direct**.
 
-- [ ] **MR-1 — Reviews, inputs and actions (service).** Forecast 1,000-1,400.
+- [x] **MR-1 — Reviews, inputs and actions (service).** Forecast 1,000-1,400.
   - Models, migration, the period input summary from the existing registers, hold and close transitions with the frozen summary, actions with follow-up rules, policy resource `MANAGEMENT_REVIEW`, MCP modules.
 - [ ] **MR-2 — Screens and dashboard.** Forecast 900-1,400.
   - Review list and detail with the input sections and comments, review and action forms, hold and close actions, action register with filters, dashboard card with overdue actions.
@@ -51,8 +52,24 @@ Baseline at `e5ecfed`: 1,282 tests. Migrations are tested on PostgreSQL (`TEST_P
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| MR-1..MR-3 | Pending | — | — | — |
+| MR-1 | Done | `9195391` (models `revisiones_direccion`, `revision_asistentes`, `acciones_revision`, migration `a9c1e3f5d7b2`, policy `MANAGEMENT_REVIEW`, people delete protection), `562806b` (`app/services/management_reviews.py`: registers, `inputs`, `hold`, `close`, `preview`, `overdue_actions`; MCP modules `revisiones_direccion`, `acciones_revision`: 22 modules), review follow-up `c48ee51` | RED: `ImportError: RevisionDireccion`, attribution `23 != 21`, `KeyError: 'MANAGEMENT_REVIEW'`; follow-up: moving the review date past a completed action was not refused. GREEN: 1,309, then 1,310 tests incl. PostgreSQL; `9195391` alone passed 1,283 | Range `e5ecfed..562806b`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-57a059d44858b025` **approved** and acknowledged; its warning fixed in `c48ee51` |
+| MR-2..MR-3 | Pending | — | — | — |
+
+## Findings during implementation
+
+- **Inputs:** every section is cut off at the earlier of `hasta` and today. Earlier reviews' actions come from every review dated before this one, drafts included; stakeholders and risks count records created or modified in the period by UTC day (risks have no level, so they are counted by type); objectives overlapping the period, except cancelled, are judged as of the cut-off.
+- `datos_entrada` stores "no data" as SQL NULL (`none_as_null=True`); with the default JSON `null` the CHECK that a draft holds no frozen inputs never fires.
+- Moving an action away from `completada` without clearing its completion date is refused, not cleared silently; moving the review date past a completed action is refused (`ACTIONS_COMPLETED_BEFORE`).
+- MCP extras get only the row, so the review module uses `preview_of` (no permission check) after the module's read check.
+- Test adaptations (standing approval): `tests/test_attribution.py`, `tests/test_policy.py`, `tests/test_access_characterization.py`, `tests/test_migrations.py`, `tests/test_mcp_modules.py`, `tests/test_mcp_http.py`, `tests/mcp_support.py`.
+
+## Delivery
+
+| Slice | Pull request | Commits | Merged as | Note |
+|---|---|---|---|---|
+| 1 | Pending | tracker, MR-1 models | — | |
+| 2 | Pending | MR-1 service, follow-up, record | — | One-off `size:exception` (1,941 lines) |
 
 ## Next step
 
-MR-1.
+MR-2.
