@@ -17,9 +17,9 @@ import enum
 from decimal import Decimal
 
 from .models import (
-    CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAuditoriaEnum,
-    FrecuenciaMedicion, GravedadNoConformidad, OrigenNoConformidad, ResultadoVerificacion,
-    RoleEnum, SentidoObjetivo, TipoHallazgo,
+    CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAccionRevision,
+    EstadoAuditoriaEnum, FrecuenciaMedicion, GravedadNoConformidad, OrigenNoConformidad,
+    ResultadoVerificacion, RoleEnum, SentidoObjetivo, TipoAccionRevision, TipoHallazgo,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -466,3 +466,59 @@ class MedicionObjetivoForm(BaseForm):
     valor = NumberField('Valor', validators=[InputRequired()])
     registrado_por_id = person_field('Registrada por')
     comentario = TextAreaField('Comentario')
+
+
+# Management reviews and their actions (``management-review``, MR-2). The routes
+# fill the people pickers; the service has the last word on every value (the
+# period ends by the meeting, active attendees and owners, a completion date
+# only for a completed action). ``REVIEW_INPUTS`` names the inputs of ISO 9001
+# clause 9.3.2 a) to f) by their comment field, for the labels and the page.
+REVIEW_INPUTS = {
+    'comentario_acciones_previas': 'a) Estado de las acciones de las revisiones previas',
+    'comentario_contexto': 'b) Cambios en las cuestiones externas e internas',
+    'comentario_desempeno': 'c) Desempeño y eficacia del SGC',
+    'comentario_recursos': 'd) Adecuación de los recursos',
+    'comentario_riesgos': 'e) Eficacia de las acciones para abordar riesgos y oportunidades',
+    'comentario_mejora': 'f) Oportunidades de mejora',
+}
+
+
+class _ReviewMeeting(BaseForm):  # declared first, so its fields come first
+    fecha = DateField('Fecha de la reunión', validators=[DataRequired()])
+    periodo_desde = DateField('Periodo revisado: desde', validators=[DataRequired()])
+    periodo_hasta = DateField('Periodo revisado: hasta', validators=[DataRequired()])
+    asistente_ids = SelectMultipleField('Asistentes', coerce=int, choices=[])
+
+
+class _ReviewComments(BaseForm):
+    comentario_acciones_previas = TextAreaField(REVIEW_INPUTS['comentario_acciones_previas'])
+    comentario_contexto = TextAreaField(REVIEW_INPUTS['comentario_contexto'])
+    comentario_desempeno = TextAreaField(
+        REVIEW_INPUTS['comentario_desempeno'] + ' (incluidos los proveedores externos)')
+    comentario_recursos = TextAreaField(REVIEW_INPUTS['comentario_recursos'])
+    comentario_riesgos = TextAreaField(REVIEW_INPUTS['comentario_riesgos'])
+    comentario_mejora = TextAreaField(REVIEW_INPUTS['comentario_mejora'])
+
+
+class RevisionDireccionForm(_ReviewMeeting, _ReviewComments):
+    """A draft review: the meeting, its period, its attendees and a comment per input."""
+
+
+class ConclusionesRevisionForm(_ReviewComments):
+    """A held review: the comments per input and the conclusions."""
+
+    conclusiones = TextAreaField('Conclusiones sobre la conveniencia, adecuación y eficacia '
+                                 'del SGC')
+
+
+class AccionRevisionForm(BaseForm):
+    tipo = SelectField('Tipo', coerce=member_name, validators=[DataRequired()],
+                       choices=[(t.name, t.value) for t in TipoAccionRevision])
+    descripcion = TextAreaField('Descripción', validators=[DataRequired()])
+    responsable_id = required_person_field('Responsable')
+    fecha_limite = DateField('Fecha límite', validators=[DataRequired()])
+    estado = SelectField('Estado', coerce=member_name, validators=[DataRequired()],
+                         choices=[(s.name, s.value) for s in EstadoAccionRevision])
+    fecha_completada = DateField('Fecha de finalización (solo si está completada)',
+                                 validators=[Optional()])
+    resultado = TextAreaField('Resultado')

@@ -396,13 +396,68 @@ class UiPermissionsTestCase(unittest.TestCase):
                     with self.subTest(objective=oid, role=role.name, control=name):
                         self.assertEqual(role in allowed.get(name, nobody), marker in body)
 
+    def test_management_review_controls_follow_role_and_state(self) -> None:
+        """Administrators and auditors edit drafts, write a held review's comments and
+        conclusions, and add and edit actions until the review is closed (then only their
+        follow-up); administrators hold drafts, close held reviews, delete drafts without
+        actions and delete the actions of a review that is not closed (MR4 to MR6)."""
+        from app.services import management_reviews as mr
+        from app.services.actor import Actor
+
+        system = Actor(None, "seed", ADMIN, "system")
+        with self.app.app_context():
+            def review(*steps, action=True):
+                rid = mr.reviews.create(db.session, system, {
+                    "fecha": date(2026, 7, 10), "periodo_desde": date(2026, 4, 1),
+                    "periodo_hasta": date(2026, 6, 30), "asistente_ids": [self.owner_id]}).id
+                aid = mr.actions.create(db.session, system, {
+                    "revision_id": rid, "tipo": "mejora", "descripcion": "Acción",
+                    "responsable_id": self.owner_id, "fecha_limite": date(2026, 12, 31)},
+                    today=DAY).id if action else None
+                for step in steps:
+                    if step == "close":
+                        mr.reviews.update(db.session, system, rid, {"conclusiones": "Conforme"})
+                    getattr(mr, step)(db.session, system, rid, today=DAY)
+                return rid, aid
+
+            empty, draft = review(action=False), review()
+            held, closed = review("hold"), review("hold", "close")
+            db.session.commit()
+        writers, admins, nobody = {ADMIN, AUDITOR}, {ADMIN}, set()
+        expected = {
+            empty: {"edit": writers, "hold": admins, "delete": admins, "add": writers},
+            draft: {"edit": writers, "hold": admins, "add": writers, "edit action": writers,
+                    "delete action": admins},
+            held: {"conclusions": writers, "close": admins, "add": writers,
+                   "edit action": writers, "delete action": admins},
+            closed: {"edit action": writers},
+        }
+        for (rid, aid), allowed in expected.items():
+            page = f"/revisiones-direccion/{rid}"
+            item = f"{page}/acciones/{aid}"
+            controls = {"edit": f'href="{page}/editar"', "conclusions": f'href="{page}/conclusiones"',
+                        "hold": f'action="{page}/celebrar"', "close": f'action="{page}/cerrar"',
+                        "delete": f'action="{page}/eliminar"', "add": f'href="{page}/acciones/nueva"',
+                        "edit action": f'href="{item}/editar"',
+                        "delete action": f'action="{item}/eliminar"'}
+            for role in RoleEnum:
+                body = self._page(role, page).get_data(as_text=True)
+                for name, marker in controls.items():
+                    with self.subTest(review=rid, role=role.name, control=name):
+                        self.assertEqual(role in allowed.get(name, nobody), marker in body)
+        for role in RoleEnum:
+            html = self._page(role, "/revisiones-direccion/").get_data(as_text=True)
+            with self.subTest(page="list", role=role.name):
+                self.assertEqual(role in writers, 'href="/revisiones-direccion/nueva"' in html)
+
     def test_navigation_links_follow_the_read_permission(self) -> None:
         expected = {"/auditorias/": {ADMIN, AUDITOR}, "/programas-auditoria/": {ADMIN, AUDITOR},
                     "/documents/": set(RoleEnum), "/no_conformidades/": set(RoleEnum),
                     "/usuarios/": {ADMIN, AUDITOR}, "/perfil/": set(RoleEnum),
                     "/personas/": set(RoleEnum), "/competencias/requisitos/": set(RoleEnum),
                     "/competencias/matriz": set(RoleEnum),
-                    "/objetivos-calidad/": set(RoleEnum)}
+                    "/objetivos-calidad/": set(RoleEnum),
+                    "/revisiones-direccion/": {ADMIN, AUDITOR}}
         for role in RoleEnum:
             html = self._page(role, "/dashboard/").get_data(as_text=True)
             self.assertIn('class="nav__group">Personas y competencia<', html)

@@ -1,0 +1,82 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% from "revisiones_direccion/_macros.html" import estado_revision, dia %}
+{% block title %}Revisión por la dirección{% endblock %}
+{% block crumb %}Calidad · Revisión por la dirección{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 9.3 · Revisión por la dirección', 'Revisiones por la dirección') %}
+    {% if can('create', 'management_review') %}
+    <a class="btn btn--primary" href="{{ url_for('revision_direccion.new_review') }}">+ Nueva revisión</a>
+    {% endif %}
+{% endcall %}
+
+<details class="filters"{% if applied %} open{% endif %}>
+    <summary>Filtros{% if applied %} <span class="badge badge--warn">{{ applied }} {{ 'activo' if applied == 1 else 'activos' }}</span>{% endif %}</summary>
+    <form method="get" action="{{ url_for('revision_direccion.list_reviews') }}" class="filters__body">
+        <div class="field"><label for="anio">Año</label>
+            <select name="anio" id="anio">
+                <option {% if filtros.anio is none %}selected {% endif %}value="">Todos</option>
+                {% for anio in anios %}
+                <option {% if anio == filtros.anio %}selected {% endif %}value="{{ anio }}">{{ anio }}</option>
+                {% endfor %}
+            </select></div>
+        <div class="field"><label for="estado">Estado</label>
+            <select name="estado" id="estado">
+                <option {% if not filtros.estado %}selected {% endif %}value="">Todos</option>
+                {% for estado in estados %}
+                <option {% if estado.name == filtros.estado %}selected {% endif %}value="{{ estado.name }}">{{ estado.value }}</option>
+                {% endfor %}
+            </select></div>
+        <div class="filters__actions">
+            <button type="submit" class="btn btn--primary">Buscar</button>
+            <a class="btn btn--ghost" href="{{ url_for('revision_direccion.list_reviews') }}">Limpiar</a>
+        </div>
+    </form>
+</details>
+
+{% if revisiones %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Reunión</th>
+                <th scope="col">Periodo revisado</th>
+                <th scope="col">Estado</th>
+                <th scope="col" class="num">Asistentes</th>
+                <th scope="col" class="num">Acciones (abiertas / vencidas / total)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for revision in revisiones %}
+            {% set cuenta = acciones[revision.id] %}
+            <tr id="revision-{{ revision.id }}">
+                <td><a href="{{ url_for('revision_direccion.show_review', review_id=revision.id) }}">{{ dia(revision.fecha) }}</a></td>
+                <td class="date">{{ dia(revision.periodo_desde) }} – {{ dia(revision.periodo_hasta) }}</td>
+                <td>{{ estado_revision(revision) }}</td>
+                <td class="num">{{ revision.asistentes | length }}</td>
+                <td class="num">{{ cuenta.abiertas }} / {{ cuenta.vencidas }} / {{ cuenta.total }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    {{ empty_state('Ninguna revisión coincide con los filtros.' if applied else 'Todavía no hay revisiones por la dirección.') }}
+{% endif %}
+{% endblock %}

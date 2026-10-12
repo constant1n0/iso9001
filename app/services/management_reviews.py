@@ -50,8 +50,8 @@ chosen; ``fecha_completada`` is given exactly when the action is
 are added, edited and deleted while their review is a draft or held; once it
 is closed only ``estado``, ``fecha_completada`` and ``resultado`` change and
 none is deleted. An action never moves to another review. It is overdue
-(``is_overdue``, the ``vencida`` filter, ``overdue_actions``) when pending or
-in progress after its deadline.
+(``is_overdue``, the ``vencida`` filter, ``overdue_actions``, ``action_counts``)
+when pending or in progress after its deadline.
 
 Every date that judges something (``today``) comes from the adapter: services
 never read the clock. Like every service this module flushes and never
@@ -66,7 +66,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from functools import partial
 from typing import Any
 
-from sqlalchemy import and_, exists, false, func, not_, or_, select
+from sqlalchemy import and_, case, exists, false, func, not_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -548,6 +548,28 @@ def overdue_actions(session: Session, actor: Actor, *, today: date) -> list[Acci
     policy.require(actor, Action.READ, RESOURCE)
     return list(session.scalars(select(AccionRevision).where(_overdue(_today(today)))
                                 .order_by(*ACTION_SPEC.order_by)))
+
+
+def action_counts(session: Session, actor: Actor, review_ids: Any, *,
+                  today: date) -> dict[int, dict[str, int]]:
+    """``total``, ``abiertas`` (pending or in progress) and ``vencidas`` actions per review.
+
+    One grouped query for the list screen; every id given is a key, with zeros
+    when the review has no actions. Read grant; ``today`` is the adapter's date.
+    """
+    policy.require(actor, Action.READ, RESOURCE)
+    overdue = _overdue(_today(today))
+    wanted = {value for value in review_ids if people.is_db_id(value)}
+    counts = {review_id: {"total": 0, "abiertas": 0, "vencidas": 0} for review_id in wanted}
+    if wanted:
+        rows = session.execute(select(
+            AccionRevision.revision_id, func.count(),
+            func.sum(case((AccionRevision.estado.in_(OPEN_STATES), 1), else_=0)),
+            func.sum(case((overdue, 1), else_=0)),
+        ).where(AccionRevision.revision_id.in_(wanted)).group_by(AccionRevision.revision_id))
+        for review_id, total, open_, late in rows:
+            counts[review_id] = {"total": total, "abiertas": int(open_), "vencidas": int(late)}
+    return counts
 
 
 reviews = Register(

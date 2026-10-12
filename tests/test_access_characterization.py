@@ -18,6 +18,7 @@ from werkzeug.security import generate_password_hash
 from app.extensions import db
 from app.models import (
     AccionCorrectiva,
+    AccionRevision,
     Auditoria,
     AuditoriaIndicador,
     Capacitacion,
@@ -28,6 +29,7 @@ from app.models import (
     DocumentCategory,
     DocumentRevision,
     EstadoRevision,
+    EstadoRevisionDireccion,
     FrecuenciaMedicion,
     HallazgoAuditoria,
     MedicionObjetivo,
@@ -39,11 +41,13 @@ from app.models import (
     ProcesoOperacion,
     ProgramaAuditoria,
     RecursoCapacitacion,
+    RevisionDireccion,
     RiesgoOportunidad,
     RoleEnum,
     RolResponsabilidad,
     SatisfaccionCliente,
     SentidoObjetivo,
+    TipoAccionRevision,
     TipoEnum,
     TipoHallazgo,
     User,
@@ -140,6 +144,11 @@ OBJECTIVE = dict(titulo="Entregas", descripcion="", proceso_id="", indicador="% 
                  fecha_limite="2026-12-31", frecuencia="mensual", recursos="", evaluacion="")
 # Dated well before any day the suite runs on: a measurement is never in the future.
 MEASUREMENT = dict(fecha="2026-02-28", valor="96", comentario="", registrado_por_id="")
+REVIEW = dict(fecha="2026-07-10", periodo_desde="2026-04-01", periodo_hasta="2026-06-30",
+              asistente_ids="1", comentario_contexto="Cambio")
+REVIEW_ACTION = dict(tipo="mejora", descripcion="Seguir", responsable_id="1",
+                     fecha_limite="2026-12-31", estado="pendiente", fecha_completada="",
+                     resultado="")
 
 
 def _html(resource, base, create, update, delete):
@@ -247,6 +256,21 @@ ENDPOINTS = [
              "/objetivos-calidad/1/mediciones/1/editar", 302, MEASUREMENT),
     Endpoint("QUALITY_OBJECTIVES", "delete", "POST",
              "/objetivos-calidad/1/mediciones/1/eliminar", 302),
+    # Review 1 is a draft with action 1; review 2 a draft without actions, so
+    # deleting it succeeds; review 3 is held, so it takes conclusions (MR-2).
+    # Holding and closing narrow the role to administrators, so
+    # tests/test_management_review_screens.py characterizes them.
+    *_html("MANAGEMENT_REVIEW", "/revisiones-direccion/", ("nueva", REVIEW),
+           ("1/editar", REVIEW), "2/eliminar"),
+    Endpoint("MANAGEMENT_REVIEW", "read", "GET", "/revisiones-direccion/1", 200),
+    Endpoint("MANAGEMENT_REVIEW", "update", "POST", "/revisiones-direccion/3/conclusiones",
+             302, dict(conclusiones="Conforme")),
+    Endpoint("MANAGEMENT_REVIEW", "create", "POST", "/revisiones-direccion/1/acciones/nueva",
+             302, REVIEW_ACTION),
+    Endpoint("MANAGEMENT_REVIEW", "update", "POST",
+             "/revisiones-direccion/1/acciones/1/editar", 302, REVIEW_ACTION),
+    Endpoint("MANAGEMENT_REVIEW", "delete", "POST",
+             "/revisiones-direccion/1/acciones/1/eliminar", 302),
     *_json("IMPROVEMENTS", "/mejoras/api/", {"no_conformidad": "NC"},
            {"accion_correctiva": "x"}),
     *_json("AUDIT_INDICATORS", "/auditoria_indicador/",
@@ -290,11 +314,12 @@ ALLOWED = {
     "COMPETENCE": JSON_REGISTER,
     "CORRECTIVE_ACTIONS": (ALL, ALL, {ADMIN}),
     "QUALITY_OBJECTIVES": JSON_REGISTER,  # decision QO4 of quality-objectives
+    "MANAGEMENT_REVIEW": (ADMIN_AUDITOR, ADMIN_AUDITOR, {ADMIN}),  # MR5 of management-review
 }
 # Policy entries without routes. AUDIT_LOG has no adapter yet. The API_TOKENS
 # matrix (issue, list, revoke any token) stays CLI-only; "Mi perfil" bypasses it
 # with an ownership check, so tests/test_profile_routes.py characterizes it.
-NO_ROUTES = {"AUDIT_LOG", "API_TOKENS", "MANAGEMENT_REVIEW"}  # screens arrive in MR-2
+NO_ROUTES = {"AUDIT_LOG", "API_TOKENS"}
 
 
 def allowed_roles(endpoint: Endpoint) -> set:
@@ -396,11 +421,23 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                         )
                         for titulo in ("Seed", "Unmeasured")
                     ),
+                    *(
+                        RevisionDireccion(
+                            fecha=date(2026, 7, 10), periodo_desde=date(2026, 4, 1),
+                            periodo_hasta=date(2026, 6, 30), **held,
+                        )
+                        for held in ({}, {}, dict(estado=EstadoRevisionDireccion.celebrada,
+                                                  datos_entrada={}))
+                    ),
                 ]
             )
-            db.session.flush()  # the measurement cites objective 1
+            db.session.flush()  # the measurement cites objective 1, the action review 1
             db.session.add(
                 MedicionObjetivo(objetivo_id=1, fecha=date(2026, 1, 31), valor=90)
+            )
+            db.session.add(
+                AccionRevision(revision_id=1, tipo=TipoAccionRevision.mejora, descripcion="Seed",
+                               responsable_id=1, fecha_limite=date(2026, 12, 31))
             )
             db.session.commit()
         client = self.app.test_client()
