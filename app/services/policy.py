@@ -41,6 +41,10 @@ The approved role-by-action matrix (decision D1). Roles may read, write
 - Quality objectives and their measurements: every role reads (objectives
   are communicated, ISO 9001 clause 6.2.1 f); administrators and auditors
   write; administrators delete (decision QO4 of ``quality-objectives``).
+- Management reviews and their actions: administrators and auditors read and
+  write; administrators delete; other roles have no access (decision MR5 of
+  ``management-review``). Holding and closing a review are further limited to
+  administrators outside the ``mcp`` channel by its service (MR4).
 
 Seams: the ``mcp`` channel never deletes and never writes documents (they are
 written in the web only), and token scopes intersect the role.
@@ -87,6 +91,7 @@ class Resource(StrEnum):
     COMPETENCE = "competence"
     CORRECTIVE_ACTIONS = "corrective_actions"
     QUALITY_OBJECTIVES = "quality_objectives"
+    MANAGEMENT_REVIEW = "management_review"
 
 
 _ALL = frozenset(RoleEnum)
@@ -132,6 +137,7 @@ _MATRIX: dict[Resource, Grant] = {
     Resource.COMPETENCE: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
     Resource.CORRECTIVE_ACTIONS: _OPEN_REGISTER,
     Resource.QUALITY_OBJECTIVES: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
+    Resource.MANAGEMENT_REVIEW: Grant(_ADMIN_AUDITOR, _ADMIN_AUDITOR, _ADMIN),
 }
 
 
