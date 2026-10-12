@@ -35,7 +35,7 @@ Route for every task: **delegated direct**.
 
 - [x] **MR-1 — Reviews, inputs and actions (service).** Forecast 1,000-1,400.
   - Models, migration, the period input summary from the existing registers, hold and close transitions with the frozen summary, actions with follow-up rules, policy resource `MANAGEMENT_REVIEW`, MCP modules.
-- [ ] **MR-2 — Screens and dashboard.** Forecast 900-1,400.
+- [x] **MR-2 — Screens and dashboard.** Forecast 900-1,400.
   - Review list and detail with the input sections and comments, review and action forms, hold and close actions, action register with filters, dashboard card with overdue actions.
 - [ ] **MR-3 — Minutes PDF and docs.** Forecast 300-600.
   - Minutes PDF, README, `docs/mcp.md`, `docs/architecture/services.md`, gap analysis update (Wave 1 complete).
@@ -53,13 +53,16 @@ Baseline at `e5ecfed`: 1,282 tests. Migrations are tested on PostgreSQL (`TEST_P
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
 | MR-1 | Done | `9195391` (models `revisiones_direccion`, `revision_asistentes`, `acciones_revision`, migration `a9c1e3f5d7b2`, policy `MANAGEMENT_REVIEW`, people delete protection), `562806b` (`app/services/management_reviews.py`: registers, `inputs`, `hold`, `close`, `preview`, `overdue_actions`; MCP modules `revisiones_direccion`, `acciones_revision`: 22 modules), review follow-up `c48ee51` | RED: `ImportError: RevisionDireccion`, attribution `23 != 21`, `KeyError: 'MANAGEMENT_REVIEW'`; follow-up: moving the review date past a completed action was not refused. GREEN: 1,309, then 1,310 tests incl. PostgreSQL; `9195391` alone passed 1,283 | Range `e5ecfed..562806b`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-57a059d44858b025` **approved** and acknowledged; its warning fixed in `c48ee51` |
-| MR-2..MR-3 | Pending | — | — | — |
+| MR-2 | Done | `45f4f0b` (`/revisiones-direccion/` list, detail with the input sections (provisional in draft, frozen once held), comments and conclusions, hold and close for ADMIN, review and action forms, `action_counts` for the list), `263f19d` (action register `/revisiones-direccion/acciones`, dashboard card `#acciones-revision`), review follow-up `bd16465` | RED: 10 screen tests (`no attribute 'management_review_routes'`); characterization and UI permission additions failed with the blueprint unregistered (`200 != 404`, 26 subtests); follow-up: an unknown numeric owner emptied the register. GREEN: 1,323 tests incl. PostgreSQL; `45f4f0b` alone passed 1,321 | Range `562806b..263f19d` (includes the MR-1 follow-up `c48ee51`): **medium**, `slice_budget_reached`; consent granted; reliability review `review-81d88265ab7a3875` **approved** and acknowledged; its suggestion applied in `bd16465` |
+| MR-3 | Pending | — | — | — |
 
 ## Findings during implementation
 
 - **Inputs:** every section is cut off at the earlier of `hasta` and today. Earlier reviews' actions come from every review dated before this one, drafts included; stakeholders and risks count records created or modified in the period by UTC day (risks have no level, so they are counted by type); objectives overlapping the period, except cancelled, are judged as of the cut-off.
 - `datos_entrada` stores "no data" as SQL NULL (`none_as_null=True`); with the default JSON `null` the CHECK that a draft holds no frozen inputs never fires.
 - Moving an action away from `completada` without clearing its completion date is refused, not cleared silently; moving the review date past a completed action is refused (`ACTIONS_COMPLETED_BEFORE`).
+- **Screens (MR-2):** hold and close are ADMIN-only buttons covered by the screens test (the characterization table keeps the endpoints any granted role reaches); the input labels live in `input_sections()` in the routes module so the minutes PDF reuses them; the new-action form also takes the follow-up fields; register filters that name nothing (state, type, overdue flag, owner) are ignored.
+- Test adaptations (standing approval, MR-2): `tests/test_access_characterization.py`, `tests/test_ui_permissions.py`.
 - MCP extras get only the row, so the review module uses `preview_of` (no permission check) after the module's read check.
 - Test adaptations (standing approval): `tests/test_attribution.py`, `tests/test_policy.py`, `tests/test_access_characterization.py`, `tests/test_migrations.py`, `tests/test_mcp_modules.py`, `tests/test_mcp_http.py`, `tests/mcp_support.py`.
 
@@ -67,9 +70,12 @@ Baseline at `e5ecfed`: 1,282 tests. Migrations are tested on PostgreSQL (`TEST_P
 
 | Slice | Pull request | Commits | Merged as | Note |
 |---|---|---|---|---|
-| 1 | Pending | tracker, MR-1 models | — | |
-| 2 | Pending | MR-1 service, follow-up, record | — | One-off `size:exception` (1,941 lines) |
+| 1 | [#112](https://github.com/constant1n0/iso9001/pull/112) | tracker, MR-1 models | merged | |
+| 2 | [#113](https://github.com/constant1n0/iso9001/pull/113) | MR-1 service, follow-up, record | `612bde6` | One-off `size:exception` (1,941 lines) |
+| 3 | Pending | MR-2 screens `45f4f0b` | — | 1,379 lines |
+| 4 | Pending | MR-2 register and card, follow-up, this record | — | |
+| 5 | Pending | MR-3 | — | |
 
 ## Next step
 
-MR-2.
+MR-3.
