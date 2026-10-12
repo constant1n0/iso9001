@@ -22,7 +22,7 @@ from decimal import Decimal
 from unittest.mock import patch
 
 import test_auth_bootstrap as bootstrap
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.exc import IntegrityError
 
 from mcp_support import McpDbCase, mcp_actor
@@ -330,8 +330,107 @@ class MeasurementTestCase(Helpers, ServiceBase):
                              today=TODAY)
         self.assertEqual(1, self.count(models().MedicionObjetivo))
 
+    def test_unknown_keys_are_refused_before_any_lookup(self) -> None:
+        """Like every service, ahead of the measurement, its objective and missing keys."""
+        objective = self.objective()
+        measured = self.measure(objective.id, date(2026, 1, 31), 90)
+        create, update = qo().measurements.create, qo().measurements.update
+        cases = (
+            (create, ({"objetivo_id": objective.id, "fecha": date(2026, 2, 28), "valor": 1,
+                       "nota": "x"},)),
+            (create, ({"objetivo_id": objective.id, "nota": "x"},)),
+            (create, ({"objetivo_id": 999, "fecha": date(2026, 2, 28), "valor": 1,
+                       "nota": "x"},)),
+            (update, (measured.id, {"nota": "x"})),
+            (update, (measured.id, {"valor": 91, "nota": "x"})),
+            (update, (999, {"valor": 91, "nota": "x"})),
+        )
+        for closed in (False, True):
+            if closed:
+                self.edit("objectives", objective.id, {"estado": "cancelado"})
+            for call, args in cases:
+                with self.subTest(closed=closed, args=args):
+                    message = self.refused(errors().ValidationError, call, CLI, *args,
+                                           today=TODAY)
+                    self.assertEqual("Campos no permitidos: nota.", message)
+        self.assertEqual([Decimal("90")], [m.valor for m in qo().measurements.list_(
+            db.session, CLI)])
+        self.assertEqual(["create"], [r.action for r in self.rows("mediciones_objetivo")])
+
+    def test_numbers_must_be_finite(self) -> None:
+        objective = self.objective()
+        measured = self.measure(objective.id, date(2026, 1, 31), 90)
+        owner = self.person("Eva")
+        for value in ("nan", "NaN", "inf", "-Infinity", " Infinity ", "sNaN", float("nan"),
+                      float("-inf"), Decimal("sNaN"), Decimal("Infinity")):
+            calls = (
+                ("meta", qo().objectives.create, (OBJECTIVE | {"responsable_id": owner,
+                                                               "meta": value},), {}),
+                ("valor_inicial", qo().objectives.create, (
+                    OBJECTIVE | {"responsable_id": owner, "valor_inicial": value},), {}),
+                ("meta", qo().objectives.update, (objective.id, {"meta": value}), {}),
+                ("valor_inicial", qo().objectives.update,
+                 (objective.id, {"valor_inicial": value}), {}),
+                ("valor", qo().measurements.create, (
+                    {"objetivo_id": objective.id, "fecha": date(2026, 2, 28), "valor": value},),
+                 {"today": TODAY}),
+                ("valor", qo().measurements.update, (measured.id, {"valor": value}),
+                 {"today": TODAY}),
+            )
+            for key, call, args, kwargs in calls:
+                with self.subTest(value=value, key=key, call=call):
+                    message = self.refused(errors().ValidationError, call, CLI, *args, **kwargs)
+                    self.assertEqual(qo().NOT_FINITE.format(key=key), message)
+        self.assertEqual(1, self.count(models().ObjetivoCalidad))
+        self.assertEqual([Decimal("90")], [m.valor for m in qo().measurements.list_(
+            db.session, CLI)])
+
+    def test_a_closed_objectives_measurement_cannot_be_deleted(self) -> None:
+        objective = self.objective()
+        measured = self.measure(objective.id, date(2026, 1, 31), 90)
+        for estado in ("alcanzado", "no_alcanzado", "cancelado"):
+            with self.subTest(estado=estado):
+                self.edit("objectives", objective.id, {"estado": estado})
+                message = self.refused(errors().ValidationError, qo().measurements.delete, CLI,
+                                       measured.id)
+                self.assertEqual(qo().OBJECTIVE_NOT_ACTIVE, message)
+        self.assertEqual(1, self.count(models().MedicionObjetivo))
+        self.refused(errors().NotFound, qo().measurements.delete, CLI, 999)
+        self.refused(errors().PermissionDenied, qo().measurements.delete, actor(AUDITOR),
+                     measured.id)
+        self.edit("objectives", objective.id, {"estado": "activo"})
+        qo().measurements.delete(db.session, CLI, measured.id)
+        db.session.commit()
+        self.assertEqual(0, self.count(models().MedicionObjetivo))
+        self.assertEqual(["create", "delete"],
+                         [r.action for r in self.rows("mediciones_objetivo")])
+
 
 class ReadAndPolicyTestCase(Helpers, ServiceBase):
+    def test_measurements_by_objective_come_in_date_order_from_one_query(self) -> None:
+        first, second, empty = (self.objective(titulo=t) for t in ("Uno", "Dos", "Tres"))
+        for objective_id, fecha in ((first.id, date(2026, 3, 31)), (second.id, date(2026, 2, 28)),
+                                    (first.id, date(2026, 1, 31))):
+            self.measure(objective_id, fecha, 90)
+        ids = [first.id, second.id, empty.id, 999]
+        executed: list[str] = []
+
+        def count(conn, cursor, statement, *args) -> None:
+            executed.append(statement)
+
+        event.listen(db.engine, "before_cursor_execute", count)
+        try:
+            got = qo().measurements.by_objective(db.session, actor(OPERATIVO), ids)
+        finally:
+            event.remove(db.engine, "before_cursor_execute", count)
+        self.assertEqual(1, len(executed))
+        self.assertEqual({first.id: [date(2026, 1, 31), date(2026, 3, 31)],
+                          second.id: [date(2026, 2, 28)], empty.id: [], 999: []},
+                         {key: [m.fecha for m in found] for key, found in got.items()})
+        self.assertEqual({}, qo().measurements.by_objective(db.session, CLI, []))
+        self.refused(errors().PermissionDenied, qo().measurements.by_objective,
+                     actor(OPERATIVO, channel="mcp", scopes=()), ids)
+
     def test_lists_filter_by_year_state_owner_process_and_objective(self) -> None:
         process_id, eva = self.process(), self.person("Eva")
         a = self.objective(fecha_limite=date(2026, 6, 30), proceso_id=process_id)
@@ -512,6 +611,16 @@ class PeopleAndProcessesTestCase(Helpers, ServiceBase):
         db.session.commit()
         self.assertEqual(1, self.count(ProcesoOperacion))
 
+    def test_another_conflict_keeps_its_own_message(self) -> None:
+        from app.services import process_operations
+
+        process_id = self.process()
+        with patch.object(process_operations.crud, "delete",
+                          side_effect=errors().Conflict("Otro conflicto.")):
+            message = self.refused(errors().Conflict, process_operations.delete, CLI, process_id)
+        self.assertEqual("Otro conflicto.", message)
+        self.assertEqual(1, self.count(ProcesoOperacion))
+
 
 class ForeignKeyCases:
     """The schema backs the service; shared by the SQLite and PostgreSQL cases."""
@@ -543,12 +652,15 @@ class ForeignKeyCases:
         objective = self.objective(proceso_id=process_id)
         message = self.refused(errors().Conflict, process_operations.delete, CLI, process_id)
         self.assertEqual(process_operations.CITED_BY_OBJECTIVES, message)
-        # The foreign key refuses a citation the check did not see, with the same message.
+        # The foreign key refuses a citation the check did not see: with the same message
+        # when the database names it, otherwise with the original conflict's.
         with patch.object(process_operations, "_cited_by_objectives", return_value=False):
             with self.assertRaises(errors().Conflict) as caught:
                 process_operations.delete(db.session, CLI, process_id)
         self.assertIsInstance(caught.exception.__cause__, IntegrityError)
-        self.assertEqual(process_operations.CITED_BY_OBJECTIVES, caught.exception.message)
+        expected = (process_operations.CITED_BY_OBJECTIVES if self.names_violated_constraints
+                    else errors().Conflict.default_message)
+        self.assertEqual(expected, caught.exception.message)
         db.session.rollback()
         db.session.expire_all()
         self.assertEqual(process_id, db.session.get(models().ObjetivoCalidad,
@@ -668,6 +780,38 @@ class McpTestCase(McpDbCase):
                          {f["name"] for f in described["objetivos_calidad"]["filters"]})
         self.assertEqual(["objetivo_id"],
                          [f["name"] for f in described["mediciones_objetivo"]["filters"]])
+
+    async def test_non_finite_numbers_are_refused(self) -> None:
+        ana = self.seed("personas")
+        who = mcp_actor(AUDITOR)
+        objective = {"titulo": "Entregas a tiempo", "indicador": "% a tiempo", "meta": 95,
+                     "sentido": "mayor_igual", "responsable_id": ana,
+                     "fecha_inicio": "2026-01-01", "fecha_limite": "2026-12-31",
+                     "frecuencia": "mensual"}
+        with patch("app.mcp_server.registry.local_today", return_value=TODAY):
+            created = await self.call(who, "qms_create", {"module": "objetivos_calidad",
+                                                          "data": objective})
+            self.assertFalse(created.is_error, created.content)
+            record_id = created.structured_content["id"]
+            for value in ("NaN", "Infinity", "-inf", "sNaN"):
+                for module, key, data in (
+                    ("objetivos_calidad", "meta", objective | {"meta": value}),
+                    ("objetivos_calidad", "valor_inicial", objective | {"valor_inicial": value}),
+                    ("mediciones_objetivo", "valor", {"objetivo_id": record_id,
+                                                      "fecha": "2026-09-30", "valor": value}),
+                ):
+                    with self.subTest(value=value, key=key):
+                        refused = await self.call(who, "qms_create",
+                                                  {"module": module, "data": data})
+                        self.assertTrue(refused.is_error)
+                        self.assertIn(qo().NOT_FINITE.format(key=key),
+                                      refused.content[0].text)
+                updated = await self.call(who, "qms_update", {
+                    "module": "objetivos_calidad", "id": record_id, "data": {"meta": value}})
+                self.assertTrue(updated.is_error)
+                self.assertIn("finito", updated.content[0].text)
+            listed = await self.call(who, "qms_list", {"module": "mediciones_objetivo"})
+            self.assertEqual(0, listed.structured_content["total"])
 
 
 if __name__ == "__main__":

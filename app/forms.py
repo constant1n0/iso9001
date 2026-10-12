@@ -409,8 +409,15 @@ def process_choices(processes):
     return [NO_PROCESS, *((p.id_proceso, p.proceso) for p in processes)]
 
 
+NOT_FINITE = 'Debe ser un número finito.'
+
+
 class NumberField(DecimalField):
-    """A decimal typed with a point or a comma; shown as ``number_text`` writes it."""
+    """A decimal typed with a point or a comma; shown as ``number_text`` writes it.
+
+    ``Decimal`` reads ``nan``, ``inf``, ``Infinity`` and ``sNaN``; they are a
+    field error (``NOT_FINITE``), like text that is not a number.
+    """
 
     widget = widgets.TextInput()
 
@@ -420,6 +427,9 @@ class NumberField(DecimalField):
 
     def process_formdata(self, valuelist):
         super().process_formdata([value.strip().replace(',', '.') for value in valuelist])
+        if self.data is not None and not self.data.is_finite():
+            self.data = None
+            raise ValueError(NOT_FINITE)
 
     def _value(self):
         if self.raw_data:

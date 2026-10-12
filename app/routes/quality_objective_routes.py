@@ -25,7 +25,8 @@ change their state and add and edit measurements; administrators delete
   measurement is overdue (``summary`` against ``local_today``).
 - An objective's page lists its measurements and embeds the trend chart's data
   as JSON (``objective-data``), drawn by ``static/js/objectives.js``.
-- A state change (``/<id>/estado/<state>``) is an ordinary update. The
+- A state change (``/<id>/estado/<state>``) is an ordinary update; a segment
+  that names no state (by member name) is a 404 that writes nothing. The
   measurement forms live under their objective; one asked for under another
   objective is a 404, and while the objective is not ``activo`` they return to
   its page with the reason, so its measurements stay read-only.
@@ -40,7 +41,7 @@ is flashed on the objective's page.
 from decimal import Decimal
 from typing import Any
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from flask_login import login_required
 
@@ -110,7 +111,8 @@ def list_objectives() -> ResponseReturnValue:
     """Objectives matching the filters with their status; ``applied`` counts the filters used.
 
     An ``estado`` that names no state, or a year, owner or process that is not
-    a number, is ignored, so it neither filters nor counts.
+    a number, is ignored, so it neither filters nor counts. The measurements of
+    every listed objective come in one query, however many are listed.
     """
     actor = current_actor()
     filters = {name: request.args.get(name, type=int)
@@ -123,11 +125,11 @@ def list_objectives() -> ResponseReturnValue:
     today = local_today()
     owners = people.names(db.session, actor, (o.responsable_id for o in every))
     processes = _processes(actor)
+    measured = qo.measurements.by_objective(db.session, actor, [o.id for o in found])
     return render_template(
         'objetivos_calidad/list.html',
         objetivos=found,
-        resumenes={o.id: qo.summary(o, _measurements(actor, o.id), today=today)
-                   for o in found},
+        resumenes={o.id: qo.summary(o, measured[o.id], today=today) for o in found},
         personas=owners,
         responsables=sorted(owners.items(), key=lambda item: item[1].casefold()),
         anios=sorted({o.anio for o in every}, reverse=True),
@@ -245,6 +247,8 @@ def edit_objective(objective_id: int) -> ResponseReturnValue:
 @require_permission('update', 'quality_objectives')
 def change_state(objective_id: int, estado: str) -> ResponseReturnValue:
     """Close an active objective (reached, not reached, cancelled) or reopen a closed one."""
+    if estado not in STATES:  # a member name only; anything else is no route
+        abort(404)
     if committed(lambda: qo.objectives.update(db.session, current_actor(), objective_id,
                                               {'estado': estado})):
         flash(f'Estado del objetivo: {EstadoObjetivo[estado].value}.', 'success')
