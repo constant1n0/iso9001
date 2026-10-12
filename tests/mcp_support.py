@@ -14,7 +14,8 @@ from app.mcp_server import context
 from app.mcp_server.server import build_server
 from app.mcp_server.registry import MODULES
 from app.models import (
-    EstadoNoConformidad, NoConformidad, ObjetivoCalidad, Person, RoleEnum, User,
+    EstadoNoConformidad, NoConformidad, ObjetivoCalidad, Person, RevisionDireccion, RoleEnum,
+    User,
 )
 from app.services import api_tokens
 from app.services.actor import Actor
@@ -65,6 +66,12 @@ SEEDS = {
                           "frecuencia": "mensual"},
     # Cites the objective above (id 1), on a past date inside its period.
     "mediciones_objetivo": {"objetivo_id": 1, "fecha": "2026-01-31", "valor": 92.5},
+    "revisiones_direccion": {"fecha": "2026-10-01", "periodo_desde": "2026-01-01",
+                             "periodo_hasta": "2026-09-30"},
+    # Cites the review and the person seeded above (both id 1).
+    "acciones_revision": {"revision_id": 1, "tipo": "mejora",
+                          "descripcion": "Automatizar el seguimiento", "responsable_id": 1,
+                          "fecha_limite": "2026-12-31"},
 }
 
 
@@ -102,10 +109,13 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
     def seed(self, slug: str, **overrides) -> int:
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
-        if slug in ("documentos", "objetivos_calidad") and db.session.get(Person, 1) is None:
+        if (slug in ("documentos", "objetivos_calidad", "acciones_revision")
+                and db.session.get(Person, 1) is None):
             self.seed("personas")
         if slug == "mediciones_objetivo" and db.session.get(ObjetivoCalidad, 1) is None:
             self.seed("objetivos_calidad")
+        if slug == "acciones_revision" and db.session.get(RevisionDireccion, 1) is None:
+            self.seed("revisiones_direccion")
         data = SEEDS[slug] | overrides
         for field in module.fields:
             if field.type == "date" and field.name in data:

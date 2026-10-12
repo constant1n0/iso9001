@@ -17,13 +17,14 @@ from sqlalchemy.orm import object_session
 from ..audit_notifications import local_today
 from ..models import (
     CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAccionCorrectiva,
-    EstadoAuditoriaEnum, EstadoNoConformidad, EstadoObjetivo, EstadoProgramaAuditoria,
-    FrecuenciaMedicion, GravedadNoConformidad, OrigenNoConformidad, SentidoObjetivo, TipoEnum,
+    EstadoAccionRevision, EstadoAuditoriaEnum, EstadoNoConformidad, EstadoObjetivo,
+    EstadoProgramaAuditoria, EstadoRevisionDireccion, FrecuenciaMedicion,
+    GravedadNoConformidad, OrigenNoConformidad, SentidoObjetivo, TipoAccionRevision, TipoEnum,
     TipoHallazgo,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, competence, corrective_actions,
-    document_revisions, documents, improvements,
+    document_revisions, documents, improvements, management_reviews,
     nonconformities, people, process_operations, quality_objectives, risks_opportunities,
     roles_responsibilities, satisfaction, stakeholders, training, training_resources,
 )
@@ -103,6 +104,17 @@ def _measurement_extras(measurement: Any) -> dict[str, Any]:
                                                            measurement)}
 
 
+def _review_extras(review: Any) -> dict[str, Any]:
+    """The attendees and the inputs of 9.3.2: frozen once held, live in a draft (MR2)."""
+    return {"asistente_ids": review.asistente_ids,
+            "preview": management_reviews.preview_of(object_session(review), review,
+                                                      today=local_today())}
+
+
+def _review_action_extras(action: Any) -> dict[str, Any]:
+    return {"vencida": management_reviews.is_overdue(action, today=local_today())}
+
+
 @dataclass(frozen=True)
 class _DatedWrites:
     """A register whose writes take the adapter's date (``local_today``), used like a service."""
@@ -127,6 +139,16 @@ class _DatedWrites:
 
     def update(self, session: Any, actor: Any, record_id: int, data: Any) -> Any:
         return self.register.update(session, actor, record_id, data, today=local_today())
+
+
+class _DatedRegister(_DatedWrites):
+    """Also passes the adapter's date to the lists, whose ``vencida`` filter needs it."""
+
+    def list_(self, session: Any, actor: Any, **filters: Any) -> list[Any]:
+        return self.register.list_(session, actor, **filters, today=local_today())
+
+    def list_page(self, session: Any, actor: Any, **kwargs: Any) -> tuple[list[Any], int]:
+        return self.register.list_page(session, actor, **kwargs, today=local_today())
 
 
 def _f(name: str, type: str = "string", required: bool = False, allowed=(), members=None,
@@ -338,6 +360,54 @@ _MODULES = (
         _f("valor", "number", True), _f("comentario"),
         _f("registrado_por_id", "integer", note="Person (personas) who recorded it."),
     ), (_f("objetivo_id", "integer"),), extras=_measurement_extras),
+    # Both share ``MANAGEMENT_REVIEW`` (MR5): administrators and auditors only. ``estado``
+    # shows the Spanish label and no tool writes it: holding, which freezes the inputs
+    # into ``datos_entrada`` and records ``celebrada_por_id``, and closing, which records
+    # ``fecha_cierre``, are web-only, for administrators (MR4). A held review takes only
+    # comments and conclusions, a closed one nothing. Review records add ``asistente_ids``
+    # and ``preview`` (the 9.3.2 inputs of the period: frozen once held, live in a draft);
+    # action records add ``vencida``.
+    Module("revisiones_direccion", "Management reviews", Resource.MANAGEMENT_REVIEW,
+           management_reviews.reviews, (
+        _f("fecha", "date", True, note="Meeting date."),
+        _f("periodo_desde", "date", True, note="First day of the period reviewed."),
+        _f("periodo_hasta", "date", True, note=(
+            "Last day of the period reviewed; not before periodo_desde nor after fecha.")),
+        _f("asistente_ids", "integer_list", note=(
+            "People (personas) attending; replaces them. Holding needs at least one.")),
+        _f("comentario_acciones_previas", note="Status of actions from previous reviews."),
+        _f("comentario_contexto", note=(
+            "Changes in external and internal issues, interested parties, risks and "
+            "opportunities.")),
+        _f("comentario_desempeno", note=(
+            "Performance and effectiveness of the QMS, including external providers.")),
+        _f("comentario_recursos", note="Adequacy of resources."),
+        _f("comentario_riesgos", note=(
+            "Effectiveness of the actions taken on risks and opportunities.")),
+        _f("comentario_mejora", note="Opportunities for improvement."),
+        _f("conclusiones", note=(
+            "Suitability, adequacy and effectiveness of the QMS; needed to close.")),
+    ), (_f("estado", "enum", members=EstadoRevisionDireccion),
+        _f("anio", "integer", note="Year of the meeting date.")),
+        extras=_review_extras),
+    Module("acciones_revision", "Management review actions", Resource.MANAGEMENT_REVIEW,
+           _DatedRegister(management_reviews.actions), (
+        _f("revision_id", "integer", True, note=(
+            "Review (revisiones_direccion), not closed; it cannot change later. Once the "
+            "review is closed only estado, fecha_completada and resultado change.")),
+        _f("tipo", "enum", True, members=TipoAccionRevision),
+        _f("descripcion", required=True),
+        _f("responsable_id", "integer", True, note="Person (personas) who owns the action."),
+        _f("fecha_limite", "date", True),
+        _f("estado", "enum", members=EstadoAccionRevision, note="Starts pendiente."),
+        _f("fecha_completada", "date", note=(
+            "Given exactly when estado is completada; not in the future nor before the "
+            "review's date.")),
+        _f("resultado"),
+    ), (_f("revision_id", "integer"), _f("estado", "enum", members=EstadoAccionRevision),
+        _f("responsable_id", "integer"), _f("tipo", "enum", members=TipoAccionRevision),
+        _f("vencida", "boolean", note="Pendiente or en_curso past fecha_limite.")),
+        extras=_review_action_extras),
 )
 
 MODULES: dict[str, Module] = {module.slug: module for module in _MODULES}
