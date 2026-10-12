@@ -29,7 +29,8 @@ MIGRATIONS_DIR = str(bootstrap.PROJECT_ROOT / "migrations")
 LATER_AUDITED_TABLES = frozenset(
     {"personas", "competencias_requeridas", "competencias_acreditadas",
      "acciones_correctivas", "document_revisions", "programas_auditoria",
-     "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo"}
+     "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo",
+     "revisiones_direccion", "acciones_revision"}
 )
 
 
@@ -833,6 +834,69 @@ class MigrationsTestCase(unittest.TestCase):
                             connection.execute(text(statement))
             downgrade(directory=MIGRATIONS_DIR, revision="e9c2a4f6b8d1")
             self.assertFalse({objectives, measurements}
+                             & set(inspect(db.engine).get_table_names()))
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+    def test_management_reviews_guard_their_links_and_downgrade(self) -> None:
+        reviews, actions, attendees = (
+            "revisiones_direccion", "acciones_revision", "revision_asistentes")
+        expected = {
+            "fk_revisiones_direccion_celebrada_por_id_personas": ("personas", "RESTRICT"),
+            "fk_revision_asistentes_revision_id_revisiones_direccion": (reviews, "CASCADE"),
+            "fk_revision_asistentes_persona_id_personas": ("personas", "RESTRICT"),
+            "fk_acciones_revision_revision_id_revisiones_direccion": (reviews, "RESTRICT"),
+            "fk_acciones_revision_responsable_id_personas": ("personas", "RESTRICT"),
+        }
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision="b4d6f8a1c3e5")
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            foreign_keys = {fk["name"]: (fk["referred_table"], fk["options"].get("ondelete"))
+                            for table in (reviews, actions, attendees)
+                            for fk in inspector.get_foreign_keys(table)}
+            self.assertLessEqual(expected.items(), foreign_keys.items())
+            self.assertLessEqual(
+                {f"ix_{actions}_revision_id", f"ix_{actions}_responsable_id"},
+                {index["name"] for index in inspector.get_indexes(actions)})
+            self.assertIn(f"ix_{attendees}_persona_id",
+                          {index["name"] for index in inspector.get_indexes(attendees)})
+            with db.engine.begin() as connection:
+                for statement in (
+                    "INSERT INTO personas (nombre) VALUES ('Ana')",
+                    "INSERT INTO revisiones_direccion (fecha, periodo_desde, periodo_hasta) "
+                    "VALUES ('2026-07-10', '2026-04-01', '2026-06-30')",
+                    "INSERT INTO revision_asistentes (revision_id, persona_id) "
+                    "SELECT r.id, p.id FROM revisiones_direccion r, personas p",
+                    "INSERT INTO acciones_revision (revision_id, tipo, descripcion, "
+                    "responsable_id, fecha_limite) SELECT r.id, 'mejora', 'Automatizar', p.id, "
+                    "'2026-12-31' FROM revisiones_direccion r, personas p",
+                ):
+                    connection.execute(text(statement))
+            self.assertEqual([("borrador", None, "pendiente")], self._rows(
+                "SELECT r.estado, r.datos_entrada, a.estado FROM revisiones_direccion r "
+                "JOIN acciones_revision a ON a.revision_id = r.id"))
+            for statement in (
+                "UPDATE revisiones_direccion SET estado = 'celebrada'",  # without its inputs
+                "UPDATE revisiones_direccion SET datos_entrada = '{}'",  # a draft has none
+                "UPDATE revisiones_direccion SET estado = 'Borrador'",
+                "UPDATE revisiones_direccion SET periodo_hasta = '2026-07-11'",
+                "UPDATE revisiones_direccion SET fecha_cierre = '2026-10-12'",
+                "UPDATE acciones_revision SET estado = 'completada'",  # without its date
+                "UPDATE acciones_revision SET tipo = 'otra'",
+                "DELETE FROM revisiones_direccion",
+                "DELETE FROM personas",
+            ):
+                with self.subTest(refused=statement):
+                    with self.assertRaises(IntegrityError):
+                        with db.engine.begin() as connection:
+                            connection.execute(text(statement))
+            with db.engine.begin() as connection:
+                connection.execute(text("DELETE FROM acciones_revision"))
+                connection.execute(text("DELETE FROM revisiones_direccion"))  # and its attendees
+            self.assertEqual([(0,)], self._rows(f"SELECT count(*) FROM {attendees}"))
+            downgrade(directory=MIGRATIONS_DIR, revision="b4d6f8a1c3e5")
+            self.assertFalse({reviews, actions, attendees}
                              & set(inspect(db.engine).get_table_names()))
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())

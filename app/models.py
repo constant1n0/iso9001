@@ -916,6 +916,175 @@ class MedicionObjetivo(RecordMetadataMixin, db.Model):
     def __repr__(self):
         return f'<MedicionObjetivo {self.objetivo_id} {self.fecha}>'
 
+
+class EstadoRevisionDireccion(enum.Enum):
+    """Where a management review stands (decisions MR1 and MR4 of ``management-review``).
+
+    Only ``services.management_reviews.hold`` and ``close`` move it, forward only.
+    """
+
+    borrador = 'Borrador'
+    celebrada = 'Celebrada'
+    cerrada = 'Cerrada'
+
+
+class TipoAccionRevision(enum.Enum):
+    """What a management review output is about (ISO 9001 clause 9.3.3, decision MR3)."""
+
+    mejora = 'Oportunidad de mejora'
+    cambio_sgc = 'Cambio en el SGC'
+    recursos = 'Necesidad de recursos'
+
+
+class EstadoAccionRevision(enum.Enum):
+    """Where a management review action stands (decision MR3)."""
+
+    pendiente = 'Pendiente'
+    en_curso = 'En curso'
+    completada = 'Completada'
+    cancelada = 'Cancelada'
+
+
+# MR1: the period ends on or before the meeting. MR2: a review holds its frozen
+# inputs from the moment it is held. MR4: only a closed review has a closing date.
+_REVIEW_PERIOD = 'periodo_desde <= periodo_hasta AND periodo_hasta <= fecha'
+_REVIEW_INPUTS = (
+    "(estado = 'borrador' AND datos_entrada IS NULL) OR "
+    "(estado <> 'borrador' AND datos_entrada IS NOT NULL)"
+)
+_REVIEW_CLOSING = (
+    "(estado = 'cerrada' AND fecha_cierre IS NOT NULL) OR "
+    "(estado <> 'cerrada' AND fecha_cierre IS NULL)"
+)
+# MR3: a completed action records when, and only a completed one.
+_ACTION_COMPLETION = (
+    "(estado = 'completada' AND fecha_completada IS NOT NULL) OR "
+    "(estado <> 'completada' AND fecha_completada IS NULL)"
+)
+
+# The attendees of a review; a plain table, not audited itself: attendance
+# changes are recorded on the review's own rows (``asistente_ids``).
+revision_asistentes = db.Table(
+    'revision_asistentes',
+    db.Column('revision_id', db.Integer, nullable=False),
+    db.Column('persona_id', db.Integer, nullable=False),
+    db.PrimaryKeyConstraint('revision_id', 'persona_id', name='pk_revision_asistentes'),
+    db.ForeignKeyConstraint(
+        ['revision_id'], ['revisiones_direccion.id'],
+        name='fk_revision_asistentes_revision_id_revisiones_direccion', ondelete='CASCADE',
+    ),
+    db.ForeignKeyConstraint(
+        ['persona_id'], ['personas.id'],
+        name='fk_revision_asistentes_persona_id_personas', ondelete='RESTRICT',
+    ),
+    db.Index('ix_revision_asistentes_persona_id', 'persona_id'),
+)
+
+
+class RevisionDireccion(RecordMetadataMixin, db.Model):
+    """A management review of the QMS (ISO 9001 clause 9.3, decisions MR1 to MR6).
+
+    A meeting date, the period it reviews, its attendees, a comment per input
+    of 9.3.2 and the conclusions. ``datos_entrada`` is the input summary frozen
+    when the review is held (``services.management_reviews.hold``), so the
+    minutes keep what was presented; ``None`` while a draft. ``None`` is
+    stored as SQL NULL, never as JSON ``null``, so the CHECK can see it.
+    """
+
+    __tablename__ = 'revisiones_direccion'
+    __table_args__ = (
+        db.CheckConstraint(_REVIEW_PERIOD, name='ck_revisiones_direccion_periodo'),
+        db.CheckConstraint(_REVIEW_INPUTS, name='ck_revisiones_direccion_datos_entrada'),
+        db.CheckConstraint(_REVIEW_CLOSING, name='ck_revisiones_direccion_cierre'),
+        db.ForeignKeyConstraint(
+            ['celebrada_por_id'], ['personas.id'],
+            name='fk_revisiones_direccion_celebrada_por_id_personas', ondelete='RESTRICT',
+        ),
+        db.Index('ix_revisiones_direccion_celebrada_por_id', 'celebrada_por_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    fecha = db.Column(db.Date, nullable=False)  # the meeting
+    periodo_desde = db.Column(db.Date, nullable=False)
+    periodo_hasta = db.Column(db.Date, nullable=False)
+    estado = db.Column(
+        text_enum(EstadoRevisionDireccion, 'ck_revisiones_direccion_estado'),
+        nullable=False,
+        default=EstadoRevisionDireccion.borrador,
+        server_default=EstadoRevisionDireccion.borrador.name,
+    )
+    comentario_acciones_previas = db.Column(db.Text)  # 9.3.2 a
+    comentario_contexto = db.Column(db.Text)  # 9.3.2 b: issues, stakeholders, risks
+    comentario_desempeno = db.Column(db.Text)  # 9.3.2 c, including external providers
+    comentario_recursos = db.Column(db.Text)  # 9.3.2 d
+    comentario_riesgos = db.Column(db.Text)  # 9.3.2 e: actions on risks and opportunities
+    comentario_mejora = db.Column(db.Text)  # 9.3.2 f
+    conclusiones = db.Column(db.Text)  # suitability, adequacy and effectiveness of the QMS
+    datos_entrada = db.Column(
+        db.JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), 'postgresql')
+    )
+    celebrada_por_id = db.Column(db.Integer, nullable=True)
+    fecha_cierre = db.Column(db.Date)
+
+    # One-way on purpose, like ``Auditoria.equipo``: a back-reference would mark
+    # people as changed (and unaudited) whenever the attendance changes.
+    asistentes = db.relationship(
+        'Person',
+        secondary=revision_asistentes,
+        order_by='Person.nombre',
+        lazy='selectin',
+    )
+
+    @property
+    def asistente_ids(self) -> list[int]:
+        """Ids of the attendees, ascending."""
+        return sorted(person.id for person in self.asistentes)
+
+    def __repr__(self):
+        return f'<RevisionDireccion {self.id} {self.fecha}>'
+
+
+class AccionRevision(RecordMetadataMixin, db.Model):
+    """An output of a management review (ISO 9001 clause 9.3.3, decision MR3).
+
+    An owner, a deadline and its follow-up. Once its review is closed only
+    ``estado``, ``fecha_completada`` and ``resultado`` change
+    (``services.management_reviews``); a review with actions cannot be deleted.
+    """
+
+    __tablename__ = 'acciones_revision'
+    __table_args__ = (
+        db.CheckConstraint(_ACTION_COMPLETION, name='ck_acciones_revision_completada'),
+        db.ForeignKeyConstraint(
+            ['revision_id'], ['revisiones_direccion.id'],
+            name='fk_acciones_revision_revision_id_revisiones_direccion', ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['responsable_id'], ['personas.id'],
+            name='fk_acciones_revision_responsable_id_personas', ondelete='RESTRICT',
+        ),
+        db.Index('ix_acciones_revision_revision_id', 'revision_id'),
+        db.Index('ix_acciones_revision_responsable_id', 'responsable_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    revision_id = db.Column(db.Integer, nullable=False)
+    tipo = db.Column(text_enum(TipoAccionRevision, 'ck_acciones_revision_tipo'), nullable=False)
+    descripcion = db.Column(db.Text, nullable=False)
+    responsable_id = db.Column(db.Integer, nullable=False)
+    fecha_limite = db.Column(db.Date, nullable=False)
+    estado = db.Column(
+        text_enum(EstadoAccionRevision, 'ck_acciones_revision_estado'),
+        nullable=False,
+        default=EstadoAccionRevision.pendiente,
+        server_default=EstadoAccionRevision.pendiente.name,
+    )
+    fecha_completada = db.Column(db.Date)
+    resultado = db.Column(db.Text)
+
+    def __repr__(self):
+        return f'<AccionRevision {self.id} {self.estado.name if self.estado else None}>'
+
 # Modelo para Control Documental
 class DocumentCategory(enum.Enum):
     MANUAL_CALIDAD = 'Manual de Calidad'

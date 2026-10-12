@@ -41,6 +41,7 @@ EXPECTED = {
     "COMPETENCE": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),
     "CORRECTIVE_ACTIONS": (ALL_ROLES, ALL_ROLES, ADMIN_ONLY),
     "QUALITY_OBJECTIVES": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),  # QO4 of quality-objectives
+    "MANAGEMENT_REVIEW": (ADMIN_AUDITOR, ADMIN_AUDITOR, ADMIN_ONLY),  # MR5 of management-review
 }
 
 FORBIDDEN_MODULES = ("flask", "flask_login", "werkzeug.local", "app.routes")
