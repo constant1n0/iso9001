@@ -37,7 +37,7 @@ Route for every task: **delegated direct**.
   - Models, migration, the period input summary from the existing registers, hold and close transitions with the frozen summary, actions with follow-up rules, policy resource `MANAGEMENT_REVIEW`, MCP modules.
 - [x] **MR-2 — Screens and dashboard.** Forecast 900-1,400.
   - Review list and detail with the input sections and comments, review and action forms, hold and close actions, action register with filters, dashboard card with overdue actions.
-- [ ] **MR-3 — Minutes PDF and docs.** Forecast 300-600.
+- [x] **MR-3 — Minutes PDF and docs.** Forecast 300-600.
   - Minutes PDF, README, `docs/mcp.md`, `docs/architecture/services.md`, gap analysis update (Wave 1 complete).
 
 ## Checks
@@ -54,7 +54,7 @@ Baseline at `e5ecfed`: 1,282 tests. Migrations are tested on PostgreSQL (`TEST_P
 |---|---|---|---|---|
 | MR-1 | Done | `9195391` (models `revisiones_direccion`, `revision_asistentes`, `acciones_revision`, migration `a9c1e3f5d7b2`, policy `MANAGEMENT_REVIEW`, people delete protection), `562806b` (`app/services/management_reviews.py`: registers, `inputs`, `hold`, `close`, `preview`, `overdue_actions`; MCP modules `revisiones_direccion`, `acciones_revision`: 22 modules), review follow-up `c48ee51` | RED: `ImportError: RevisionDireccion`, attribution `23 != 21`, `KeyError: 'MANAGEMENT_REVIEW'`; follow-up: moving the review date past a completed action was not refused. GREEN: 1,309, then 1,310 tests incl. PostgreSQL; `9195391` alone passed 1,283 | Range `e5ecfed..562806b`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-57a059d44858b025` **approved** and acknowledged; its warning fixed in `c48ee51` |
 | MR-2 | Done | `45f4f0b` (`/revisiones-direccion/` list, detail with the input sections (provisional in draft, frozen once held), comments and conclusions, hold and close for ADMIN, review and action forms, `action_counts` for the list), `263f19d` (action register `/revisiones-direccion/acciones`, dashboard card `#acciones-revision`), review follow-up `bd16465` | RED: 10 screen tests (`no attribute 'management_review_routes'`); characterization and UI permission additions failed with the blueprint unregistered (`200 != 404`, 26 subtests); follow-up: an unknown numeric owner emptied the register. GREEN: 1,323 tests incl. PostgreSQL; `45f4f0b` alone passed 1,321 | Range `562806b..263f19d` (includes the MR-1 follow-up `c48ee51`): **medium**, `slice_budget_reached`; consent granted; reliability review `review-81d88265ab7a3875` **approved** and acknowledged; its suggestion applied in `bd16465` |
-| MR-3 | Pending | — | — | — |
+| MR-3 | Done | `3eb14be` (minutes PDF `/revisiones-direccion/<id>/pdf` with header, inputs and comments, conclusions, actions and generation date, sharing `_review_context()` with the detail page; README section; `docs/mcp.md` (22 modules); `docs/architecture/services.md`; gap analysis: 9.3 covered and Wave 1 complete) | RED: 3 `no attribute 'render_pdf'`, missing PDF link, 8 UI permission subtests, 2 characterization URLs. GREEN: 1,327 tests incl. PostgreSQL; a real WeasyPrint PDF read back with `pdftotext` | Range `263f19d..3eb14be` (includes the MR-2 follow-up `bd16465`): **medium**, `slice_budget_reached`; consent granted; reliability review `review-49b719ca140fbe52` **approved** with no findings and acknowledged |
 
 ## Findings during implementation
 
@@ -62,6 +62,8 @@ Baseline at `e5ecfed`: 1,282 tests. Migrations are tested on PostgreSQL (`TEST_P
 - `datos_entrada` stores "no data" as SQL NULL (`none_as_null=True`); with the default JSON `null` the CHECK that a draft holds no frozen inputs never fires.
 - Moving an action away from `completada` without clearing its completion date is refused, not cleared silently; moving the review date past a completed action is refused (`ACTIONS_COMPLETED_BEFORE`).
 - **Screens (MR-2):** hold and close are ADMIN-only buttons covered by the screens test (the characterization table keeps the endpoints any granted role reaches); the input labels live in `input_sections()` in the routes module so the minutes PDF reuses them; the new-action form also takes the follow-up fields; register filters that name nothing (state, type, overdue flag, owner) are ignored.
+- **Minutes (MR-3):** the file is named after the meeting date (`acta_revision_direccion_YYYY-MM-DD.pdf`); a draft prints "BORRADOR — datos provisionales". The gap analysis marks 9.3 covered and Wave 1 complete, and states that the other clause rows still describe the baseline before Wave 1 (re-assessing them is a follow-up).
+- Test adaptations (standing approval, MR-3): `tests/test_access_characterization.py`, `tests/test_ui_permissions.py`.
 - Test adaptations (standing approval, MR-2): `tests/test_access_characterization.py`, `tests/test_ui_permissions.py`.
 - MCP extras get only the row, so the review module uses `preview_of` (no permission check) after the module's read check.
 - Test adaptations (standing approval): `tests/test_attribution.py`, `tests/test_policy.py`, `tests/test_access_characterization.py`, `tests/test_migrations.py`, `tests/test_mcp_modules.py`, `tests/test_mcp_http.py`, `tests/mcp_support.py`.
@@ -72,10 +74,14 @@ Baseline at `e5ecfed`: 1,282 tests. Migrations are tested on PostgreSQL (`TEST_P
 |---|---|---|---|---|
 | 1 | [#112](https://github.com/constant1n0/iso9001/pull/112) | tracker, MR-1 models | merged | |
 | 2 | [#113](https://github.com/constant1n0/iso9001/pull/113) | MR-1 service, follow-up, record | `612bde6` | One-off `size:exception` (1,941 lines) |
-| 3 | Pending | MR-2 screens `45f4f0b` | — | 1,379 lines |
-| 4 | Pending | MR-2 register and card, follow-up, this record | — | |
-| 5 | Pending | MR-3 | — | |
+| 3 | [#114](https://github.com/constant1n0/iso9001/pull/114) | MR-2 screens `45f4f0b` | merged | 1,379 lines |
+| 4 | [#115](https://github.com/constant1n0/iso9001/pull/115) | MR-2 register and card, follow-up, record | `442d4b5` | |
+| 5 | Pending | MR-3, closing update | — | Final slice |
+
+## Production deployment (pending authorization)
+
+One migration (`a9c1e3f5d7b2` reviews, attendees and actions) on top of `b4d6f8a1c3e5`: back up the database and the code, fast-forward, `flask db upgrade`, `flask db check`, then the user restarts the four services. Smoke tests: `/revisiones-direccion/` and its register redirect to the login, the dashboard loads, `qms_modules` lists 22 modules.
 
 ## Next step
 
-MR-3.
+**Feature complete** once slice 5 merges, and with it Wave 1. Next: the production deployment above, after explicit authorization; then re-assess the gap analysis clause rows against the delivered Wave 1.
