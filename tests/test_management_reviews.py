@@ -325,6 +325,19 @@ class ActionTestCase(Helpers, ServiceBase):
         self.assertFalse(mr().is_overdue(created, today=TODAY))
         self.assertTrue(mr().is_overdue(created, today=date(2027, 1, 1)))
 
+    def test_a_review_date_never_moves_past_its_completed_actions(self) -> None:
+        review = self.review()  # held on 10/07/2026
+        self.action(review.id, estado="completada", fecha_completada=date(2026, 7, 10))
+        self.action(review.id)  # pending: no completion date to keep
+        message = self.refused(errors().ValidationError, mr().reviews.update, CLI, review.id,
+                               {"fecha": date(2026, 7, 15)})
+        self.assertEqual(mr().ACTIONS_COMPLETED_BEFORE, message)
+        self.assertEqual(date(2026, 7, 10), db.session.get(models().RevisionDireccion,
+                                                            review.id).fecha)
+        self.edit("reviews", review.id, {"fecha": date(2026, 7, 8)})  # earlier is fine
+        self.assertEqual(date(2026, 7, 8), db.session.get(models().RevisionDireccion,
+                                                           review.id).fecha)
+
     def test_the_completion_date_goes_with_the_completed_state(self) -> None:
         review = self.review()
         owner, inactive = self.person(), self.person("Eva", activo=False)

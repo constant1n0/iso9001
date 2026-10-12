@@ -137,6 +137,8 @@ COMPLETION_REQUIRED = "Indica la fecha de finalización de una acción completad
 COMPLETION_ONLY_WHEN_DONE = "Solo una acción completada tiene fecha de finalización."
 COMPLETION_IN_FUTURE = "La fecha de finalización no puede ser futura."
 COMPLETION_BEFORE_REVIEW = "La fecha de finalización no puede ser anterior a la de la revisión."
+ACTIONS_COMPLETED_BEFORE = ("La revisión tiene acciones finalizadas antes de esa fecha; "
+                            "su fecha no puede ser posterior a la de esas acciones.")
 
 
 def _optional_date(data: Mapping[str, Any], key: str) -> date | None:
@@ -228,6 +230,8 @@ def _update_review(session: Session, actor: Actor, review_id: int,
     if found.estado is EstadoRevisionDireccion.celebrada and touched - HELD_WRITABLE:
         raise ValidationError(ONLY_COMMENTS)
     _check_period(changes, found)
+    if "fecha" in changes:
+        _check_completed_actions(session, found.id, changes["fecha"])
     before = _snapshot(found)
     for key, value in changes.items():
         setattr(found, key, value)
@@ -237,6 +241,14 @@ def _update_review(session: Session, actor: Actor, review_id: int,
     audit.record(session, actor, "update", found, before=before, after=_snapshot(found))
     _flush(session, None)
     return found
+
+
+def _check_completed_actions(session: Session, review_id: int, fecha: date) -> None:
+    """Keep every completion date on or after the review's date (MR3) when the date moves."""
+    if session.scalar(select(exists().where(
+            AccionRevision.revision_id == review_id,
+            AccionRevision.fecha_completada < fecha))):
+        raise ValidationError(ACTIONS_COMPLETED_BEFORE)
 
 
 def _delete_review(session: Session, actor: Actor, review_id: int) -> None:
