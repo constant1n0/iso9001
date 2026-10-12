@@ -118,7 +118,7 @@ def number(data: Mapping[str, Any], key: str, *, required: bool = False) -> Deci
 
     A blank optional one (``None`` or blank text) is ``None``. Booleans,
     non-finite values (``NOT_FINITE``: ``nan``, ``inf``, ``sNaN``...) and values
-    of eight or more integer digits are refused.
+    of more than eight integer digits are refused.
     """
     value = data[key]
     if value is None or (isinstance(value, str) and not value.strip()):

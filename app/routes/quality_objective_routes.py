@@ -32,16 +32,27 @@ change their state and add and edit measurements; administrators delete
   its page with the reason, so its measurements stay read-only.
 - Once measured, the target and its direction are shown locked on the edit form
   and left out of the update (the service refuses changing them).
+- The yearly PDF (``/pdf?anio=``, task QO-3) has the list's access. Without
+  ``anio``, or with it blank, it covers the current year; a year that is not
+  four digits from 2000 to 2100 is a 404. It counts the year's objectives by
+  state, the active ones meeting their target and those with an overdue
+  measurement, then lists each objective by deadline and title with its
+  measurements. A PDF that cannot be rendered is logged and flashed on the list.
 
 A service ``ValidationError`` or ``Conflict`` is rolled back and flashed on the
 re-rendered form, which keeps what was typed; a refused delete or state change
 is flashed on the objective's page.
 """
 
+import re
+from collections import Counter
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import (
+    Blueprint, abort, current_app, flash, redirect, render_template, request, url_for,
+)
 from flask.typing import ResponseReturnValue
 from flask_login import login_required
 
@@ -56,6 +67,7 @@ from ..services import crud, people, process_operations
 from ..services import quality_objectives as qo
 from ..services.actor import Actor
 from ..services.errors import NotFound
+from ..utils.pdf import pdf_response, render_pdf
 from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
 from .auditoria_routes import committed
@@ -77,6 +89,7 @@ CLOSE_STATES = (
     ('cancelado', 'Cancelar', '¿Cancelar el objetivo?' + CLOSED_NOTE),
 )
 REOPEN = (('activo', 'Reactivar', None),)
+YEAR_TEXT = re.compile(r'[0-9]{4}')
 
 
 @bp.app_template_filter('cifra')
@@ -129,6 +142,7 @@ def list_objectives() -> ResponseReturnValue:
     return render_template(
         'objetivos_calidad/list.html',
         objetivos=found,
+        anio_pdf=filters['anio'] if _valid_year(filters['anio']) else today.year,
         resumenes={o.id: qo.summary(o, measured[o.id], today=today) for o in found},
         personas=owners,
         responsables=sorted(owners.items(), key=lambda item: item[1].casefold()),
@@ -171,6 +185,65 @@ def show_objective(objective_id: int) -> ResponseReturnValue:
             'indicador': objetivo.indicador,
         },
     )
+
+
+def _valid_year(year: int | None) -> bool:
+    return year is not None and qo.YEAR_MIN <= year <= qo.YEAR_MAX
+
+
+def _report_year(text: str | None, today: date) -> int:
+    """The year ``anio`` names, or ``today``'s when it is missing or blank; else a 404."""
+    if not text:
+        return today.year
+    if YEAR_TEXT.fullmatch(text) and _valid_year(int(text)):
+        return int(text)
+    abort(404)
+
+
+def _year_context(actor: Actor, year: int, today: date) -> dict[str, Any]:
+    """The year's objectives by deadline and title, with their measurements and status.
+
+    ``por_estado`` counts them by state, in the enum's order; ``en_meta`` and
+    ``vencidas`` count the active ones meeting their target and those with an
+    overdue measurement on ``today``.
+    """
+    found = sorted(qo.objectives.list_(db.session, actor, anio=year),
+                   key=lambda o: (o.fecha_limite, o.titulo.casefold(), o.id))
+    measured = qo.measurements.by_objective(db.session, actor, [o.id for o in found])
+    resumenes = {o.id: qo.summary(o, measured[o.id], today=today) for o in found}
+    active = [resumenes[o.id] for o in found if o.estado is EstadoObjetivo.activo]
+    states = Counter(o.estado for o in found)
+    return dict(
+        anio=year,
+        objetivos=found,
+        mediciones=measured,
+        resumenes=resumenes,
+        cumple={m.id: qo.meets(m.valor, o.meta, o.sentido)
+                for o in found for m in measured[o.id]},
+        por_estado={state: states[state] for state in EstadoObjetivo},
+        en_meta=sum(resumen['cumple'] is True for resumen in active),
+        vencidas=sum(resumen['medicion_vencida'] for resumen in active),
+        procesos={p.id_proceso: p.proceso for p in _processes(actor)},
+        personas=people.names(db.session, actor, (o.responsable_id for o in found)),
+    )
+
+
+@bp.route('/pdf', methods=['GET'])
+@login_required
+@require_permission('read', 'quality_objectives')
+def export_pdf() -> ResponseReturnValue:
+    """The year's objectives as a PDF (``?anio=``; the current year by default)."""
+    actor = current_actor()
+    today = local_today()
+    year = _report_year(request.args.get('anio'), today)
+    context = _year_context(actor, year, today)
+    try:
+        pdf = render_pdf('objetivos_calidad/pdf_template.html', **context)
+    except Exception:
+        current_app.logger.exception('Error generating PDF for quality objectives %s', year)
+        flash('Error al generar el PDF de los objetivos de calidad.', 'danger')
+        return redirect(url_for('objetivo_calidad.list_objectives'))
+    return pdf_response(pdf, f'objetivos_calidad_{year}.pdf')
 
 
 def _process_name(actor: Actor, process_id: int | None) -> str | None:

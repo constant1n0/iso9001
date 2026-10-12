@@ -482,6 +482,66 @@ The MCP server reads and writes programmes, audits and findings with the same
 rules; approving a programme and deleting are web-only (see `docs/mcp.md`).
 Every change is written to the audit log.
 
+**2h. Objetivos de calidad**
+
+Quality objectives (`/objetivos-calidad/`, ISO 9001:2026 clause 6.2) record
+what the QMS sets out to achieve, how it is measured and whether it is on
+track.
+
+- **Objective**: a title and description, an optional process, the indicator
+  and its unit, and a target with its direction: *≥* is met at or above it,
+  *≤* at or below it. It also records:
+  - a baseline and the owner (a person);
+  - its period: start date, deadline and year (by default the start's year);
+  - the measurement frequency: *Mensual*, *Trimestral*, *Semestral* or
+    *Anual*;
+  - the resources needed and how the results are evaluated.
+
+  It starts *Activo*. Its page closes it as *Alcanzado*, *No alcanzado* or
+  *Cancelado*, and reopens it.
+- **Measurements**: date, value, comment and the person who recorded it (the
+  form starts on today and on the user's own person).
+  - One per objective and date, inside the objective's period and never in
+    the future.
+  - They are added, edited and deleted only while the objective is *Activo*.
+  - Once an objective has measurements, its target and direction are fixed
+    and it cannot be deleted.
+- **Status**: each measurement, and the objective through its latest one,
+  meets the target or not; the trend (*Sube*, *Baja*, *Estable*) compares the
+  latest measurement with the one before.
+- **Overdue rule**: an active objective's next measurement is due one
+  frequency period after its latest measurement, or after its start date when
+  it has none, and never after its deadline. Once that date has passed, the
+  measurement is overdue.
+- **Access**: every role reads objectives and measurements (objectives are
+  communicated, 6.2.1 f). Administrators and auditors create and edit them,
+  change an objective's state and record measurements; only administrators
+  delete.
+- **Screens**:
+  - the list filters by year, state, owner and process. It shows each
+    objective's target, latest value, a met / not met badge, the next
+    measurement and an *overdue* badge;
+  - an objective's page shows its planning, its result, its measurements and
+    a trend chart against the target, with the state buttons;
+  - a refused save shows the form again with what was typed.
+- **PDF**: the button *PDF <year>* on the list
+  (`/objetivos-calidad/pdf?anio=<year>`) covers the filtered year, or the
+  current one; a year outside 2000-2100 is not found. The PDF holds:
+  - the objectives counted by state, and how many active objectives meet
+    their target and how many have an overdue measurement;
+  - each objective, by deadline and title, with its process, indicator,
+    target, baseline, owner, deadline, frequency, state, latest value and
+    date, met / not met, trend, next measurement, resources and evaluation;
+  - a table of its measurements: date, value, met / not met and comment.
+- **Dashboard**: the card *Objetivos de calidad* lists the active objectives
+  that miss their target or have an overdue measurement, and links to the
+  active objectives.
+
+The MCP server reads and writes objectives and measurements with the same
+rules (modules `objetivos_calidad` and `mediciones_objetivo`); deleting and
+the PDF are web-only (see `docs/mcp.md`). Every change is written to the
+audit log.
+
 **3. Iniciar Redis y Celery para las Notificaciones Programadas**
 
 Celery envía cuatro avisos por correo; la aplicación web funciona sin él.
@@ -499,9 +559,11 @@ el informe semanal, las pendientes; el informe mensual adjunta un PDF con
 el total de auditorías, no conformidades y capacitaciones y la satisfacción media
 registrados en el mes, las no conformidades del mes por estado, las acciones
 correctivas verificadas en el mes (eficaces y no eficaces), las auditorías del
-mes completadas y los hallazgos registrados en el mes por tipo (por la fecha de
-su auditoría). El aviso de revisión
-documental lista los documentos en uso cuya fecha de próxima revisión ya ha
+mes completadas, los hallazgos registrados en el mes por tipo (por la fecha de
+su auditoría) y, de los objetivos de calidad, las mediciones del mes y los
+objetivos activos, cuántos cumplen la meta y cuántos tienen una medición
+vencida el último día del mes (o en la fecha del informe, si es anterior). El
+aviso de revisión documental lista los documentos en uso cuya fecha de próxima revisión ya ha
 llegado: cada propietario recibe los suyos a través del usuario vinculado a su
 persona (un usuario Operativo, solo los vigentes) y los administradores reciben
 la lista completa con el propietario de cada documento; los propietarios sin
@@ -550,6 +612,7 @@ python -c "import celery_worker as w; w.send_upcoming_audits_alert.delay()"
   - En el dashboard podrás ver:
     - Estadísticas generales de auditorías, no conformidades, satisfacción del cliente y capacitaciones.
     - Alertas de auditorías próximas, no conformidades abiertas y capacitaciones cercanas.
+    - Los objetivos de calidad activos que no cumplen la meta o tienen una medición vencida.
 
 **Monitoreo de Logs**
 

@@ -55,7 +55,17 @@
     </table>
 </div>
 <div class="section">
+    <h2>Objetivos de calidad</h2>
+    {{ fields([
+        ('Mediciones registradas', mediciones_objetivos),
+        ('Objetivos activos', objetivos_activos),
+        ('Objetivos activos que cumplen la meta', objetivos_en_meta),
+        ('Objetivos activos con medición vencida', objetivos_medicion_vencida),
+    ]) }}
+    <p class="muted">Situación de los objetivos activos a {{ objetivos_fecha_corte.strftime('%d/%m/%Y') }}.</p>
+</div>
+<div class="section">
     <h2>Alcance</h2>
-    <p>Indicadores del sistema de gestión de calidad registrados en el mes del informe: las no conformidades por su fecha de detección, con su estado al generar el informe; las acciones correctivas por su fecha de verificación; las auditorías completadas por su fecha, y los hallazgos por la fecha de su auditoría. La satisfacción media se expresa sobre 10.</p>
+    <p>Indicadores del sistema de gestión de calidad registrados en el mes del informe: las no conformidades por su fecha de detección, con su estado al generar el informe; las acciones correctivas por su fecha de verificación; las auditorías completadas por su fecha, y los hallazgos por la fecha de su auditoría. Las mediciones de los objetivos de calidad se cuentan por su fecha; los objetivos activos, con su estado al generar el informe, se valoran con sus mediciones hasta el último día del mes, o hasta la fecha del informe si es anterior. La satisfacción media se expresa sobre 10.</p>
 </div>
 {% endblock %}
