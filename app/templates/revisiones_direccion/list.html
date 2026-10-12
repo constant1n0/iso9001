@@ -21,6 +21,7 @@
 {% block crumb %}Calidad · Revisión por la dirección{% endblock %}
 {% block content %}
 {% call page_header('Cláusula 9.3 · Revisión por la dirección', 'Revisiones por la dirección') %}
+    <a class="btn" href="{{ url_for('revision_direccion.list_actions') }}">Registro de acciones</a>
     {% if can('create', 'management_review') %}
     <a class="btn btn--primary" href="{{ url_for('revision_direccion.new_review') }}">+ Nueva revisión</a>
     {% endif %}
