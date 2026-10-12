@@ -14,7 +14,7 @@ can never delete.
 
   | Tool | Purpose |
   |---|---|
-  | `qms_modules` | The 20 modules with fields, allowed values, filters and what the caller may do |
+  | `qms_modules` | The 22 modules with fields, allowed values, filters and what the caller may do |
   | `qms_list` | One bounded page of a module, with the filters `qms_modules` lists |
   | `qms_get` | One record by `id` |
   | `qms_create` | Create a record |
@@ -35,13 +35,14 @@ can never delete.
 
 ## Modules
 
-`qms_modules` lists 20 modules: `no_conformidades`, `auditorias`,
+`qms_modules` lists 22 modules: `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `riesgos_oportunidades`, `recursos_capacitacion`,
 `procesos`, `indicadores_auditoria`, `personas`, `competencias_requeridas`,
-`competencias_acreditadas`, `acciones_correctivas`, `objetivos_calidad` and
-`mediciones_objetivo`. Each field has a
+`competencias_acreditadas`, `acciones_correctivas`, `objetivos_calidad`,
+`mediciones_objetivo`, `revisiones_direccion` and `acciones_revision`. Each
+field has a
 `type`, a `required` flag, `allowed` values for enums and, where the flags do
 not say enough, a short `note`.
 
@@ -185,6 +186,45 @@ create and update. No token deletes.
     date.
   - Records add `cumple`. Filter: `objetivo_id`.
 - Web-only: every delete and the yearly objectives PDF.
+
+Management reviews (ISO 9001 clause 9.3). Both modules share one grant: only
+ADMIN or AUDITOR tokens read them, and only those tokens (with the `write`
+scope) create and update. No token deletes, holds or closes a review.
+
+- `revisiones_direccion`: `fecha` (the meeting), `periodo_desde` and
+  `periodo_hasta` are required; the period starts on or before its end, which
+  is on or before the meeting.
+  - Optional: `asistente_ids` (people; it replaces the attendees), one comment
+    per input of 9.3.2 (`comentario_acciones_previas`, `comentario_contexto`,
+    `comentario_desempeno`, `comentario_recursos`, `comentario_riesgos`,
+    `comentario_mejora`) and `conclusiones`.
+  - `estado` (`borrador`, `celebrada`, `cerrada`) is never written. Holding
+    a review, which freezes its inputs into `datos_entrada` and records
+    `celebrada_por_id`, and closing it, which records `fecha_cierre`, are
+    web-only, for administrators.
+  - A draft takes every field; a held review only its comments and
+    conclusions; a closed one nothing. Moving `fecha` past an action's
+    completion date is refused.
+  - Records add `asistente_ids` and `preview`: the inputs of the period,
+    frozen once held and computed live in a draft. `fecha_corte` is
+    `periodo_hasta`, or the server's local date when earlier; each section
+    (`acciones_previas`, `contexto`, `satisfaccion`, `objetivos`,
+    `indicadores`, `no_conformidades`, `auditorias`, `mejoras`,
+    `capacitaciones`) counts the period up to it, and its lists hold at most
+    ten items.
+  - Filters: `estado` and `anio` (the year of the meeting).
+- `acciones_revision`: `revision_id`, `tipo` (`mejora`, `cambio_sgc`,
+  `recursos`), `descripcion`, `responsable_id` (a person) and `fecha_limite`
+  are required; `estado` (`pendiente` by default, `en_curso`, `completada`,
+  `cancelada`), `fecha_completada` and `resultado` are optional.
+  - The review must not be closed, and an action never moves to another
+    review. Once the review is closed, only `estado`, `fecha_completada` and
+    `resultado` change.
+  - `fecha_completada` is given exactly when the action is `completada`; it is
+    never after the server's local date nor before the review's date.
+  - Records add `vencida`: `pendiente` or `en_curso` past `fecha_limite`.
+  - Filters: `revision_id`, `estado`, `responsable_id`, `tipo` and `vencida`.
+- Web-only: holding, closing, every delete and the minutes PDF.
 
 ## Issue a token
 

@@ -22,6 +22,7 @@
 {% block crumb %}Calidad · Revisión por la dirección{% endblock %}
 {% block content %}
 {% call page_header('Cláusula 9.3 · Revisión por la dirección', 'Revisión del ' ~ dia(revision.fecha)) %}
+    <a class="btn" href="{{ url_for('revision_direccion.export_pdf', review_id=revision.id) }}" target="_blank" rel="noopener">Acta PDF</a>
     {% if can('update', 'management_review') %}
     {% if estado == 'borrador' %}
     <a class="btn" href="{{ url_for('revision_direccion.edit_review', review_id=revision.id) }}">Editar</a>

@@ -424,13 +424,15 @@ class UiPermissionsTestCase(unittest.TestCase):
             held, closed = review("hold"), review("hold", "close")
             db.session.commit()
         writers, admins, nobody = {ADMIN, AUDITOR}, {ADMIN}, set()
+        # Every reader links the minutes PDF, whatever the state (MR-3).
         expected = {
-            empty: {"edit": writers, "hold": admins, "delete": admins, "add": writers},
+            empty: {"edit": writers, "hold": admins, "delete": admins, "add": writers,
+                    "minutes": writers},
             draft: {"edit": writers, "hold": admins, "add": writers, "edit action": writers,
-                    "delete action": admins},
+                    "delete action": admins, "minutes": writers},
             held: {"conclusions": writers, "close": admins, "add": writers,
-                   "edit action": writers, "delete action": admins},
-            closed: {"edit action": writers},
+                   "edit action": writers, "delete action": admins, "minutes": writers},
+            closed: {"edit action": writers, "minutes": writers},
         }
         for (rid, aid), allowed in expected.items():
             page = f"/revisiones-direccion/{rid}"
@@ -439,7 +441,8 @@ class UiPermissionsTestCase(unittest.TestCase):
                         "hold": f'action="{page}/celebrar"', "close": f'action="{page}/cerrar"',
                         "delete": f'action="{page}/eliminar"', "add": f'href="{page}/acciones/nueva"',
                         "edit action": f'href="{item}/editar"',
-                        "delete action": f'action="{item}/eliminar"'}
+                        "delete action": f'action="{item}/eliminar"',
+                        "minutes": f'href="{page}/pdf"'}
             for role in RoleEnum:
                 body = self._page(role, page).get_data(as_text=True)
                 for name, marker in controls.items():
