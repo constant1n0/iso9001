@@ -370,6 +370,8 @@ class UiPermissionsTestCase(unittest.TestCase):
             with self.subTest(page="list", role=role.name):
                 self.assertEqual(role in writers, f'href="{base}/nuevo"' in html[role])
                 self.assertEqual(role in writers, f'href="{base}/{empty}/editar"' in html[role])
+                # Every role reads the yearly PDF (QO-3).
+                self.assertRegex(html[role], rf'href="{base}/pdf\?anio=\d{{4}}"')
         expected = {
             measured: {"edit": writers, "delete": nobody, "close": writers, "reopen": nobody,
                        "add": writers, "edit measurement": writers,

@@ -237,6 +237,8 @@ ENDPOINTS = [
     *_html("QUALITY_OBJECTIVES", "/objetivos-calidad/", ("nuevo", OBJECTIVE),
            ("1/editar", OBJECTIVE), "2/eliminar"),
     Endpoint("QUALITY_OBJECTIVES", "read", "GET", "/objetivos-calidad/1", 200),
+    # The yearly PDF (QO-3) is rendered for real, so the print template is exercised.
+    Endpoint("QUALITY_OBJECTIVES", "read", "GET", "/objetivos-calidad/pdf?anio=2026", 200),
     Endpoint("QUALITY_OBJECTIVES", "update", "POST", "/objetivos-calidad/1/estado/alcanzado",
              302),
     Endpoint("QUALITY_OBJECTIVES", "create", "POST", "/objetivos-calidad/1/mediciones/nueva",

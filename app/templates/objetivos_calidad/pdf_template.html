@@ -1,0 +1,89 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "_partials/pdf_base.html" %}
+{% from "_partials/pdf.html" import fields %}
+{% from "objetivos_calidad/_macros.html" import meta, valor %}
+{% set tendencias = {'sube': 'Sube', 'baja': 'Baja', 'estable': 'Estable'} %}
+{% block title %}Objetivos de calidad {{ anio }}{% endblock %}
+{% block clause %}Cláusula 6.2 · Objetivos de la calidad{% endblock %}
+{% block subtitle %}Objetivos de calidad del año {{ anio }}{% endblock %}
+{% block content %}
+{# PDF-only template (never served to a browser, so the CSP does not apply):
+   the measurements table is a multi-column table the print theme lacks. #}
+<style>
+.objetivo { margin-bottom: 8mm; }
+.objetivo h2 { margin: 0 0 3mm; font: 700 14pt/1.2 "Barlow Condensed"; }
+.objetivo h3 { margin: 0 0 1.5mm; color: #6b675f; font: 500 7.5pt "IBM Plex Mono"; letter-spacing: 0.08em; text-transform: uppercase; }
+.objetivo .texto { margin: 0 0 4mm; white-space: pre-wrap; }
+.mediciones { width: 100%; border-collapse: collapse; margin-bottom: 4mm; font-size: 8pt; line-height: 1.35; }
+.mediciones th, .mediciones td { padding: 1.8mm 2mm; border-bottom: 0.3mm solid #d9d4c8; text-align: left; vertical-align: top; }
+.mediciones thead th { border-top: 0.6mm solid #0a0a0a; color: #6b675f; font: 500 6.5pt "IBM Plex Mono"; letter-spacing: 0.06em; text-transform: uppercase; }
+.mediciones .num { text-align: right; }
+.mediciones tr { page-break-inside: avoid; }
+</style>
+<table class="fields">
+    <tr><th>Año</th><td>{{ anio }}</td></tr>
+    <tr><th>Objetivos</th><td>{{ objetivos | length }}</td></tr>
+    {% for estado, total in por_estado.items() %}
+    <tr><th>{{ estado.value }}</th><td>{{ total }}</td></tr>
+    {% endfor %}
+    <tr><th>Activos que cumplen la meta</th><td>{{ en_meta }}</td></tr>
+    <tr><th>Activos con medición vencida</th><td>{{ vencidas }}</td></tr>
+</table>
+{% if not objetivos %}<p class="muted">No hay objetivos de calidad del año {{ anio }}.</p>{% endif %}
+{% for objetivo in objetivos %}
+{% set resumen = resumenes[objetivo.id] %}
+{% set ultimo %}{{ valor(objetivo, resumen.ultimo_valor) }}{% if resumen.ultima_fecha %} · {{ resumen.ultima_fecha.strftime('%d/%m/%Y') }}{% endif %}{% endset %}
+{% set proxima %}{% if resumen.proxima_medicion %}{{ resumen.proxima_medicion.strftime('%d/%m/%Y') }}{% if resumen.medicion_vencida %} · vencida{% endif %}{% else %}—{% endif %}{% endset %}
+<section class="objetivo">
+    <h2>{{ objetivo.titulo }}</h2>
+    {{ fields([
+        ('Proceso', procesos.get(objetivo.proceso_id, '—')),
+        ('Indicador', objetivo.indicador),
+        ('Meta', meta(objetivo)),
+        ('Valor inicial', valor(objetivo, objetivo.valor_inicial)),
+        ('Responsable', personas.get(objetivo.responsable_id, '—')),
+        ('Fecha límite', objetivo.fecha_limite.strftime('%d/%m/%Y')),
+        ('Frecuencia de medición', objetivo.frecuencia.value),
+        ('Estado', objetivo.estado.value),
+        ('Último valor', ultimo),
+        ('Meta cumplida', 'Sin medir' if resumen.cumple is none else 'Cumple' if resumen.cumple else 'No cumple'),
+        ('Tendencia', tendencias.get(resumen.tendencia, '—')),
+        ('Próxima medición', proxima),
+    ]) }}
+    {% for titulo, texto in [('Recursos necesarios', objetivo.recursos), ('Cómo se evalúan los resultados', objetivo.evaluacion)] %}
+    <h3>{{ titulo }}</h3>
+    {% if texto %}<p class="texto">{{ texto }}</p>{% else %}<p class="texto muted">Sin indicar.</p>{% endif %}
+    {% endfor %}
+    <h3>Mediciones</h3>
+    {% if mediciones[objetivo.id] %}
+    <table class="mediciones">
+        <thead>
+            <tr><th>Fecha</th><th class="num">Valor</th><th>Meta cumplida</th><th>Comentario</th></tr>
+        </thead>
+        <tbody>
+            {% for medicion in mediciones[objetivo.id] %}
+            <tr><td>{{ medicion.fecha.strftime('%d/%m/%Y') }}</td><td class="num">{{ valor(objetivo, medicion.valor) }}</td><td>{{ 'Cumple' if cumple[medicion.id] else 'No cumple' }}</td><td>{{ medicion.comentario or '—' }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="texto muted">Sin mediciones.</p>
+    {% endif %}
+</section>
+{% endfor %}
+{% endblock %}

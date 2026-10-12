@@ -21,6 +21,7 @@
 {% block crumb %}Calidad · Objetivos de calidad{% endblock %}
 {% block content %}
 {% call page_header('Cláusula 6.2 · Objetivos de la calidad', 'Objetivos de calidad') %}
+    <a class="btn" href="{{ url_for('objetivo_calidad.export_pdf', anio=anio_pdf) }}" target="_blank" rel="noopener">PDF {{ anio_pdf }}</a>
     {% if can('create', 'quality_objectives') %}
     <a class="btn btn--primary" href="{{ url_for('objetivo_calidad.new_objective') }}">+ Nuevo objetivo</a>
     {% endif %}

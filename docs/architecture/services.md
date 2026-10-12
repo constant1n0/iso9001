@@ -56,6 +56,7 @@ bounded: the page is clamped to `1..crud.MAX_PAGE` and the size to
 | `audits.py`, `documents.py` | Audits, documents (bespoke) |
 | `audit_programmes.py`, `audit_findings.py` | Yearly audit programmes and their approval; audit findings and their nonconformities (see below) |
 | `document_revisions.py`, `document_files.py` | Document revisions and their workflow; attachment storage (see below) |
+| `quality_objectives.py` | Quality objectives and their measurements, target checks and overdue measurements (see below) |
 | `crud.py` | Generic helper driven by a `Spec` (model, resource, fields, ordering) |
 | `training.py`, `satisfaction.py`, `stakeholders.py`, `improvements.py` | Plain HTML registers on `crud` |
 | `roles_responsibilities.py`, `risks_opportunities.py`, `training_resources.py`, `process_operations.py`, `audit_indicators.py` | JSON registers on `crud` |
@@ -83,6 +84,7 @@ checked first (`mcp` never deletes), then the role.
 | Audits, audit programmes, audit findings | ADMIN, AUDITOR | ADMIN, AUDITOR (approve a programme: ADMIN) | ADMIN |
 | Documents | all roles (drafts: ADMIN, AUDITOR) | ADMIN, AUDITOR (approve and withdraw: ADMIN) | nobody (withdrawn instead) |
 | Roles, risks and opportunities, training resources, process operations, audit indicators | all roles | ADMIN, AUDITOR | ADMIN |
+| Quality objectives and their measurements | all roles | ADMIN, AUDITOR | ADMIN |
 | Users; audit log (policy only, no routes yet) | ADMIN, AUDITOR | ADMIN | nobody |
 | API tokens (list, issue, revoke) | ADMIN | ADMIN | nobody |
 
@@ -181,6 +183,55 @@ audits and findings share the `AUDITS` resource.
   foreign key to `auditorias`; otherwise it is `DELETE_CONFLICT`.
 - The MCP adapter exposes the three modules without `approve` and without
   deletes. The web adapter adds the audit and programme PDFs.
+
+## Quality objectives
+
+Decisions QO1-QO4 of `quality-objectives` (ISO 9001:2026 clause 6.2).
+`quality_objectives` offers two registers on `crud`, `objectives` and
+`measurements`, which share the `QUALITY_OBJECTIVES` resource.
+
+- **Measurements only while active**: `measurements.create`, `update` and
+  `delete` read the objective with a shared lock (`FOR SHARE`) and refuse
+  unless it is `activo` (`OBJECTIVE_NOT_ACTIVE`).
+  - An update that changes nothing writes nothing, even on a closed
+    objective: there is nothing to refuse.
+  - A measurement never moves to another objective (`OBJECTIVE_FIXED`).
+  - There is one measurement per objective and date (`DUPLICATE_DATE`).
+  - Its date lies in the objective's period and never after `today`, a
+    `date` from the adapter (`local_today()`); a `datetime` is a
+    `ValueError`.
+- **Locked target**: once an objective has measurements, `objectives.update`
+  refuses a change of `meta` or `sentido` (`TARGET_FIXED`) and `delete`
+  refuses the objective (`HAS_MEASUREMENTS`).
+  - The update locks the objective's row (`FOR UPDATE`). The deadline is
+    never before the start, and the period always keeps the measurements
+    inside it.
+  - When the database refuses the delete instead, the message names
+    measurements only if the violated constraint is `MEASUREMENTS_FK`;
+    otherwise it is `DELETE_CONFLICT`.
+- **Finite numbers**: `meta`, `valor_inicial` and `valor` (`number`) take
+  numbers or decimal text and round them half up to four decimals
+  (`Numeric(12, 4)`).
+  - Booleans, values of more than eight integer digits and non-finite values
+    (`NaN`, `Infinity`; `NOT_FINITE`) are refused.
+  - A measurement write refuses unknown keys before anything is looked up.
+- **Overdue rule** (`summary(objective, measurements, *, today)`, pure):
+  - the latest value and date, whether it meets the target (`meets`: at or
+    above for `mayor_igual`, at or below for `menor_igual`) and the trend
+    from the measurement before;
+  - `proxima_medicion`: one frequency period after the latest measurement,
+    or after `fecha_inicio` without one, capped at `fecha_limite`; `None`
+    when the objective is not `activo` or was measured on its deadline;
+  - `medicion_vencida`: `today` is after `proxima_medicion`.
+- `measurements.by_objective` reads the measurements of several objectives
+  in one query. `off_track(session, actor, *, today)` lists the active
+  objectives that miss their target or have an overdue measurement, soonest
+  deadline first, for the dashboard card.
+- Adapters: the web screens, the dashboard card and the yearly PDF
+  (`/objetivos-calidad/pdf`); the MCP modules `objetivos_calidad` and
+  `mediciones_objetivo` (no deletes); and the monthly report, which judges the
+  active objectives with `summary` on the month's last day, or on today when
+  earlier.
 
 ## Document control
 

@@ -14,7 +14,7 @@ can never delete.
 
   | Tool | Purpose |
   |---|---|
-  | `qms_modules` | The 18 modules with fields, allowed values, filters and what the caller may do |
+  | `qms_modules` | The 20 modules with fields, allowed values, filters and what the caller may do |
   | `qms_list` | One bounded page of a module, with the filters `qms_modules` lists |
   | `qms_get` | One record by `id` |
   | `qms_create` | Create a record |
@@ -35,12 +35,13 @@ can never delete.
 
 ## Modules
 
-`qms_modules` lists 18 modules: `no_conformidades`, `auditorias`,
+`qms_modules` lists 20 modules: `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `riesgos_oportunidades`, `recursos_capacitacion`,
 `procesos`, `indicadores_auditoria`, `personas`, `competencias_requeridas`,
-`competencias_acreditadas` and `acciones_correctivas`. Each field has a
+`competencias_acreditadas`, `acciones_correctivas`, `objetivos_calidad` and
+`mediciones_objetivo`. Each field has a
 `type`, a `required` flag, `allowed` values for enums and, where the flags do
 not say enough, a short `note`.
 
@@ -145,6 +146,45 @@ People and competence (ISO 9001 clauses 5.3 and 7.2):
 
 The required-versus-demonstrated matrix is a web page
 (`/competencias/matriz`); agents read the same data from these modules.
+
+Quality objectives (ISO 9001:2026 clause 6.2). Both modules share one grant:
+every role reads, and only ADMIN or AUDITOR tokens (with the `write` scope)
+create and update. No token deletes.
+
+- Numbers (`meta`, `valor_inicial`, `valor` and `ultimo_valor`) come back as
+  decimal strings with four decimals, such as `"95.0000"`. They are written as
+  finite numbers or decimal text, rounded to four decimals.
+- Enums come back as their Spanish label (`sentido` shows `"≥"` or `"≤"`); writes
+  and filters take the member name.
+- `objetivos_calidad`: `titulo`, `indicador`, `meta`, `sentido` (`mayor_igual`
+  or `menor_igual`), `responsable_id` (a person), `fecha_inicio`,
+  `fecha_limite` and `frecuencia` (`mensual`, `trimestral`, `semestral`,
+  `anual`) are required.
+  - Optional: `descripcion`, `proceso_id` (a `procesos` record), `unidad`,
+    `valor_inicial`, `anio` (2000-2100, by default the year of
+    `fecha_inicio`), `recursos` and `evaluacion`.
+  - `estado` starts `activo`; `alcanzado`, `no_alcanzado` and `cancelado`
+    close the objective, and `activo` reopens it.
+  - `fecha_limite` is never before `fecha_inicio`, and the period always keeps
+    the objective's measurements inside it. `meta` and `sentido` cannot change
+    once the objective has measurements.
+  - Records add the summary: `ultimo_valor` and `ultima_fecha` (the latest
+    measurement), `cumple` (whether it meets the target), `tendencia`
+    (`sube`, `baja` or `estable` from the measurement before), `proxima_medicion`
+    and `medicion_vencida`. The next measurement is due one frequency period
+    after the latest one, or after `fecha_inicio` without one, and never after
+    `fecha_limite`; it is `null` when the objective is not `activo` or was
+    measured on its deadline.
+  - Filters: `anio`, `estado`, `responsable_id` and `proceso_id`.
+- `mediciones_objetivo`: `objetivo_id`, `fecha` and `valor` are required;
+  `comentario` and `registrado_por_id` (a person) are optional.
+  - The objective must be `activo`, and a measurement never moves to another
+    objective.
+  - `fecha` lies in the objective's period and is never after the server's
+    local date (`APP_TIMEZONE`); there is one measurement per objective and
+    date.
+  - Records add `cumple`. Filter: `objetivo_id`.
+- Web-only: every delete and the yearly objectives PDF.
 
 ## Issue a token
 
