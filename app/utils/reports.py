@@ -80,7 +80,7 @@ def _objective_figures(cutoff: date) -> dict[str, Any]:
     if measured:
         for measurement in db.session.scalars(select(MedicionObjetivo).where(
                 MedicionObjetivo.objetivo_id.in_(list(measured)),
-                MedicionObjetivo.fecha <= cutoff)):
+                MedicionObjetivo.fecha <= cutoff).order_by(MedicionObjetivo.fecha)):
             measured[measurement.objetivo_id].append(measurement)
     summaries = [quality_objectives.summary(objective, measured[objective.id], today=cutoff)
                  for objective in active]

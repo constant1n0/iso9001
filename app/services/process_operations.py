@@ -79,7 +79,8 @@ def delete(session: Session, actor: Actor, record_id: int) -> None:
     try:
         crud.delete(SPEC, session, actor, found.id_proceso)
     except Conflict as exc:
-        if _violated_constraint(exc.__cause__) == OBJECTIVES_FK:
+        violated = _violated_constraint(exc.__cause__)
+        if violated is not None and violated == OBJECTIVES_FK:
             raise Conflict(CITED_BY_OBJECTIVES) from exc.__cause__
         raise
 

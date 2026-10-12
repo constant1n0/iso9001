@@ -202,6 +202,15 @@ class MonthlyReportObjectivesTestCase(unittest.TestCase):
         self.assertIn("Situación de los objetivos activos a 30/09/2026.", html)
         self.assertIn("hallazgos por la fecha de su auditoría", html)  # the scope still says so
 
+    def test_the_latest_measurement_is_the_latest_by_date_whatever_the_stored_order(self) -> None:
+        # Stored newest first: judged on the 99 of 20/09, not on the 80 of 20/08.
+        self.objective({date(2026, 9, 20): 99, date(2026, 8, 20): 80})
+        db.session.commit()
+
+        ctx = reports._monthly_report_context(SEPT, today=date(2026, 10, 12))
+
+        self.assertEqual((1, 1, 1, 0), self.figures(ctx))
+
     def test_a_month_not_yet_over_is_judged_on_today(self) -> None:
         self.objective({date(2026, 9, 15): 96})  # next on 15/10
         self.objective({date(2026, 8, 25): 96})  # next on 25/09: overdue on 30/09 only
