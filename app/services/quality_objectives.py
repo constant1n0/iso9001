@@ -26,8 +26,8 @@ administrators and auditors create and update, administrators delete, and the
 Objectives:
 
 - ``sentido``, ``frecuencia`` and ``estado`` are given as member names;
-  ``meta`` and ``valor_inicial`` as numbers or decimal text, rounded to four
-  decimals (``number``). ``estado`` starts ``activo``.
+  ``meta`` and ``valor_inicial`` as finite numbers or decimal text, rounded to
+  four decimals (``number``). ``estado`` starts ``activo``.
 - ``anio`` defaults to the year of ``fecha_inicio``. ``fecha_limite`` is never
   before ``fecha_inicio``, and the period always keeps the objective's
   measurements inside it.
@@ -37,11 +37,13 @@ Objectives:
   such an objective cannot be deleted (``Conflict``; the foreign key is
   ``ON DELETE RESTRICT``).
 
-Measurements, one per objective and date, are added or edited only while their
-objective is ``activo``, never move to another objective, and are dated inside
-the objective's period and never after ``today``, the adapter's local date
-(services never read the clock). An edit that changes nothing writes nothing,
-even when the objective is closed: there is nothing to refuse.
+Measurements, one per objective and date, are added, edited or deleted only
+while their objective is ``activo``, never move to another objective, and are
+dated inside the objective's period and never after ``today``, the adapter's
+local date (services never read the clock). An edit that changes nothing writes
+nothing, even when the objective is closed: there is nothing to refuse. An
+unknown key is refused before anything is looked up. ``measurements.by_objective``
+reads the measurements of several objectives in one query.
 
 ``meets``, ``summary`` and ``off_track`` say whether a target is met, the trend
 and whether a measurement is overdue (decision QO3; see ``summary``).
@@ -53,7 +55,6 @@ next to each change, and an update that changes nothing writes nothing.
 from __future__ import annotations
 
 import calendar
-from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -109,13 +110,15 @@ OUTSIDE_PERIOD = (
 )
 IN_THE_FUTURE = "La fecha de la medición no puede ser futura."
 DUPLICATE_DATE = "El objetivo ya tiene una medición en esa fecha."
+NOT_FINITE = "El campo «{key}» debe ser un número finito."
 
 
 def number(data: Mapping[str, Any], key: str, *, required: bool = False) -> Decimal | None:
     """A number or decimal text, rounded half up to four decimals (``Numeric(12, 4)``).
 
     A blank optional one (``None`` or blank text) is ``None``. Booleans,
-    non-finite values and values of eight or more integer digits are refused.
+    non-finite values (``NOT_FINITE``: ``nan``, ``inf``, ``sNaN``...) and values
+    of eight or more integer digits are refused.
     """
     value = data[key]
     if value is None or (isinstance(value, str) and not value.strip()):
@@ -128,7 +131,9 @@ def number(data: Mapping[str, Any], key: str, *, required: bool = False) -> Deci
         parsed = Decimal(str(value).strip())
     except InvalidOperation:
         raise ValidationError(f"El campo «{key}» debe ser un número.") from None
-    if parsed.is_finite() and abs(parsed) < NUMBER_LIMIT:
+    if not parsed.is_finite():
+        raise ValidationError(NOT_FINITE.format(key=key))
+    if abs(parsed) < NUMBER_LIMIT:
         rounded = parsed.quantize(FOUR_PLACES, rounding=ROUND_HALF_UP)
         if abs(rounded) < NUMBER_LIMIT:
             return rounded
@@ -310,6 +315,7 @@ def _create_measurement(session: Session, actor: Actor, data: Mapping[str, Any],
     """Record a measurement of an active objective; ``today`` is the adapter's date."""
     policy.require(actor, Action.CREATE, Resource.QUALITY_OBJECTIVES)
     today = _today(today)
+    _reject_unknown(MEASUREMENT_SPEC, data)
     if _well_formed(MEASUREMENT_SPEC, data) and {"objetivo_id", "fecha"} <= set(data):
         objective = _active_objective(
             session, _MEASUREMENT_FIELDS["objetivo_id"].clean(data, "objetivo_id"))
@@ -322,6 +328,7 @@ def _update_measurement(session: Session, actor: Actor, measurement_id: int,
     """Apply the given fields while the objective is active; the objective never changes."""
     policy.require(actor, Action.UPDATE, Resource.QUALITY_OBJECTIVES)
     today = _today(today)
+    _reject_unknown(MEASUREMENT_SPEC, data)
     found = None
     if people.is_db_id(measurement_id):
         found = session.get(MedicionObjetivo, measurement_id)
@@ -339,12 +346,23 @@ def _update_measurement(session: Session, actor: Actor, measurement_id: int,
 
 
 def _unchanged(found: MedicionObjetivo, data: Mapping[str, Any]) -> bool:
-    """Whether ``data`` leaves the measurement as it is; invalid data counts as a change."""
+    """Whether ``data`` leaves the measurement as it is; invalid data counts as a change.
+
+    Every key of ``data`` is writable: the callers refuse unknown keys first.
+    """
     try:
         return all(_MEASUREMENT_FIELDS[key].clean(data, key) == getattr(found, key)
                    for key in data)
     except ValidationError:
         return False
+
+
+def _delete_measurement(session: Session, actor: Actor, measurement_id: int) -> None:
+    """Hard-delete a measurement while its objective is active, keeping an audit snapshot."""
+    policy.require(actor, Action.DELETE, Resource.QUALITY_OBJECTIVES)
+    found = crud.get(MEASUREMENT_SPEC, session, actor, measurement_id)
+    _active_objective(session, found.objetivo_id)
+    crud.delete(MEASUREMENT_SPEC, session, actor, found.id)
 
 
 def _active_objective(session: Session, objective_id: int) -> ObjetivoCalidad:
@@ -405,6 +423,21 @@ class Register:
                               page=page, per_page=per_page)
 
 
+@dataclass(frozen=True)
+class MeasurementRegister(Register):
+    """The measurements' register, which also reads them grouped by objective."""
+
+    def by_objective(self, session: Session, actor: Actor,
+                     objective_ids: Iterable[int]) -> dict[int, list[MedicionObjetivo]]:
+        """The measurements of each of ``objective_ids`` in date order, in one query.
+
+        Every id given is a key, with an empty list when nothing is measured.
+        Read grant of ``QUALITY_OBJECTIVES``.
+        """
+        policy.require(actor, Action.READ, self.SPEC.resource)
+        return _by_objective(session, objective_ids)
+
+
 objectives = Register(
     SPEC=OBJECTIVE_SPEC,
     conditions=_objective_conditions,
@@ -413,12 +446,12 @@ objectives = Register(
     delete=_delete_objective,
 )
 
-measurements = Register(
+measurements = MeasurementRegister(
     SPEC=MEASUREMENT_SPEC,
     conditions=_measurement_conditions,
     create=_create_measurement,
     update=_update_measurement,
-    delete=partial(crud.delete, MEASUREMENT_SPEC),
+    delete=_delete_measurement,
 )
 
 
@@ -495,11 +528,7 @@ def off_track(session: Session, actor: Actor, *,
     active = list(session.scalars(
         select(ObjetivoCalidad).where(ObjetivoCalidad.estado == EstadoObjetivo.activo)
         .order_by(ObjetivoCalidad.fecha_limite, ObjetivoCalidad.id)))
-    by_objective: dict[int, list[MedicionObjetivo]] = defaultdict(list)
-    if active:
-        for measurement in session.scalars(select(MedicionObjetivo).where(
-                MedicionObjetivo.objetivo_id.in_([objective.id for objective in active]))):
-            by_objective[measurement.objetivo_id].append(measurement)
+    by_objective = _by_objective(session, [objective.id for objective in active])
     flagged = []
     for objective in active:
         state = summary(objective, by_objective[objective.id], today=today)
@@ -516,6 +545,19 @@ def _add_months(base: date, months: int) -> date:
     index = base.month - 1 + months
     year, month = base.year + index // 12, index % 12 + 1
     return date(year, month, min(base.day, calendar.monthrange(year, month)[1]))
+
+
+def _by_objective(session: Session,
+                  objective_ids: Iterable[int]) -> dict[int, list[MedicionObjetivo]]:
+    """The measurements of each objective in date order, from one query (none without ids)."""
+    found: dict[int, list[MedicionObjetivo]] = {key: [] for key in objective_ids}
+    ids = [key for key in found if people.is_db_id(key)]
+    if ids:
+        for measurement in session.scalars(
+                select(MedicionObjetivo).where(MedicionObjetivo.objetivo_id.in_(ids))
+                .order_by(*MEASUREMENT_SPEC.order_by)):
+            found[measurement.objetivo_id].append(measurement)
+    return found
 
 
 def _has_measurements(session: Session, objective_id: int) -> bool:
@@ -544,6 +586,12 @@ def _lock_objective(session: Session, objective_id: Any) -> ObjetivoCalidad:
 def _well_formed(spec: crud.Spec, data: Any) -> bool:
     """Whether ``data`` is a mapping of writable keys (otherwise ``crud`` refuses it)."""
     return isinstance(data, Mapping) and set(data) <= spec.writable
+
+
+def _reject_unknown(spec: crud.Spec, data: Any) -> None:
+    """Refuse a key outside ``spec`` before any lookup (``crud`` refuses non-mappings)."""
+    if isinstance(data, Mapping):
+        fields.reject_unknown(data, spec.writable)
 
 
 def _today(today: Any) -> date:

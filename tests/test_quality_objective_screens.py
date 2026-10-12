@@ -21,9 +21,12 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import patch
 
+from sqlalchemy import event
+
 from test_audit_screens import ADMIN, AUDITOR, OPERATIVO, SYSTEM, ScreensBase
 from test_delete_forms import _PostForms
 
+from app import forms
 from app.extensions import db
 from app.models import EstadoObjetivo, MedicionObjetivo, ObjetivoCalidad, RoleEnum
 from app.services import process_operations, quality_objectives
@@ -300,6 +303,55 @@ class WebFlowTestCase(ObjectiveScreensBase):
         self.assertIn(f'<option selected value="{process_id}">Ventas</option>', html)
 
 
+    def test_a_state_change_takes_only_a_state_name(self) -> None:
+        oid = self.objective()
+        self.login(ADMIN)
+        rows = self.audit_rows()
+        for estado in ("desconocido", "Alcanzado", "ALCANZADO", "alcanzado "):
+            with self.subTest(estado=estado):
+                response = self.client.post(f"{BASE}/{oid}/estado/{estado}")
+                self.assertEqual(404, response.status_code)
+        self.assertEqual(EstadoObjetivo.activo, self.load(ObjetivoCalidad, oid).estado)
+        self.assertEqual(rows, self.audit_rows())
+        self.assertEqual([], self.flashes())
+
+    def test_the_list_queries_do_not_grow_with_the_objectives(self) -> None:
+        first = self.objective()
+        self.measure(first, date(2026, 9, 30), 1)
+        self.login(OPERATIVO)
+        for query in ("", "?estado=activo"):
+            with self.subTest(query=query):
+                self.html(f"{BASE}/{query}")  # warm-up: the first request loads more
+                self.assertEqual(self.statements(f"{BASE}/{query}"),
+                                 self.statements(f"{BASE}/{query}"))
+        small = {query: self.statements(f"{BASE}/{query}") for query in ("", "?estado=activo")}
+        for n in range(3):
+            oid = self.objective(titulo=f"Objetivo {n}", responsable_id=self.luis)
+            self.measure(oid, date(2026, 8, 31), n)
+            self.measure(oid, date(2026, 9, 30), n + 1)
+        for query, expected in small.items():
+            with self.subTest(query=query):
+                html = self.html(f"{BASE}/{query}")
+                self.assertIn("Objetivo 2", html)
+                self.assertEqual(expected, self.statements(f"{BASE}/{query}"))
+
+    def statements(self, url: str) -> int:
+        """How many SQL statements rendering ``url`` runs."""
+        executed: list[str] = []
+
+        def count(conn, cursor, statement, *args) -> None:
+            executed.append(statement)
+
+        with self.app.app_context():
+            engine = db.engine
+        event.listen(engine, "before_cursor_execute", count)
+        try:
+            self.html(url)
+        finally:
+            event.remove(engine, "before_cursor_execute", count)
+        return len(executed)
+
+
 class RolesTestCase(ObjectiveScreensBase):
     def test_every_role_reads_writers_write_and_administrators_delete(self) -> None:
         oid = self.objective()
@@ -382,6 +434,29 @@ class InputKeptTestCase(ObjectiveScreensBase):
                 else:
                     self.assertIn("field--invalid", html)
         self.assertEqual([Decimal("1")], self.measurement_values(oid))
+
+    def test_non_finite_numbers_are_field_errors(self) -> None:
+        oid = self.objective()
+        self.login(AUDITOR)
+        measurement = {"fecha": "2026-10-01", "comentario": "Tres quejas",
+                       "registrado_por_id": str(self.luis)}
+        objective = FORM | {"responsable_id": str(self.eva)}
+        for value in ("nan", "NaN", "inf", "-Infinity", "sNaN"):
+            for url, data in (
+                (f"{BASE}/nuevo", objective | {"meta": value}),
+                (f"{BASE}/nuevo", objective | {"valor_inicial": value}),
+                (f"{BASE}/{oid}/editar", objective | {"meta": value}),
+                (f"{BASE}/{oid}/mediciones/nueva", measurement | {"valor": value}),
+            ):
+                with self.subTest(value=value, url=url, data=data):
+                    html = self.rerendered(url, data)
+                    self.assertIn("field--invalid", html)
+                    self.assertIn(forms.NOT_FINITE, html)
+                    self.assertIn(f'value="{value}"', html)
+                    self.assertNotIn("flash--danger", html)
+        self.assertEqual(1, self.count(ObjetivoCalidad))
+        self.assertEqual(Decimal("2"), self.load(ObjetivoCalidad, oid).meta)
+        self.assertEqual([], self.measurement_values(oid))
 
 
 class CsrfTestCase(ObjectiveScreensBase):

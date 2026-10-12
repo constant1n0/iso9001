@@ -18,7 +18,8 @@
 ``proceso`` is unique: a duplicate raises ``Conflict``. A process that quality
 objectives cite cannot be deleted (``Conflict`` with ``CITED_BY_OBJECTIVES``):
 ``delete`` checks it, and the ``ON DELETE RESTRICT`` foreign key, which SQLite
-only enforces on request, refuses a citation added after the check.
+only enforces on request, refuses a citation added after the check. Any other
+conflict keeps its own message.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from __future__ import annotations
 from functools import partial
 
 from sqlalchemy import exists, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import ObjetivoCalidad, ProcesoOperacion
@@ -65,8 +67,10 @@ def delete(session: Session, actor: Actor, record_id: int) -> None:
     """Hard-delete a process that no quality objective cites, keeping an audit snapshot.
 
     A cited process raises ``Conflict`` (``CITED_BY_OBJECTIVES``); so does one
-    cited after the check, when the foreign key refuses the flush (objectives
-    are the only records citing processes).
+    cited after the check, when the flush breaks the objectives' foreign key
+    and the database names it (PostgreSQL). A failed flush leaves the session
+    unusable until rolled back, so the citation cannot be checked again: any
+    other ``Conflict``, or one SQLite does not name, is raised as it came.
     """
     policy.require(actor, Action.DELETE, SPEC.resource)
     found = crud.get(SPEC, session, actor, record_id)
@@ -75,9 +79,28 @@ def delete(session: Session, actor: Actor, record_id: int) -> None:
     try:
         crud.delete(SPEC, session, actor, found.id_proceso)
     except Conflict as exc:
-        raise Conflict(CITED_BY_OBJECTIVES) from exc.__cause__
+        if _violated_constraint(exc.__cause__) == OBJECTIVES_FK:
+            raise Conflict(CITED_BY_OBJECTIVES) from exc.__cause__
+        raise
 
 
 def _cited_by_objectives(session: Session, process_id: int) -> bool:
     return bool(session.scalar(
         select(exists().where(ObjetivoCalidad.proceso_id == process_id))))
+
+
+def _objectives_foreign_key() -> str:
+    """Name of the objectives' foreign key to processes, as the model declares it."""
+    (name,) = {fk.constraint.name for fk in ObjetivoCalidad.__table__.foreign_keys
+               if fk.column.table is ProcesoOperacion.__table__}
+    return name
+
+
+OBJECTIVES_FK = _objectives_foreign_key()
+
+
+def _violated_constraint(exc: BaseException | None) -> str | None:
+    """The constraint the database names in ``exc`` (psycopg2 ``diag``), if any."""
+    if not isinstance(exc, IntegrityError):
+        return None
+    return getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
