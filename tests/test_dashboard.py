@@ -33,7 +33,8 @@ class ActionRegisterTestCase(ReviewScreensBase):
                  f"?responsable_id={self.luis}": {going}, "?tipo=recursos": {done},
                  "?vencida=1": {late}, "?vencida=0": {going, done, cancelled},
                  "?estado=pendiente&vencida=1": {late},
-                 "?estado=nada&tipo=nada&vencida=quizas": {late, going, done, cancelled}}
+                 "?estado=nada&tipo=nada&vencida=quizas": {late, going, done, cancelled},
+                 "?responsable_id=99999": {late, going, done, cancelled}}
         for query, expected in cases.items():
             with self.subTest(query=query):
                 self.assertEqual(expected, self.listed(f"{url}{query}", "accion"))

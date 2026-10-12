@@ -480,15 +480,16 @@ def list_actions() -> ResponseReturnValue:
     """Every review's actions matching the state, owner, type and overdue filters."""
     actor = current_actor()
     today = local_today()
+    every = mr.actions.list_(db.session, actor)
+    owners = people.names(db.session, actor, (a.responsable_id for a in every))
     estado, tipo = request.args.get('estado', ''), request.args.get('tipo', '')
+    owner = request.args.get('responsable_id', type=int)
     filters = {'estado': estado if estado in ACTION_STATES else None,
-               'responsable_id': request.args.get('responsable_id', type=int),
+               'responsable_id': owner if owner in owners else None,
                'tipo': tipo if tipo in ACTION_TYPES else None,
                'vencida': OVERDUE_FLAGS.get(request.args.get('vencida', ''))}
     applied = sum(value is not None for value in filters.values())
-    every = mr.actions.list_(db.session, actor)
     found = mr.actions.list_(db.session, actor, today=today, **filters) if applied else every
-    owners = people.names(db.session, actor, (a.responsable_id for a in every))
     return render_template(
         'revisiones_direccion/actions.html',
         acciones=found,
