@@ -1,0 +1,154 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, action_form, delete_form, empty_state %}
+{% from "revisiones_direccion/_macros.html" import estado_revision, estado_accion, vencida_badge, dia %}
+{% set estado = revision.estado.name %}
+{% block title %}Revisión por la dirección del {{ dia(revision.fecha) }}{% endblock %}
+{% block crumb %}Calidad · Revisión por la dirección{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 9.3 · Revisión por la dirección', 'Revisión del ' ~ dia(revision.fecha)) %}
+    {% if can('update', 'management_review') %}
+    {% if estado == 'borrador' %}
+    <a class="btn" href="{{ url_for('revision_direccion.edit_review', review_id=revision.id) }}">Editar</a>
+    {% elif estado == 'celebrada' %}
+    <a class="btn" href="{{ url_for('revision_direccion.edit_conclusions', review_id=revision.id) }}">Comentarios y conclusiones</a>
+    {% endif %}
+    {% endif %}
+    {% if puede_decidir and estado == 'borrador' %}
+    {{ action_form(url_for('revision_direccion.hold_review', review_id=revision.id), 'Celebrar revisión', '¿Celebrar la revisión? Sus datos de entrada quedarán congelados.', 'primary') }}
+    {% elif puede_decidir and estado == 'celebrada' %}
+    {{ action_form(url_for('revision_direccion.close_review', review_id=revision.id), 'Cerrar revisión', '¿Cerrar la revisión? Después solo se podrá hacer el seguimiento de sus acciones.', 'primary') }}
+    {% endif %}
+    {% if estado == 'borrador' and not acciones and can('delete', 'management_review') %}
+    {{ delete_form(url_for('revision_direccion.delete_review', review_id=revision.id), '¿Eliminar la revisión del ' ~ dia(revision.fecha) ~ '?') }}
+    {% endif %}
+{% endcall %}
+
+<section class="grid grid--2" aria-label="Reunión y conclusiones">
+    <article class="card">
+        <header class="card__header"><h2 class="card__title">Reunión</h2>{{ estado_revision(revision) }}</header>
+        <ul class="list">
+            <li class="list__item"><span class="list__primary">Fecha de la reunión</span><span class="list__secondary">{{ dia(revision.fecha) }}</span></li>
+            <li class="list__item"><span class="list__primary">Periodo revisado</span><span class="list__secondary">{{ dia(revision.periodo_desde) }} – {{ dia(revision.periodo_hasta) }}</span></li>
+            <li class="list__item"><span class="list__primary">Asistentes</span><span class="list__secondary">{{ revision.asistentes | map(attribute='nombre') | join(', ') or '—' }}</span></li>
+            <li class="list__item"><span class="list__primary">Celebrada por</span><span class="list__secondary">{{ personas.get(revision.celebrada_por_id, '—') }}</span></li>
+            <li class="list__item"><span class="list__primary">Fecha de cierre</span><span class="list__secondary">{{ dia(revision.fecha_cierre) }}</span></li>
+        </ul>
+    </article>
+    <article class="card">
+        <header class="card__header"><h2 class="card__title">Conclusiones</h2><span class="card__meta">Conveniencia, adecuación y eficacia del SGC</span></header>
+        {% if revision.conclusiones %}<div class="card__body"><p class="card__text">{{ revision.conclusiones }}</p></div>{% else %}<p class="empty">Sin conclusiones todavía.</p>{% endif %}
+    </article>
+</section>
+
+<section id="entradas" aria-labelledby="entradas-titulo">
+    <div class="section-header">
+        <h2 id="entradas-titulo">Entradas (9.3.2)</h2>
+        <span class="card__meta">Fecha de corte {{ corte }}</span>
+    </div>
+    {% if estado == 'borrador' %}
+    <p class="text-canary">Datos provisionales: se congelarán al celebrar la revisión.</p>
+    {% else %}
+    <p class="muted">Datos congelados al celebrar la revisión: no cambian aunque cambien los registros.</p>
+    {% endif %}
+    {% for seccion in secciones %}
+    <article class="card">
+        <header class="card__header"><h3 class="card__title">{{ seccion.titulo }}</h3></header>
+        {% for bloque in seccion.bloques %}
+        <div class="card__body"><strong>{{ bloque.titulo }}</strong></div>
+        <ul class="list">
+            {% for etiqueta, valor in bloque.cifras %}
+            <li class="list__item"><span class="list__primary">{{ etiqueta }}</span><span class="list__secondary">{{ valor }}</span></li>
+            {% endfor %}
+        </ul>
+        {% if bloque.filas %}
+        <div class="table-wrap">
+            <table>
+                <thead><tr>{% for columna in bloque.columnas %}<th scope="col">{{ columna }}</th>{% endfor %}</tr></thead>
+                <tbody>
+                    {% for fila in bloque.filas %}
+                    <tr>{% for celda in fila %}<td>{{ celda if celda is not none else '—' }}</td>{% endfor %}</tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="empty">Sin datos de los registros: se valora en el comentario.</p>
+        {% endfor %}
+        <div class="card__body">
+            <strong>Comentario</strong>
+            <p class="card__text">{{ revision[seccion.comentario] or 'Sin comentario.' }}</p>
+        </div>
+    </article>
+    {% endfor %}
+</section>
+
+<section aria-labelledby="acciones">
+    <div class="section-header">
+        <h2 id="acciones">Salidas: acciones (9.3.3)</h2>
+        {% if estado != 'cerrada' and can('create', 'management_review') %}
+        <a class="btn btn--primary btn--sm" href="{{ url_for('revision_direccion.new_action', review_id=revision.id) }}">+ Nueva acción</a>
+        {% endif %}
+    </div>
+    {% if estado == 'cerrada' %}<p class="muted">La revisión está cerrada: de sus acciones solo se registra el seguimiento.</p>{% endif %}
+    {% if acciones %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Tipo</th>
+                    <th scope="col">Descripción</th>
+                    <th scope="col">Responsable</th>
+                    <th scope="col">Fecha límite</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col">Finalizada</th>
+                    <th scope="col">Resultado</th>
+                    <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for accion in acciones %}
+                <tr id="accion-{{ accion.id }}">
+                    <td>{{ accion.tipo.value }}</td>
+                    <td>{{ accion.descripcion }}</td>
+                    <td>{{ personas.get(accion.responsable_id, '—') }}</td>
+                    <td class="date">{{ dia(accion.fecha_limite) }} {{ vencida_badge(accion.id in vencidas) }}</td>
+                    <td>{{ estado_accion(accion) }}</td>
+                    <td class="date">{{ dia(accion.fecha_completada) }}</td>
+                    <td>{{ accion.resultado or '—' }}</td>
+                    <td>
+                        <div class="table__actions">
+                            {% if can('update', 'management_review') %}
+                            <a class="btn btn--sm" href="{{ url_for('revision_direccion.edit_action', review_id=revision.id, action_id=accion.id) }}">{{ 'Seguimiento' if estado == 'cerrada' else 'Editar' }}</a>
+                            {% endif %}
+                            {% if estado != 'cerrada' and can('delete', 'management_review') %}
+                            {{ delete_form(url_for('revision_direccion.delete_action', review_id=revision.id, action_id=accion.id), '¿Eliminar la acción?') }}
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        {{ empty_state('Sin acciones todavía.') }}
+    {% endif %}
+</section>
+{% endblock %}

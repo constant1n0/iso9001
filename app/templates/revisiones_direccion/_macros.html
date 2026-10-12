@@ -1,0 +1,15 @@
+{# Shared by the management review pages and the dashboard card. #}
+{% macro estado_revision(revision) %}
+{%- set variant = {'celebrada': ' badge--warn', 'cerrada': ' badge--ok'}.get(revision.estado.name, '') -%}
+<span class="badge{{ variant }}">{{ revision.estado.value }}</span>
+{%- endmacro %}
+
+{% macro estado_accion(accion) %}
+{%- set variant = {'en_curso': ' badge--warn', 'completada': ' badge--ok'}.get(accion.estado.name, '') -%}
+<span class="badge{{ variant }}">{{ accion.estado.value }}</span>
+{%- endmacro %}
+
+{# An action pending or in progress after its deadline (``management_reviews.is_overdue``). #}
+{% macro vencida_badge(vencida) %}{% if vencida %}<span class="badge badge--danger">Vencida</span>{% endif %}{% endmacro %}
+
+{% macro dia(value) %}{{ value.strftime('%d/%m/%Y') if value else '—' }}{% endmacro %}

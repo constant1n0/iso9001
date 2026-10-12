@@ -1,0 +1,36 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% from "revisiones_direccion/_macros.html" import dia %}
+{% set titulo = ('Seguimiento de la acción' if cerrada else 'Editar la acción') if accion else 'Nueva acción' %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block crumb %}Calidad · Revisión por la dirección{% endblock %}
+{% block content %}
+{{ page_header('Cláusula 9.3.3 · Revisión del ' ~ dia(revision.fecha), titulo) }}
+{% if cerrada %}
+<article class="card">
+    <header class="card__header"><h2 class="card__title">{{ accion.tipo.value }}</h2><span class="card__meta">Revisión cerrada: solo cambia el seguimiento</span></header>
+    <div class="card__body"><p class="card__text">{{ accion.descripcion }}</p></div>
+    <ul class="list">
+        <li class="list__item"><span class="list__primary">Responsable</span><span class="list__secondary">{{ personas.get(accion.responsable_id, '—') }}</span></li>
+        <li class="list__item"><span class="list__primary">Fecha límite</span><span class="list__secondary">{{ dia(accion.fecha_limite) }}</span></li>
+    </ul>
+</article>
+{% endif %}
+{{ form_card(form, url_for('revision_direccion.show_review', review_id=revision.id), 'Guardar' if accion else 'Añadir acción') }}
+{% endblock %}
