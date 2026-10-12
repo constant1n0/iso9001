@@ -1,0 +1,29 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% from "objetivos_calidad/_macros.html" import meta %}
+{% set titulo = 'Editar la medición' if medicion else 'Nueva medición' %}
+{% block title %}{{ titulo }} · {{ objetivo.titulo }}{% endblock %}
+{% block crumb %}Calidad · Objetivos de calidad{% endblock %}
+{% block content %}
+{{ page_header('Cláusula 6.2 · ' ~ objetivo.titulo, titulo) }}
+<article class="card">
+    <div class="card__body"><p class="card__text muted">{{ objetivo.indicador }}{% if objetivo.unidad %} ({{ objetivo.unidad }}){% endif %} · meta {{ meta(objetivo) }} · del {{ objetivo.fecha_inicio.strftime('%d/%m/%Y') }} al {{ objetivo.fecha_limite.strftime('%d/%m/%Y') }}</p></div>
+</article>
+{{ form_card(form, url_for('objetivo_calidad.show_objective', objective_id=objetivo.id), 'Guardar cambios' if medicion else 'Registrar medición') }}
+{% endblock %}

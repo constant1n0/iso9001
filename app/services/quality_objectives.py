@@ -40,7 +40,8 @@ Objectives:
 Measurements, one per objective and date, are added or edited only while their
 objective is ``activo``, never move to another objective, and are dated inside
 the objective's period and never after ``today``, the adapter's local date
-(services never read the clock).
+(services never read the clock). An edit that changes nothing writes nothing,
+even when the objective is closed: there is nothing to refuse.
 
 ``meets``, ``summary`` and ``off_track`` say whether a target is met, the trend
 and whether a measurement is overdue (decision QO3; see ``summary``).
@@ -330,10 +331,20 @@ def _update_measurement(session: Session, actor: Actor, measurement_id: int,
         if ("objetivo_id" in data and _MEASUREMENT_FIELDS["objetivo_id"].clean(
                 data, "objetivo_id") != found.objetivo_id):
             raise ValidationError(OBJECTIVE_FIXED)
-        objective = _active_objective(session, found.objetivo_id)
-        if "fecha" in data:
-            _check_date(objective, fields.required_date(data, "fecha"), today)
+        if not _unchanged(found, data):  # a no-op is left to ``crud``, which writes nothing
+            objective = _active_objective(session, found.objetivo_id)
+            if "fecha" in data:
+                _check_date(objective, fields.required_date(data, "fecha"), today)
     return crud.update(MEASUREMENT_SPEC, session, actor, found.id, data)
+
+
+def _unchanged(found: MedicionObjetivo, data: Mapping[str, Any]) -> bool:
+    """Whether ``data`` leaves the measurement as it is; invalid data counts as a change."""
+    try:
+        return all(_MEASUREMENT_FIELDS[key].clean(data, key) == getattr(found, key)
+                   for key in data)
+    except ValidationError:
+        return False
 
 
 def _active_objective(session: Session, objective_id: int) -> ObjetivoCalidad:

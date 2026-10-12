@@ -1,0 +1,112 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% from "objetivos_calidad/_macros.html" import estado_badge, meta, valor, cumple_badge, vencida_badge %}
+{% block title %}Objetivos de calidad{% endblock %}
+{% block crumb %}Calidad · Objetivos de calidad{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 6.2 · Objetivos de la calidad', 'Objetivos de calidad') %}
+    {% if can('create', 'quality_objectives') %}
+    <a class="btn btn--primary" href="{{ url_for('objetivo_calidad.new_objective') }}">+ Nuevo objetivo</a>
+    {% endif %}
+{% endcall %}
+
+<details class="filters"{% if applied %} open{% endif %}>
+    <summary>Filtros{% if applied %} <span class="badge badge--warn">{{ applied }} {{ 'activo' if applied == 1 else 'activos' }}</span>{% endif %}</summary>
+    <form method="get" action="{{ url_for('objetivo_calidad.list_objectives') }}" class="filters__body">
+        <div class="field"><label for="anio">Año</label>
+            <select name="anio" id="anio">
+                <option {% if filtros.anio is none %}selected {% endif %}value="">Todos</option>
+                {% for anio in anios %}
+                <option {% if anio == filtros.anio %}selected {% endif %}value="{{ anio }}">{{ anio }}</option>
+                {% endfor %}
+            </select></div>
+        <div class="field"><label for="estado">Estado</label>
+            <select name="estado" id="estado">
+                <option {% if not filtros.estado %}selected {% endif %}value="">Todos</option>
+                {% for estado in estados %}
+                <option {% if estado.name == filtros.estado %}selected {% endif %}value="{{ estado.name }}">{{ estado.value }}</option>
+                {% endfor %}
+            </select></div>
+        <div class="field"><label for="responsable_id">Responsable</label>
+            <select name="responsable_id" id="responsable_id">
+                <option {% if filtros.responsable_id is none %}selected {% endif %}value="">Todos</option>
+                {% for person_id, nombre in responsables %}
+                <option {% if person_id == filtros.responsable_id %}selected {% endif %}value="{{ person_id }}">{{ nombre }}</option>
+                {% endfor %}
+            </select></div>
+        <div class="field"><label for="proceso_id">Proceso</label>
+            <select name="proceso_id" id="proceso_id">
+                <option {% if filtros.proceso_id is none %}selected {% endif %}value="">Todos</option>
+                {% for proceso in procesos %}
+                <option {% if proceso.id_proceso == filtros.proceso_id %}selected {% endif %}value="{{ proceso.id_proceso }}">{{ proceso.proceso }}</option>
+                {% endfor %}
+            </select></div>
+        <div class="filters__actions">
+            <button type="submit" class="btn btn--primary">Buscar</button>
+            <a class="btn btn--ghost" href="{{ url_for('objetivo_calidad.list_objectives') }}">Limpiar</a>
+        </div>
+    </form>
+</details>
+
+{% if objetivos %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Objetivo</th>
+                <th scope="col">Indicador</th>
+                <th scope="col" class="num">Meta</th>
+                <th scope="col" class="num">Último valor</th>
+                <th scope="col">Meta cumplida</th>
+                <th scope="col">Responsable</th>
+                <th scope="col">Fecha límite</th>
+                <th scope="col">Próxima medición</th>
+                <th scope="col">Estado</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for objetivo in objetivos %}
+            {% set resumen = resumenes[objetivo.id] %}
+            <tr>
+                <td><a href="{{ url_for('objetivo_calidad.show_objective', objective_id=objetivo.id) }}">{{ objetivo.titulo }}</a></td>
+                <td>{{ objetivo.indicador }}</td>
+                <td class="num">{{ meta(objetivo) }}</td>
+                <td class="num">{{ valor(objetivo, resumen.ultimo_valor) }}</td>
+                <td>{{ cumple_badge(resumen.cumple) }}</td>
+                <td>{{ personas.get(objetivo.responsable_id, '—') }}</td>
+                <td class="date">{{ objetivo.fecha_limite.strftime('%d/%m/%Y') }}</td>
+                <td class="date">{{ resumen.proxima_medicion.strftime('%d/%m/%Y') if resumen.proxima_medicion else '—' }} {{ vencida_badge(resumen) }}</td>
+                <td>{{ estado_badge(objetivo) }}</td>
+                <td>
+                    <div class="table__actions">
+                        {% if can('update', 'quality_objectives') %}
+                        <a class="btn btn--sm" href="{{ url_for('objetivo_calidad.edit_objective', objective_id=objetivo.id) }}">Editar</a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    {{ empty_state('Ningún objetivo coincide con los filtros.' if applied else 'Todavía no hay objetivos de calidad.') }}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,133 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, action_form, delete_form, empty_state %}
+{% from "objetivos_calidad/_macros.html" import estado_badge, meta, valor, cumple_badge, vencida_badge %}
+{% set tendencias = {'sube': 'Sube', 'baja': 'Baja', 'estable': 'Estable'} %}
+{% block title %}{{ objetivo.titulo }}{% endblock %}
+{% block crumb %}Calidad · Objetivos de calidad{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 6.2 · Objetivo de calidad ' ~ objetivo.anio, objetivo.titulo) %}
+    {% if can('update', 'quality_objectives') %}
+    <a class="btn" href="{{ url_for('objetivo_calidad.edit_objective', objective_id=objetivo.id) }}">Editar</a>
+    {% for estado, etiqueta, aviso in transiciones %}
+    {{ action_form(url_for('objetivo_calidad.change_state', objective_id=objetivo.id, estado=estado), etiqueta, aviso) }}
+    {% endfor %}
+    {% endif %}
+    {% if not mediciones and can('delete', 'quality_objectives') %}
+    {{ delete_form(url_for('objetivo_calidad.delete_objective', objective_id=objetivo.id), '¿Eliminar el objetivo «' ~ objetivo.titulo ~ '»?') }}
+    {% endif %}
+{% endcall %}
+
+<section class="grid grid--2" aria-label="Resultado y planificación">
+    <article class="card">
+        <header class="card__header">
+            <h2 class="card__title">Resultado</h2>
+            {{ estado_badge(objetivo) }}
+        </header>
+        <ul class="list">
+            <li class="list__item"><span class="list__primary">Meta</span><span class="list__secondary">{{ meta(objetivo) }}</span></li>
+            <li class="list__item"><span class="list__primary">Valor inicial</span><span class="list__secondary">{{ valor(objetivo, objetivo.valor_inicial) }}</span></li>
+            <li class="list__item"><span class="list__primary">Último valor</span><span class="list__secondary">{{ valor(objetivo, resumen.ultimo_valor) }}{% if resumen.ultima_fecha %} · {{ resumen.ultima_fecha.strftime('%d/%m/%Y') }}{% endif %} {{ cumple_badge(resumen.cumple) }}</span></li>
+            <li class="list__item"><span class="list__primary">Tendencia</span><span class="list__secondary">{{ tendencias.get(resumen.tendencia, '—') }}</span></li>
+            <li class="list__item"><span class="list__primary">Próxima medición</span><span class="list__secondary">{{ resumen.proxima_medicion.strftime('%d/%m/%Y') if resumen.proxima_medicion else '—' }} {{ vencida_badge(resumen) }}</span></li>
+        </ul>
+    </article>
+    <article class="card">
+        <header class="card__header"><h2 class="card__title">Planificación</h2></header>
+        <ul class="list">
+            <li class="list__item"><span class="list__primary">Indicador</span><span class="list__secondary">{{ objetivo.indicador }}</span></li>
+            <li class="list__item"><span class="list__primary">Proceso</span><span class="list__secondary">{{ proceso or '—' }}</span></li>
+            <li class="list__item"><span class="list__primary">Responsable</span><span class="list__secondary">{{ personas.get(objetivo.responsable_id, '—') }}</span></li>
+            <li class="list__item"><span class="list__primary">Periodo</span><span class="list__secondary">{{ objetivo.fecha_inicio.strftime('%d/%m/%Y') }} – {{ objetivo.fecha_limite.strftime('%d/%m/%Y') }} ({{ objetivo.anio }})</span></li>
+            <li class="list__item"><span class="list__primary">Frecuencia de medición</span><span class="list__secondary">{{ objetivo.frecuencia.value }}</span></li>
+        </ul>
+    </article>
+</section>
+
+<section class="grid grid--3" aria-label="Descripción, recursos y evaluación">
+    {% for titulo, texto in [('Descripción', objetivo.descripcion), ('Recursos necesarios', objetivo.recursos), ('Cómo se evalúan los resultados', objetivo.evaluacion)] %}
+    <article class="card">
+        <header class="card__header"><h2 class="card__title">{{ titulo }}</h2></header>
+        {% if texto %}<div class="card__body"><p class="card__text">{{ texto }}</p></div>{% else %}<p class="empty">Sin indicar.</p>{% endif %}
+    </article>
+    {% endfor %}
+</section>
+
+<section aria-labelledby="mediciones">
+    <div class="section-header">
+        <h2 id="mediciones">Mediciones</h2>
+        {% if activo and can('create', 'quality_objectives') %}
+        <a class="btn btn--primary btn--sm" href="{{ url_for('objetivo_calidad.new_measurement', objective_id=objetivo.id) }}">+ Nueva medición</a>
+        {% endif %}
+    </div>
+    {% if not activo %}<p class="muted">El objetivo ya no está activo: sus mediciones solo se pueden consultar.</p>{% endif %}
+    {% if mediciones %}
+    <article class="card">
+        <header class="card__header">
+            <h2 class="card__title">Evolución</h2>
+            <span class="card__meta">Meta {{ meta(objetivo) }}</span>
+        </header>
+        <div class="card__body"><div class="chart"><canvas id="chart-objetivo" role="img" aria-label="{{ objetivo.indicador }}: mediciones frente a la meta"></canvas></div></div>
+    </article>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Fecha</th>
+                    <th scope="col" class="num">Valor</th>
+                    <th scope="col">Meta cumplida</th>
+                    <th scope="col">Comentario</th>
+                    <th scope="col">Registrada por</th>
+                    <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for medicion in mediciones %}
+                <tr>
+                    <td class="date">{{ medicion.fecha.strftime('%d/%m/%Y') }}</td>
+                    <td class="num">{{ valor(objetivo, medicion.valor) }}</td>
+                    <td>{{ cumple_badge(cumple[medicion.id]) }}</td>
+                    <td>{{ medicion.comentario or '—' }}</td>
+                    <td>{{ personas.get(medicion.registrado_por_id, '—') }}</td>
+                    <td>
+                        <div class="table__actions">
+                            {% if activo and can('update', 'quality_objectives') %}
+                            <a class="btn btn--sm" href="{{ url_for('objetivo_calidad.edit_measurement', objective_id=objetivo.id, measurement_id=medicion.id) }}">Editar</a>
+                            {% endif %}
+                            {% if activo and can('delete', 'quality_objectives') %}
+                            {{ delete_form(url_for('objetivo_calidad.delete_measurement', objective_id=objetivo.id, measurement_id=medicion.id), '¿Eliminar la medición del ' ~ medicion.fecha.strftime('%d/%m/%Y') ~ '?') }}
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        {{ empty_state('Sin mediciones todavía.') }}
+    {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+{% if mediciones %}
+<script type="application/json" id="objective-data">{{ grafica | tojson }}</script>
+<script src="{{ url_for('static', filename='lib/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/objectives.js') }}"></script>
+{% endif %}
+{% endblock %}

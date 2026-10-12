@@ -23,7 +23,7 @@ from ..extensions import db
 from ..models import (
     Auditoria, Capacitacion, EstadoNoConformidad, NoConformidad, SatisfaccionCliente,
 )
-from ..services import documents
+from ..services import documents, quality_objectives
 from ..services.nonconformities import OPEN_STATES
 from ..utils.permissions import can
 from ..utils.web_actor import current_actor
@@ -66,6 +66,12 @@ def dashboard():
         revisiones_documentales = documents.due_for_review(
             db.session, current_actor(), today=hoy, within_days=REVIEW_WINDOW_DAYS)
 
+    # Active quality objectives off target or with an overdue measurement (QO3
+    # of quality-objectives); every role reads them. None hides the card.
+    objetivos_desviados = None
+    if can('read', 'quality_objectives'):
+        objetivos_desviados = quality_objectives.off_track(db.session, current_actor(), today=hoy)
+
     # Puntuación media de satisfacción por mes
     # (year, month) grouping, last 12 calendar months including the current one
     indice_actual = hoy.year * 12 + hoy.month - 1
@@ -105,6 +111,7 @@ def dashboard():
         no_conformidades_pendientes=no_conformidades_pendientes,
         proximas_capacitaciones=proximas_capacitaciones,
         revisiones_documentales=revisiones_documentales,
+        objetivos_desviados=objetivos_desviados,
         review_window_days=REVIEW_WINDOW_DAYS,
         chart_data=chart_data,
     )
