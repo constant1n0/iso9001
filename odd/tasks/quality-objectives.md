@@ -75,12 +75,21 @@ Baseline at `1b40054`: 1,225 tests. Migrations are tested on PostgreSQL (`TEST_P
 | 2 | [#107](https://github.com/constant1n0/iso9001/pull/107) | QO-1 service, record | `7d22f29` | |
 | 3 | [#108](https://github.com/constant1n0/iso9001/pull/108) | QO-2 screens `531043a` | merged | 1,499 lines |
 | 4 | [#109](https://github.com/constant1n0/iso9001/pull/109) | QO-2 review follow-up, record | `2a04c42` | |
-| 5 | Pending | QO-3, closing update | — | Final slice |
+| 5 | [#110](https://github.com/constant1n0/iso9001/pull/110) | QO-3, closing update | `024828f` | |
 
-## Production deployment (pending authorization)
+## Production deployment (2026-10-12)
 
-One migration (`b4d6f8a1c3e5` objectives and measurements) on top of `e9c2a4f6b8d1`: back up the database and the code, fast-forward, `flask db upgrade`, `flask db check`, then the user restarts the four services. Smoke tests: `/objetivos-calidad/` redirects to the login, the dashboard loads, `qms_modules` lists 20 modules.
+`main@024828f` runs on `vulcano`. The user authorized this deployment over SSH as `dcm`, with no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `1b40054`, clean, migration `e9c2a4f6b8d1` |
+| Backups | `~/work/backups/calidad-*-pre-024828f.dump` (`pg_dump -Fc`, 289 entries listed by `pg_restore -l`) and `iso9001-code-*-pre-024828f.tar.gz` (without `instance/documents`), both mode 600 |
+| Code | Incremental git bundle `1b40054..main`, fast-forward to `024828f`; `pip check` clean, no dependency changes |
+| Database | `flask db upgrade` `e9c2a4f6b8d1` → `b4d6f8a1c3e5`; `flask db check` clean |
+| Restart (user, with sudo) | All four services |
+| Smoke tests | Services active, no error entries in the journal; `/login` 200; `/`, `/objetivos-calidad/` and its PDF redirect to the login; `/mcp` 401 with `WWW-Authenticate: Bearer`; 20 MCP modules |
 
 ## Next step
 
-**Feature complete** once slice 5 merges. Next: the production deployment above, after explicit authorization; then management review, the last Wave 1 module.
+**Feature complete and deployed.** Next: management review, the last Wave 1 module.
