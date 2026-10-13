@@ -76,12 +76,21 @@ Baseline at `e5ecfed`: 1,282 tests. Migrations are tested on PostgreSQL (`TEST_P
 | 2 | [#113](https://github.com/constant1n0/iso9001/pull/113) | MR-1 service, follow-up, record | `612bde6` | One-off `size:exception` (1,941 lines) |
 | 3 | [#114](https://github.com/constant1n0/iso9001/pull/114) | MR-2 screens `45f4f0b` | merged | 1,379 lines |
 | 4 | [#115](https://github.com/constant1n0/iso9001/pull/115) | MR-2 register and card, follow-up, record | `442d4b5` | |
-| 5 | Pending | MR-3, closing update | — | Final slice |
+| 5 | [#116](https://github.com/constant1n0/iso9001/pull/116) | MR-3, closing update | `60f62c6` | |
 
-## Production deployment (pending authorization)
+## Production deployment (2026-10-13)
 
-One migration (`a9c1e3f5d7b2` reviews, attendees and actions) on top of `b4d6f8a1c3e5`: back up the database and the code, fast-forward, `flask db upgrade`, `flask db check`, then the user restarts the four services. Smoke tests: `/revisiones-direccion/` and its register redirect to the login, the dashboard loads, `qms_modules` lists 22 modules.
+`main@60f62c6` runs on `vulcano`. The user authorized this deployment over SSH as `dcm`, with no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `024828f`, clean, migration `b4d6f8a1c3e5` |
+| Backups | `~/work/backups/calidad-*-pre-60f62c6.dump` (`pg_dump -Fc`, 316 entries listed by `pg_restore -l`) and `iso9001-code-*-pre-60f62c6.tar.gz` (without `instance/documents`), both mode 600 |
+| Code | Incremental git bundle `024828f..main`, fast-forward to `60f62c6`; `pip check` clean, no dependency changes |
+| Database | `flask db upgrade` `b4d6f8a1c3e5` → `a9c1e3f5d7b2`; `flask db check` clean |
+| Restart (user, with sudo) | All four services |
+| Smoke tests | Services active, no error entries in the journal; `/login` 200; `/`, `/revisiones-direccion/` and its action register redirect to the login; `/mcp` 401 with `WWW-Authenticate: Bearer`; 22 MCP modules |
 
 ## Next step
 
-**Feature complete** once slice 5 merges, and with it Wave 1. Next: the production deployment above, after explicit authorization; then re-assess the gap analysis clause rows against the delivered Wave 1.
+**Feature complete and deployed; Wave 1 complete.** Follow-up: re-assess the gap analysis clause rows against the delivered Wave 1 (they still describe the baseline).
