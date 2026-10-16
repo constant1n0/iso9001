@@ -113,14 +113,15 @@ def send_monthly_quality_report(today: date | None = None) -> int:
     """E-mail administrators the quality summary of the month that just ended.
 
     The job runs on the 1st, so the report covers the previous calendar month
-    and is dated its last day.
+    and is dated the day it runs.
     """
-    day = (today or local_today()).replace(day=1) - timedelta(days=1)
+    today = today or local_today()
+    day = today.replace(day=1) - timedelta(days=1)
     if not _recipients(RoleEnum.ADMINISTRADOR):
         logger.info("No administrators with e-mail for the monthly report")
         return 0
 
-    pdf = reports.generar_reporte_pdf(day)
+    pdf = reports.generar_reporte_pdf(day, today=today)
     return _send_to_role(
         RoleEnum.ADMINISTRADOR,
         subject="Reporte Mensual del Sistema de Gestión de Calidad",
