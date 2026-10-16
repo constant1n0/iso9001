@@ -1,9 +1,10 @@
 # Service layer
 
 Every write to a quality record goes through a framework-free service in
-`app/services/`. The Flask routes are thin adapters; a future MCP server is
-another adapter over the same functions, so both share one validation, one
-authorization rule and one audit trail.
+`app/services/`. The Flask routes are thin adapters; the MCP server
+(`app/mcp_server/`, see [MCP server](../mcp.md)) is another adapter over the
+same functions, so both share one validation, one authorization rule and one
+audit trail.
 
 ## Anatomy of a service call
 
@@ -58,6 +59,7 @@ bounded: the page is clamped to `1..crud.MAX_PAGE` and the size to
 | `document_revisions.py`, `document_files.py` | Document revisions and their workflow; attachment storage (see below) |
 | `quality_objectives.py` | Quality objectives and their measurements, target checks and overdue measurements (see below) |
 | `management_reviews.py` | Management reviews, their inputs drawn from the registers, holding and closing, and their actions (see below) |
+| `people.py`, `competence.py` | People (each linked to at most one user and holding QMS roles), and competence required per role and demonstrated per person, with the required-versus-demonstrated matrix |
 | `crud.py` | Generic helper driven by a `Spec` (model, resource, fields, ordering) |
 | `training.py`, `satisfaction.py`, `stakeholders.py`, `improvements.py` | Plain HTML registers on `crud` |
 | `roles_responsibilities.py`, `risks_opportunities.py`, `training_resources.py`, `process_operations.py`, `audit_indicators.py` | JSON registers on `crud` |
@@ -67,7 +69,10 @@ bounded: the page is clamped to `1..crud.MAX_PAGE` and the size to
 
 ## Actor and channels
 
-`Actor(user_id, label, role, channel, scopes)` is frozen. `channel` is one of
+`Actor(user_id, label, role, channel, scopes, token_prefix)` is frozen.
+`token_prefix` is the public prefix of the API token behind an `mcp` actor
+(never the secret), used for its rate limit and the security log; it is
+`None` otherwise. `channel` is one of
 `web`, `mcp`, `cli`, `system` and is stored on every audit row. `scopes` is
 `None` for unrestricted web sessions or a set drawn from `{"read", "write"}`:
 a scope only narrows the role, never widens it (a read-only token cannot
@@ -76,18 +81,20 @@ write even for an administrator, and a `write` scope does not let an
 
 ## Permission matrix
 
-`policy.can(actor, action, resource)` is pure. The channel and the scopes are
-checked first (`mcp` never deletes), then the role.
+`policy.can(actor, action, resource)` is pure. The channel is checked first
+(`mcp` never deletes, never touches API tokens and never writes documents),
+then the scopes, then the role.
 
 | Resource | Read | Create / update | Delete |
 |---|---|---|---|
 | Nonconformities, corrective actions, improvements, surveys, training, stakeholders | all roles | all roles | ADMIN |
 | Audits, audit programmes, audit findings | ADMIN, AUDITOR | ADMIN, AUDITOR (approve a programme: ADMIN) | ADMIN |
-| Documents | all roles (drafts: ADMIN, AUDITOR) | ADMIN, AUDITOR (approve and withdraw: ADMIN) | nobody (withdrawn instead) |
+| Documents | all roles (drafts: ADMIN, AUDITOR) | ADMIN, AUDITOR, never `mcp` (approve and withdraw: ADMIN) | nobody (withdrawn instead) |
 | Roles, risks and opportunities, training resources, process operations, audit indicators | all roles | ADMIN, AUDITOR | ADMIN |
+| People; competence requirements and records | all roles | ADMIN, AUDITOR | ADMIN |
 | Quality objectives and their measurements | all roles | ADMIN, AUDITOR | ADMIN |
 | Management reviews and their actions | ADMIN, AUDITOR | ADMIN, AUDITOR (hold and close: ADMIN, never `mcp`) | ADMIN |
-| Users; audit log (policy only, no routes yet) | ADMIN, AUDITOR | ADMIN | nobody |
+| Users (web screens; no MCP module); audit log (policy only, no screen or tool) | ADMIN, AUDITOR | ADMIN | nobody |
 | API tokens (list, issue, revoke) | ADMIN | ADMIN | nobody |
 
 Roles are `ADMINISTRADOR`, `AUDITOR` and `OPERATIVO`. Hard deletes leave an
@@ -339,7 +346,7 @@ document's row (`lock_document`, `SELECT … FOR UPDATE`) and through `_change`
 Attachments (DC7) are stored before they are recorded, and a file is deleted
 only once nothing committed references it:
 
-1. **Store**: `document_files.store(directory, stream, filename, max_bytes)`
+1. **Store**: `document_files.store(base_dir, stream, original_name, *, max_bytes)`
    checks the size, the extension and the content (magic bytes, ZIP
    structure), writes the file atomically under a random name (mode 0600) and
    returns a `StoredFile` (names, size, SHA-256, MIME type). It knows nothing
@@ -387,7 +394,10 @@ A client is treated as JSON when the body is JSON or it prefers
   `query.delete/update`, or instantiates an audited model. Routes may still
   `commit` and `rollback`.
 
-## Writing a new adapter (for example the MCP server)
+## Writing a new adapter
+
+The MCP server follows these steps (`app/mcp_server/context.py`:
+`authenticate` and `unit_of_work`); copy it for another adapter.
 
 1. Run inside a Flask application context (the models and `db.session` need it)
    or provide your own `Session`.
@@ -408,8 +418,8 @@ A client is treated as JSON when the body is JSON or it prefers
    ```
 
    `failure.reason` is an `errors.AuthFailure` member (`MALFORMED`,
-   `UNKNOWN_PREFIX`, `BAD_SECRET`, `REVOKED`, `EXPIRED`, `USER_MISSING`);
-   it is for the log only. `api_tokens.status(token, now)` returns
+   `UNKNOWN_PREFIX`, `BAD_SECRET`, `REVOKED`, `EXPIRED`, `USER_MISSING`,
+   `USER_INACTIVE`, or the default `INVALID`); it is for the log only. `api_tokens.status(token, now)` returns
    `active`, `expired` or `revoked` and is the single validity rule.
 
    The actor has channel `mcp`, the owner's current role and the token scopes.
@@ -454,8 +464,9 @@ security log.
   call. `last_used_at` is updated at most once every five minutes.
 - **Authentication.** `authenticate(session, raw, secret_key=...)` returns the
   `Actor(channel="mcp", ...)` with the owner's *current* role. Malformed,
-  unknown, tampered, expired and revoked tokens, and tokens whose owner was
-  deleted, all raise `AuthenticationFailed` with one generic message.
+  unknown, tampered, expired and revoked tokens, and tokens whose owner no
+  longer exists or is inactive, all raise `AuthenticationFailed` with one
+  generic message.
   `failure.reason` and `failure.token_prefix` exist only for the security log
   (`log_api_token_auth_failed`) and must never be sent to the client.
 - **Management.** Only an administrator on a non-`mcp` channel may `issue`,
