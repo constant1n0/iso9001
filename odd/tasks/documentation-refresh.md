@@ -17,8 +17,9 @@ Bring the documentation in line with the delivered system: a short English READM
 | ID | Decision | Source |
 |---|---|---|
 | Route | ODD, one delegated writer at a time; branch `docs/documentation-refresh` in worktree `iso9001-worktrees/user-management` from `main@3cbef71` | User: "antes de seguir con las mejoras deberíamos actualizar la documentación" (2026-10-16) |
-| DR1 | Technical documentation in English: README, operations guide, `docs/mcp.md`, `docs/architecture/services.md`, gap analysis | Assistant recommendation; user did not object (2026-10-16) |
-| DR2 | User guide in both English (`docs/user-guide.md`) and Spanish (`docs/guia-de-usuario.md`, neutral professional Spanish from Spain, no voseo); both cover the same content and link to each other | User: "ambas a ser posible" (2026-10-16) |
+| DR1 | **Revised 2026-10-16.** Spanish is the reference language for everything companies, users and deployers read: `README.md`, the user guide (`docs/guia-de-usuario.md`), the operations guide (`docs/operaciones.md`), the MCP guide (`docs/mcp.md`) and the ISO 9001 gap analysis (`docs/analisis-brechas-iso-9001.md`); neutral professional Spanish from Spain, no voseo. The first version of this decision (all technical documentation in English) is superseded: DOC-1 wrote the README and operations guide in English, DOC-5 and DOC-6 translate them | User: "El español manda… nuestro objetivo son empresas españolas o en España"; "sí, adelante con ese reparto" (2026-10-16) |
+| DR2 | English is kept minimal for international visitors: a short `README.en.md` and `docs/user-guide.md`, marked as translations of the Spanish reference (a change is written in Spanish first). Developer material stays in English: code, comments, commits, `docs/architecture/services.md` and the `odd/` trackers | Same; full bilingual copies of every document rejected to avoid double maintenance and drift |
+| DR2a | The repository is also a showcase for Spanish companies: the Spanish README presents the product (follow-up: screenshots, GitHub description and topics, a demo) | User (2026-10-16) |
 | DR3 | Nothing is lost when the README shrinks: every instruction moves to the operations or user guide, or is dropped only when it is wrong or obsolete (listed in the task's report) | Assistant design |
 | DR4 | Documentation only: no application code changes; tests change only where they pin documentation text | Assistant design |
 | Delivery | `auto-chain`, `stacked-to-main`: one pull request per task; push, PR and merge when CI is green; ask before a pull request above 1,500 changed lines | User authorization (2026-10-02) |
@@ -36,6 +37,14 @@ Route for every task: **delegated direct** (each needs reading beyond the inline
   - `docs/guia-de-usuario.md`: the same content as DOC-2, using the interface's Spanish labels.
 - [ ] **DOC-4 — Gap analysis and technical docs review.** Forecast 200-500.
   - Re-assess every clause row of `docs/iso-9001-gap-analysis.md` against the code at the branch head with file references; check `docs/mcp.md` and `docs/architecture/services.md` against the code.
+- [ ] **DOC-5 — Spanish README and English summary.** Forecast 250-400.
+  - `README.md` in Spanish as the showcase entry point; `README.en.md` short with links; `docs/user-guide.md` gets a note that the Spanish guide is the reference.
+- [ ] **DOC-6 — Spanish operations guide.** Forecast 1,300 (rename plus translation).
+  - `docs/operations.md` → `docs/operaciones.md`, translated; every link updated.
+- [ ] **DOC-7 — Spanish MCP guide.** Forecast 1,000-1,100 (translation in place).
+  - `docs/mcp.md` translated; tests that pin its text adjusted to the Spanish wording with the same intent.
+- [ ] **DOC-8 — Spanish gap analysis.** Forecast 400-700, after DOC-4.
+  - `docs/iso-9001-gap-analysis.md` → `docs/analisis-brechas-iso-9001.md`, translated; every link updated.
 
 ## Checks
 
