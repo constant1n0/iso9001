@@ -35,7 +35,7 @@ Route for every task: **delegated direct** (each needs reading beyond the inline
   - `docs/user-guide.md`: roles and access, dashboard, every module (users and profile, people and competence, nonconformities and corrective actions, document control, audit programme and findings, quality objectives, management review, and the older registers), PDFs and the monthly report, API tokens for agents (pointing to `docs/mcp.md`).
 - [x] **DOC-3 — Spanish user guide.** Forecast 600-1,000.
   - `docs/guia-de-usuario.md`: the same content as DOC-2, using the interface's Spanish labels.
-- [ ] **DOC-4 — Gap analysis and technical docs review.** Forecast 200-500.
+- [x] **DOC-4 — Gap analysis and technical docs review.** Forecast 200-500.
   - Re-assess every clause row of `docs/iso-9001-gap-analysis.md` against the code at the branch head with file references; check `docs/mcp.md` and `docs/architecture/services.md` against the code.
 - [ ] **DOC-5 — Spanish README and English summary.** Forecast 250-400.
   - `README.md` in Spanish as the showcase entry point; `README.en.md` short with links; `docs/user-guide.md` gets a note that the Spanish guide is the reference.
@@ -61,13 +61,14 @@ Plus a relative-link check over the Markdown files (every relative link and anch
 | DOC-1 | Done | `6957ec7` (`docs/operations.md`, 651 lines; `docs/mcp.md` links its API-token section), `9b7e801` (English `README.md`, 879 → 120 lines) | Structural readback; no secrets or hosts; relative-link check: 57 links in 5 files, 0 errors (5 expected-missing links to the DOC-2 and DOC-3 guides); 1,327 tests OK | `3cbef71..9b7e801`: **passive**, no review |
 | DOC-2 | Done | `b6be86f` (`docs/user-guide.md`, 1,039 lines: sign-in and profile, screens, roles and access matching `policy.py`, dashboard, every module with workflow, states, refusals and PDFs, other registers, reports and e-mails, glossary) | Structural readback; relative-link check: 91 links in 6 files, 0 errors (2 expected-missing links to DOC-3); 1,327 tests OK | Passive (documentation only) |
 | DOC-3 | Done | `cc021bc` (`docs/guia-de-usuario.md`, 1,055 lines, the same 58 headings as the English guide, "usted" in the prose, ISO clauses as "apartado", a "Términos" section of 17 terms) | Structural readback; 420 bold labels checked by script against the templates and the Python sources; relative-link check: 127 links in 7 files, 0 errors, none missing; 1,327 tests OK | Passive (documentation only) |
-| DOC-4 | Pending | — | — | — |
+| DOC-4 | Done | `0bfcc91` (gap analysis re-assessed at `fd46fad`: 34 clause rows now 9 covered, 16 partial, 6 not covered, 3 documentary only (before: 1 / 21 / 8 / 4); changed rows 6.2, 7.2, 7.5.1, 7.5.2, 7.5.3, 9.1.1, 9.2, 10.2 → covered, 6.3 and 7.3 → partial; Wave 2 proposed; `services.md`: MCP no longer "future", people and competence in the module table and permission matrix, channel and token rules, users have screens, `document_files.store` signature; `mcp.md`: systemd steps and stdio deactivation) | Structural readback; relative-link check: 131 links in 7 files, 0 errors; 1,327 tests OK | Passive (documentation only) |
+| DOC-5..DOC-8 | Pending | — | — | — |
 
 ## Findings during implementation
 
 - **Old README destinations (DR3):** installation, configuration, database, Celery, maintenance, security, deployment and Nginx moved to `docs/operations.md`; the module sections 2b–2i, the Celery e-mail contents and the dashboard checks are kept verbatim for DOC-2 and DOC-3 in the job scratch file `readme-module-sections.md`; the project tree was dropped as obsolete (no services, MCP or newer routes).
 - **Wrong claims corrected:** the Gunicorn entry point is `wsgi:app`, not `app:app`; migrations ship with the repository, so setup runs no `flask db init` or `migrate`; Flask 3 does not read `FLASK_ENV`; `pip install -U` changes nothing with pinned requirements.
-- **Code gaps found (not in this feature's scope, reported to the user):** sign-in calls `login_user(user)` without a permanent session or remember cookie, so `PERMANENT_SESSION_LIFETIME` and `REMEMBER_COOKIE_DURATION` have no effect; `instance/` is not in `.gitignore`; the web systemd unit has a placeholder `Documentation=` link.
+- **Code gaps found (not in this feature's scope, reported to the user):** sign-in calls `login_user(user)` without a permanent session or remember cookie, so the session cookie has no expiry date and `REMEMBER_COOKIE_DURATION` is unused (corrected by DOC-4: Flask still rejects a session 8 hours after the cookie was last written, because it applies `PERMANENT_SESSION_LIFETIME` as a maximum age to every signed session cookie); `instance/` is not in `.gitignore`; the web systemd unit has a placeholder `Documentation=` link.
 - **Old material vs code (DOC-2 follows the code):** the nonconformity's free-text **Acción Correctiva** is still editable on its forms; in the web interface a management review's conclusions are written only once it is held (**Comentarios y conclusiones**), while the MCP server accepts them on a draft.
 - **More code gaps found while documenting (reported to the user):** the dashboard shows the audit count and upcoming audits (area and date) to Operativo, which has no audit read access, and that card also lists cancelled and completed audits; the monthly report PDF prints the month's last day as "Generado el" (`app/utils/reports.py` passes `generado=fecha`); roles, risks and opportunities, training resources, processes and audit indicators have no web screens (only MCP or the JSON endpoints) although people, competence and objectives pick from them; the administrators' reset-link limit counts per network address, not per administrator.
 - `gunicorn.conf.py` sets `preload_app = True`, so deployments restart `iso9001.service` (a HUP does not load new code); the units use `ProtectSystem=strict`, so a `DOCUMENT_STORAGE_DIR` outside the checkout needs its own `ReadWritePaths`.
@@ -79,8 +80,9 @@ Plus a relative-link check over the Markdown files (every relative link and anch
 | 1 | [#118](https://github.com/constant1n0/iso9001/pull/118) | tracker, operations guide | merged | |
 | 2 | [#119](https://github.com/constant1n0/iso9001/pull/119) | README, record | `9b8d96a` | |
 | 3 | [#120](https://github.com/constant1n0/iso9001/pull/120) | English user guide, record | `c3c6ee2` | |
-| 4 | Pending | Spanish user guide, this record | — | |
+| 4 | [#121](https://github.com/constant1n0/iso9001/pull/121) | Spanish user guide, record | `3cd4e78` | |
+| 5 | Pending | language revision, DOC-4, this record | — | |
 
 ## Next step
 
-DOC-4.
+DOC-5.
