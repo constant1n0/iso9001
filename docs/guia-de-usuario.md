@@ -205,7 +205,10 @@ Los módulos, los campos y la configuración de los clientes están en la
 ## Panel de control
 
 El **Panel de control** (`/dashboard/`) se abre al iniciar sesión. Muestra el
-estado del SGC a todos los roles.
+estado del SGC a todos los roles. La cifra **Auditorías** y la tarjeta
+**Auditorías próximas** solo las ven los roles que pueden consultar las
+auditorías (administradores y auditores); un usuario con rol Operativo no ve
+ninguna cifra, área ni fecha de auditoría.
 
 **Botones de acceso rápido**, en la parte superior, para crear registros:
 **+ Auditoría** (administradores y auditores), **+ No conformidad**,
@@ -215,15 +218,17 @@ estado del SGC a todos los roles.
 
 | Cifra | Qué cuenta |
 |---|---|
-| **Auditorías** | Todas las auditorías registradas; debajo, cuántas tienen fecha en los próximos 7 días |
+| **Auditorías** | Todas las auditorías registradas, en cualquier estado; debajo, cuántas quedan por celebrar en los próximos 7 días |
 | **No conformidades abiertas** | Las no conformidades abiertas (ni cerradas ni canceladas) sobre el total; debajo, las cerradas |
 | **Satisfacción media** | La puntuación media de todas las encuestas de satisfacción, sobre 10 |
 | **Capacitaciones** | Todas las sesiones de capacitación registradas; debajo, cuántas tienen fecha en los próximos 30 días |
 
 **Tarjetas de aviso:**
 
-- **Auditorías próximas**: las auditorías con fecha de hoy o de los próximos
-  7 días, con su área y su fecha.
+- **Auditorías próximas**, para administradores y auditores: las auditorías
+  que quedan por celebrar (ni completadas ni canceladas) con fecha de hoy o de
+  los próximos 7 días, de la más próxima a la más lejana, con su área y su
+  fecha.
 - **No conformidades abiertas**: las no conformidades abiertas, de la
   detectada hace más tiempo a la más reciente, con su responsable o **Sin
   asignar**.
