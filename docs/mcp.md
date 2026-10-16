@@ -228,7 +228,8 @@ scope) create and update. No token deletes, holds or closes a review.
 
 ## Issue a token
 
-From a trusted shell on the server (see the README for all options):
+From a trusted shell on the server (see [API tokens](operations.md#api-tokens)
+in the operations guide for all options):
 
 ```bash
 venv/bin/flask --app run.py create-api-token --user ana --name "Claude Code" --scope read --scope write --days 90
