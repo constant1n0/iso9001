@@ -37,13 +37,13 @@ Route for every task: **delegated direct** (each needs reading beyond the inline
   - `docs/guia-de-usuario.md`: the same content as DOC-2, using the interface's Spanish labels.
 - [x] **DOC-4 — Gap analysis and technical docs review.** Forecast 200-500.
   - Re-assess every clause row of `docs/iso-9001-gap-analysis.md` against the code at the branch head with file references; check `docs/mcp.md` and `docs/architecture/services.md` against the code.
-- [ ] **DOC-5 — Spanish README and English summary.** Forecast 250-400.
+- [x] **DOC-5 — Spanish README and English summary.** Forecast 250-400.
   - `README.md` in Spanish as the showcase entry point; `README.en.md` short with links; `docs/user-guide.md` gets a note that the Spanish guide is the reference.
-- [ ] **DOC-6 — Spanish operations guide.** Forecast 1,300 (rename plus translation).
+- [x] **DOC-6 — Spanish operations guide.** Forecast 1,300 (rename plus translation).
   - `docs/operations.md` → `docs/operaciones.md`, translated; every link updated.
-- [ ] **DOC-7 — Spanish MCP guide.** Forecast 1,000-1,100 (translation in place).
+- [x] **DOC-7 — Spanish MCP guide.** Forecast 1,000-1,100 (translation in place).
   - `docs/mcp.md` translated; tests that pin its text adjusted to the Spanish wording with the same intent.
-- [ ] **DOC-8 — Spanish gap analysis.** Forecast 400-700, after DOC-4.
+- [x] **DOC-8 — Spanish gap analysis.** Forecast 400-700, after DOC-4.
   - `docs/iso-9001-gap-analysis.md` → `docs/analisis-brechas-iso-9001.md`, translated; every link updated.
 
 ## Checks
@@ -59,10 +59,13 @@ Plus a relative-link check over the Markdown files (every relative link and anch
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
 | DOC-1 | Done | `6957ec7` (`docs/operations.md`, 651 lines; `docs/mcp.md` links its API-token section), `9b7e801` (English `README.md`, 879 → 120 lines) | Structural readback; no secrets or hosts; relative-link check: 57 links in 5 files, 0 errors (5 expected-missing links to the DOC-2 and DOC-3 guides); 1,327 tests OK | `3cbef71..9b7e801`: **passive**, no review |
-| DOC-2 | Done | `b6be86f` (`docs/user-guide.md`, 1,039 lines: sign-in and profile, screens, roles and access matching `policy.py`, dashboard, every module with workflow, states, refusals and PDFs, other registers, reports and e-mails, glossary) | Structural readback; relative-link check: 91 links in 6 files, 0 errors (2 expected-missing links to DOC-3); 1,327 tests OK | Passive (documentation only) |
-| DOC-3 | Done | `cc021bc` (`docs/guia-de-usuario.md`, 1,055 lines, the same 58 headings as the English guide, "usted" in the prose, ISO clauses as "apartado", a "Términos" section of 17 terms) | Structural readback; 420 bold labels checked by script against the templates and the Python sources; relative-link check: 127 links in 7 files, 0 errors, none missing; 1,327 tests OK | Passive (documentation only) |
-| DOC-4 | Done | `0bfcc91` (gap analysis re-assessed at `fd46fad`: 34 clause rows now 9 covered, 16 partial, 6 not covered, 3 documentary only (before: 1 / 21 / 8 / 4); changed rows 6.2, 7.2, 7.5.1, 7.5.2, 7.5.3, 9.1.1, 9.2, 10.2 → covered, 6.3 and 7.3 → partial; Wave 2 proposed; `services.md`: MCP no longer "future", people and competence in the module table and permission matrix, channel and token rules, users have screens, `document_files.store` signature; `mcp.md`: systemd steps and stdio deactivation) | Structural readback; relative-link check: 131 links in 7 files, 0 errors; 1,327 tests OK | Passive (documentation only) |
-| DOC-5..DOC-8 | Pending | — | — | — |
+| DOC-2 | Done | `d14aa4a` (`docs/user-guide.md`, 1,039 lines: sign-in and profile, screens, roles and access matching `policy.py`, dashboard, every module with workflow, states, refusals and PDFs, other registers, reports and e-mails, glossary) | Structural readback; relative-link check: 91 links in 6 files, 0 errors (2 expected-missing links to DOC-3); 1,327 tests OK | Passive (documentation only) |
+| DOC-3 | Done | `c416a19` (`docs/guia-de-usuario.md`, 1,055 lines, the same 58 headings as the English guide, "usted" in the prose, ISO clauses as "apartado", a "Términos" section of 17 terms) | Structural readback; 420 bold labels checked by script against the templates and the Python sources; relative-link check: 127 links in 7 files, 0 errors, none missing; 1,327 tests OK | Passive (documentation only) |
+| DOC-4 | Done | `538200e` (gap analysis re-assessed at `fd46fad`: 34 clause rows now 9 covered, 16 partial, 6 not covered, 3 documentary only (before: 1 / 21 / 8 / 4); changed rows 6.2, 7.2, 7.5.1, 7.5.2, 7.5.3, 9.1.1, 9.2, 10.2 → covered, 6.3 and 7.3 → partial; Wave 2 proposed; `services.md`: MCP no longer "future", people and competence in the module table and permission matrix, channel and token rules, users have screens, `document_files.store` signature; `mcp.md`: systemd steps and stdio deactivation) | Structural readback; relative-link check: 131 links in 7 files, 0 errors; 1,327 tests OK | Passive (documentation only) |
+| DOC-5 | Done | `d440eaf` (Spanish `README.md` as the showcase entry point, 173 lines, with a screenshot placeholder comment; `README.en.md`, 62 lines; `docs/user-guide.md` marked as a translation) | Structural readback; pinned README strings kept; link check: only the DOC-6 and DOC-8 targets missing until those tasks; 1,327 tests OK | Passive |
+| DOC-6 | Done | `61f30fc` (pure rename `docs/operations.md` → `docs/operaciones.md`, so `git log --follow` keeps the history), `f3c85de` (Spanish translation, 707 lines; every link and anchor updated; the Spanish guide's intro now lists only `services.md` as English) | 23 code blocks byte-identical, 306 inline code spans and 43 table rows kept; link check: only the DOC-8 target missing; 1,327 tests OK | Passive |
+| DOC-7 | Done | `84ec8fb` (`docs/mcp.md` translated in place, 586 lines, contents list; inbound anchors updated; `tests/test_mcp_deployment.py` pins the Spanish headings "## Prueba de humo" and "### Estado de la verificación", splitting on the full heading line) | 13 code blocks byte-identical (same sha256); link check: only the DOC-8 target missing; 1,327 tests OK | See the range assessment below |
+| DOC-8 | Done | `f82851d` (pure rename to `docs/analisis-brechas-iso-9001.md`), `ba4808b` (Spanish translation with the Spanish edition's terms; clause titles from the 2015 Spanish wording because the 2026 Spanish text could not be checked; "Wave" → "fase") | 3 Mermaid blocks byte-identical; 385 of 386 inline code spans unchanged (the `[VERIFY: …]` marker became `[VERIFICAR: …]`); 34 clause rows keep numbers and status codes; link check: 163 links, 0 errors; 1,327 tests OK | Passive |
 
 ## Findings during implementation
 
@@ -81,8 +84,12 @@ Plus a relative-link check over the Markdown files (every relative link and anch
 | 2 | [#119](https://github.com/constant1n0/iso9001/pull/119) | README, record | `9b8d96a` | |
 | 3 | [#120](https://github.com/constant1n0/iso9001/pull/120) | English user guide, record | `c3c6ee2` | |
 | 4 | [#121](https://github.com/constant1n0/iso9001/pull/121) | Spanish user guide, record | `3cd4e78` | |
-| 5 | Pending | language revision, DOC-4, this record | — | |
+| 5 | [#122](https://github.com/constant1n0/iso9001/pull/122) | language revision, DOC-4, record | `8cc3a98` | |
+| 6 | Pending | DOC-5 Spanish README | — | Merged back to back with 7–9 so `main` keeps no broken link for long |
+| 7 | Pending | DOC-6 Spanish operations guide | — | |
+| 8 | Pending | DOC-7 Spanish MCP guide | — | |
+| 9 | Pending | DOC-8 Spanish gap analysis, closing record | — | Final slice |
 
 ## Next step
 
-DOC-5.
+**Feature complete** once slices 6–9 merge. Follow-ups outside this feature: the code gaps listed in the findings (dashboard audit data shown to Operativo, the monthly report's "Generado el" date, registers without screens, session cookie expiry and remember-me, the reset-link limit per address, `instance/` in `.gitignore`, the systemd `Documentation=` placeholder); the showcase work (screenshots, GitHub description and topics, a demo); and the Wave 2 proposed in the gap analysis.
