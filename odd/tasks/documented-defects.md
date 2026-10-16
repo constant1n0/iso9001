@@ -31,7 +31,7 @@ Fix the code defects found while writing the documentation (`odd/tasks/documenta
 
 ## Tasks
 
-- [ ] **DF-1 — Dashboard audit data by permission.** Route: delegated (template, route, tests and two guides). Forecast 100-250.
+- [x] **DF-1 — Dashboard audit data by permission.** Route: delegated (template, route, tests and two guides). Forecast 100-250.
 - [ ] **DF-2 — Monthly report generation date.** Route: delegated (report, notifications, tests, docs). Forecast 60-150.
 - [ ] **DF-3 — Permanent sessions and per-administrator reset limit.** Route: delegated (auth, config, rate limit, tests, docs). Forecast 120-300.
 - [ ] **DF-4 — Repository hygiene and closing.** Route: inline (two mechanical lines plus the gap-analysis defects table). Forecast 20-60.
@@ -49,8 +49,9 @@ Baseline at `999df34`: 1,329 tests (PostgreSQL via `TEST_POSTGRES_URI`).
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| DF-1..DF-4 | Pending | — | — | — |
+| DF-1 | Done | `32e4fdf` (`audits.upcoming(session, actor, *, today, within_days)` requiring `read` on audits, both window ends included, `COMPLETADA` and `CANCELADA` left out, ordered by date then id; the dashboard computes the audit count and the upcoming list only when `can('read', 'audits')`; card `#auditorias-proximas`; dashboard sections of both guides) | RED: `no attribute 'upcoming'` (2), OPERATIVO saw the audit label, areas and dates, upcoming count `3 != 5` with cancelled and completed audits, missing card. GREEN: 6 new tests; 1,335 tests OK incl. PostgreSQL | Range `999df34..32e4fdf`: **medium**, `under_budget` (pending in the slice) |
+| DF-2..DF-4 | Pending | — | — | — |
 
 ## Next step
 
-DF-1.
+DF-2.
