@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 
 from flask import Flask
 
+from . import session_lifetime
 from .commands import register_commands
 from .config import Config
 from .extensions import db, ma, migrate, csrf, login_manager, mail, limiter
@@ -123,6 +124,9 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Por favor, inicia sesión para acceder a esta página.'
     login_manager.login_message_category = 'warning'
+
+    # Idle and absolute limits of a signed-in session (DD4)
+    session_lifetime.init_app(app)
 
     # Cargar el usuario desde la base de datos (usando Session.get() recomendado en SQLAlchemy 2.0)
     @login_manager.user_loader

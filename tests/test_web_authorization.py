@@ -10,6 +10,7 @@ from flask import render_template_string
 from flask_login import login_required, login_user
 from werkzeug.security import generate_password_hash
 
+from app import session_lifetime
 from app.extensions import db
 from app.models import RoleEnum, User
 
@@ -38,6 +39,7 @@ class WebAuthorizationTestCase(unittest.TestCase):
         if role is not None:
             with client.session_transaction() as session:
                 session["_user_id"] = str(self.ids[role])
+                session_lifetime.start(session)
                 session["_fresh"] = True
         return client
 

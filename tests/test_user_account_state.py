@@ -16,6 +16,7 @@ import test_auth_bootstrap as bootstrap
 from flask_login.utils import encode_cookie
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from app import session_lifetime
 from app.extensions import db
 from app.models import RoleEnum, User
 from app.utils import password_reset_mail
@@ -98,24 +99,28 @@ class SessionTestCase(AccountStateTestCase):
     def test_existing_session_stops_working_once_the_user_is_deactivated(self) -> None:
         with self.client.session_transaction() as session:
             session["_user_id"] = str(self.active_id)
+            session_lifetime.start(session)
         self.assertEqual(200, self.client.get(DASHBOARD).status_code)
 
         self._set_active(self.active_id, False)
 
         self.assertTrue(self._redirects_to_login(self.client.get(DASHBOARD)))
 
-    def test_remember_cookie_of_an_inactive_user_is_ignored(self) -> None:
-        for user_id, allowed in ((self.active_id, True), (self.inactive_id, False)):
-            with self.subTest(allowed=allowed):
+    def test_a_remember_cookie_does_not_sign_a_user_in(self) -> None:
+        # No remember cookie is issued (DD4). A validly signed one is ignored for
+        # an inactive user; for an active one the session it opens has no
+        # sign-in stamps, so it is signed out and the cookie deleted.
+        for user_id, active in ((self.active_id, True), (self.inactive_id, False)):
+            with self.subTest(active=active):
                 client = self.app.test_client()
                 with self.app.test_request_context():
                     cookie = encode_cookie(str(user_id))
                 client.set_cookie("remember_token", cookie)
                 response = client.get(DASHBOARD)
-                if allowed:
-                    self.assertEqual(200, response.status_code)
-                else:
-                    self.assertTrue(self._redirects_to_login(response))
+                self.assertTrue(self._redirects_to_login(response))
+                if active:
+                    self.assertIsNone(client.get_cookie("remember_token"))
+                self.assertEqual(200, client.get("/login").status_code)
 
 
 class LoginTestCase(AccountStateTestCase):

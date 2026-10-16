@@ -40,3 +40,6 @@ gunicorn.pid
 
 # CodeGraph local index
 .codegraph/
+
+# Local instance data: databases and uploaded documents
+instance/

@@ -12,6 +12,7 @@ import test_auth_bootstrap as bootstrap
 from sqlalchemy import inspect as sa_inspect
 from werkzeug.security import generate_password_hash
 
+from app import session_lifetime
 from app.extensions import db
 from app.models import AuditLog, RoleEnum, User
 from app.services import audit
@@ -45,6 +46,7 @@ class RegisterRoutesBase(unittest.TestCase):
     def login(self, role: RoleEnum = RoleEnum.OPERATIVO) -> None:
         with self.client.session_transaction() as session:
             session["_user_id"] = str(self.ids[role])
+            session_lifetime.start(session)
 
     def flashes(self):
         with self.client.session_transaction() as session:

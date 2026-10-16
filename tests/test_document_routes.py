@@ -22,6 +22,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from test_document_files import PDF, docx as docx_bytes
 from werkzeug.security import generate_password_hash
 
+from app import session_lifetime
 from app.extensions import db
 from app.models import (AuditLog, Document, DocumentCategory, DocumentRevision, Person,
                         RoleEnum, User)
@@ -74,6 +75,7 @@ class DocumentRoutesBase(unittest.TestCase):
     def login(self, role: RoleEnum = RoleEnum.ADMINISTRADOR) -> None:
         with self.client.session_transaction() as session:
             session["_user_id"] = str(self.ids[role])
+            session_lifetime.start(session)
 
     def flashes(self):
         with self.client.session_transaction() as session:

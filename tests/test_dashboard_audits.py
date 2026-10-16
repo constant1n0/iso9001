@@ -17,6 +17,7 @@ from unittest.mock import patch
 import test_auth_bootstrap as bootstrap
 from werkzeug.security import generate_password_hash
 
+from app import session_lifetime
 from app.extensions import db
 from app.models import Auditoria, EstadoAuditoriaEnum, RoleEnum, User
 from app.services import audits
@@ -64,6 +65,7 @@ class DashboardAuditsTestCase(unittest.TestCase):
         client = self.app.test_client()
         with client.session_transaction() as session:
             session["_user_id"] = str(self.ids[role])
+            session_lifetime.start(session)
             session["_fresh"] = True
         with patch(TODAY_IN_DASHBOARD, return_value=TODAY):
             response = client.get("/dashboard/")
@@ -105,9 +107,13 @@ class DashboardAuditsTestCase(unittest.TestCase):
         with self.app.app_context():
             Auditoria.query.filter(Auditoria.area_auditada.in_(STILL_TO_HOLD)).delete()
             db.session.commit()
-        card = CARD.search(self.html(ADMIN)).group(1)
+        html = self.html(ADMIN)
+        card = CARD.search(html).group(1)
         self.assertIn("Sin auditorías programadas.", card)
         self.assertEqual([], AREA.findall(card))
+        # The count is shown on its own value, not on the upcoming list's.
+        self.assertEqual((str(len(AUDITS) - len(STILL_TO_HOLD)), "0"),
+                         AUDIT_KPI.search(html).groups())
 
 
 class UpcomingAuditsServiceTestCase(unittest.TestCase):

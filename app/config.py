@@ -35,13 +35,19 @@ class Config:
     SESSION_COOKIE_SECURE = os.environ.get('FLASK_DEBUG', 'False').lower() not in ('true', '1', 'yes')
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
-    PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
-
-    # Configuración de cookies "Remember Me"
-    REMEMBER_COOKIE_SECURE = os.environ.get('FLASK_DEBUG', 'False').lower() not in ('true', '1', 'yes')
-    REMEMBER_COOKIE_HTTPONLY = True
-    REMEMBER_COOKIE_SAMESITE = 'Lax'
-    REMEMBER_COOKIE_DURATION = timedelta(days=7)
+    # The session cookie is a browser-session cookie (no Expires): it ends when
+    # the browser closes. app/session_lifetime.py also signs a user out after
+    # SESSION_IDLE_TIMEOUT without a request or SESSION_ABSOLUTE_LIFETIME after
+    # sign-in, from timestamps kept in the signed session (DD4). No "remember
+    # me" cookie is offered.
+    SESSION_IDLE_TIMEOUT = timedelta(hours=8)
+    SESSION_ABSOLUTE_LIFETIME = timedelta(hours=12)
+    # Sessions are never permanent, but Flask still refuses any session cookie
+    # signed more than this long ago, before any hook runs. It is only a
+    # backstop, well above both limits, so a session left open overnight still
+    # reaches the hook, which signs it out with the expiry message and a
+    # security-log line. The limits themselves come from the signed stamps.
+    PERMANENT_SESSION_LIFETIME = timedelta(days=7)
 
     # Configuración del registro de eventos de seguridad
     SECURITY_LOG_ENABLED = os.environ.get(

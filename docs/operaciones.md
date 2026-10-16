@@ -90,7 +90,7 @@ contrástelo con las tablas siguientes, que proceden del código.
 |---|---|---|
 | `SECRET_KEY` | ninguno (obligatoria) | Firma las sesiones, los tokens CSRF y los enlaces de restablecimiento de contraseña, y es la clave de los hashes de los tokens de API. La aplicación no arranca sin ella. Cambiarla cierra la sesión de todos los usuarios e invalida todos los tokens de API |
 | `DATABASE_URI` | ninguno (obligatoria) | URL de SQLAlchemy de la base de datos PostgreSQL, por ejemplo `postgresql://<user>:<password>@<host>:5432/<database>`. La aplicación no arranca sin ella |
-| `FLASK_DEBUG` | `False` | `true`, `1` o `yes` activa el modo de depuración. En modo de depuración, las cookies de sesión y de «recordarme» no se marcan como `Secure` y no se envía HSTS. No la active nunca en producción |
+| `FLASK_DEBUG` | `False` | `true`, `1` o `yes` activa el modo de depuración. En modo de depuración, la cookie de sesión no se marca como `Secure` y no se envía HSTS. No la active nunca en producción |
 | `APP_TIMEZONE` | `Europe/Madrid` | Zona horaria de «hoy» (fechas de aprobación, publicación y cierre, comprobación de vencimientos, periodos de los informes) y del calendario de Celery |
 | `MAIL_USERNAME` | ninguno | Usuario de SMTP |
 | `MAIL_PASSWORD` | ninguno | Contraseña de SMTP |
@@ -129,11 +129,14 @@ Se definen en `app/config.py`, no en el entorno:
 - Correo: `MAIL_SERVER = smtp.gmail.com`, `MAIL_PORT = 587`, `MAIL_USE_TLS = True`.
   Otro proveedor de SMTP requiere un cambio en el código.
 - La cookie de sesión es `HttpOnly`, `SameSite=Lax` y `Secure` salvo que
-  `FLASK_DEBUG` esté activado. Hay configurados una duración de sesión
-  permanente (8 horas) y unos ajustes de «recordarme» (7 días, con los mismos
-  atributos), pero el inicio de sesión no crea ni una sesión permanente ni una
-  cookie de «recordarme», de modo que la sesión termina al cerrar el
-  navegador.
+  `FLASK_DEBUG` esté activado, y no lleva fecha de caducidad: termina al
+  cerrar el navegador. Una sesión iniciada termina además tras 8 horas sin
+  actividad (`SESSION_IDLE_TIMEOUT`) o 12 horas después del inicio de sesión
+  (`SESSION_ABSOLUTE_LIFETIME`); véase [Notas de
+  seguridad](#notas-de-seguridad). `PERMANENT_SESSION_LIFETIME` (7 días) es
+  la antigüedad máxima que Flask admite en la firma de cualquier cookie de
+  sesión; solo es una salvaguarda, muy por encima de los dos límites. No se
+  ofrece la opción «recordarme».
 - Las claves de los límites de peticiones usan el prefijo `iso9001`; un
   almacenamiento Redis recibe tiempos de espera de conexión y de socket de 1
   segundo, y mientras no está accesible lo sustituyen contadores en memoria.
@@ -582,7 +585,7 @@ cubre el estado local, como `logs/` y `celerybeat-schedule`.
 | Journal | `journalctl -u <unit>` | Mensajes de arranque de Gunicorn, el *worker* y el *beat* de Celery (`--loglevel=info`) y el servidor MCP |
 | Registro de acceso de Gunicorn | `logs/gunicorn-access.log` | Dirección del extremo remoto, hora, estado, tamaño, User-Agent y duración de cada petición |
 | Registro de errores de Gunicorn | `logs/gunicorn-error.log` | Errores de Gunicorn y de la aplicación |
-| Registro de seguridad | `SECURITY_LOG_FILE` (`logs/security.log`) | Inicios de sesión y fallos, cierres de sesión, rechazos por límite de peticiones (`RATE_LIMIT_EXCEEDED`), solicitudes y cambios de restablecimiento de contraseña, estado de las cuentas, cambios de correo electrónico y de enlaces de restablecimiento, tokens de API emitidos, revocados y fallidos (`API_TOKEN_AUTH_FAILED`, `API_TOKEN_RATE_LIMITED`, `MCP_AUTH_RATE_LIMITED`), subidas y rechazos de adjuntos |
+| Registro de seguridad | `SECURITY_LOG_FILE` (`logs/security.log`) | Inicios de sesión y fallos, cierres de sesión, sesiones caducadas (`SESSION_EXPIRED`), rechazos por límite de peticiones (`RATE_LIMIT_EXCEEDED`), solicitudes y cambios de restablecimiento de contraseña, estado de las cuentas, cambios de correo electrónico y de enlaces de restablecimiento, tokens de API emitidos, revocados y fallidos (`API_TOKEN_AUTH_FAILED`, `API_TOKEN_RATE_LIMITED`, `MCP_AUTH_RATE_LIMITED`), subidas y rechazos de adjuntos |
 | Registro de auditoría | Base de datos | Cada cambio hecho a través de los servicios, con el actor y el canal |
 
 - **Privacidad del registro de acceso**: `gunicorn.conf.py` omite
@@ -615,6 +618,19 @@ cubre el estado local, como `logs/` y `celerybeat-schedule`.
   tokens de API y los enlaces de restablecimiento.
 - **Modo de depuración**: no active nunca `FLASK_DEBUG` en producción; quita
   el atributo `Secure` de las cookies y elimina HSTS.
+- **Sesiones**: la cookie de sesión termina al cerrar el navegador. Además,
+  el servidor guarda en la sesión firmada la hora del inicio de sesión y la
+  de la última petición, y cierra la sesión tras 8 horas sin actividad o 12
+  horas después de iniciarla, aunque se siga usando: el usuario vuelve a la
+  página de acceso con el aviso «La sesión ha caducado. Inicie sesión de
+  nuevo.» y el registro de seguridad anota `SESSION_EXPIRED`. Una petición
+  JSON recibe la misma respuesta que cualquier petición sin sesión, la
+  redirección a la página de acceso. Flask también rechaza una cookie firmada
+  hace más de 7 días, como salvaguarda; así, una sesión que se queda abierta
+  toda la noche también recibe el aviso y queda anotada. Las sesiones
+  abiertas antes de esta versión no llevan esas horas y se cierran en su
+  siguiente petición. Los tokens de API del servidor MCP no usan la sesión y
+  estos límites no les afectan.
 - **Proxies de confianza**: `TRUSTED_PROXIES` es la única vía por la que la
   dirección o el esquema de un cliente se toman de las cabeceras de proxy; los
   extremos remotos que no figuran en la lista no pueden establecerlos. `*` se
@@ -626,8 +642,9 @@ cubre el estado local, como `logs/` y `celerybeat-schedule`.
 - **Límites de peticiones** (Flask-Limiter, por dirección de cliente salvo que
   se indique otra cosa): inicio de sesión, 5 POST por minuto; solicitudes de
   restablecimiento de contraseña, 3 por hora; enlaces de restablecimiento
-  enviados por un administrador, 10 por hora; cambios de credenciales en la
-  página de perfil, 10 por hora y cuenta. No hay un límite general para las
+  enviados por un administrador, 10 por hora y administrador, sea cual sea su
+  dirección; cambios de credenciales en la página de perfil, 10 por hora y
+  cuenta. No hay un límite general para las
   páginas ordinarias. Configure `RATELIMIT_STORAGE_URI` con Redis para que
   todos los *workers* de Gunicorn compartan los contadores y estos se
   conserven tras los reinicios; con el valor por defecto, `memory://`, cada

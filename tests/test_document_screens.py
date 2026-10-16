@@ -25,6 +25,7 @@ from test_delete_forms import _PostForms
 from test_document_files import PDF
 from werkzeug.security import generate_password_hash
 
+from app import session_lifetime
 from app.extensions import db
 from app.models import (Document, DocumentCategory, DocumentRevision, EstadoRevision, Person,
                         RoleEnum, User)
@@ -80,6 +81,7 @@ class ScreensBase(unittest.TestCase):
     def login(self, role: RoleEnum = ADMIN) -> None:
         with self.client.session_transaction() as session:
             session["_user_id"] = str(self.ids[role])
+            session_lifetime.start(session)
             session["_fresh"] = True
 
     def flashes(self) -> list:
