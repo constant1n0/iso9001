@@ -89,14 +89,14 @@ y Claude Desktop.
 Los administradores emiten los tokens de API desde una línea de órdenes en el
 servidor con `flask --app run.py create-api-token`, los enumeran con
 `list-api-tokens` y los revocan con `revoke-api-token` (véase la
-[guía de operaciones](docs/operaciones.md)). El servidor MCP, su despliegue y
+[guía de operaciones](docs/operaciones.md#tokens-de-api)). El servidor MCP, su despliegue y
 la configuración de cada cliente están en [`docs/mcp.md`](docs/mcp.md).
 
 ## Puesta en marcha (desarrollo)
 
 Se necesita Python 3.11, una base de datos PostgreSQL (Docker es la forma más
 rápida) y las bibliotecas del sistema que WeasyPrint usa para los PDF (véanse
-los requisitos en la [guía de operaciones](docs/operaciones.md)).
+los requisitos en la [guía de operaciones](docs/operaciones.md#requisitos)).
 
 ```bash
 git clone https://github.com/constant1n0/iso9001.git
@@ -120,7 +120,7 @@ venv/bin/flask --app run.py run
 
 Abra `http://127.0.0.1:5000` e inicie sesión con ese administrador. Celery, el
 correo electrónico, la configuración de producción y todas las variables de
-entorno están en la [guía de operaciones](docs/operaciones.md).
+entorno están en la [guía de operaciones](docs/operaciones.md#configuración).
 
 ## Documentación
 
@@ -149,7 +149,7 @@ comprobaciones y los despliegues en producción de cada cambio.
   [`docs/architecture/services.md`](docs/architecture/services.md).
 - **Pruebas**: `venv/bin/python -m unittest discover -s tests -p 'test_*.py'`.
   Las pruebas de PostgreSQL solo se ejecutan con `TEST_POSTGRES_URI`; véase la
-  integración continua en la [guía de operaciones](docs/operaciones.md).
+  integración continua en la [guía de operaciones](docs/operaciones.md#integración-continua).
 - **Interfaz**: una sola hoja de estilos, `app/static/css/app.css`, con los
   tokens de diseño (negro, blanco hueso y amarillo canario `#FFF000`) como
   propiedades personalizadas de CSS. Todos los recursos se sirven desde el
@@ -166,7 +166,7 @@ comprobaciones y los despliegues en producción de cada cambio.
 GitHub Actions ejecuta la comprobación `Python 3.11 tests`, contra PostgreSQL
 17, en cada *push*, en las *pull requests* dirigidas a `main` y cuando se
 lanza manualmente. Los detalles están en la
-[guía de operaciones](docs/operaciones.md).
+[guía de operaciones](docs/operaciones.md#integración-continua).
 
 ## Licencia
 

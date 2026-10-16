@@ -17,7 +17,7 @@ conformidades** (nonconformities). A [glossary](#glossary) at the end lists the
 most frequent terms.
 
 Installation and server administration are in the
-[operations guide](operations.md).
+[operations guide](operaciones.md) (in Spanish).
 
 ## Contents
 
@@ -175,8 +175,8 @@ can read, create, edit, delete and approve in each module.
 
 AI agents (for example Claude Code or Codex) work with the QMS through its MCP
 server. An administrator issues each agent an API token from the server's
-command line (see [API tokens](operations.md#api-tokens) in the operations
-guide).
+command line (see [API tokens](operaciones.md#tokens-de-api) in the operations
+guide, in Spanish).
 
 - A token acts as the user it was issued to, with that user's role. Its
   scopes can only reduce the role's rights: a `read` token only reads, and a
@@ -570,7 +570,7 @@ Each revision may carry one file: PDF, DOCX, XLSX or ODT.
   file always downloads; the browser does not open it.
 
 How the server stores and backs up the files is in the
-[operations guide](operations.md#document-attachments).
+[operations guide](operaciones.md#ficheros-adjuntos-de-los-documentos) (in Spanish).
 
 ### Withdrawal
 
@@ -978,7 +978,7 @@ organization's time zone. They go to active users with an e-mail address;
 anyone else is skipped. The audit and document e-mails are not sent when
 there is nothing to list.
 The server side (Redis and Celery) is described in the
-[operations guide](operations.md#redis-and-celery).
+[operations guide](operaciones.md#redis-y-celery) (in Spanish).
 
 | Subject | To | When | Contents |
 |---|---|---|---|
