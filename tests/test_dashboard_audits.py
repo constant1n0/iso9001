@@ -107,9 +107,13 @@ class DashboardAuditsTestCase(unittest.TestCase):
         with self.app.app_context():
             Auditoria.query.filter(Auditoria.area_auditada.in_(STILL_TO_HOLD)).delete()
             db.session.commit()
-        card = CARD.search(self.html(ADMIN)).group(1)
+        html = self.html(ADMIN)
+        card = CARD.search(html).group(1)
         self.assertIn("Sin auditorías programadas.", card)
         self.assertEqual([], AREA.findall(card))
+        # The count is shown on its own value, not on the upcoming list's.
+        self.assertEqual((str(len(AUDITS) - len(STILL_TO_HOLD)), "0"),
+                         AUDIT_KPI.search(html).groups())
 
 
 class UpcomingAuditsServiceTestCase(unittest.TestCase):

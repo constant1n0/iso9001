@@ -43,11 +43,11 @@ class Config:
     SESSION_IDLE_TIMEOUT = timedelta(hours=8)
     SESSION_ABSOLUTE_LIFETIME = timedelta(hours=12)
     # Sessions are never permanent, but Flask still refuses any session cookie
-    # signed more than this long ago, before any hook runs. It matches the
-    # absolute limit, so the hook enforces the idle limit with the expiry
-    # message. An active session is re-signed at least once a minute of use,
-    # when the last-seen time is refreshed.
-    PERMANENT_SESSION_LIFETIME = SESSION_ABSOLUTE_LIFETIME
+    # signed more than this long ago, before any hook runs. It is only a
+    # backstop, well above both limits, so a session left open overnight still
+    # reaches the hook, which signs it out with the expiry message and a
+    # security-log line. The limits themselves come from the signed stamps.
+    PERMANENT_SESSION_LIFETIME = timedelta(days=7)
 
     # Configuración del registro de eventos de seguridad
     SECURITY_LOG_ENABLED = os.environ.get(

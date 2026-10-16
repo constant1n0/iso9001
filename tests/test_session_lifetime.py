@@ -6,7 +6,7 @@ Sign-in stamps the signed session with the sign-in time and the last-seen time
 more than ``SESSION_IDLE_TIMEOUT`` or signed in more than
 ``SESSION_ABSOLUTE_LIFETIME`` ago, with the expiry message. Flask also refuses
 any session cookie signed more than ``PERMANENT_SESSION_LIFETIME`` ago; that
-limit matches the absolute one, so the idle limit is the hook's to enforce.
+limit is a 7-day backstop, so both limits are the hook's to enforce.
 
 Time is moved on the server only, without sleeping: the hook reads
 ``app.session_lifetime._clock`` and itsdangerous stamps and checks the cookie's
@@ -42,6 +42,8 @@ DASHBOARD = "/dashboard/"
 IDLE = timedelta(hours=8)
 ABSOLUTE = timedelta(hours=12)
 MINUTE = timedelta(minutes=1)
+# Literals on purpose: they pin the stored session keys and the user-facing
+# message, so renaming them in app/session_lifetime.py fails here.
 SIGNED_IN_AT, SEEN_AT = "_signed_in_at", "_seen_at"
 EXPIRED = "La sesión ha caducado. Inicie sesión de nuevo."
 
@@ -147,7 +149,7 @@ class BrowserSessionCookieTestCase(SessionLifetimeTestCase):
     def test_the_limits_are_configured(self) -> None:
         self.assertEqual(IDLE, Config.SESSION_IDLE_TIMEOUT)
         self.assertEqual(ABSOLUTE, Config.SESSION_ABSOLUTE_LIFETIME)
-        self.assertEqual(ABSOLUTE, self.app.permanent_session_lifetime)
+        self.assertEqual(timedelta(days=7), self.app.permanent_session_lifetime)
 
     def test_no_remember_me_cookie_is_offered_or_configured(self) -> None:
         response = self.sign_in()
@@ -211,6 +213,17 @@ class ActivityTestCase(SessionLifetimeTestCase):
 
         self.assert_signed_out(response)
         self.assertIn("reason=idle", "\n".join(logged.output))
+
+    def test_a_session_left_open_overnight_gets_the_expiry_message(self) -> None:
+        # Flask's cookie-age limit is only a backstop: a session idle for 16
+        # hours still reaches the hook, which signs it out and logs why.
+        self.sign_in()
+
+        with self.assertLogs("security", level="INFO") as logged:
+            response = self.get_at(timedelta(hours=16))
+
+        self.assert_signed_out(response)
+        self.assertIn("SESSION_EXPIRED", "\n".join(logged.output))
 
     def test_twelve_hours_after_sign_in_signs_out_despite_activity(self) -> None:
         self.sign_in()

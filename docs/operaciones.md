@@ -133,10 +133,10 @@ Se definen en `app/config.py`, no en el entorno:
   cerrar el navegador. Una sesión iniciada termina además tras 8 horas sin
   actividad (`SESSION_IDLE_TIMEOUT`) o 12 horas después del inicio de sesión
   (`SESSION_ABSOLUTE_LIFETIME`); véase [Notas de
-  seguridad](#notas-de-seguridad). `PERMANENT_SESSION_LIFETIME` vale lo
-  mismo que el límite absoluto (12 horas): es la antigüedad máxima que Flask
-  admite en la firma de cualquier cookie de sesión. No se ofrece la opción
-  «recordarme».
+  seguridad](#notas-de-seguridad). `PERMANENT_SESSION_LIFETIME` (7 días) es
+  la antigüedad máxima que Flask admite en la firma de cualquier cookie de
+  sesión; solo es una salvaguarda, muy por encima de los dos límites. No se
+  ofrece la opción «recordarme».
 - Las claves de los límites de peticiones usan el prefijo `iso9001`; un
   almacenamiento Redis recibe tiempos de espera de conexión y de socket de 1
   segundo, y mientras no está accesible lo sustituyen contadores en memoria.
@@ -626,8 +626,8 @@ cubre el estado local, como `logs/` y `celerybeat-schedule`.
   nuevo.» y el registro de seguridad anota `SESSION_EXPIRED`. Una petición
   JSON recibe la misma respuesta que cualquier petición sin sesión, la
   redirección a la página de acceso. Flask también rechaza una cookie firmada
-  hace más de 12 horas, el mismo límite absoluto; la cookie se vuelve a
-  firmar al menos una vez por minuto de uso. Las sesiones
+  hace más de 7 días, como salvaguarda; así, una sesión que se queda abierta
+  toda la noche también recibe el aviso y queda anotada. Las sesiones
   abiertas antes de esta versión no llevan esas horas y se cierran en su
   siguiente petición. Los tokens de API del servidor MCP no usan la sesión y
   estos límites no les afectan.
