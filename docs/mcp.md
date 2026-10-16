@@ -261,16 +261,18 @@ Set these in the application's `.env` (the systemd unit reads it):
 | `MCP_AUTH_FAILURE_RATE_LIMIT` | `20/minute` | HTTP only: failed bearer authentications per client address |
 | `RATELIMIT_STORAGE_URI` | `memory://` | Where both limits are counted, shared with the web application (Redis in production) |
 
-Run it with the systemd unit `iso9001-mcp.service` (copy, `daemon-reload`,
-`enable --now`; see the header of the file), or by hand:
+Run it with the systemd unit `iso9001-mcp.service` (copy it, then
+`daemon-reload`, `enable` and `start`, as the header of the file shows), or by
+hand:
 
 ```bash
 venv/bin/python -m app.mcp_server --transport http --host 127.0.0.1 --port 8765
 ```
 
 stdio re-authenticates the configured token on every tool call, so revoking it,
-letting it expire or changing its owner's role takes effect on the next call
-(a rejected call returns a tool error; the server keeps running).
+letting it expire, deactivating its owner or changing the owner's role takes
+effect on the next call (a rejected call returns a tool error; the server keeps
+running).
 
 `qms_list` pages every module in the database: each service's `list_page`
 counts and fetches one page with the same filters and order as its `list_`
