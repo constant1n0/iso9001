@@ -26,6 +26,7 @@ from flask import (
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy import func
 from werkzeug.security import check_password_hash, generate_password_hash
+from .. import session_lifetime
 from ..models import User
 from ..forms import LoginForm, PasswordResetRequestForm, PasswordResetForm
 from ..extensions import limiter
@@ -60,9 +61,9 @@ def login():
             # login_user() refuses an inactive user by returning False, so the
             # result decides; the response matches wrong credentials exactly.
             if login_user(user):
-                # Permanent, so the cookie expires PERMANENT_SESSION_LIFETIME
-                # after the last request (SESSION_REFRESH_EACH_REQUEST renews it).
-                session.permanent = True
+                # The cookie stays a browser-session cookie; the idle and
+                # absolute limits are enforced from these stamps (DD4).
+                session_lifetime.start(session)
                 log_login_attempt(username, success=True)
                 flash('Inicio de sesión exitoso', 'success')
                 return redirect(url_for('dashboard.dashboard'))
@@ -79,6 +80,7 @@ def login():
 def logout():
     username = current_user.username
     logout_user()
+    session_lifetime.end(session)
     log_logout(username)
     flash('Has cerrado sesión', 'info')
     return redirect(url_for('auth.login'))

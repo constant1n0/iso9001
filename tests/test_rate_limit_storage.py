@@ -16,6 +16,7 @@ from werkzeug.security import generate_password_hash
 
 import test_auth_bootstrap as bootstrap
 
+from app import session_lifetime
 from app.config import Config
 from app.extensions import db, limiter
 from app.models import RoleEnum, User
@@ -124,6 +125,7 @@ class RateLimitWiringTestCase(unittest.TestCase):
         client = app.test_client()
         with client.session_transaction() as session:
             session["_user_id"] = str(user_id)
+            session_lifetime.start(session)
             session["_fresh"] = True
 
         # The removed blanket limit allowed 50 requests per hour.

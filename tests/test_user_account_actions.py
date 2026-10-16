@@ -17,6 +17,7 @@ from urllib.parse import unquote
 import test_auth_bootstrap as bootstrap
 from test_user_routes import ADMIN, AUDITOR, OPERATIVO, PASSWORD, _post_forms, _seed
 
+from app import session_lifetime
 from app.extensions import db
 from app.models import ApiToken, AuditLog, User
 from app.services import api_tokens
@@ -59,6 +60,7 @@ class AccountActionsTestCase(unittest.TestCase):
     def login(self, role=ADMIN, client=None) -> None:
         with (client or self.client).session_transaction() as session:
             session["_user_id"] = str(self.ids[role])
+            session_lifetime.start(session)
             session["_fresh"] = True
 
     def flashes(self, client=None) -> list:
@@ -362,6 +364,7 @@ class ResetLinkRateLimitTestCase(unittest.TestCase):
         if user_id is not None:
             with client.session_transaction() as session:
                 session["_user_id"] = str(user_id)
+                session_lifetime.start(session)
                 session["_fresh"] = True
         return client
 

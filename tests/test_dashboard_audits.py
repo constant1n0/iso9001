@@ -17,6 +17,7 @@ from unittest.mock import patch
 import test_auth_bootstrap as bootstrap
 from werkzeug.security import generate_password_hash
 
+from app import session_lifetime
 from app.extensions import db
 from app.models import Auditoria, EstadoAuditoriaEnum, RoleEnum, User
 from app.services import audits
@@ -64,6 +65,7 @@ class DashboardAuditsTestCase(unittest.TestCase):
         client = self.app.test_client()
         with client.session_transaction() as session:
             session["_user_id"] = str(self.ids[role])
+            session_lifetime.start(session)
             session["_fresh"] = True
         with patch(TODAY_IN_DASHBOARD, return_value=TODAY):
             response = client.get("/dashboard/")

@@ -51,8 +51,11 @@ from the same place, further attempts are refused for a while.
 
 There is no public registration: an administrator creates your account (see
 [Users](#users)). To leave, press **Salir** (sign out) in the top bar. The
-session also ends by itself after eight hours without activity; then sign in
-again.
+session also ends by itself when you close the browser, after eight hours
+without activity and, even while you keep working, twelve hours after you
+signed in; the sign-in page says so with a message, and you just sign in
+again. On a shared computer, press **Salir** or close the browser when you
+finish.
 
 ### Forgotten password
 

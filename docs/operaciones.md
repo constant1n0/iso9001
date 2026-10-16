@@ -129,12 +129,14 @@ Se definen en `app/config.py`, no en el entorno:
 - Correo: `MAIL_SERVER = smtp.gmail.com`, `MAIL_PORT = 587`, `MAIL_USE_TLS = True`.
   Otro proveedor de SMTP requiere un cambio en el código.
 - La cookie de sesión es `HttpOnly`, `SameSite=Lax` y `Secure` salvo que
-  `FLASK_DEBUG` esté activado. El inicio de sesión la hace permanente: caduca
-  8 horas después de la última petición (`PERMANENT_SESSION_LIFETIME`), porque
-  cada petición la renueva (`SESSION_REFRESH_EACH_REQUEST`, activado por
-  defecto en Flask). Una sesión sin actividad durante 8 horas termina, aunque
-  el navegador siga abierto, y una cookie firmada hace más de 8 horas se
-  rechaza. No se ofrece la opción «recordarme».
+  `FLASK_DEBUG` esté activado, y no lleva fecha de caducidad: termina al
+  cerrar el navegador. Una sesión iniciada termina además tras 8 horas sin
+  actividad (`SESSION_IDLE_TIMEOUT`) o 12 horas después del inicio de sesión
+  (`SESSION_ABSOLUTE_LIFETIME`); véase [Notas de
+  seguridad](#notas-de-seguridad). `PERMANENT_SESSION_LIFETIME` vale lo
+  mismo que el límite absoluto (12 horas): es la antigüedad máxima que Flask
+  admite en la firma de cualquier cookie de sesión. No se ofrece la opción
+  «recordarme».
 - Las claves de los límites de peticiones usan el prefijo `iso9001`; un
   almacenamiento Redis recibe tiempos de espera de conexión y de socket de 1
   segundo, y mientras no está accesible lo sustituyen contadores en memoria.
@@ -583,7 +585,7 @@ cubre el estado local, como `logs/` y `celerybeat-schedule`.
 | Journal | `journalctl -u <unit>` | Mensajes de arranque de Gunicorn, el *worker* y el *beat* de Celery (`--loglevel=info`) y el servidor MCP |
 | Registro de acceso de Gunicorn | `logs/gunicorn-access.log` | Dirección del extremo remoto, hora, estado, tamaño, User-Agent y duración de cada petición |
 | Registro de errores de Gunicorn | `logs/gunicorn-error.log` | Errores de Gunicorn y de la aplicación |
-| Registro de seguridad | `SECURITY_LOG_FILE` (`logs/security.log`) | Inicios de sesión y fallos, cierres de sesión, rechazos por límite de peticiones (`RATE_LIMIT_EXCEEDED`), solicitudes y cambios de restablecimiento de contraseña, estado de las cuentas, cambios de correo electrónico y de enlaces de restablecimiento, tokens de API emitidos, revocados y fallidos (`API_TOKEN_AUTH_FAILED`, `API_TOKEN_RATE_LIMITED`, `MCP_AUTH_RATE_LIMITED`), subidas y rechazos de adjuntos |
+| Registro de seguridad | `SECURITY_LOG_FILE` (`logs/security.log`) | Inicios de sesión y fallos, cierres de sesión, sesiones caducadas (`SESSION_EXPIRED`), rechazos por límite de peticiones (`RATE_LIMIT_EXCEEDED`), solicitudes y cambios de restablecimiento de contraseña, estado de las cuentas, cambios de correo electrónico y de enlaces de restablecimiento, tokens de API emitidos, revocados y fallidos (`API_TOKEN_AUTH_FAILED`, `API_TOKEN_RATE_LIMITED`, `MCP_AUTH_RATE_LIMITED`), subidas y rechazos de adjuntos |
 | Registro de auditoría | Base de datos | Cada cambio hecho a través de los servicios, con el actor y el canal |
 
 - **Privacidad del registro de acceso**: `gunicorn.conf.py` omite
@@ -616,6 +618,19 @@ cubre el estado local, como `logs/` y `celerybeat-schedule`.
   tokens de API y los enlaces de restablecimiento.
 - **Modo de depuración**: no active nunca `FLASK_DEBUG` en producción; quita
   el atributo `Secure` de las cookies y elimina HSTS.
+- **Sesiones**: la cookie de sesión termina al cerrar el navegador. Además,
+  el servidor guarda en la sesión firmada la hora del inicio de sesión y la
+  de la última petición, y cierra la sesión tras 8 horas sin actividad o 12
+  horas después de iniciarla, aunque se siga usando: el usuario vuelve a la
+  página de acceso con el aviso «La sesión ha caducado. Inicie sesión de
+  nuevo.» y el registro de seguridad anota `SESSION_EXPIRED`. Una petición
+  JSON recibe la misma respuesta que cualquier petición sin sesión, la
+  redirección a la página de acceso. Flask también rechaza una cookie firmada
+  hace más de 12 horas, el mismo límite absoluto; la cookie se vuelve a
+  firmar al menos una vez por minuto de uso. Las sesiones
+  abiertas antes de esta versión no llevan esas horas y se cierran en su
+  siguiente petición. Los tokens de API del servidor MCP no usan la sesión y
+  estos límites no les afectan.
 - **Proxies de confianza**: `TRUSTED_PROXIES` es la única vía por la que la
   dirección o el esquema de un cliente se toman de las cabeceras de proxy; los
   extremos remotos que no figuran en la lista no pueden establecerlos. `*` se

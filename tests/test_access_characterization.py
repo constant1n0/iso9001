@@ -15,6 +15,7 @@ from datetime import date
 import test_auth_bootstrap as bootstrap
 from werkzeug.security import generate_password_hash
 
+from app import session_lifetime
 from app.extensions import db
 from app.models import (
     AccionCorrectiva,
@@ -452,6 +453,7 @@ class AccessCharacterizationTestCase(unittest.TestCase):
             # Same session keys Flask-Login writes on a real login.
             with client.session_transaction() as session:
                 session["_user_id"] = str(user_id)
+                session_lifetime.start(session)
                 session["_fresh"] = True
         return client
 

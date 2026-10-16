@@ -53,8 +53,10 @@ tiempo.
 
 No hay registro público: un administrador crea las cuentas (véase
 [Usuarios](#usuarios)). Para salir, pulse **Salir** en la barra superior. La
-sesión también termina sola tras ocho horas sin actividad; después, vuelva a
-iniciar sesión.
+sesión también termina sola al cerrar el navegador, tras ocho horas sin
+actividad y, aunque siga trabajando, doce horas después de iniciarla; la
+página de acceso lo indica con un aviso y basta con volver a iniciar sesión.
+En un equipo compartido, pulse **Salir** o cierre el navegador al terminar.
 
 ### Contraseña olvidada
 

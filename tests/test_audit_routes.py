@@ -13,6 +13,7 @@ from unittest.mock import patch
 import test_auth_bootstrap as bootstrap
 from werkzeug.security import generate_password_hash
 
+from app import session_lifetime
 from app.extensions import db
 from app.models import Auditoria, AuditLog, EstadoAuditoriaEnum, RoleEnum, User
 from app.services import audit, errors
@@ -58,6 +59,7 @@ class AuditRoutesTestCase(unittest.TestCase):
     def login(self, role: RoleEnum = RoleEnum.AUDITOR) -> None:
         with self.client.session_transaction() as session:
             session["_user_id"] = str(self.ids[role])
+            session_lifetime.start(session)
 
     def flashes(self):
         with self.client.session_transaction() as session:
