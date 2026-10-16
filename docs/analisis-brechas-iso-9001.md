@@ -1,217 +1,235 @@
-# ISO 9001 Gap Analysis of the QMS Application
+# Análisis de brechas ISO 9001 de la aplicación SGC
 
-This report assesses whether the application provides the documented information and process support that an organization needs to demonstrate each ISO 9001 requirement in a certification audit. It started as the input for the domain work behind the MCP server for AI agents, and now records what that work delivered and what remains.
+Este informe evalúa si la aplicación proporciona la información documentada y el soporte a los procesos que una organización necesita para demostrar cada requisito de ISO 9001 en una auditoría de certificación. Nació como punto de partida del trabajo de dominio previo al servidor MCP para agentes de IA, y ahora recoge lo que ese trabajo entregó y lo que queda pendiente.
 
-- **Baseline (history):** first assessed read-only at `main@b794952` on 2026-10-02 and committed in `288558e`.
-- **Re-assessed:** 2026-10-16, at `fd46fad` on the branch `docs/documentation-refresh`, whose application code matches `main`. Every clause row was assessed again.
-- **Method:** a read-only review of the models, services, policy, routes, templates, MCP registry, reports and scheduled tasks. File and line references point to that commit. The behaviour is described in the [user guide](user-guide.md), the [service layer](architecture/services.md) and the [MCP server](mcp.md).
-- **Framing:** software cannot comply with ISO 9001; the organization does. Each clause is judged on whether the app can hold the evidence and support the process.
-- **Status:** Waves 0 and 1 of the roadmap are complete. Nine of the 34 clause rows are now covered, against none at the baseline.
+- **Línea base (historial):** primera evaluación, de solo lectura, en `main@b794952` el 2026-10-02, incorporada al repositorio en `288558e`.
+- **Reevaluación:** 2026-10-16, en `fd46fad` de la rama `docs/documentation-refresh`, cuyo código de aplicación coincide con `main`. Se volvieron a evaluar todas las filas de apartados.
+- **Método:** revisión de solo lectura de los modelos, los servicios, la política de permisos, las rutas, las plantillas, el registro de módulos MCP, los informes y las tareas programadas. Las referencias a archivos y líneas apuntan a ese commit. El comportamiento se describe en la [guía de usuario](guia-de-usuario.md), la [capa de servicios](architecture/services.md) (en inglés) y el [servidor MCP](mcp.md).
+- **Enfoque:** el software no puede cumplir ISO 9001; quien cumple es la organización. Cada apartado se juzga según si la aplicación puede conservar la evidencia y dar soporte al proceso.
+- **Estado:** las fases 0 y 1 de la hoja de ruta están terminadas. Nueve de las 34 filas de apartados están ahora cubiertas, frente a ninguna en la línea base.
 
-## Summary
+## Contenido
 
-**At the baseline, no clause was fully covered.** The application was a set of independent CRUD registers. Records were not linked, versioned, approved or attributed to a person.
+- [Resumen](#resumen)
+- [Norma de referencia](#norma-de-referencia)
+- [Defectos verificados](#defectos-verificados)
+- [Evaluación apartado por apartado](#evaluación-apartado-por-apartado)
+- [Las diez brechas principales por impacto en la auditoría](#las-diez-brechas-principales-por-impacto-en-la-auditoría)
+- [Brechas transversales](#brechas-transversales)
+- [Modelo de dominio objetivo](#modelo-de-dominio-objetivo)
+  - [Entidades existentes que cambian](#entidades-existentes-que-cambian)
+  - [Entidades nuevas](#entidades-nuevas)
+  - [Máquinas de estado principales (tal como se entregaron)](#máquinas-de-estado-principales-tal-como-se-entregaron)
+- [Fortalezas que conservar](#fortalezas-que-conservar)
+- [Hoja de ruta propuesta](#hoja-de-ruta-propuesta)
+- [Límites de este estudio](#límites-de-este-estudio)
 
-**At the re-assessment, the audit-critical clauses are covered:**
+## Resumen
 
-- documented information: 7.5.1, 7.5.2 and 7.5.3;
-- competence: 7.2;
-- quality objectives: 6.2;
-- monitoring and measurement: 9.1.1;
-- internal audit: 9.2;
-- management review: 9.3;
-- nonconformity and corrective action: 10.2.
+**En la línea base, ningún apartado estaba cubierto por completo.** La aplicación era un conjunto de registros CRUD independientes. Sus entradas no estaban vinculadas, versionadas, aprobadas ni atribuidas a una persona.
 
-Every record carries who created and last changed it, and an append-only audit log. People are records, not free text, wherever Wave 1 touched a register. What remains open are the planning and operational clauses, which still rest on unchanged text registers.
+**En la reevaluación, los apartados críticos para la auditoría están cubiertos:**
 
-| Status | Clauses at the re-assessment | At the baseline |
+- información documentada: 7.5.1, 7.5.2 y 7.5.3;
+- competencia: 7.2;
+- objetivos de la calidad: 6.2;
+- seguimiento y medición: 9.1.1;
+- auditoría interna: 9.2;
+- revisión por la dirección: 9.3;
+- no conformidad y acción correctiva: 10.2.
+
+Cada entrada guarda quién la creó y quién la modificó por última vez, y queda en un registro de auditoría de solo inserción. En los registros que tocó la fase 1, las personas son entradas de un registro, no texto libre. Quedan abiertos los apartados de planificación y de operación, que siguen apoyándose en registros de texto sin cambios.
+
+| Estado | Apartados en la reevaluación | En la línea base |
 |---|---|---|
-| Covered | 9 (6.2, 7.2, 7.5.1, 7.5.2, 7.5.3, 9.1.1, 9.2, 9.3, 10.2) | 0 |
-| Partial | 16 | 22 |
-| Not covered | 6 (7.1.5, 7.1.6, 7.4, 8.3, 8.5, 8.6) | 8 |
-| Documentary support only | 3 (4.1, 4.3, 5.1) | 4 |
+| Cubierto | 9 (6.2, 7.2, 7.5.1, 7.5.2, 7.5.3, 9.1.1, 9.2, 9.3, 10.2) | 0 |
+| Parcial | 16 | 22 |
+| No cubierto | 6 (7.1.5, 7.1.6, 7.4, 8.3, 8.5, 8.6) | 8 |
+| Solo soporte documental | 3 (4.1, 4.3, 5.1) | 4 |
 
-The baseline column counts the original assessment. The previous version of this document showed one covered clause (9.3) because only that row had been updated.
+La columna de la línea base recoge la evaluación original. La versión anterior de este documento mostraba un único apartado cubierto (9.3) porque solo se había actualizado esa fila.
 
-These are the findings an auditor would most likely raise at the re-assessment:
+Estos son los hallazgos que un auditor plantearía con más probabilidad en la reevaluación:
 
-1. **6.1 Risks and opportunities:** the register is a text list (type, description, plan). It has no scoring, owner, status, review date or link to actions, and no web screen. ISO 9001:2026 treats risks and opportunities as separate concepts.
-2. **4.4 Processes:** a process holds a name, a quality criterion and a supplier flag. It has no owner, inputs, outputs, interactions or indicators, and no web screen.
-3. **8.4 External providers:** the app holds only a boolean on the process and a nonconformity origin. There is no supplier register, approval or evaluation.
-4. **6.3 Planning of changes:** only changes decided in a management review are tracked, as review actions of type `cambio_sgc`.
-5. **4.1 and 4.3 Context and scope:** they can be held only as controlled documents. Nothing records internal and external issues, climate relevance or justified exclusions as data.
-6. **8.2 and 9.1.2 Customers:** customers are free text, and complaints exist only as nonconformities with origin `cliente`. No review of customer requirements is recorded.
+1. **6.1 Acciones para abordar riesgos y oportunidades:** el registro es una lista de texto (tipo, descripción, plan). No tiene valoración, responsable, estado, fecha de revisión ni vínculo con acciones, y no tiene pantalla web. ISO 9001:2026 trata los riesgos y las oportunidades como conceptos separados.
+2. **4.4 Sistema de gestión de la calidad y sus procesos:** un proceso guarda un nombre, un criterio de calidad y una marca de control de proveedores. No tiene responsable, entradas, salidas, interacciones ni indicadores, y no tiene pantalla web.
+3. **8.4 Control de los procesos, productos y servicios suministrados externamente:** la aplicación solo guarda un booleano en el proceso y un origen de no conformidad. No hay registro de proveedores, ni aprobación, ni evaluación.
+4. **6.3 Planificación de los cambios:** solo se siguen los cambios decididos en una revisión por la dirección, como acciones de revisión del tipo `cambio_sgc`.
+5. **4.1 y 4.3, contexto y alcance:** solo pueden conservarse como documentos controlados. Nada registra como datos las cuestiones externas e internas, la pertinencia del cambio climático ni las exclusiones justificadas.
+6. **8.2 y 9.1.2, clientes:** los clientes son texto libre y las reclamaciones solo existen como no conformidades con origen `cliente`. No se registra ninguna revisión de los requisitos del cliente.
 
-**Implication for the MCP work:**
+**Implicación para el trabajo MCP:**
 
-- The MCP server shipped: 22 modules through five generic tools (`app/mcp_server/registry.py`, `_MODULES`). Each Wave 2 register adds one `Module` entry over its service.
-- The five registers without web screens (roles, risks and opportunities, training resources, processes, audit indicators) are already MCP modules.
+- El servidor MCP está entregado: 22 módulos a través de cinco herramientas genéricas (`app/mcp_server/registry.py`, `_MODULES`). Cada registro de la fase 2 añade una entrada `Module` sobre su servicio.
+- Los cinco registros sin pantallas web (roles, riesgos y oportunidades, recursos de capacitación, procesos, indicadores de auditoría) ya son módulos MCP.
 
-## Reference standard
+## Norma de referencia
 
-**ISO 9001:2026 was published on 2026-09-16** and replaces ISO 9001:2015 with Amendment 1:2024. The AENOR store lists UNE-EN ISO 9001:2026. Certified organizations have a three-year transition, to about September 2029.
+**ISO 9001:2026 se publicó el 2026-09-16** y sustituye a ISO 9001:2015 con la Modificación 1:2024. La tienda de AENOR incluye UNE-EN ISO 9001:2026. Las organizaciones certificadas disponen de una transición de tres años, hasta septiembre de 2029 aproximadamente.
 
-> **Note:** publication and transition data come from secondary sources (AFNOR, AENOR store, sector publications). `[VERIFY: confirm against iso.org and the UNE text before relying on exact clause wording.]`
+> **Nota:** los datos de publicación y de transición proceden de fuentes secundarias (AFNOR, tienda de AENOR, publicaciones del sector). `[VERIFICAR: contrastar con iso.org y con el texto UNE antes de basarse en la redacción exacta de los apartados.]`
 
-The study used the 2015 + Amd 1:2024 clause structure. The 2026 edition keeps clauses 4 to 10, so the assessment remains valid. These 2026 changes affect the application and must be designed in from the start:
+El estudio usó la estructura de apartados de la edición 2015 con la Modificación 1:2024. La edición 2026 mantiene los apartados 4 a 10, por lo que la evaluación sigue siendo válida. Estos cambios de 2026 afectan a la aplicación y deben incorporarse al diseño desde el principio:
 
-| Topic | Change | Impact on the app |
+| Tema | Cambio | Impacto en la aplicación |
 |---|---|---|
-| Risks and opportunities (6.1) | Treated as separate concepts, with more weight on opportunities | Split `RiesgoOportunidad` into distinct risk and opportunity records (open) |
-| Change management (6.3) | More planning, communication, monitoring and effectiveness review of QMS changes | `ChangeRecord` becomes a priority, not an optional extra (open) |
-| Leadership (5.1) | Promote quality culture and ethical behaviour | Documentary support: evidence records and acknowledgements (open) |
-| Climate change (4.1, 4.2) | Amendment 1:2024 folded into the main text | Climate relevance flag on context issues and stakeholder requirements (open) |
-| Management review (9.3) | Inputs include changes in stakeholder needs | Delivered: the review inputs list the interested parties changed in the period (`app/services/management_reviews.py:727`, `_changed_parties`) |
-| Documented information (7.5) | Wording moves from "maintain" to "available as documented information" | No model change expected |
+| Riesgos y oportunidades (6.1) | Se tratan como conceptos separados, con más peso de las oportunidades | Separar `RiesgoOportunidad` en registros distintos de riesgo y de oportunidad (abierto) |
+| Planificación de los cambios (6.3) | Más planificación, comunicación, seguimiento y revisión de la eficacia de los cambios del SGC | `ChangeRecord` pasa a ser una prioridad, no un extra opcional (abierto) |
+| Liderazgo y compromiso (5.1) | Promover la cultura de la calidad y el comportamiento ético | Soporte documental: registros de evidencia y confirmaciones de lectura (abierto) |
+| Cambio climático (4.1, 4.2) | La Modificación 1:2024 se integra en el texto principal | Marca de pertinencia climática en las cuestiones de contexto y en los requisitos de las partes interesadas (abierto) |
+| Revisión por la dirección (9.3) | Las entradas incluyen los cambios en las necesidades de las partes interesadas | Entregado: las entradas de la revisión enumeran las partes interesadas modificadas en el periodo (`app/services/management_reviews.py:727`, `_changed_parties`) |
+| Información documentada (7.5) | La redacción pasa de «mantener» a «disponible como información documentada» | No se prevé ningún cambio de modelo |
 
-## Verified defects
+## Defectos verificados
 
-Each defect below was confirmed by reading the code.
+Cada uno de estos defectos se confirmó leyendo el código.
 
-- **Baseline defects:** the first two were reported by the September 2026 bug audit. Wave 0 fixed all three.
-- **Open defects:** the last three were found while writing the user guides and are still open at the re-assessment.
+- **Defectos de la línea base:** los dos primeros los detectó la auditoría de errores de septiembre de 2026. La fase 0 corrigió los tres.
+- **Defectos abiertos:** los tres últimos se encontraron al redactar las guías de usuario y siguen abiertos en la reevaluación.
 
-| Defect | Location | Effect | Status |
+| Defecto | Ubicación | Efecto | Estado |
 |---|---|---|---|
-| Monthly report counts all-time totals | `app/utils/reports.py:95-147`, `_monthly_report_context` | Counts now filter by the calendar month of `fecha` | Fixed |
-| Satisfaction chart mixes years | `app/routes/dashboard_routes.py:87-96` | Now grouped by year and month over the last 12 months | Fixed |
-| Any authenticated user can delete a nonconformity | `app/services/nonconformities.py:517-522`, `delete` | Now requires the delete grant, held only by ADMINISTRADOR (`app/services/policy.py:117`). The delete leaves an audit snapshot | Fixed |
-| Dashboard shows audit data to every role | `app/routes/dashboard_routes.py:52-54` and `:112`; `app/templates/dashboard/dashboard.html:36-76` | OPERATIVO has no audit read access (`policy.py:125`) yet sees the audit count and the next seven days' audits with area and date. The card also lists cancelled and completed audits. Affects 7.5.3 and 9.2 | Open |
-| Sign-in does not make the session permanent | `app/routes/auth_routes.py:61`, `login_user(user)`; `app/config.py:38`, `:44` | No `session.permanent` and no remember cookie, so the session cookie has no expiry date and `REMEMBER_COOKIE_DURATION` is unused. `PERMANENT_SESSION_LIFETIME` (8 h) only bounds the signed cookie's age since it was last written. Affects 7.5.3 | Open |
-| Monthly report dated with the month's last day | `app/utils/reports.py:153`, `:159` (`generado=fecha`); `app/audit_notifications.py:118-123` | "Generado el" prints the last day of the reported month, not the date the report was produced. Affects 7.5.2 and 9.1.1 | Open |
+| El informe mensual cuenta totales históricos | `app/utils/reports.py:95-147`, `_monthly_report_context` | Ahora los recuentos filtran por el mes natural de `fecha` | Corregido |
+| El gráfico de satisfacción mezcla años | `app/routes/dashboard_routes.py:87-96` | Ahora se agrupa por año y mes en los últimos 12 meses | Corregido |
+| Cualquier usuario autenticado puede borrar una no conformidad | `app/services/nonconformities.py:517-522`, `delete` | Ahora exige el permiso de borrado, que solo tiene ADMINISTRADOR (`app/services/policy.py:117`). El borrado deja una instantánea en el registro de auditoría | Corregido |
+| El panel de control muestra datos de auditorías a todos los roles | `app/routes/dashboard_routes.py:52-54` y `:112`; `app/templates/dashboard/dashboard.html:36-76` | OPERATIVO no tiene acceso de lectura a las auditorías (`policy.py:125`) y, sin embargo, ve el número de auditorías y las auditorías de los próximos siete días con su área y su fecha. La tarjeta también muestra auditorías canceladas y completadas. Afecta a 7.5.3 y 9.2 | Abierto |
+| El inicio de sesión no hace permanente la sesión | `app/routes/auth_routes.py:61`, `login_user(user)`; `app/config.py:38`, `:44` | No hay `session.permanent` ni cookie de recordatorio, así que la cookie de sesión no tiene fecha de caducidad y `REMEMBER_COOKIE_DURATION` no se usa. `PERMANENT_SESSION_LIFETIME` (8 h) solo limita la antigüedad de la cookie firmada desde su última escritura. Afecta a 7.5.3 | Abierto |
+| El informe mensual se fecha con el último día del mes | `app/utils/reports.py:153`, `:159` (`generado=fecha`); `app/audit_notifications.py:118-123` | «Generado el» muestra el último día del mes del informe, no la fecha en que se generó. Afecta a 7.5.2 y 9.1.1 | Abierto |
 
-## Clause-by-clause assessment
+## Evaluación apartado por apartado
 
-Legend:
+Leyenda (cada letra es la inicial del estado: C de cubierto, P de parcial, N de no cubierto y D de documental):
 
-- **C** covered: structured records hold the evidence and the services enforce the process.
-- **P** partial: some structured support, or only free text the organization must fill in.
-- **N** not covered.
-- **D** documentary support only: the organization can keep a controlled document (7.5) but the app has no records for it.
+- **C** (cubierto): registros estructurados conservan la evidencia y los servicios hacen cumplir el proceso.
+- **P** (parcial): algún soporte estructurado, o solo texto libre que la organización debe completar.
+- **N** (no cubierto).
+- **D** (solo soporte documental): la organización puede conservar un documento controlado (7.5), pero la aplicación no tiene registros para ello.
 
-"was X" marks a status that changed since the baseline. Paths are relative to `app/`.
+«(antes X)» marca un estado que ha cambiado desde la línea base. Las rutas son relativas a `app/`. Los títulos de los apartados siguen la versión española de la norma (UNE-EN ISO 9001).
 
-| Clause | Status | Evidence | Gap |
+| Apartado | Estado | Evidencia | Brecha |
 |---|---|---|---|
-| 4.1 Context | D | A context analysis can be a controlled document (`models.py:1102-1216`). Management review comment `comentario_contexto` (`models.py:1017`) | No register of internal and external issues, nor of climate relevance |
-| 4.2 Interested parties | P | `ParteInteresada` (`models.py:94-100`) with web screens (`routes/parte_interesada_routes.py`) and the MCP module `partes_interesadas`. Parties changed in a review period are listed among the review inputs (`services/management_reviews.py:727`) | Needs, expectations and requirements are free text. No owner, review date, relevance flag or climate flag |
-| 4.3 Scope | D | Scope and exclusions can be a controlled document. `ProgramaAuditoria.alcance` (`models.py:685`) is the audit scope, not the QMS scope | Scope, applicability and justified exclusions are not recorded as data |
-| 4.4 Processes | P | `ProcesoOperacion` (`models.py:128-134`), reached through the JSON API only (`routes/proceso_operacion_routes.py:23`, `register_json_api`) and MCP. Objectives can name a process (`ObjetivoCalidad.proceso_id`, `models.py:863`) | No owner, inputs, outputs, interactions, criteria or indicators per process, and no web screen. Nonconformities and risks are not linked to processes |
-| 5.1 Leadership | D | Management reviews record attendees, conclusions and actions (`RevisionDireccion`, `models.py:984-1044`). `RolResponsabilidad.compromiso_calidad` flag (`models.py:107`) | Nothing identifies top management. No evidence records for commitment, quality culture or ethics (2026) |
-| 5.2 Quality policy | P | The policy can be a controlled document: numbered revisions, approval by someone other than the author, an effective date and history (`services/document_revisions.py:255-335`). Every role reads the revision in force (`services/policy.py:126`; `DRAFT_READERS`, `services/document_revisions.py:83`). Legacy free text `RolResponsabilidad.descripcion_politica_calidad` (`models.py:108`) | No record that people have read or acknowledged the policy. No quality-policy category (`DocumentCategory`, `models.py:1089-1100`). The policy is not available to external interested parties through the app |
-| 5.3 Roles | P | People hold QMS roles (`persona_roles` and `Person`, `models.py:298-364`) with web screens (`routes/people_routes.py`). Roles carry competence requirements (`CompetenceRequirement`, `models.py:409-429`). A person may be linked to one login user (`Person.user_id`, `models.py:343`) | A role holds only a name, a flag and a policy text, not its responsibilities and authorities. Roles have no web screen (`routes/rol_responsabilidad_routes.py:23`, JSON and MCP only). Roles are not linked to processes |
-| 6.1 Risks and opportunities | P | `RiesgoOportunidad` (`models.py:111-117`), JSON API and MCP only (`routes/riesgo_oportunidad_routes.py:23`). Risks changed in the period are listed among the review inputs (`services/management_reviews.py:739`). Review comment `comentario_riesgos` (`models.py:1020`) | No scoring, owner, status or review date. No link to actions, context or processes, and no web screen. Risks and opportunities share one record (2026 separates them) |
-| 6.2 Quality objectives | **C** (was P) | `ObjetivoCalidad` (`models.py:835-886`) has title, indicator, unit, target and direction, baseline, owner, period, frequency, resources, evaluation method and state. Measurements are records of their own (`MedicionObjetivo`, `models.py:889-917`). The target is locked once measured, and progress, trend and overdue checks come from `services/quality_objectives.py` (`summary` at `:466`, `off_track` at `:519`). Every role reads the objectives (`services/policy.py:139`). Web screens, a yearly PDF (`routes/quality_objective_routes.py:234`) and a dashboard card | Minor: "what will be done" (6.2.2 a) is free text (`descripcion`), not tracked actions. No link to the policy or to risks |
-| 6.3 Planning of changes | P (was N) | A management review can record a change to the QMS as an action of type `cambio_sgc` (`TipoAccionRevision`, `models.py:931-936`), with owner, deadline, state and result (`AccionRevision`, `models.py:1047-1086`) | No change register outside management reviews. No record of purpose, consequences, integrity, resources or the effectiveness of a change |
-| 7.1 Resources | P | `RecursoCapacitacion` (`models.py:120-125`), JSON API and MCP only (`routes/recurso_capacitacion_routes.py:23`). People register (7.1.2, `Person`). Review comment `comentario_recursos` and actions of type `recursos` (`models.py:1019`, `:936`) | No infrastructure (7.1.3) or work-environment (7.1.4) records. The training-resources register has no type, owner or status, and no web screen |
-| 7.1.5 Monitoring and measuring resources | N | None | No equipment register or calibration records |
-| 7.1.6 Organizational knowledge | N | None | No knowledge register or lessons learned |
-| 7.2 Competence | **C** (was P) | Required competence per role (`CompetenceRequirement`, `models.py:409-429`). Demonstrated competence per person, with evidence, expiry, training link and an effectiveness evaluation by another person (`CompetenceRecord`, `models.py:432-487`). Required-versus-demonstrated matrix (`services/competence.py:344`, `cell_status`; `:375`, `matrix`; page `routes/competence_routes.py:141`). Training is linked to a person (`Capacitacion.persona_id`, `models.py:634`) | Minor: evidence is text or a reference (500 characters), with no certificate upload. Roles, and therefore requirements, can only be created through the JSON API or MCP. The training's own `evaluacion_final` is free text |
-| 7.3 Awareness | P (was D) | Every role reads the documents in force and the quality objectives (`services/policy.py:126`, `:139`). Awareness sessions can be recorded as training (`Capacitacion`) | No acknowledgement that a person has read the policy, the objectives or a procedure |
-| 7.4 Communication | N | Only automated e-mails: audit reminders, document review alerts and the monthly report (`audit_notifications.py:55`, `:81`, `:112`, `:140`) | No communication plan: what, when, with whom, how and who communicates |
-| 7.5.1 Documented information | **C** (was P) | Controlled documents (`Document`, `models.py:1102-1123`) with numbered revisions (`DocumentRevision`, `models.py:1153-1216`). Every register keeps who created and changed each record (`RecordMetadataMixin`, `models.py:57-90`), and an append-only audit log keeps the history (`AuditLog`, `models.py:1220-1258`) | None for the clause itself. The partial registers are assessed under their own clauses |
-| 7.5.2 Creating and updating | **C** (was P) | Identification: code, title, category, revision number and author (`models.py:1113-1115`, `:1191`, `:1200`). A change summary is needed to submit (`models.py:1199`). Review and approval: submit, approve (ADMINISTRADOR, never the author) and reject with a reason (`services/document_revisions.py:255-299`). Format: text plus an optional PDF, DOCX, XLSX or ODT checked by content (`services/document_files.py:60-64`, `:155`) | None. See the open defect on the monthly report's date |
-| 7.5.3 Control | **C** (was N) | One revision in force and one in preparation at most (`models.py:1140-1142`, `:1181-1184`). Publishing obsoletes the previous revision (`services/document_revisions.py:300`). Revisions in force or obsolete never change (`IMMUTABLE`, `:94`). Withdrawal instead of deletion (`:313`). Drafts are readable only by ADMINISTRADOR and AUDITOR (`:83`). Next review date and a weekly alert to owners (`services/documents.py:173`; `audit_notifications.py:140`). Attachment checksum (`models.py:1212`). Append-only audit log (`services/audit.py:183-190`) | No retention period or disposition record. No external-origin flag. Records of the older registers can still be hard-deleted by administrators (an audit snapshot remains). No screen to read the audit log. The two open access defects (dashboard, session) |
-| 8.1 Operational planning | P | `ProcesoOperacion.criterio_calidad` (`models.py:132`), JSON API and MCP only | No operational plan or acceptance criteria per process, and no web screen |
-| 8.2 Requirements for products and services | P | Customer feedback in `SatisfaccionCliente` (`models.py:619-625`). Complaints can be recorded as nonconformities with origin `cliente` (`OrigenNoConformidad`, `models.py:508`) | No review of customer requirements, no change record or communication log, and no complaint register with the answer to the customer |
-| 8.3 Design and development | N | None | No design entity; may be excluded only if the organization justifies it |
-| 8.4 External providers | P | `ProcesoOperacion.control_proveedor` boolean (`models.py:133`). Nonconformity origin `proveedor` (`models.py:510`). Review comment on performance including external providers (`comentario_desempeno`, `models.py:1018`) | No supplier register, approval, evaluation or re-evaluation |
-| 8.5 Production and service provision | N | None | No control, traceability, customer property or post-delivery records |
-| 8.6 Release | N | None | No release record |
-| 8.7 Nonconforming outputs | P | `NoConformidad` (`models.py:523-542`) with origin, severity, containment (`contencion`), owner (`responsable_id`) and root cause, and corrective actions (10.2) | No disposition (correction, segregation, return, concession), no concession or deciding-authority record, and no link to the product, lot or process |
-| 9.1.1 Monitoring and measurement | **C** (was P) | Indicators are records: each objective defines what is measured, how often and how results are evaluated (`models.py:864-877`). Dated measurements (`models.py:889-917`) are judged against the target, with trend and overdue checks (`services/quality_objectives.py:466`). The monthly report counts the month and judges the objectives (`utils/reports.py:66`, `:95-147`) | Minor: process indicators without a target must be entered as objectives. The legacy audit-indicators register (`AuditoriaIndicador`, `models.py:137-144`) is JSON and MCP only (`routes/auditoria_indicador_routes.py:23`). See the open defect on the report's date |
-| 9.1.2 Customer satisfaction | P | `SatisfaccionCliente` (`models.py:619-625`) with web screens (`routes/satisfaccion_cliente_routes.py`) and a PDF. Period average among the review inputs (`services/management_reviews.py:753`). Monthly chart (`routes/dashboard_routes.py:87-96`) | The customer is free text. No survey type, channel or target |
-| 9.1.3 Analysis and evaluation | P | Objective versus target and trend (`services/quality_objectives.py:466`, `:519`). Period-bound review inputs: satisfaction, objectives, indicators, nonconformities, audits, improvements and training (`services/management_reviews.py:595`, `:665-684`). Monthly report | No analysis of supplier performance (9.1.3 f) or of the effectiveness of actions on risks (9.1.3 e), because neither has records |
-| 9.2 Internal audit | **C** (was P) | Yearly programme with objectives and scope, approved by an administrator (`ProgramaAuditoria`, `models.py:662-696`; `services/audit_programmes.py:187`). Each audit has programme, scope, criteria, lead auditor, team and area owner (`Auditoria` and `auditoria_equipo`, `models.py:701-762`). Independence check: no auditor owns the audited area (`services/audits.py:226-251`). Findings are classified and a nonconformity finding opens its nonconformity (`HallazgoAuditoria`, `models.py:765-807`; `services/audit_findings.py:277`). Audit and programme PDFs (`routes/auditoria_routes.py:306`; `routes/audit_programme_routes.py:139`). Reminders (`audit_notifications.py:55`, `:81`) | Minor: the audit report is free text (`resultado`), and `accion_correctiva` is legacy free text. No audit frequency or method per process. See the open dashboard defect |
-| 9.3 Management review | C | Each review records meeting date, period, attendees, a comment per input of 9.3.2 and conclusions (`RevisionDireccion`, `models.py:984-1044`). The inputs are drawn from the registers and frozen when the review is held (`services/management_reviews.py:595`, `inputs`; `:355`, `hold`). Each output is an action with owner, deadline and follow-up (`AccionRevision`, `models.py:1047-1086`). Minutes PDF (`routes/management_review_routes.py:310`) and an overdue-actions card | None |
-| 10.1 Improvement | P | `Mejora` (`models.py:147-153`) with web screens (`routes/mejora_routes.py`). Opportunities also come from audit findings of type `oportunidad_mejora` and review actions of type `mejora` (`models.py:771`, `:934`) | Improvements are a free-text list that requires a nonconformity text (`forms.py:172-176`). No pipeline and no link to their source. Opportunities live in three unconnected places |
-| 10.2 Nonconformity and corrective action | **C** (was P) | `NoConformidad` (`models.py:490-542`) has origin, severity, containment, root cause, owner and a state set only by the service. Corrective actions have owner, due date, done date and verification by someone other than the owner (`AccionCorrectiva`, `models.py:545-616`; `services/corrective_actions.py:231`, `verify`). A nonconformity closes only after its latest action proves effective (`services/nonconformities.py:378`, `close`; `:450`, `close_blockers`). Cancel and reopen with a reason; PDF (`routes/no_conformidad_routes.py:210`) | Minor: no link to risks (10.2.1 e) or to QMS changes (10.2.1 f), and no record of similar nonconformities. The legacy free-text `accion_correctiva` is still editable on the form (`forms.py:143`) |
-| 10.3 Continual improvement | P | `Mejora` (`models.py:147-153`). Objective trends (`services/quality_objectives.py:466`). Review conclusions and improvement actions (`models.py:1022`, `:934`) | `fecha_implementacion` is always the creation time (`models.py:153`; not on the form). Improvements are not linked to objectives or review outputs |
+| 4.1 Comprensión de la organización y de su contexto | D | Un análisis de contexto puede ser un documento controlado (`models.py:1102-1216`). Comentario de la revisión por la dirección `comentario_contexto` (`models.py:1017`) | No hay registro de cuestiones externas e internas ni de la pertinencia del cambio climático |
+| 4.2 Comprensión de las necesidades y expectativas de las partes interesadas | P | `ParteInteresada` (`models.py:94-100`) con pantallas web (`routes/parte_interesada_routes.py`) y el módulo MCP `partes_interesadas`. Las partes modificadas en el periodo de una revisión figuran entre las entradas de la revisión (`services/management_reviews.py:727`) | Las necesidades, las expectativas y los requisitos son texto libre. Sin responsable, fecha de revisión, marca de pertinencia ni marca climática |
+| 4.3 Determinación del alcance del sistema de gestión de la calidad | D | El alcance y las exclusiones pueden ser un documento controlado. `ProgramaAuditoria.alcance` (`models.py:685`) es el alcance de la auditoría, no el del SGC | El alcance, la aplicabilidad y las exclusiones justificadas no se registran como datos |
+| 4.4 Sistema de gestión de la calidad y sus procesos | P | `ProcesoOperacion` (`models.py:128-134`), accesible solo mediante la API JSON (`routes/proceso_operacion_routes.py:23`, `register_json_api`) y MCP. Los objetivos pueden indicar un proceso (`ObjetivoCalidad.proceso_id`, `models.py:863`) | Sin responsable, entradas, salidas, interacciones, criterios ni indicadores por proceso, y sin pantalla web. Las no conformidades y los riesgos no están vinculados a procesos |
+| 5.1 Liderazgo y compromiso | D | Las revisiones por la dirección registran asistentes, conclusiones y acciones (`RevisionDireccion`, `models.py:984-1044`). Marca `RolResponsabilidad.compromiso_calidad` (`models.py:107`) | Nada identifica a la alta dirección. No hay registros de evidencia del compromiso, la cultura de la calidad ni la ética (2026) |
+| 5.2 Política | P | La política puede ser un documento controlado: revisiones numeradas, aprobación por alguien distinto del autor, fecha de entrada en vigor e historial (`services/document_revisions.py:255-335`). Todos los roles leen la revisión vigente (`services/policy.py:126`; `DRAFT_READERS`, `services/document_revisions.py:83`). Texto libre heredado `RolResponsabilidad.descripcion_politica_calidad` (`models.py:108`) | No se registra que las personas hayan leído o confirmado la política. No hay categoría de política de la calidad (`DocumentCategory`, `models.py:1089-1100`). La política no está disponible para las partes interesadas externas a través de la aplicación |
+| 5.3 Roles, responsabilidades y autoridades en la organización | P | Las personas tienen roles del SGC (`persona_roles` y `Person`, `models.py:298-364`) con pantallas web (`routes/people_routes.py`). Los roles llevan requisitos de competencia (`CompetenceRequirement`, `models.py:409-429`). Una persona puede estar vinculada a un usuario de acceso (`Person.user_id`, `models.py:343`) | Un rol solo guarda un nombre, una marca y un texto de política, no sus responsabilidades y autoridades. Los roles no tienen pantalla web (`routes/rol_responsabilidad_routes.py:23`, solo JSON y MCP). Los roles no están vinculados a procesos |
+| 6.1 Acciones para abordar riesgos y oportunidades | P | `RiesgoOportunidad` (`models.py:111-117`), solo API JSON y MCP (`routes/riesgo_oportunidad_routes.py:23`). Los riesgos modificados en el periodo figuran entre las entradas de la revisión (`services/management_reviews.py:739`). Comentario de la revisión `comentario_riesgos` (`models.py:1020`) | Sin valoración, responsable, estado ni fecha de revisión. Sin vínculo con acciones, contexto o procesos, y sin pantalla web. Riesgos y oportunidades comparten un mismo registro (la edición 2026 los separa) |
+| 6.2 Objetivos de la calidad y planificación para lograrlos | **C** (antes P) | `ObjetivoCalidad` (`models.py:835-886`) tiene título, indicador, unidad, meta y sentido, valor inicial, responsable, periodo, frecuencia, recursos, método de evaluación y estado. Las mediciones son registros propios (`MedicionObjetivo`, `models.py:889-917`). La meta queda fijada en cuanto hay mediciones, y el avance, la tendencia y los retrasos se calculan en `services/quality_objectives.py` (`summary` en `:466`, `off_track` en `:519`). Todos los roles leen los objetivos (`services/policy.py:139`). Pantallas web, un PDF anual (`routes/quality_objective_routes.py:234`) y una tarjeta en el panel de control | Menor: «qué se va a hacer» (6.2.2 a) es texto libre (`descripcion`), no acciones con seguimiento. Sin vínculo con la política ni con los riesgos |
+| 6.3 Planificación de los cambios | P (antes N) | Una revisión por la dirección puede registrar un cambio en el SGC como acción del tipo `cambio_sgc` (`TipoAccionRevision`, `models.py:931-936`), con responsable, plazo, estado y resultado (`AccionRevision`, `models.py:1047-1086`) | No hay registro de cambios fuera de las revisiones por la dirección. No se registran el propósito, las consecuencias, la integridad, los recursos ni la eficacia de un cambio |
+| 7.1 Recursos | P | `RecursoCapacitacion` (`models.py:120-125`), solo API JSON y MCP (`routes/recurso_capacitacion_routes.py:23`). Registro de personas (7.1.2, `Person`). Comentario de la revisión `comentario_recursos` y acciones del tipo `recursos` (`models.py:1019`, `:936`) | Sin registros de infraestructura (7.1.3) ni de ambiente para la operación de los procesos (7.1.4). El registro de recursos de capacitación no tiene tipo, responsable ni estado, ni pantalla web |
+| 7.1.5 Recursos de seguimiento y medición | N | Ninguna | Sin registro de equipos ni registros de calibración |
+| 7.1.6 Conocimientos de la organización | N | Ninguna | Sin registro de conocimientos ni de lecciones aprendidas |
+| 7.2 Competencia | **C** (antes P) | Competencia requerida por rol (`CompetenceRequirement`, `models.py:409-429`). Competencia demostrada por persona, con evidencia, caducidad, vínculo con la capacitación y una evaluación de la eficacia hecha por otra persona (`CompetenceRecord`, `models.py:432-487`). Matriz de competencia requerida frente a demostrada (`services/competence.py:344`, `cell_status`; `:375`, `matrix`; página `routes/competence_routes.py:141`). La capacitación está vinculada a una persona (`Capacitacion.persona_id`, `models.py:634`) | Menor: la evidencia es un texto o una referencia (500 caracteres), sin carga de certificados. Los roles, y por tanto los requisitos, solo pueden crearse mediante la API JSON o MCP. El campo `evaluacion_final` de la propia capacitación es texto libre |
+| 7.3 Toma de conciencia | P (antes D) | Todos los roles leen los documentos vigentes y los objetivos de la calidad (`services/policy.py:126`, `:139`). Las sesiones de sensibilización pueden registrarse como capacitación (`Capacitacion`) | No se registra la confirmación de que una persona ha leído la política, los objetivos o un procedimiento |
+| 7.4 Comunicación | N | Solo correos automáticos: recordatorios de auditoría, avisos de revisión de documentos y el informe mensual (`audit_notifications.py:55`, `:81`, `:112`, `:140`) | Sin plan de comunicación: qué, cuándo, a quién, cómo y quién comunica |
+| 7.5.1 Información documentada: generalidades | **C** (antes P) | Documentos controlados (`Document`, `models.py:1102-1123`) con revisiones numeradas (`DocumentRevision`, `models.py:1153-1216`). Todos los registros guardan quién creó y quién modificó cada entrada (`RecordMetadataMixin`, `models.py:57-90`), y un registro de auditoría de solo inserción conserva el historial (`AuditLog`, `models.py:1220-1258`) | Ninguna para el apartado en sí. Los registros parciales se evalúan en sus propios apartados |
+| 7.5.2 Creación y actualización | **C** (antes P) | Identificación: código, título, categoría, número de revisión y autor (`models.py:1113-1115`, `:1191`, `:1200`). Para enviar a revisión hace falta un resumen del cambio (`models.py:1199`). Revisión y aprobación: enviar, aprobar (ADMINISTRADOR, nunca el autor) y rechazar con un motivo (`services/document_revisions.py:255-299`). Formato: texto más un PDF, DOCX, XLSX u ODT opcional, comprobado por su contenido (`services/document_files.py:60-64`, `:155`) | Ninguna. Véase el defecto abierto sobre la fecha del informe mensual |
+| 7.5.3 Control de la información documentada | **C** (antes N) | Como máximo, una revisión vigente y una en preparación (`models.py:1140-1142`, `:1181-1184`). Publicar deja obsoleta la revisión anterior (`services/document_revisions.py:300`). Las revisiones vigentes u obsoletas no cambian nunca (`IMMUTABLE`, `:94`). Retirada en lugar de borrado (`:313`). Solo ADMINISTRADOR y AUDITOR pueden leer los borradores (`:83`). Fecha de la próxima revisión y aviso semanal a los responsables (`services/documents.py:173`; `audit_notifications.py:140`). Suma de comprobación de los adjuntos (`models.py:1212`). Registro de auditoría de solo inserción (`services/audit.py:183-190`) | Sin periodo de conservación ni registro de disposición. Sin marca de origen externo. Los administradores aún pueden borrar definitivamente las entradas de los registros antiguos (queda una instantánea en el registro de auditoría). Sin pantalla para consultar el registro de auditoría. Los dos defectos de acceso abiertos (panel de control, sesión) |
+| 8.1 Planificación y control operacional | P | `ProcesoOperacion.criterio_calidad` (`models.py:132`), solo API JSON y MCP | Sin plan operacional ni criterios de aceptación por proceso, y sin pantalla web |
+| 8.2 Requisitos para los productos y servicios | P | Retroalimentación de los clientes en `SatisfaccionCliente` (`models.py:619-625`). Las reclamaciones pueden registrarse como no conformidades con origen `cliente` (`OrigenNoConformidad`, `models.py:508`) | Sin revisión de los requisitos del cliente, sin registro de cambios ni de comunicaciones, y sin registro de reclamaciones con la respuesta al cliente |
+| 8.3 Diseño y desarrollo de los productos y servicios | N | Ninguna | No existe una entidad de diseño; solo puede excluirse si la organización lo justifica |
+| 8.4 Control de los procesos, productos y servicios suministrados externamente | P | Booleano `ProcesoOperacion.control_proveedor` (`models.py:133`). Origen de no conformidad `proveedor` (`models.py:510`). Comentario de la revisión sobre el desempeño, incluido el de los proveedores externos (`comentario_desempeno`, `models.py:1018`) | Sin registro de proveedores, aprobación, evaluación ni reevaluación |
+| 8.5 Producción y provisión del servicio | N | Ninguna | Sin registros de control, trazabilidad, propiedad perteneciente al cliente ni actividades posteriores a la entrega |
+| 8.6 Liberación de los productos y servicios | N | Ninguna | Sin registro de liberación |
+| 8.7 Control de las salidas no conformes | P | `NoConformidad` (`models.py:523-542`) con origen, gravedad, contención (`contencion`), responsable (`responsable_id`) y causa raíz, y acciones correctivas (10.2) | Sin tratamiento (corrección, separación, devolución, concesión), sin registro de la concesión ni de la autoridad que decide, y sin vínculo con el producto, el lote o el proceso |
+| 9.1.1 Seguimiento, medición, análisis y evaluación: generalidades | **C** (antes P) | Los indicadores son registros: cada objetivo define qué se mide, con qué frecuencia y cómo se evalúan los resultados (`models.py:864-877`). Las mediciones fechadas (`models.py:889-917`) se comparan con la meta, con comprobación de la tendencia y de los retrasos (`services/quality_objectives.py:466`). El informe mensual cuenta los datos del mes y valora los objetivos (`utils/reports.py:66`, `:95-147`) | Menor: los indicadores de proceso sin meta deben darse de alta como objetivos. El registro heredado de indicadores de auditoría (`AuditoriaIndicador`, `models.py:137-144`) solo es accesible por JSON y MCP (`routes/auditoria_indicador_routes.py:23`). Véase el defecto abierto sobre la fecha del informe |
+| 9.1.2 Satisfacción del cliente | P | `SatisfaccionCliente` (`models.py:619-625`) con pantallas web (`routes/satisfaccion_cliente_routes.py`) y un PDF. Media del periodo entre las entradas de la revisión (`services/management_reviews.py:753`). Gráfico mensual (`routes/dashboard_routes.py:87-96`) | El cliente es texto libre. Sin tipo de encuesta, canal ni meta |
+| 9.1.3 Análisis y evaluación | P | Objetivo frente a meta y tendencia (`services/quality_objectives.py:466`, `:519`). Entradas de la revisión acotadas al periodo: satisfacción, objetivos, indicadores, no conformidades, auditorías, mejoras y capacitación (`services/management_reviews.py:595`, `:665-684`). Informe mensual | Sin análisis del desempeño de los proveedores externos (9.1.3 f) ni de la eficacia de las acciones tomadas para abordar los riesgos (9.1.3 e), porque ninguno de los dos tiene registros |
+| 9.2 Auditoría interna | **C** (antes P) | Programa anual con objetivos y alcance, aprobado por un administrador (`ProgramaAuditoria`, `models.py:662-696`; `services/audit_programmes.py:187`). Cada auditoría tiene programa, alcance, criterios, auditor jefe, equipo y responsable del área (`Auditoria` y `auditoria_equipo`, `models.py:701-762`). Comprobación de independencia: ningún auditor es responsable del área auditada (`services/audits.py:226-251`). Los hallazgos se clasifican y un hallazgo de no conformidad abre su no conformidad (`HallazgoAuditoria`, `models.py:765-807`; `services/audit_findings.py:277`). PDF de la auditoría y del programa (`routes/auditoria_routes.py:306`; `routes/audit_programme_routes.py:139`). Recordatorios (`audit_notifications.py:55`, `:81`) | Menor: el informe de auditoría es texto libre (`resultado`) y `accion_correctiva` es texto libre heredado. Sin frecuencia ni método de auditoría por proceso. Véase el defecto abierto del panel de control |
+| 9.3 Revisión por la dirección | C | Cada revisión registra la fecha de la reunión, el periodo, los asistentes, un comentario por cada entrada de 9.3.2 y las conclusiones (`RevisionDireccion`, `models.py:984-1044`). Las entradas se obtienen de los registros y se congelan al celebrar la revisión (`services/management_reviews.py:595`, `inputs`; `:355`, `hold`). Cada salida es una acción con responsable, plazo y seguimiento (`AccionRevision`, `models.py:1047-1086`). PDF del acta (`routes/management_review_routes.py:310`) y una tarjeta de acciones vencidas | Ninguna |
+| 10.1 Mejora: generalidades | P | `Mejora` (`models.py:147-153`) con pantallas web (`routes/mejora_routes.py`). También surgen oportunidades de los hallazgos de auditoría del tipo `oportunidad_mejora` y de las acciones de revisión del tipo `mejora` (`models.py:771`, `:934`) | Las mejoras son una lista de texto libre que exige un texto de no conformidad (`forms.py:172-176`). Sin flujo de tratamiento ni vínculo con su origen. Las oportunidades están en tres lugares sin conexión |
+| 10.2 No conformidad y acción correctiva | **C** (antes P) | `NoConformidad` (`models.py:490-542`) tiene origen, gravedad, contención, causa raíz, responsable y un estado que solo fija el servicio. Las acciones correctivas tienen responsable, fecha límite, fecha de realización y verificación por alguien distinto del responsable (`AccionCorrectiva`, `models.py:545-616`; `services/corrective_actions.py:231`, `verify`). Una no conformidad solo se cierra cuando su última acción resulta eficaz (`services/nonconformities.py:378`, `close`; `:450`, `close_blockers`). Cancelar y reabrir con un motivo; PDF (`routes/no_conformidad_routes.py:210`) | Menor: sin vínculo con los riesgos (10.2.1 e) ni con los cambios del SGC (10.2.1 f), y sin registro de no conformidades similares. El texto libre heredado `accion_correctiva` sigue siendo editable en el formulario (`forms.py:143`) |
+| 10.3 Mejora continua | P | `Mejora` (`models.py:147-153`). Tendencias de los objetivos (`services/quality_objectives.py:466`). Conclusiones de la revisión y acciones de mejora (`models.py:1022`, `:934`) | `fecha_implementacion` es siempre el momento de creación (`models.py:153`; no figura en el formulario). Las mejoras no están vinculadas a los objetivos ni a las salidas de la revisión |
 
-## Top 10 gaps by audit impact
+## Las diez brechas principales por impacto en la auditoría
 
-The baseline's first seven gaps were closed by Wave 1:
+La fase 1 cerró las siete primeras brechas de la línea base:
 
-- uncontrolled documents;
-- no management review;
-- the open corrective-action loop;
-- no audit programme;
-- unmeasurable objectives;
-- no attribution or history;
-- people as free text.
+- documentos no controlados;
+- ausencia de revisión por la dirección;
+- el ciclo de la acción correctiva sin cerrar;
+- ausencia de programa de auditoría;
+- objetivos no medibles;
+- sin atribución ni historial;
+- personas como texto libre.
 
-These are the remaining ten.
+Estas son las diez que quedan.
 
-| # | Gap | Clause | Why an auditor flags it | Domain change |
+| # | Brecha | Apartado | Por qué la señala un auditor | Cambio de dominio |
 |---|---|---|---|---|
-| 1 | Risks and opportunities unstructured | 6.1 | A mandatory planning clause, changed in 2026, with no scoring, owner, status, review or actions | Separate risk and opportunity records with scoring, owner, review date and links to actions, processes and context; web screens |
-| 2 | Processes and roles not defined | 4.4, 8.1, 5.3 | No process owner, inputs, outputs or interactions. Roles hold no responsibilities or authorities. Neither has a web screen | Owner, inputs, outputs, interactions and criteria on `ProcesoOperacion`; responsibilities and authorities on roles; screens; nonconformities, risks and objectives linked to processes |
-| 3 | No supplier control | 8.4 | Only a boolean and a nonconformity origin | `Supplier`, `SupplierEvaluation`, approved-supplier status, links from nonconformities with origin `proveedor` |
-| 4 | Context and scope not recorded | 4.1, 4.2, 4.3 | Issues, climate relevance, stakeholder requirements and exclusions exist at most in a document | `ContextIssue` with a climate flag, `InterestedPartyRequirement`, a scope and exclusions record, all feeding the review inputs |
-| 5 | No change register | 6.3 | Emphasised in 2026; only review actions of type `cambio_sgc` | `ChangeRecord` with purpose, consequences, resources, owner and an effectiveness review |
-| 6 | Customers free text, complaints only as nonconformities | 8.2, 9.1.2 | The same customer appears under several spellings; no complaint handling or requirement review | `Customer`, `Complaint` with an optional link to a nonconformity, survey type and channel |
-| 7 | Nonconforming outputs without disposition | 8.7 | No disposition, concession or deciding authority; no product or process link | Disposition, concession and authority on `NoConformidad`, plus a process link |
-| 8 | No calibration register | 7.1.5 | Required wherever measurement results are used | `MeasuringEquipment`, `CalibrationRecord` |
-| 9 | Policy and objectives not acknowledged | 5.2, 7.3 | Awareness rests on interviews only | Acknowledgements of the policy revision in force and of the objectives |
-| 10 | No communication plan or knowledge register | 7.4, 7.1.6 | Nothing records what is communicated to whom, or the lessons learned | `CommunicationPlan`, a knowledge or lessons-learned register |
+| 1 | Riesgos y oportunidades sin estructura | 6.1 | Apartado de planificación obligatorio, modificado en 2026, sin valoración, responsable, estado, revisión ni acciones | Registros separados de riesgo y de oportunidad con valoración, responsable, fecha de revisión y vínculos con acciones, procesos y contexto; pantallas web |
+| 2 | Procesos y roles sin definir | 4.4, 8.1, 5.3 | Sin responsable de proceso, entradas, salidas ni interacciones. Los roles no recogen responsabilidades ni autoridades. Ninguno de los dos tiene pantalla web | Responsable, entradas, salidas, interacciones y criterios en `ProcesoOperacion`; responsabilidades y autoridades en los roles; pantallas; no conformidades, riesgos y objetivos vinculados a procesos |
+| 3 | Sin control de proveedores | 8.4 | Solo un booleano y un origen de no conformidad | `Supplier`, `SupplierEvaluation`, estado de proveedor aprobado, vínculos desde las no conformidades con origen `proveedor` |
+| 4 | Contexto y alcance sin registrar | 4.1, 4.2, 4.3 | Las cuestiones, la pertinencia del cambio climático, los requisitos de las partes interesadas y las exclusiones existen, como mucho, en un documento | `ContextIssue` con marca climática, `InterestedPartyRequirement`, un registro del alcance y las exclusiones, todo ello como entrada de la revisión |
+| 5 | Sin registro de cambios | 6.3 | Reforzado en 2026; solo acciones de revisión del tipo `cambio_sgc` | `ChangeRecord` con propósito, consecuencias, recursos, responsable y revisión de la eficacia |
+| 6 | Clientes como texto libre y reclamaciones solo como no conformidades | 8.2, 9.1.2 | El mismo cliente aparece con varias grafías; sin tratamiento de reclamaciones ni revisión de requisitos | `Customer`, `Complaint` con vínculo opcional a una no conformidad, tipo de encuesta y canal |
+| 7 | Salidas no conformes sin tratamiento | 8.7 | Sin tratamiento, concesión ni autoridad que decide; sin vínculo con el producto o el proceso | Tratamiento, concesión y autoridad en `NoConformidad`, más un vínculo con el proceso |
+| 8 | Sin registro de calibración | 7.1.5 | Obligatorio allí donde se usan resultados de medición | `MeasuringEquipment`, `CalibrationRecord` |
+| 9 | Política y objetivos sin confirmación de lectura | 5.2, 7.3 | La toma de conciencia se apoya solo en entrevistas | Confirmaciones de lectura de la revisión vigente de la política y de los objetivos |
+| 10 | Sin plan de comunicación ni registro de conocimientos | 7.4, 7.1.6 | Nada registra qué se comunica ni a quién, ni las lecciones aprendidas | `CommunicationPlan`, un registro de conocimientos o de lecciones aprendidas |
 
-## Cross-cutting gaps
+## Brechas transversales
 
-- **Links still missing.**
-  - Delivered: nonconformity → corrective action → effectiveness; audit finding → nonconformity; objective → process; review → actions.
-  - Still missing: risk → action; complaint → nonconformity; nonconformity → process; improvement → its source.
-  - Customers and suppliers remain free text.
-- **No complaint handling.** Complaints exist only as nonconformities with origin `cliente`, beside the satisfaction surveys.
-- **Coarse roles.**
-  - Access follows a per-resource matrix (`services/policy.py:117-141`) over three roles.
-  - No role separates approvers or top management. Approvals rest on ADMINISTRADOR, with "never the author" for documents (`services/document_revisions.py:266-286`).
-  - The dashboard bypasses the matrix for audits (see "Verified defects").
-- **The audit log cannot be read in the app.** Every model is audited (`services/audit.py:45`, `AUDITED_MODELS`) and rows are append-only (`:183-190`). However, the log has a policy entry only (`policy.py:133`): no screen and no MCP module. History must be shown to an auditor from the database.
-- **Five registers without web screens.**
-  - The registers: roles (5.3), risks and opportunities (6.1), processes (4.4, 8.1), training resources (7.1, 7.2) and audit indicators (9.1).
-  - They are reachable only through the JSON endpoints (`routes/json_register.py:32`, `register_json_api`) and the MCP server.
-  - People, competence requirements and objectives already pick from roles and processes.
-- **Hard deletes remain** for the older registers. They are limited to administrators and leave a full audit snapshot, but they erase the record itself.
+- **Vínculos que aún faltan.**
+  - Entregados: no conformidad → acción correctiva → eficacia; hallazgo de auditoría → no conformidad; objetivo → proceso; revisión → acciones.
+  - Aún pendientes: riesgo → acción; reclamación → no conformidad; no conformidad → proceso; mejora → su origen.
+  - Los clientes y los proveedores siguen siendo texto libre.
+- **Sin tratamiento de reclamaciones.** Las reclamaciones solo existen como no conformidades con origen `cliente`, junto a las encuestas de satisfacción.
+- **Roles poco granulares.**
+  - El acceso sigue una matriz por recurso (`services/policy.py:117-141`) sobre tres roles.
+  - Ningún rol distingue a quienes aprueban ni a la alta dirección. Las aprobaciones recaen en ADMINISTRADOR, con la regla «nunca el autor» para los documentos (`services/document_revisions.py:266-286`).
+  - El panel de control se salta la matriz en las auditorías (véase [Defectos verificados](#defectos-verificados)).
+- **El registro de auditoría no puede consultarse en la aplicación.** Todos los modelos se auditan (`services/audit.py:45`, `AUDITED_MODELS`) y las filas son de solo inserción (`:183-190`). Sin embargo, el registro solo tiene una entrada en la política de permisos (`policy.py:133`): ni pantalla ni módulo MCP. El historial debe mostrarse a un auditor desde la base de datos.
+- **Cinco registros sin pantallas web.**
+  - Los registros: roles (5.3), riesgos y oportunidades (6.1), procesos (4.4, 8.1), recursos de capacitación (7.1, 7.2) e indicadores de auditoría (9.1).
+  - Solo son accesibles mediante los endpoints JSON (`routes/json_register.py:32`, `register_json_api`) y el servidor MCP.
+  - Las personas, los requisitos de competencia y los objetivos ya eligen roles y procesos de esos registros.
+- **Siguen existiendo borrados definitivos** en los registros antiguos. Están limitados a los administradores y dejan una instantánea completa en el registro de auditoría, pero eliminan la propia entrada.
 
-## Target domain model
+## Modelo de dominio objetivo
 
-This was the baseline proposal. The status column records what Waves 0 and 1 delivered; field names stay indicative for the open entities.
+Esta era la propuesta de la línea base. La columna de estado recoge lo que entregaron las fases 0 y 1; los nombres de campo de las entidades abiertas son orientativos.
 
-### Existing entities to change
+### Entidades existentes que cambian
 
-| Entity | Changes | At the re-assessment |
+| Entidad | Cambios | En la reevaluación |
 |---|---|---|
-| `User` | Link to `Person`; `active`, `last_login` | Done except `last_login`: `Person.user_id` (`models.py:343`), `User.active` (`models.py:164`) |
-| `Document` | `status`, `owner_id`, `next_review_date`, `retention_until`; content and files move to `DocumentRevision`; `approved_by` becomes a foreign key | Done except `retention_until`: the status lives on the revisions; `owner_id`, `next_review_date`, `approver_id` |
-| `NoConformidad` | `source`, `process_id`, `severity`, `containment`, `disposition`, `responsible_id`, `root_cause`, `created_by`, `closed_by`; `estado` becomes an enum with transitions | Done except `process_id`, `disposition` and `closed_by` (closing is recorded in the audit log) |
-| `Auditoria` | `programme_id`, `scope`, `criteria`, `lead_auditor_id`, audit team, report | Done except a structured report (`resultado` stays free text) |
-| `Mejora` | Becomes an improvement opportunity linked to its source | Open |
-| `Capacitacion` | Link to `Person` and `CompetenceRequirement`; effectiveness result | Done: `persona_id`; `CompetenceRecord.capacitacion_id` links it as evidence and holds the effectiveness evaluation |
-| `SatisfaccionCliente` | Link to `Customer`; `survey_type`, `channel` | Open |
-| `RiesgoOportunidad` | Split into risk and opportunity; `probability`, `severity`, `level`, `owner_id`, `status`, `review_date`, links to context, process and action | Open |
-| `ProcesoOperacion` | `owner_id`, inputs, outputs, indicators | Open (objectives already link to processes) |
-| `AuditoriaIndicador` | Merge into `Auditoria` or turn into an indicator entity | Open; quality objectives now serve as indicators |
+| `User` | Vínculo con `Person`; `active`, `last_login` | Hecho salvo `last_login`: `Person.user_id` (`models.py:343`), `User.active` (`models.py:164`) |
+| `Document` | `status`, `owner_id`, `next_review_date`, `retention_until`; el contenido y los archivos pasan a `DocumentRevision`; `approved_by` pasa a ser una clave foránea | Hecho salvo `retention_until`: el estado está en las revisiones; `owner_id`, `next_review_date`, `approver_id` |
+| `NoConformidad` | `source`, `process_id`, `severity`, `containment`, `disposition`, `responsible_id`, `root_cause`, `created_by`, `closed_by`; `estado` pasa a ser un enum con transiciones | Hecho salvo `process_id`, `disposition` y `closed_by` (el cierre queda en el registro de auditoría) |
+| `Auditoria` | `programme_id`, `scope`, `criteria`, `lead_auditor_id`, equipo auditor, informe | Hecho salvo un informe estructurado (`resultado` sigue siendo texto libre) |
+| `Mejora` | Pasa a ser una oportunidad de mejora vinculada a su origen | Abierto |
+| `Capacitacion` | Vínculo con `Person` y `CompetenceRequirement`; resultado de eficacia | Hecho: `persona_id`; `CompetenceRecord.capacitacion_id` la vincula como evidencia y guarda la evaluación de la eficacia |
+| `SatisfaccionCliente` | Vínculo con `Customer`; `survey_type`, `channel` | Abierto |
+| `RiesgoOportunidad` | Separar en riesgo y oportunidad; `probability`, `severity`, `level`, `owner_id`, `status`, `review_date`, vínculos con contexto, proceso y acción | Abierto |
+| `ProcesoOperacion` | `owner_id`, entradas, salidas, indicadores | Abierto (los objetivos ya se vinculan a procesos) |
+| `AuditoriaIndicador` | Fusionar en `Auditoria` o convertir en una entidad de indicador | Abierto; los objetivos de la calidad ya sirven como indicadores |
 
-### New entities
+### Entidades nuevas
 
-| Entity | Purpose | Clause | At the re-assessment |
+| Entidad | Propósito | Apartado | En la reevaluación |
 |---|---|---|---|
-| `AuditLog` | Entity, action, user, channel (web or MCP), timestamp, before and after | Cross-cutting | Delivered |
-| `Person`, `Customer`, `Supplier` | Replace free-text names | 5.3, 7.2, 8.4, 9.1.2 | `Person` delivered; `Customer` and `Supplier` open |
-| `DocumentRevision` | Versioned content or file, approval data | 7.5.3 | Delivered |
-| `CorrectiveAction` | Owner, due date, status, effectiveness result | 10.2 | Delivered as `AccionCorrectiva` |
-| `QualityObjective`, `ObjectiveMeasurement` | Target, unit, owner, deadline, periodic values | 6.2 | Delivered as `ObjetivoCalidad`, `MedicionObjetivo` |
-| `AuditProgramme`, `AuditFinding` | Yearly programme; findings classified as major NC, minor NC, observation or opportunity | 9.2 | Delivered as `ProgramaAuditoria`, `HallazgoAuditoria` |
-| `ManagementReview`, `ReviewInput`, `ReviewOutput` | Period-bound inputs, decisions and follow-up actions | 9.3 | Delivered as `RevisionDireccion` (inputs frozen in `datos_entrada`) and `AccionRevision` |
-| `Complaint` | Customer complaint with optional link to a nonconformity | 9.1.2, 10.2 | Open |
-| `SupplierEvaluation` | Periodic score and result | 8.4 | Open |
-| `MeasuringEquipment`, `CalibrationRecord` | Equipment status and next due date | 7.1.5 | Open |
-| `ContextIssue`, `InterestedPartyRequirement` | Context and stakeholder requirements with climate flag | 4.1, 4.2 | Open |
-| `Action` | Generic action for risks, objectives and review outputs | 6.1, 9.3 | Open; corrective and review actions are separate entities |
-| `ChangeRecord` | Planned QMS changes with impact and owner | 6.3 | Open |
-| `CompetenceRequirement`, `CommunicationPlan` | Competence per role; what, when, to whom and how | 7.2, 7.4 | `CompetenceRequirement` delivered, with `CompetenceRecord`; `CommunicationPlan` open |
+| `AuditLog` | Entidad, acción, usuario, canal (web o MCP), fecha y hora, valores antes y después | Transversal | Entregado |
+| `Person`, `Customer`, `Supplier` | Sustituir los nombres en texto libre | 5.3, 7.2, 8.4, 9.1.2 | `Person` entregado; `Customer` y `Supplier` abiertos |
+| `DocumentRevision` | Contenido o archivo versionado, datos de aprobación | 7.5.3 | Entregado |
+| `CorrectiveAction` | Responsable, fecha límite, estado, resultado de eficacia | 10.2 | Entregado como `AccionCorrectiva` |
+| `QualityObjective`, `ObjectiveMeasurement` | Meta, unidad, responsable, plazo, valores periódicos | 6.2 | Entregados como `ObjetivoCalidad`, `MedicionObjetivo` |
+| `AuditProgramme`, `AuditFinding` | Programa anual; hallazgos clasificados como NC mayor, NC menor, observación u oportunidad | 9.2 | Entregados como `ProgramaAuditoria`, `HallazgoAuditoria` |
+| `ManagementReview`, `ReviewInput`, `ReviewOutput` | Entradas acotadas al periodo, decisiones y acciones de seguimiento | 9.3 | Entregados como `RevisionDireccion` (entradas congeladas en `datos_entrada`) y `AccionRevision` |
+| `Complaint` | Reclamación del cliente con vínculo opcional a una no conformidad | 9.1.2, 10.2 | Abierto |
+| `SupplierEvaluation` | Puntuación y resultado periódicos | 8.4 | Abierto |
+| `MeasuringEquipment`, `CalibrationRecord` | Estado del equipo y próxima fecha prevista | 7.1.5 | Abierto |
+| `ContextIssue`, `InterestedPartyRequirement` | Contexto y requisitos de las partes interesadas con marca climática | 4.1, 4.2 | Abierto |
+| `Action` | Acción genérica para riesgos, objetivos y salidas de la revisión | 6.1, 9.3 | Abierto; las acciones correctivas y las de revisión son entidades separadas |
+| `ChangeRecord` | Cambios planificados del SGC con impacto y responsable | 6.3 | Abierto |
+| `CompetenceRequirement`, `CommunicationPlan` | Competencia por rol; qué, cuándo, a quién y cómo | 7.2, 7.4 | `CompetenceRequirement` entregado, junto con `CompetenceRecord`; `CommunicationPlan` abierto |
 
-### Key state machines (as delivered)
+### Máquinas de estado principales (tal como se entregaron)
+
+Los diagramas conservan los nombres de estado del código y las etiquetas de transición en inglés; el texto que sigue a cada uno los explica.
 
 ```mermaid
 stateDiagram-v2
@@ -226,7 +244,7 @@ stateDiagram-v2
     }
 ```
 
-A revision moves from draft through review and approval to in force (`EstadoRevision`, `models.py:1126-1137`). It becomes obsolete when the next revision is published or the document is withdrawn. A rejection returns it to draft with the reason. Revisions in force or obsolete never change.
+Una revisión pasa de borrador a revisión y aprobación, y de ahí a vigente (`EstadoRevision`, `models.py:1126-1137`). Queda obsoleta cuando se publica la revisión siguiente o se retira el documento. Un rechazo la devuelve a borrador con el motivo. Las revisiones vigentes u obsoletas no cambian nunca.
 
 ```mermaid
 stateDiagram-v2
@@ -241,11 +259,11 @@ stateDiagram-v2
     en_verificacion --> cancelada
 ```
 
-While open, a nonconformity follows its corrective actions (`services/nonconformities.py:431`, `expected_state`).
+Mientras está abierta, una no conformidad sigue a sus acciones correctivas (`services/nonconformities.py:431`, `expected_state`).
 
-- **Closing** needs every action done and verified, and the latest one effective.
-- **Cancelling** needs a reason.
-- **Reopening** (administrators) returns a closed or cancelled nonconformity to the state its actions call for.
+- **Cerrar** exige que todas las acciones estén realizadas y verificadas, y que la última sea eficaz.
+- **Cancelar** exige un motivo.
+- **Reabrir** (administradores) devuelve una no conformidad cerrada o cancelada al estado que corresponde a sus acciones.
 
 ```mermaid
 stateDiagram-v2
@@ -256,52 +274,52 @@ stateDiagram-v2
     realizada --> verificada_no_eficaz
 ```
 
-A corrective action's state is derived from its dates and verification, never stored (`AccionCorrectiva.estado`, `models.py:607-616`). An ineffective verification calls for a new action.
+El estado de una acción correctiva se deduce de sus fechas y de su verificación; nunca se almacena (`AccionCorrectiva.estado`, `models.py:607-616`). Una verificación no eficaz exige una nueva acción.
 
-## Strengths to preserve
+## Fortalezas que conservar
 
-- **Security work:**
-  - strict CSP (`app/__init__.py:184`);
-  - single-use reset tokens bound to the password state (`models.py:177-291`);
-  - CLI-only administrator bootstrap (`commands.py:56-111`);
-  - the security logger.
-- **One service layer and one policy** for the web and the MCP server (`services/policy.py:117-158`). A test keeps routes from writing models directly (`tests/test_route_write_guard.py`).
-- **Attribution and an append-only audit log** on every model (`models.py:57-90`; `services/audit.py:45-54`, `:183-190`).
-- **Rules held by the database:** CHECK constraints and partial unique indexes back the state rules (`models.py:950-963`, `:1140-1150`, `:1181-1186`).
-- **Themed PDFs** for nonconformities, audits, programmes, training, surveys, objectives and review minutes, which are ready-made audit evidence.
-- **Celery scheduling** with per-recipient failure isolation (`audit_notifications.py:238-260`) and the local date in `APP_TIMEZONE` (`audit_notifications.py:50`, `local_today`).
+- **Trabajo de seguridad:**
+  - CSP estricta (`app/__init__.py:184`);
+  - tokens de restablecimiento de un solo uso, ligados al estado de la contraseña (`models.py:177-291`);
+  - alta del administrador solo por línea de comandos (`commands.py:56-111`);
+  - el registro de eventos de seguridad.
+- **Una sola capa de servicios y una sola política de permisos** para la web y el servidor MCP (`services/policy.py:117-158`). Una prueba impide que las rutas escriban directamente en los modelos (`tests/test_route_write_guard.py`).
+- **Atribución y registro de auditoría de solo inserción** en todos los modelos (`models.py:57-90`; `services/audit.py:45-54`, `:183-190`).
+- **Reglas garantizadas por la base de datos:** restricciones CHECK e índices únicos parciales respaldan las reglas de estado (`models.py:950-963`, `:1140-1150`, `:1181-1186`).
+- **PDF con diseño unificado** de no conformidades, auditorías, programas, capacitaciones, encuestas, objetivos y actas de revisión, que son evidencia de auditoría lista para usar.
+- **Planificación con Celery** que aísla los fallos por destinatario (`audit_notifications.py:238-260`) y usa la fecha local de `APP_TIMEZONE` (`audit_notifications.py:50`, `local_today`).
 
-## Proposed roadmap
+## Hoja de ruta propuesta
 
-Each wave adds MCP tools for the modules it completes, on top of the shared service layer.
+Cada fase añade herramientas MCP para los módulos que completa, sobre la capa de servicios compartida.
 
-| Wave | Scope | MCP outcome |
+| Fase | Alcance | Resultado MCP |
 |---|---|---|
-| 0. Foundations (**complete**) | Service layer, `AuditLog` and record metadata, `Person`, permission policy, API tokens, the three baseline defects | Token authentication and tools for the existing registers |
-| 1. Audit-critical (**complete**) | Document control, nonconformity → corrective action → effectiveness, audit programme and findings, quality objectives, management review; people and competence | Read and write tools for these modules, no delete tools (22 modules) |
-| 2. Core QMS (proposed below) | Risks and opportunities, processes and roles, suppliers, context and scope, change management, customers and complaints, nonconforming-output disposition, acknowledgements, improvements | One registry module per register as delivered |
-| 3. Organization-dependent | Calibration, design and development, production and release, communication, organizational knowledge | Only for modules the organization does not exclude |
+| 0. Fundamentos (**terminada**) | Capa de servicios, `AuditLog` y metadatos de registro, `Person`, política de permisos, tokens de API, los tres defectos de la línea base | Autenticación por token y herramientas para los registros existentes |
+| 1. Crítica para la auditoría (**terminada**) | Control de documentos, no conformidad → acción correctiva → eficacia, programa y hallazgos de auditoría, objetivos de la calidad, revisión por la dirección; personas y competencia | Herramientas de lectura y escritura para estos módulos, sin herramientas de borrado (22 módulos) |
+| 2. Núcleo del SGC (propuesta más abajo) | Riesgos y oportunidades, procesos y roles, proveedores, contexto y alcance, planificación de los cambios, clientes y reclamaciones, tratamiento de las salidas no conformes, confirmaciones de lectura, mejoras | Un módulo del registro MCP por cada registro, a medida que se entregue |
+| 3. Según la organización | Calibración, diseño y desarrollo, producción y liberación, comunicación, conocimientos de la organización | Solo para los módulos que la organización no excluya |
 
-**Before Wave 2:** fix the three open defects (the dashboard's audit card, the session lifetime and the monthly report's date). They are small and independent of the domain work.
+**Antes de la fase 2:** corregir los tres defectos abiertos (la tarjeta de auditorías del panel de control, la duración de la sesión y la fecha del informe mensual). Son pequeños e independientes del trabajo de dominio.
 
-**Wave 2, ordered by audit impact:**
+**Fase 2, ordenada por impacto en la auditoría:**
 
-| # | Module | Clauses | Why at this place |
+| # | Módulo | Apartados | Por qué en esta posición |
 |---|---|---|---|
-| 1 | Risks and opportunities | 6.1 (also 9.3.2 e, 10.2.1 e) | Mandatory and changed in 2026. Today a text list with no scoring, owner, status or screen, which corrective actions and reviews cannot cite |
-| 2 | Processes, roles and the other JSON registers | 4.4, 8.1, 5.3, 7.1, 9.1 | The process approach underpins every audit trail. Objectives, people and competence already depend on processes and roles, which have no screens. Includes screens for training resources, and screens or retirement for audit indicators |
-| 3 | External providers | 8.4 | A frequent certification finding; only a boolean and a nonconformity origin exist |
-| 4 | Context, interested-party requirements and scope | 4.1, 4.2, 4.3 | 2026 climate relevance. A controlled document covers it meanwhile, which is why it ranks below suppliers |
-| 5 | Planning of changes | 6.3 | Emphasised in 2026; review actions of type `cambio_sgc` cover part of it meanwhile |
-| 6 | Customers and complaints | 8.2, 9.1.2 | Customers are free text. Complaints are handled meanwhile as nonconformities with origin `cliente` |
-| 7 | Nonconforming outputs | 8.7 | Disposition, concession and authority on the nonconformity; its process link comes from item 2 |
-| 8 | Acknowledgements | 5.2, 7.3 | Read confirmations of the policy in force and of the objectives; awareness otherwise rests on interviews |
-| 9 | Improvement register | 10.1, 10.3 | Unifies improvements, finding opportunities and review actions with their source and a real implementation date |
+| 1 | Riesgos y oportunidades | 6.1 (también 9.3.2 e, 10.2.1 e) | Obligatorio y modificado en 2026. Hoy es una lista de texto sin valoración, responsable, estado ni pantalla, que las acciones correctivas y las revisiones no pueden citar |
+| 2 | Procesos, roles y los demás registros JSON | 4.4, 8.1, 5.3, 7.1, 9.1 | El enfoque a procesos sustenta todo recorrido de auditoría. Los objetivos, las personas y la competencia ya dependen de los procesos y los roles, que no tienen pantallas. Incluye pantallas para los recursos de capacitación, y pantallas o retirada para los indicadores de auditoría |
+| 3 | Proveedores externos | 8.4 | Un hallazgo frecuente en certificación; solo existen un booleano y un origen de no conformidad |
+| 4 | Contexto, requisitos de las partes interesadas y alcance | 4.1, 4.2, 4.3 | Pertinencia del cambio climático en 2026. Mientras tanto lo cubre un documento controlado, por eso queda por debajo de los proveedores |
+| 5 | Planificación de los cambios | 6.3 | Reforzada en 2026; mientras tanto, las acciones de revisión del tipo `cambio_sgc` cubren una parte |
+| 6 | Clientes y reclamaciones | 8.2, 9.1.2 | Los clientes son texto libre. Mientras tanto, las reclamaciones se tratan como no conformidades con origen `cliente` |
+| 7 | Salidas no conformes | 8.7 | Tratamiento, concesión y autoridad en la no conformidad; su vínculo con el proceso llega con el punto 2 |
+| 8 | Confirmaciones de lectura | 5.2, 7.3 | Confirmaciones de lectura de la política vigente y de los objetivos; sin ellas, la toma de conciencia se apoya en entrevistas |
+| 9 | Registro de mejoras | 10.1, 10.3 | Unifica las mejoras, las oportunidades de los hallazgos y las acciones de revisión con su origen y una fecha real de implantación |
 
-## Limits of this study
+## Límites de este estudio
 
-- Clause requirements are paraphrased; the standard is not quoted.
-- References point to the code at `fd46fad`. The baseline references (at `b794952`) are superseded. All six defects above were confirmed by reading the code.
-- "Covered" means the application holds the evidence and supports the process. Whether the organization operates it is for the audit.
-- Statuses come from the code, not from production data.
-- Whether 7.1.5, 8.3, 8.5 and 8.6 apply depends on the organization's activity and justified exclusions.
+- Los requisitos de los apartados se parafrasean; no se cita la norma. Solo los títulos de los apartados siguen su redacción.
+- Las referencias apuntan al código en `fd46fad`. Las referencias de la línea base (en `b794952`) quedan sustituidas. Los seis defectos anteriores se confirmaron leyendo el código.
+- «Cubierto» significa que la aplicación conserva la evidencia y da soporte al proceso. Si la organización lo aplica es algo que determina la auditoría.
+- Los estados proceden del código, no de datos de producción.
+- La aplicabilidad de 7.1.5, 8.3, 8.5 y 8.6 depende de la actividad de la organización y de sus exclusiones justificadas.
