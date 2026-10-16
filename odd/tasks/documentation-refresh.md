@@ -32,7 +32,7 @@ Route for every task: **delegated direct** (each needs reading beyond the inline
   - Short English `README.md` (what it is, ISO 9001:2026 scope, quick start, links); `docs/operations.md` (requirements, installation, configuration and environment variables, database and migrations, Redis and Celery, Gunicorn, Nginx and systemd, the production deployment procedure used for `vulcano` without host names or secrets, backups including `instance/documents`, restore, monitoring, security notes, CI); fix tests that pin README text.
 - [x] **DOC-2 — English user guide.** Forecast 600-1,000.
   - `docs/user-guide.md`: roles and access, dashboard, every module (users and profile, people and competence, nonconformities and corrective actions, document control, audit programme and findings, quality objectives, management review, and the older registers), PDFs and the monthly report, API tokens for agents (pointing to `docs/mcp.md`).
-- [ ] **DOC-3 — Spanish user guide.** Forecast 600-1,000.
+- [x] **DOC-3 — Spanish user guide.** Forecast 600-1,000.
   - `docs/guia-de-usuario.md`: the same content as DOC-2, using the interface's Spanish labels.
 - [ ] **DOC-4 — Gap analysis and technical docs review.** Forecast 200-500.
   - Re-assess every clause row of `docs/iso-9001-gap-analysis.md` against the code at the branch head with file references; check `docs/mcp.md` and `docs/architecture/services.md` against the code.
@@ -51,7 +51,8 @@ Plus a relative-link check over the Markdown files (every relative link and anch
 |---|---|---|---|---|
 | DOC-1 | Done | `6957ec7` (`docs/operations.md`, 651 lines; `docs/mcp.md` links its API-token section), `9b7e801` (English `README.md`, 879 → 120 lines) | Structural readback; no secrets or hosts; relative-link check: 57 links in 5 files, 0 errors (5 expected-missing links to the DOC-2 and DOC-3 guides); 1,327 tests OK | `3cbef71..9b7e801`: **passive**, no review |
 | DOC-2 | Done | `b6be86f` (`docs/user-guide.md`, 1,039 lines: sign-in and profile, screens, roles and access matching `policy.py`, dashboard, every module with workflow, states, refusals and PDFs, other registers, reports and e-mails, glossary) | Structural readback; relative-link check: 91 links in 6 files, 0 errors (2 expected-missing links to DOC-3); 1,327 tests OK | Passive (documentation only) |
-| DOC-3..DOC-4 | Pending | — | — | — |
+| DOC-3 | Done | `cc021bc` (`docs/guia-de-usuario.md`, 1,055 lines, the same 58 headings as the English guide, "usted" in the prose, ISO clauses as "apartado", a "Términos" section of 17 terms) | Structural readback; 420 bold labels checked by script against the templates and the Python sources; relative-link check: 127 links in 7 files, 0 errors, none missing; 1,327 tests OK | Passive (documentation only) |
+| DOC-4 | Pending | — | — | — |
 
 ## Findings during implementation
 
@@ -68,8 +69,9 @@ Plus a relative-link check over the Markdown files (every relative link and anch
 |---|---|---|---|---|
 | 1 | [#118](https://github.com/constant1n0/iso9001/pull/118) | tracker, operations guide | merged | |
 | 2 | [#119](https://github.com/constant1n0/iso9001/pull/119) | README, record | `9b8d96a` | |
-| 3 | Pending | English user guide, this record | — | |
+| 3 | [#120](https://github.com/constant1n0/iso9001/pull/120) | English user guide, record | `c3c6ee2` | |
+| 4 | Pending | Spanish user guide, this record | — | |
 
 ## Next step
 
-DOC-3.
+DOC-4.
