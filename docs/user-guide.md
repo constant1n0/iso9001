@@ -196,7 +196,10 @@ The modules, fields and client set-up are in the [MCP server guide](mcp.md)
 ## Dashboard
 
 The **Panel de control** (`/dashboard/`) opens after you sign in. It shows the
-state of the QMS for every role.
+state of the QMS for every role. The **Auditorías** figure and the **Auditorías
+próximas** card are shown only to the roles that may read audits
+(administrators and auditors); an operativo sees no audit figure, area or
+date.
 
 **Shortcut buttons** at the top create records: **+ Auditoría** (administrators
 and auditors), **+ No conformidad**, **+ Capacitación** (training) and
@@ -206,15 +209,16 @@ and auditors), **+ No conformidad**, **+ Capacitación** (training) and
 
 | Figure | What it counts |
 |---|---|
-| **Auditorías** | Every audit recorded; below, how many are dated in the next 7 days |
+| **Auditorías** | Every audit recorded, in any state; below, how many are still to be held in the next 7 days |
 | **No conformidades abiertas** | Open nonconformities (not closed or cancelled) out of the total; below, the closed ones |
 | **Satisfacción media** | The average score of every customer survey, out of 10 |
 | **Capacitaciones** | Every training session recorded; below, how many are dated in the next 30 days |
 
 **Alert cards:**
 
-- **Auditorías próximas** (upcoming audits): audits dated today or in the next
-  7 days, with their area and date.
+- **Auditorías próximas** (upcoming audits), for administrators and auditors:
+  audits still to be held (neither completed nor cancelled) dated today or in
+  the next 7 days, soonest first, with their area and date.
 - **No conformidades abiertas**: the open nonconformities, oldest detection
   first, with their responsible person or **Sin asignar** (unassigned).
 - **Capacitaciones próximas**: training sessions dated in the next 30 days.

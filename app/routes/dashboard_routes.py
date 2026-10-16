@@ -23,7 +23,7 @@ from ..extensions import db
 from ..models import (
     Auditoria, Capacitacion, EstadoNoConformidad, NoConformidad, SatisfaccionCliente,
 )
-from ..services import documents, management_reviews, people, quality_objectives
+from ..services import audits, documents, management_reviews, people, quality_objectives
 from ..services.nonconformities import OPEN_STATES
 from ..utils.permissions import can
 from ..utils.web_actor import current_actor
@@ -32,6 +32,8 @@ bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 
 # Document reviews (DC5 of document-control) shown when due within this many days.
 REVIEW_WINDOW_DAYS = 30
+# Audits still to be held are "upcoming" when dated within this many days.
+UPCOMING_AUDIT_DAYS = 7
 
 
 @bp.route('/', methods=['GET'])
@@ -49,15 +51,21 @@ def dashboard():
         estado=EstadoNoConformidad.cerrada
     ).count()
 
-    proximas_auditorias = Auditoria.query.filter(
-        Auditoria.fecha.between(hoy, hoy + timedelta(days=7))
-    ).order_by(Auditoria.fecha).all()
     no_conformidades_pendientes = NoConformidad.query.filter(
         abiertas
     ).order_by(NoConformidad.fecha_detectada).all()
     proximas_capacitaciones = Capacitacion.query.filter(
         Capacitacion.fecha.between(hoy, hoy + timedelta(days=30))
     ).order_by(Capacitacion.fecha).all()
+
+    # Audit figures, shown only to the roles that read audits (DD2 of
+    # documented-defects); None hides the count, the figure and the card.
+    # total_auditorias counts every audit recorded, whatever its state or date.
+    total_auditorias = proximas_auditorias = None
+    if can('read', 'audits'):
+        total_auditorias = Auditoria.query.count()
+        proximas_auditorias = audits.upcoming(db.session, current_actor(), today=hoy,
+                                              within_days=UPCOMING_AUDIT_DAYS)
 
     # Reviews overdue or due soon, among the documents the user may read
     # (an operativo only reads documents in force); None hides the card.
@@ -109,7 +117,7 @@ def dashboard():
     return render_template(
         'dashboard/dashboard.html',
         hoy=hoy,
-        total_auditorias=Auditoria.query.count(),
+        total_auditorias=total_auditorias,
         total_no_conformidades=NoConformidad.query.count(),
         no_conformidades_abiertas=no_conformidades_abiertas,
         no_conformidades_cerradas=no_conformidades_cerradas,
@@ -125,5 +133,6 @@ def dashboard():
         acciones_revision=acciones_revision,
         responsables_acciones=responsables_acciones,
         review_window_days=REVIEW_WINDOW_DAYS,
+        upcoming_audit_days=UPCOMING_AUDIT_DAYS,
         chart_data=chart_data,
     )

@@ -34,11 +34,13 @@
 </header>
 
 <section class="grid grid--kpi" aria-label="Indicadores">
+    {% if proximas_auditorias is not none %}
     <div class="kpi kpi--accent">
         <span class="kpi__label">Auditorías</span>
         <span class="kpi__value">{{ total_auditorias }}</span>
-        <span class="kpi__foot">{{ proximas_auditorias | length }} en los próximos 7 días</span>
+        <span class="kpi__foot">{{ proximas_auditorias | length }} en los próximos {{ upcoming_audit_days }} días</span>
     </div>
+    {% endif %}
     <div class="kpi {{ 'kpi--alert' if no_conformidades_abiertas else '' }}">
         <span class="kpi__label">No conformidades abiertas</span>
         <span class="kpi__value">{{ no_conformidades_abiertas }}<span class="kpi__unit">/ {{ total_no_conformidades }}</span></span>
@@ -57,10 +59,11 @@
 </section>
 
 <section class="grid grid--3" aria-label="Avisos">
-    <article class="card">
+    {% if proximas_auditorias is not none %}
+    <article class="card" id="auditorias-proximas">
         <header class="card__header">
             <h2 class="card__title">Auditorías próximas</h2>
-            <span class="card__meta">7 días</span>
+            <span class="card__meta">{{ upcoming_audit_days }} días</span>
         </header>
         {% if proximas_auditorias %}
             <ul class="list">
@@ -75,6 +78,7 @@
             <p class="empty">Sin auditorías programadas.</p>
         {% endif %}
     </article>
+    {% endif %}
     <article class="card">
         <header class="card__header">
             <h2 class="card__title">No conformidades abiertas</h2>

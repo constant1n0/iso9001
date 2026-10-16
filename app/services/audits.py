@@ -50,7 +50,7 @@ it, SQLite names no constraint); otherwise it is ``DELETE_CONFLICT``.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import exists, func, select
@@ -141,6 +141,30 @@ def list_page(
         .offset((page - 1) * per_page)
     )
     return list(session.scalars(query)), total
+
+
+# Audits that will not be held any more: they are no longer "upcoming".
+_NOT_TO_BE_HELD = (EstadoAuditoriaEnum.COMPLETADA, EstadoAuditoriaEnum.CANCELADA)
+
+
+def upcoming(
+    session: Session, actor: Actor, *, today: date, within_days: int
+) -> list[Auditoria]:
+    """Audits still to be held from ``today`` to ``within_days`` days ahead, by date.
+
+    Both ends are included; completed and cancelled audits are left out.
+    ``today`` is the adapter's date. Read grant of ``AUDITS``.
+    """
+    policy.require(actor, Action.READ, Resource.AUDITS)
+    query = (
+        select(Auditoria)
+        .where(
+            Auditoria.fecha.between(today, today + timedelta(days=within_days)),
+            Auditoria.estado.not_in(_NOT_TO_BE_HELD),
+        )
+        .order_by(Auditoria.fecha, Auditoria.id)
+    )
+    return list(session.scalars(query))
 
 
 AREA_MAX = 50  # mirrors Auditoria.area_auditada and the web form
