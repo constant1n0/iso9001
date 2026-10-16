@@ -52,7 +52,9 @@ un minuto desde el mismo lugar, los intentos siguientes se rechazan durante un
 tiempo.
 
 No hay registro público: un administrador crea las cuentas (véase
-[Usuarios](#usuarios)). Para salir, pulse **Salir** en la barra superior.
+[Usuarios](#usuarios)). Para salir, pulse **Salir** en la barra superior. La
+sesión también termina sola tras ocho horas sin actividad; después, vuelva a
+iniciar sesión.
 
 ### Contraseña olvidada
 
@@ -280,8 +282,8 @@ Pulse **Crear usuario**.
 
 - **Enviar enlace de contraseña** envía al usuario por correo un enlace de
   restablecimiento válido durante una hora. Requiere una cuenta activa con
-  dirección de correo electrónico. Desde una misma dirección de red se envían
-  como máximo diez enlaces por hora.
+  dirección de correo electrónico. Cada administrador envía como máximo diez
+  enlaces por hora, desde cualquier dirección de red.
 - **Desactivar**: el usuario ya no puede iniciar sesión, pierde cualquier
   sesión abierta y sus tokens de API activos se revocan. El registro de
   auditoría conserva su nombre.

@@ -20,6 +20,7 @@ from flask import (
     flash,
     redirect,
     render_template,
+    session,
     url_for,
 )
 from flask_login import login_user, logout_user, login_required, current_user
@@ -59,6 +60,9 @@ def login():
             # login_user() refuses an inactive user by returning False, so the
             # result decides; the response matches wrong credentials exactly.
             if login_user(user):
+                # Permanent, so the cookie expires PERMANENT_SESSION_LIFETIME
+                # after the last request (SESSION_REFRESH_EACH_REQUEST renews it).
+                session.permanent = True
                 log_login_attempt(username, success=True)
                 flash('Inicio de sesión exitoso', 'success')
                 return redirect(url_for('dashboard.dashboard'))

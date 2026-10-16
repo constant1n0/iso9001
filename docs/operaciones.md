@@ -90,7 +90,7 @@ contrástelo con las tablas siguientes, que proceden del código.
 |---|---|---|
 | `SECRET_KEY` | ninguno (obligatoria) | Firma las sesiones, los tokens CSRF y los enlaces de restablecimiento de contraseña, y es la clave de los hashes de los tokens de API. La aplicación no arranca sin ella. Cambiarla cierra la sesión de todos los usuarios e invalida todos los tokens de API |
 | `DATABASE_URI` | ninguno (obligatoria) | URL de SQLAlchemy de la base de datos PostgreSQL, por ejemplo `postgresql://<user>:<password>@<host>:5432/<database>`. La aplicación no arranca sin ella |
-| `FLASK_DEBUG` | `False` | `true`, `1` o `yes` activa el modo de depuración. En modo de depuración, las cookies de sesión y de «recordarme» no se marcan como `Secure` y no se envía HSTS. No la active nunca en producción |
+| `FLASK_DEBUG` | `False` | `true`, `1` o `yes` activa el modo de depuración. En modo de depuración, la cookie de sesión no se marca como `Secure` y no se envía HSTS. No la active nunca en producción |
 | `APP_TIMEZONE` | `Europe/Madrid` | Zona horaria de «hoy» (fechas de aprobación, publicación y cierre, comprobación de vencimientos, periodos de los informes) y del calendario de Celery |
 | `MAIL_USERNAME` | ninguno | Usuario de SMTP |
 | `MAIL_PASSWORD` | ninguno | Contraseña de SMTP |
@@ -129,11 +129,12 @@ Se definen en `app/config.py`, no en el entorno:
 - Correo: `MAIL_SERVER = smtp.gmail.com`, `MAIL_PORT = 587`, `MAIL_USE_TLS = True`.
   Otro proveedor de SMTP requiere un cambio en el código.
 - La cookie de sesión es `HttpOnly`, `SameSite=Lax` y `Secure` salvo que
-  `FLASK_DEBUG` esté activado. Hay configurados una duración de sesión
-  permanente (8 horas) y unos ajustes de «recordarme» (7 días, con los mismos
-  atributos), pero el inicio de sesión no crea ni una sesión permanente ni una
-  cookie de «recordarme», de modo que la sesión termina al cerrar el
-  navegador.
+  `FLASK_DEBUG` esté activado. El inicio de sesión la hace permanente: caduca
+  8 horas después de la última petición (`PERMANENT_SESSION_LIFETIME`), porque
+  cada petición la renueva (`SESSION_REFRESH_EACH_REQUEST`, activado por
+  defecto en Flask). Una sesión sin actividad durante 8 horas termina, aunque
+  el navegador siga abierto, y una cookie firmada hace más de 8 horas se
+  rechaza. No se ofrece la opción «recordarme».
 - Las claves de los límites de peticiones usan el prefijo `iso9001`; un
   almacenamiento Redis recibe tiempos de espera de conexión y de socket de 1
   segundo, y mientras no está accesible lo sustituyen contadores en memoria.
@@ -626,8 +627,9 @@ cubre el estado local, como `logs/` y `celerybeat-schedule`.
 - **Límites de peticiones** (Flask-Limiter, por dirección de cliente salvo que
   se indique otra cosa): inicio de sesión, 5 POST por minuto; solicitudes de
   restablecimiento de contraseña, 3 por hora; enlaces de restablecimiento
-  enviados por un administrador, 10 por hora; cambios de credenciales en la
-  página de perfil, 10 por hora y cuenta. No hay un límite general para las
+  enviados por un administrador, 10 por hora y administrador, sea cual sea su
+  dirección; cambios de credenciales en la página de perfil, 10 por hora y
+  cuenta. No hay un límite general para las
   páginas ordinarias. Configure `RATELIMIT_STORAGE_URI` con Redis para que
   todos los *workers* de Gunicorn compartan los contadores y estos se
   conserven tras los reinicios; con el valor por defecto, `memory://`, cada

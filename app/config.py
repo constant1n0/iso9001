@@ -35,13 +35,10 @@ class Config:
     SESSION_COOKIE_SECURE = os.environ.get('FLASK_DEBUG', 'False').lower() not in ('true', '1', 'yes')
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
+    # Sign-in makes the session permanent: it ends after this long without a
+    # request, since Flask's SESSION_REFRESH_EACH_REQUEST (left on) renews the
+    # cookie on each one. No "remember me" cookie is offered.
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
-
-    # Configuración de cookies "Remember Me"
-    REMEMBER_COOKIE_SECURE = os.environ.get('FLASK_DEBUG', 'False').lower() not in ('true', '1', 'yes')
-    REMEMBER_COOKIE_HTTPONLY = True
-    REMEMBER_COOKIE_SAMESITE = 'Lax'
-    REMEMBER_COOKIE_DURATION = timedelta(days=7)
 
     # Configuración del registro de eventos de seguridad
     SECURITY_LOG_ENABLED = os.environ.get(

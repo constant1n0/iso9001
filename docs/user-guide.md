@@ -50,7 +50,9 @@ same message: **Credenciales inválidas**. After five attempts in one minute
 from the same place, further attempts are refused for a while.
 
 There is no public registration: an administrator creates your account (see
-[Users](#users)). To leave, press **Salir** (sign out) in the top bar.
+[Users](#users)). To leave, press **Salir** (sign out) in the top bar. The
+session also ends by itself after eight hours without activity; then sign in
+again.
 
 ### Forgotten password
 
@@ -265,8 +267,8 @@ Press **Crear usuario**.
 **Account actions** (on the list and on the edit page):
 
 - **Enviar enlace de contraseña** (send password link) e-mails the user a
-  one-hour reset link. It needs an active account with an e-mail address. At
-  most ten links an hour are sent from the same network address.
+  one-hour reset link. It needs an active account with an e-mail address. Each
+  administrator sends at most ten links an hour, from any network address.
 - **Desactivar** (deactivate): the user can no longer sign in, loses any open
   session and has their active API tokens revoked. The audit trail keeps their
   name.

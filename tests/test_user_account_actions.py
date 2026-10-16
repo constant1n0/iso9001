@@ -328,66 +328,80 @@ class AccountActionsTestCase(unittest.TestCase):
 
 
 class ResetLinkRateLimitTestCase(unittest.TestCase):
-    def test_reset_link_is_rate_limited_per_client(self) -> None:
-        app = bootstrap.build_app(
+    """Ten reset links an hour for each administrator, whatever the address."""
+
+    def setUp(self) -> None:
+        self.app = bootstrap.build_app(
             RATELIMIT_ENABLED=True, PASSWORD_RESET_BASE_URL=CANONICAL_RESET_BASE
         )
-        ids = _seed(app)
+        self.ids = _seed(self.app)
+        self.addCleanup(self._teardown)
+        with self.app.app_context():
+            second = User(
+                username="segunda.administradora",
+                email="segunda@example.com",
+                password="x",
+                role=ADMIN,
+            )
+            db.session.add(second)
+            db.session.commit()
+            self.admins = (self.ids[ADMIN], second.id)
+        self.url = f"{BASE}/{self.ids[OPERATIVO]}/enviar-enlace"
+        sender = patch.object(password_reset_mail.mail, "send")
+        self.mail_send = sender.start()
+        self.addCleanup(sender.stop)
 
-        def drop() -> None:
-            with app.app_context():
-                db.session.remove()
-                db.drop_all()
+    def _teardown(self) -> None:
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
 
-        self.addCleanup(drop)
-        client = app.test_client()
-        with client.session_transaction() as session:
-            session["_user_id"] = str(ids[ADMIN])
-            session["_fresh"] = True
-        url = f"{BASE}/{ids[OPERATIVO]}/enviar-enlace"
-        with patch.object(password_reset_mail.mail, "send") as mail_send:
-            codes = [client.post(url).status_code for _ in range(10)]
-            refused = client.post(url)
-        self.assertEqual([302] * 10, codes)
-        self.assertEqual(429, refused.status_code)
-        self.assertEqual(10, mail_send.call_count)
+    def client_for(self, user_id: int | None = None):
+        """A test client signed in as ``user_id``, or anonymous."""
+        client = self.app.test_client()
+        if user_id is not None:
+            with client.session_transaction() as session:
+                session["_user_id"] = str(user_id)
+                session["_fresh"] = True
+        return client
+
+    def posts(self, client, count: int, address: str = "192.0.2.10") -> list[int]:
+        return [
+            client.post(self.url, environ_base={"REMOTE_ADDR": address}).status_code
+            for _ in range(count)
+        ]
+
+    def test_the_eleventh_link_in_an_hour_answers_429(self) -> None:
+        admin = self.client_for(self.admins[0])
+        self.assertEqual([302] * 10 + [429], self.posts(admin, 11))
+        self.assertEqual(10, self.mail_send.call_count)
+
+    def test_administrators_behind_one_address_keep_their_own_budget(self) -> None:
+        for admin_id in self.admins:
+            with self.subTest(admin=admin_id):
+                admin = self.client_for(admin_id)
+                self.assertEqual([302] * 10 + [429], self.posts(admin, 11))
+        self.assertEqual(20, self.mail_send.call_count)
+
+    def test_one_administrator_shares_the_budget_across_addresses(self) -> None:
+        admin = self.client_for(self.admins[0])
+        self.assertEqual([302] * 10, self.posts(admin, 10, "192.0.2.10"))
+        self.assertEqual([429], self.posts(admin, 1, "198.51.100.7"))
+        self.assertEqual(10, self.mail_send.call_count)
 
     def test_refused_requests_do_not_spend_the_administrators_budget(self) -> None:
-        app = bootstrap.build_app(
-            RATELIMIT_ENABLED=True, PASSWORD_RESET_BASE_URL=CANONICAL_RESET_BASE
-        )
-        ids = _seed(app)
-
-        def drop() -> None:
-            with app.app_context():
-                db.session.remove()
-                db.drop_all()
-
-        self.addCleanup(drop)
-
-        def client_for(role=None):
-            client = app.test_client()
-            if role is not None:
-                with client.session_transaction() as session:
-                    session["_user_id"] = str(ids[role])
-                    session["_fresh"] = True
-            return client
-
-        url = f"{BASE}/{ids[OPERATIVO]}/enviar-enlace"
-        anonymous, operativo = client_for(), client_for(OPERATIVO)
-        admin = client_for(ADMIN)
-        with patch.object(password_reset_mail.mail, "send") as mail_send:
-            # All three clients share one address, so they share one budget.
-            for client, target in ((anonymous, "/login"), (operativo, "/dashboard/")):
-                for _ in range(11):
-                    response = client.post(url)
-                    self.assertEqual(302, response.status_code)
-                    self.assertIn(target, response.headers["Location"])
-            mail_send.assert_not_called()
-            allowed = admin.post(url)
+        anonymous, operativo = self.client_for(), self.client_for(self.ids[OPERATIVO])
+        # Counted, the eleventh refused post of either client would be a 429.
+        for client, target in ((anonymous, "/login"), (operativo, "/dashboard/")):
+            for _ in range(11):
+                response = client.post(self.url)
+                self.assertEqual(302, response.status_code)
+                self.assertIn(target, response.headers["Location"])
+        self.mail_send.assert_not_called()
+        allowed = self.client_for(self.admins[0]).post(self.url)
         self.assertEqual(302, allowed.status_code)
         self.assertTrue(allowed.headers["Location"].endswith(f"{BASE}/"))
-        self.assertEqual(1, mail_send.call_count)
+        self.assertEqual(1, self.mail_send.call_count)
 
 
 class AdminResetLinkLogTestCase(unittest.TestCase):

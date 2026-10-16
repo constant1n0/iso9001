@@ -28,8 +28,9 @@ a 404, a policy refusal redirects to the dashboard).
 The account actions (deactivate, reactivate, send a reset link) are POST-only
 and need the update grant; they flash the outcome or the refusal on the list
 and write one security-log line when something happened. The reset link is
-rate limited per client, counting only requests that pass the grant check, and
-never shows why mail failed: the exception types go to the application log.
+rate limited per administrator, whatever the client address, counting only
+requests that pass the grant check, and never shows why mail failed: the
+exception types go to the application log.
 """
 
 import logging
@@ -38,7 +39,7 @@ from typing import Any
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
-from flask_login import login_required
+from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 
 from ..extensions import db, limiter
@@ -166,12 +167,21 @@ def _set_active(user_id: int, active: bool) -> ResponseReturnValue:
     return redirect(url_for('users.list_users'))
 
 
+def _requesting_administrator() -> str:
+    """Rate-limit key of the reset links: the signed-in administrator.
+
+    Keyed by account, not address, so administrators behind one office address
+    keep their own budgets and changing address buys no extra links.
+    """
+    return f'user:{current_user.get_id()}'
+
+
 # The limiter is innermost so that refused requests (anonymous, or without the
 # grant) never spend the administrators' budget.
 @bp.route('/<int:user_id>/enviar-enlace', methods=['POST'])
 @login_required
 @require_permission('update', 'users')
-@limiter.limit('10 per hour')
+@limiter.limit('10 per hour', key_func=_requesting_administrator)
 def send_reset_link(user_id: int) -> ResponseReturnValue:
     """Mail the user a password-reset link with the administrator wording."""
     actor = current_actor()
