@@ -989,6 +989,11 @@ Notas:
 El **Informe mensual de calidad** (apartado 9.1) es un PDF que se envía por
 correo electrónico a los administradores el día 1 de cada mes. Abarca el mes
 natural que acaba de terminar y no está disponible desde las pantallas web.
+
+La cabecera indica el periodo del informe (por ejemplo, **Periodo: septiembre
+de 2026**) y, en **Generado el**, el día en que se generó: el día 1 en que se
+envía, no el último día del mes.
+
 Cada cifra cuenta:
 
 | Cifra | Qué cuenta |

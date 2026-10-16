@@ -956,7 +956,13 @@ Notes:
 The **Informe mensual de calidad** (monthly quality report, clause 9.1) is a
 PDF e-mailed to administrators on the 1st of each month. It covers the
 calendar month that has just ended, and is not available from the web
-screens. Each figure counts:
+screens.
+
+The header gives the report's period (for example, **Periodo: septiembre de
+2026**) and, under **Generado el**, the day it was generated: the 1st on which
+it is sent, not the month's last day.
+
+Each figure counts:
 
 | Figure | What it counts |
 |---|---|

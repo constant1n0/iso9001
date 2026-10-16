@@ -18,7 +18,7 @@
 {% from "_partials/pdf.html" import fields %}
 {% block title %}Informe mensual de calidad{% endblock %}
 {% block clause %}Cláusula 9.1 · Seguimiento y medición{% endblock %}
-{% block subtitle %}Situación a {{ fecha.strftime('%d/%m/%Y') }}{% endblock %}
+{% block subtitle %}Periodo: {{ periodo }}{% endblock %}
 {% block content %}
 <div class="kpis">
     <div class="kpi kpi--accent"><span class="kpi__label">Auditorías</span><span class="kpi__value">{{ total_auditorias }}</span></div>
@@ -66,6 +66,6 @@
 </div>
 <div class="section">
     <h2>Alcance</h2>
-    <p>Indicadores del sistema de gestión de calidad registrados en el mes del informe: las no conformidades por su fecha de detección, con su estado al generar el informe; las acciones correctivas por su fecha de verificación; las auditorías completadas por su fecha, y los hallazgos por la fecha de su auditoría. Las mediciones de los objetivos de calidad se cuentan por su fecha; los objetivos activos, con su estado al generar el informe, se valoran con sus mediciones hasta el último día del mes, o hasta la fecha del informe si es anterior. La satisfacción media se expresa sobre 10.</p>
+    <p>Indicadores del sistema de gestión de calidad registrados en el mes del informe: las no conformidades por su fecha de detección, con su estado al generar el informe; las acciones correctivas por su fecha de verificación; las auditorías completadas por su fecha, y los hallazgos por la fecha de su auditoría. Las mediciones de los objetivos de calidad se cuentan por su fecha; los objetivos activos, con su estado al generar el informe, se valoran con sus mediciones hasta el último día del mes, o hasta el día en que se genera el informe si es anterior. La satisfacción media se expresa sobre 10.</p>
 </div>
 {% endblock %}

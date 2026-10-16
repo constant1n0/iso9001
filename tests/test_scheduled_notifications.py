@@ -168,9 +168,10 @@ class ScheduledNotificationsTestCase(unittest.TestCase):
         db.session.add(Capacitacion(tema="ISO", fecha=TODAY, personal="Equipo"))
         db.session.commit()
 
-        html = reports.render_monthly_report_html(TODAY)
+        html = reports.render_monthly_report_html(TODAY, today=TODAY)
 
-        self.assertIn("05/10/2026", html)
+        self.assertIn("Generado el 05/10/2026", html)
+        self.assertIn("Periodo: octubre de 2026", html)
         kpis = dict(re.findall(
             r'kpi__label">([^<]+)</span><span class="kpi__value">([^<]+)<', html
         ))

@@ -33,6 +33,9 @@ from .pdf import render_pdf
 
 E = TypeVar("E", bound=Enum)
 
+_MONTH_NAMES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+                "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+
 
 def _month_bounds(fecha: date) -> tuple[date, date]:
     """Return the first day of ``fecha``'s month and of the next month."""
@@ -104,7 +107,9 @@ def _monthly_report_context(fecha: date, *, today: date | None = None) -> dict:
     Quality objective measurements count by their date. The active objectives,
     and those meeting their target or with an overdue measurement, are judged
     on the month's last day, or on ``today`` when earlier (``_objective_figures``).
-    ``today`` defaults to the local date in ``APP_TIMEZONE``.
+
+    ``today`` is the day the report is generated, its ``generado`` date; it
+    defaults to the local date in ``APP_TIMEZONE``. ``periodo`` names the month.
     """
     start, end = _month_bounds(fecha)
     today = _local_today() if today is None else today
@@ -126,6 +131,8 @@ def _monthly_report_context(fecha: date, *, today: date | None = None) -> dict:
                           join=(Auditoria, HallazgoAuditoria.auditoria_id == Auditoria.id))
     return dict(
         fecha=fecha,
+        periodo=f"{_MONTH_NAMES[start.month - 1]} de {start.year}",
+        generado=today,
         total_auditorias=Auditoria.query.filter(in_month(Auditoria.fecha)).count(),
         auditorias_completadas=Auditoria.query.filter(
             in_month(Auditoria.fecha), Auditoria.estado == EstadoAuditoriaEnum.COMPLETADA
@@ -150,10 +157,10 @@ def _monthly_report_context(fecha: date, *, today: date | None = None) -> dict:
 def render_monthly_report_html(fecha: date, *, today: date | None = None) -> str:
     """Render the HTML summary of the key quality indicators."""
     return render_template('reportes/reporte_mensual.html',
-                           **_monthly_report_context(fecha, today=today), generado=fecha)
+                           **_monthly_report_context(fecha, today=today))
 
 
 def generar_reporte_pdf(fecha: date, *, today: date | None = None) -> bytes:
     """Build the monthly summary report as PDF bytes."""
     return render_pdf('reportes/reporte_mensual.html',
-                      **_monthly_report_context(fecha, today=today), generado=fecha)
+                      **_monthly_report_context(fecha, today=today))

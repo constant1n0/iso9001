@@ -183,7 +183,7 @@ class MonthlyReportPeriodTestCase(unittest.TestCase):
             with mail.record_messages() as outbox:
                 notifications.send_monthly_quality_report(today=date(2026, 10, 1))
 
-        build.assert_called_once_with(date(2026, 9, 30))
+        build.assert_called_once_with(date(2026, 9, 30), today=date(2026, 10, 1))
         self.assertEqual("reporte-calidad-2026-09.pdf", outbox[0].attachments[0].filename)
 
 
