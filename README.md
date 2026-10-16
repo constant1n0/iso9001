@@ -1,43 +1,102 @@
-# ISO 9001 QMS
+# SGC ISO 9001
 
-A quality management system for ISO 9001:2026, built on Flask, PostgreSQL,
-Celery and Redis. People work in a Spanish web interface; AI agents work on the
-same records through an MCP server, under the same permissions, with revocable
-API tokens. Every change goes through one service layer that checks
-permissions, validates, attributes and writes the audit log.
+[English summary](README.en.md)
 
-## Modules
+**Sistema de gestión de la calidad para ISO 9001:2026, auditable de principio
+a fin, en el que las personas y los agentes de IA trabajan sobre los mismos
+registros.**
 
-- **Dashboard**: key figures, charts and alerts (overdue document reviews,
-  objectives off target, overdue management-review actions).
-- **Users and profile**: accounts with the *Administrador*, *Auditor* and
-  *Operativo* roles, deactivation instead of deletion, and each user's profile
-  and API tokens.
-- **People and competence** (clauses 5.3, 7.2): people, QMS roles, required and
-  demonstrated competence, and the competence matrix.
-- **Nonconformities and corrective actions** (10.2): containment, root cause,
-  corrective actions, effectiveness verification, closing and reopening.
-- **Document control** (7.5): numbered revisions reviewed, approved and
-  published, attachments, withdrawal and periodic review.
-- **Internal audits** (9.2): yearly audit programme, audits with scope, team
-  and independence checks, and classified findings that open nonconformities.
-- **Quality objectives** (6.2): indicator, target, owner, measurements, trend
-  and overdue measurements.
-- **Management review** (9.3): inputs drawn from the registers, conclusions,
-  actions and the minutes PDF.
-- **Earlier registers**: interested parties, risks and opportunities, roles and
-  responsibilities, training and training resources, process operations, audit
-  indicators, improvements and customer satisfaction.
-- **Reports and notifications**: PDFs of the records, a monthly quality report,
-  and scheduled e-mail alerts sent by Celery.
-- **MCP server** (`app/mcp_server/`): Claude Code, Codex, Pi, OpenCode,
-  OpenClaw and Claude Desktop read and write the QMS as a user.
+Esta aplicación web reúne los registros de un sistema de gestión de la calidad
+(SGC): no conformidades y acciones correctivas, control de documentos,
+auditorías internas, objetivos de la calidad, revisión por la dirección,
+competencia del personal y el resto de registros de la norma. Está pensada
+para empresas y organizaciones que implantan o mantienen un SGC conforme a ISO
+9001:2026 y necesitan demostrar ante un auditor quién hizo cada cosa, cuándo y
+con qué resultado.
 
-## Quick start (development)
+La interfaz está en español. Los agentes de IA (Claude Code, Codex y otros
+clientes MCP) consultan y registran datos en el mismo SGC a través de un
+servidor MCP, con los permisos del usuario al que representan y sin poder
+eliminar nada.
 
-You need Python 3.11, a PostgreSQL database (Docker is the quickest way) and
-WeasyPrint's system libraries for the PDFs (see
-[requirements](docs/operations.md#requirements)).
+<!-- capturas: pendiente de añadir capturas del panel de control, la ficha de
+una no conformidad, el flujo de revisiones de un documento, el acta de la
+revisión por la dirección en PDF y un agente de IA consultando el SGC por MCP.
+No enlazar imágenes hasta que existan en el repositorio. -->
+
+## Qué resuelve
+
+- **Trazabilidad lista para la auditoría.** Cada cambio pasa por una única
+  capa de servicios que comprueba los permisos, valida los datos y escribe el
+  registro de auditoría: quién, cuándo, por qué canal y los valores antes y
+  después del cambio. Los usuarios se desactivan y los documentos se dan de
+  baja; ninguno se elimina, y las revisiones sustituidas de un documento se
+  conservan como evidencia.
+- **Las reglas de la norma, aplicadas por el sistema.** Tres roles
+  (Administrador, Auditor y Operativo) deciden qué puede consultar, crear,
+  editar, eliminar o aprobar cada cuenta. Cada registro sigue sus estados: un
+  documento se revisa, se aprueba y se publica; la eficacia de una acción
+  correctiva se verifica; una revisión por la dirección se celebra y sus
+  entradas quedan congeladas.
+- **Agentes de IA bajo control.** Un administrador emite a cada agente un
+  token de API revocable que actúa como un usuario concreto y solo puede
+  reducir los permisos de su rol. Lo que registra un agente queda en el
+  registro de auditoría con el nombre de ese usuario. Un agente nunca elimina,
+  nunca escribe documentos y nunca gestiona tokens; verificar acciones
+  correctivas, cerrar no conformidades, aprobar programas de auditoría y
+  celebrar revisiones por la dirección solo se hace desde la web.
+- **Evidencia en PDF y avisos por correo electrónico.** Informes en PDF de las
+  no conformidades, las auditorías y sus programas, los objetivos de la
+  calidad, las capacitaciones, las encuestas de satisfacción y las actas de la
+  revisión por la dirección; un informe mensual de calidad que los
+  administradores reciben el día 1 de cada mes, y avisos programados de
+  auditorías próximas y de revisiones de documentos pendientes.
+- **Software libre, en su propio servidor.** Licencia GPL v3. Funciona con
+  PostgreSQL, Redis, Celery y Gunicorn detrás de un proxy inverso, y la
+  interfaz no carga recursos de terceros.
+
+## Módulos
+
+| Módulo | Apartado de ISO 9001:2026 | Qué cubre |
+|---|---|---|
+| Panel de control | — | Cifras, gráficos y avisos, entre ellos las revisiones de documentos vencidas, los objetivos que no alcanzan la meta y las acciones vencidas de la revisión por la dirección |
+| Usuarios y perfil | 5.3 | Cuentas con los roles Administrador, Auditor y Operativo, desactivación en lugar de eliminación, y el perfil y los tokens de API de cada usuario |
+| Personas y competencia | 5.3, 7.2 | Personas, roles del SGC, competencias requeridas y acreditadas, y la matriz de competencias |
+| No conformidades y acciones correctivas | 10.2 | Contención, causa raíz, acciones correctivas, verificación de la eficacia, cierre y reapertura |
+| Control de documentos | 7.5 | Revisiones numeradas que se revisan, aprueban y publican, ficheros adjuntos, baja y revisión periódica |
+| Auditorías internas | 9.2 | Programa anual de auditoría, auditorías con alcance, equipo y comprobación de independencia, y hallazgos clasificados que abren no conformidades |
+| Objetivos de la calidad | 6.2 | Indicador, meta, responsable, mediciones, tendencia y mediciones vencidas |
+| Revisión por la dirección | 9.3 | Entradas tomadas de los registros, conclusiones, acciones y acta en PDF |
+| Informes y notificaciones | 9.1 | PDF de los registros, informe mensual de calidad y avisos programados por correo electrónico |
+
+**Otros registros**, anteriores a los módulos de la tabla: partes interesadas
+(4.2), operaciones de los procesos (4.4, 8.1), roles y responsabilidades
+(5.3), riesgos y oportunidades (6.1), recursos de capacitación (7.1),
+capacitaciones (7.2), indicadores de auditoría (9.1), satisfacción del cliente
+(9.1.2) y mejoras (10.3). Los que no tienen pantallas se mantienen a través
+del servidor MCP.
+
+La [guía de usuario](docs/guia-de-usuario.md) explica cada pantalla, los
+permisos de cada rol y las reglas de cada módulo.
+
+## Agentes de IA
+
+El servidor MCP (`app/mcp_server/`) permite que los agentes de IA lean y
+escriban en el SGC como un usuario, con las mismas reglas que la web. Su
+configuración está documentada para Claude Code, Codex, Pi, OpenCode, OpenClaw
+y Claude Desktop.
+
+Los administradores emiten los tokens de API desde una línea de órdenes en el
+servidor con `flask --app run.py create-api-token`, los enumeran con
+`list-api-tokens` y los revocan con `revoke-api-token` (véase la
+[guía de operaciones](docs/operaciones.md)). El servidor MCP, su despliegue y
+la configuración de cada cliente están en [`docs/mcp.md`](docs/mcp.md).
+
+## Puesta en marcha (desarrollo)
+
+Se necesita Python 3.11, una base de datos PostgreSQL (Docker es la forma más
+rápida) y las bibliotecas del sistema que WeasyPrint usa para los PDF (véanse
+los requisitos en la [guía de operaciones](docs/operaciones.md)).
 
 ```bash
 git clone https://github.com/constant1n0/iso9001.git
@@ -45,76 +104,70 @@ cd iso9001
 python3.11 -m venv venv
 venv/bin/pip install -r requirements.txt
 
-docker run -d --name iso9001-dev-db -e POSTGRES_PASSWORD=<password> \
+docker run -d --name iso9001-dev-db -e POSTGRES_PASSWORD=<contraseña> \
   -p 127.0.0.1:5432:5432 postgres:17-alpine
 
 cat > .env <<'EOF'
-SECRET_KEY=<random-string>
-DATABASE_URI=postgresql://postgres:<password>@127.0.0.1:5432/postgres
+SECRET_KEY=<cadena-aleatoria>
+DATABASE_URI=postgresql://postgres:<contraseña>@127.0.0.1:5432/postgres
 FLASK_DEBUG=1
 EOF
 
 venv/bin/flask --app run.py db upgrade
-venv/bin/flask --app run.py create-admin   # the first administrator, once
+venv/bin/flask --app run.py create-admin   # el primer administrador, una sola vez
 venv/bin/flask --app run.py run
 ```
 
-Open `http://127.0.0.1:5000` and sign in. Celery, e-mail, production
-settings and every environment variable are in the
-[operations guide](docs/operations.md).
+Abra `http://127.0.0.1:5000` e inicie sesión con ese administrador. Celery, el
+correo electrónico, la configuración de producción y todas las variables de
+entorno están en la [guía de operaciones](docs/operaciones.md).
 
-## AI agents
+## Documentación
 
-Administrators issue API tokens from a shell on the server with
-`flask --app run.py create-api-token`, list them with `list-api-tokens` and
-revoke them with `revoke-api-token` (see
-[API tokens](docs/operations.md#api-tokens)). The MCP server, its deployment
-and the configuration of each client are in [`docs/mcp.md`](docs/mcp.md).
-
-## Documentation
-
-| Document | For |
+| Documento | Contenido |
 |---|---|
-| [Operations guide](docs/operations.md) | Installation, configuration, PostgreSQL, Redis and Celery, Gunicorn, the reverse proxy and systemd, deployment, backups, monitoring, security, CI |
-| [User guide](docs/user-guide.md) | Using every module, in English |
-| [Guía de usuario](docs/guia-de-usuario.md) | The same guide, in Spanish |
-| [MCP server](docs/mcp.md) | Tokens, the MCP server and AI-agent clients |
-| [Service layer](docs/architecture/services.md) | Architecture, permission matrix, state rules, writing an adapter |
-| [ISO 9001 gap analysis](docs/iso-9001-gap-analysis.md) | Coverage of each clause |
+| [Guía de usuario](docs/guia-de-usuario.md) | La guía principal: cada módulo, los roles, los flujos, los PDF y los correos |
+| [User guide](docs/user-guide.md) | La traducción al inglés de la guía de usuario |
+| [Guía de operaciones](docs/operaciones.md) | Instalación, configuración, PostgreSQL, Redis y Celery, Gunicorn, el proxy inverso y systemd, despliegue, copias de seguridad, monitorización, seguridad e integración continua |
+| [Servidor MCP](docs/mcp.md) | Tokens, el servidor MCP y la configuración de los clientes de agentes de IA |
+| [Análisis de brechas ISO 9001](docs/analisis-brechas-iso-9001.md) | La cobertura de cada apartado de la norma |
+| [Capa de servicios](docs/architecture/services.md) | Arquitectura, matriz de permisos, reglas de estado y cómo escribir un adaptador (en inglés, para desarrolladores) |
 
-The feature trackers in `odd/tasks/` record the decisions, checks and
-production deployments of each change.
+Los seguimientos de `odd/tasks/` (en inglés) recogen las decisiones, las
+comprobaciones y los despliegues en producción de cada cambio.
 
-## Development
+## Desarrollo
 
-- **Layout**: `app/` holds the routes, services, models, templates, static
-  assets and the MCP server; `migrations/` the Alembic migrations; `tests/` the
-  test suite; `celery_worker.py` the scheduled tasks; `wsgi.py` and
-  `gunicorn.conf.py` the production entry point; the `iso9001*.service` files
-  the systemd units.
-- **Architecture**: writes go through a service layer independent of Flask
-  (permissions, validation, attribution and audit log); the web and the MCP
-  server are adapters over it. See
+- **Estructura**: `app/` contiene las rutas, los servicios, los modelos, las
+  plantillas, los recursos estáticos y el servidor MCP; `migrations/`, las
+  migraciones de Alembic; `tests/`, las pruebas; `celery_worker.py`, las
+  tareas programadas; `wsgi.py` y `gunicorn.conf.py`, el punto de entrada de
+  producción, y los ficheros `iso9001*.service`, las unidades de systemd.
+- **Arquitectura**: las escrituras pasan por una capa de servicios
+  independiente de Flask (permisos, validación, atribución y registro de
+  auditoría); la web y el servidor MCP son adaptadores sobre ella. Véase
   [`docs/architecture/services.md`](docs/architecture/services.md).
-- **Tests**: `venv/bin/python -m unittest discover -s tests -p 'test_*.py'`.
-  The PostgreSQL tests run only with `TEST_POSTGRES_URI`; see
-  [Continuous integration](docs/operations.md#continuous-integration).
-- **User interface**: one stylesheet, `app/static/css/app.css`, with design
-  tokens (black, bone white and canary yellow `#FFF000`) as CSS custom
-  properties. Every asset is served locally, so the Content-Security-Policy
-  allows no external origin: the Barlow Condensed, IBM Plex Sans and IBM Plex
-  Mono fonts (SIL Open Font License, see `app/static/fonts/*-OFL.txt`) and
-  Chart.js 4.5.1 (MIT, see `app/static/lib/chart.js-LICENSE.md`). Shared
-  template pieces live in `app/templates/_partials/`. Forms marked with
-  `data-confirm="…"` ask for confirmation through `app/static/js/app.js`; do
-  not use inline `onclick` or `onsubmit` handlers.
+- **Pruebas**: `venv/bin/python -m unittest discover -s tests -p 'test_*.py'`.
+  Las pruebas de PostgreSQL solo se ejecutan con `TEST_POSTGRES_URI`; véase la
+  integración continua en la [guía de operaciones](docs/operaciones.md).
+- **Interfaz**: una sola hoja de estilos, `app/static/css/app.css`, con los
+  tokens de diseño (negro, blanco hueso y amarillo canario `#FFF000`) como
+  propiedades personalizadas de CSS. Todos los recursos se sirven desde el
+  propio servidor, de modo que la Content-Security-Policy no admite orígenes
+  externos: las tipografías Barlow Condensed, IBM Plex Sans e IBM Plex Mono
+  (SIL Open Font License, véase `app/static/fonts/*-OFL.txt`) y Chart.js 4.5.1
+  (MIT, véase `app/static/lib/chart.js-LICENSE.md`). Las piezas de plantilla
+  compartidas están en `app/templates/_partials/`. Los formularios marcados
+  con `data-confirm="…"` piden confirmación a través de `app/static/js/app.js`;
+  no se usan manejadores `onclick` ni `onsubmit` en línea.
 
-## Continuous integration
+## Integración continua
 
-GitHub Actions runs the `Python 3.11 tests` check, against PostgreSQL 17, on
-every push, on pull requests targeting `main` and when started manually. See
-[Continuous integration](docs/operations.md#continuous-integration).
+GitHub Actions ejecuta la comprobación `Python 3.11 tests`, contra PostgreSQL
+17, en cada *push*, en las *pull requests* dirigidas a `main` y cuando se
+lanza manualmente. Los detalles están en la
+[guía de operaciones](docs/operaciones.md).
 
-## Licence
+## Licencia
 
-GNU General Public License v3.0; see [LICENSE](LICENSE).
+GNU General Public License v3.0; véase [LICENSE](LICENSE).

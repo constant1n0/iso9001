@@ -1,5 +1,10 @@
 # User guide
 
+> **Translation.** This guide is the English translation of the
+> [Guía de usuario](guia-de-usuario.md), which is the reference: changes are
+> written in the Spanish guide first, and if the two differ, the Spanish guide
+> applies.
+
 This guide is for the people who use the ISO 9001 QMS in a web browser:
 quality staff, managers and auditors. It explains each screen, what you can
 do there with your role, and which rules the system enforces. It covers the
@@ -11,7 +16,6 @@ with an English gloss the first time they appear: for example **No
 conformidades** (nonconformities). A [glossary](#glossary) at the end lists the
 most frequent terms.
 
-The same guide in Spanish: [Guía de usuario](guia-de-usuario.md).
 Installation and server administration are in the
 [operations guide](operations.md).
 
