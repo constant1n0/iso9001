@@ -190,7 +190,8 @@ guide, in Spanish).
 - You see and revoke your own tokens on **Mi perfil**; deactivating a user
   revokes their active tokens.
 
-The modules, fields and client set-up are in the [MCP server guide](mcp.md).
+The modules, fields and client set-up are in the [MCP server guide](mcp.md)
+(in Spanish).
 
 ## Dashboard
 
@@ -911,8 +912,8 @@ decision:
 
 These registers predate the modules above. Some have screens; others have
 none and are kept through the MCP server (see
-[Agents and API tokens](#agents-and-api-tokens) and [`mcp.md`](mcp.md)), which
-reads and writes them with the same role rules.
+[Agents and API tokens](#agents-and-api-tokens) and [`mcp.md`](mcp.md), in
+Spanish), which reads and writes them with the same role rules.
 
 | Register | Clause | Where | Fields |
 |---|---|---|---|

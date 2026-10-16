@@ -200,7 +200,7 @@ API desde la línea de órdenes del servidor (véase
   usuario revoca sus tokens activos.
 
 Los módulos, los campos y la configuración de los clientes están en la
-[guía del servidor MCP](mcp.md) (en inglés).
+[guía del servidor MCP](mcp.md).
 
 ## Panel de control
 
@@ -942,7 +942,7 @@ En **Salidas: acciones**, **+ Nueva acción** registra una decisión:
 Estos registros son anteriores a los módulos descritos más arriba. Algunos
 tienen pantallas; otros no tienen ninguna y se mantienen a través del
 servidor MCP (véanse [Agentes y tokens de API](#agentes-y-tokens-de-api) y
-[`mcp.md`](mcp.md), en inglés), que los consulta y los escribe con las mismas
+[`mcp.md`](mcp.md)), que los consulta y los escribe con las mismas
 reglas de rol.
 
 | Registro | Apartado | Dónde | Campos |

@@ -98,7 +98,7 @@ contrástelo con las tablas siguientes, que proceden del código.
 | `PASSWORD_RESET_BASE_URL` | ninguno | Origen HTTPS raíz con el que se construyen los enlaces de restablecimiento de contraseña, por ejemplo `https://qms.example.com`. Véase [Enlaces de restablecimiento de contraseña](#enlaces-de-restablecimiento-de-contraseña) |
 | `TRUSTED_PROXIES` | vacío | Proxies inversos cuyas cabeceras `X-Forwarded-For` y `X-Forwarded-Proto` se respetan: direcciones o redes CIDR separadas por comas. Vacío significa ninguno. `*` o una entrada no válida detienen el arranque. Véase [Proxy inverso](#proxy-inverso) |
 | `RATELIMIT_STORAGE_URI` | `memory://` | Almacenamiento de los contadores de los límites de peticiones, compartido por la aplicación web y el servidor MCP. En producción, use Redis, por ejemplo `redis://:<password>@127.0.0.1:6379/2`, en un índice de base de datos distinto del de Celery |
-| `MCP_TOKEN_RATE_LIMIT` | `120/minute` | Transporte HTTP de MCP: peticiones por token de API. Véase [`mcp.md`](mcp.md#rate-limits) |
+| `MCP_TOKEN_RATE_LIMIT` | `120/minute` | Transporte HTTP de MCP: peticiones por token de API. Véase [`mcp.md`](mcp.md#límites-de-peticiones) |
 | `MCP_AUTH_FAILURE_RATE_LIMIT` | `20/minute` | Transporte HTTP de MCP: autenticaciones *bearer* fallidas por dirección de cliente |
 | `DOCUMENT_STORAGE_DIR` | `instance/documents` | Directorio de los ficheros adjuntos de las revisiones de documentos (`<instance path>/documents`; la ruta de instancia es `instance/` en la copia de trabajo). Se crea al arrancar con modo `700`; el arranque falla si está dentro de `app/static/`. Véase [Ficheros adjuntos de los documentos](#ficheros-adjuntos-de-los-documentos) |
 | `DOCUMENT_MAX_BYTES` | `20971520` (20 MiB) | Tamaño máximo de un adjunto, en bytes. Debe ser un entero positivo o el arranque falla. Las peticiones que superan este valor más 1 MiB para el formulario reciben `413` |
@@ -114,7 +114,7 @@ El servidor MCP (`python -m app.mcp_server`) también lee `MCP_HOST` (por
 defecto `127.0.0.1`), `MCP_PORT` (`8765`), `MCP_ALLOWED_HOSTS`,
 `MCP_TRUSTED_PROXIES` (`127.0.0.1`) y, solo para el transporte stdio,
 `ISO9001_MCP_TOKEN`; su significado está en
-[`mcp.md`](mcp.md#server-configuration).
+[`mcp.md`](mcp.md#configuración-del-servidor).
 
 Las pruebas leen `TEST_POSTGRES_URI` (véase
 [Integración continua](#integración-continua)).
@@ -254,7 +254,7 @@ venv/bin/flask --app run.py revoke-api-token <prefix>
 Los usuarios enumeran y revocan sus propios tokens en su página de perfil
 (`/perfil/`); desactivar un usuario revoca sus tokens activos. La
 configuración de los clientes, el punto de acceso HTTP y sus límites están en
-[`mcp.md`](mcp.md#issue-a-token); cómo se autentica un adaptador, en
+[`mcp.md`](mcp.md#emisión-de-un-token); cómo se autentica un adaptador, en
 [`architecture/services.md`](architecture/services.md#api-tokens) (en inglés).
 
 ## Ficheros adjuntos de los documentos
@@ -375,7 +375,7 @@ tipo mod_wsgi; las unidades de systemd no lo usan.
 
 El servidor de producción usa Traefik en la misma máquina: termina TLS y
 encamina el host del SGC a Gunicorn y `/mcp` al servidor MCP (véase
-[`mcp.md`](mcp.md#traefik-routing)). Cualquier proxy debe:
+[`mcp.md`](mcp.md#enrutamiento-con-traefik)). Cualquier proxy debe:
 
 - terminar TLS: las cookies seguras, HSTS y los enlaces de restablecimiento
   presuponen HTTPS;
@@ -445,7 +445,7 @@ Si PostgreSQL o Redis se ejecutan en contenedores, ordene las unidades después
 de `docker.service` (las unidades de Celery ya lo hacen). La unidad MCP escucha
 en loopback; un proxy en un contenedor llega a ella mediante un *drop-in* de
 systemd que cambia `--host`, más una regla de cortafuegos limitada a la red
-del proxy (véase [`mcp.md`](mcp.md#server-configuration)).
+del proxy (véase [`mcp.md`](mcp.md#configuración-del-servidor)).
 
 ## Procedimiento de despliegue
 
@@ -527,7 +527,7 @@ ejecutando y `<new>`, el commit que se despliega.
    - `/mcp` responde `401` con `WWW-Authenticate: Bearer` cuando no se envía
      token;
    - el servidor MCP enumera los módulos esperados (por ejemplo, con un cliente
-     MCP; véase [`mcp.md`](mcp.md#smoke-test));
+     MCP; véase [`mcp.md`](mcp.md#prueba-de-humo));
    - en una versión que cambia el calendario, el registro de beat muestra la
      nueva entrada.
 
@@ -633,7 +633,7 @@ cubre el estado local, como `logs/` y `celerybeat-schedule`.
   conserven tras los reinicios; con el valor por defecto, `memory://`, cada
   proceso lleva su propia cuenta. Si Redis no está accesible, los límites
   siguen funcionando con contadores en memoria hasta que se recupera. Los
-  límites de MCP están en [`mcp.md`](mcp.md#rate-limits).
+  límites de MCP están en [`mcp.md`](mcp.md#límites-de-peticiones).
 - **Cabeceras de seguridad** en todas las respuestas: una
   Content-Security-Policy que solo admite el origen propio de la aplicación
   (`default-src 'self'`; scripts, estilos y tipografías desde `'self'`;
