@@ -32,7 +32,7 @@ Fix the code defects found while writing the documentation (`odd/tasks/documenta
 ## Tasks
 
 - [x] **DF-1 — Dashboard audit data by permission.** Route: delegated (template, route, tests and two guides). Forecast 100-250.
-- [ ] **DF-2 — Monthly report generation date.** Route: delegated (report, notifications, tests, docs). Forecast 60-150.
+- [x] **DF-2 — Monthly report generation date.** Route: delegated (report, notifications, tests, docs). Forecast 60-150.
 - [ ] **DF-3 — Permanent sessions and per-administrator reset limit.** Route: delegated (auth, config, rate limit, tests, docs). Forecast 120-300.
 - [ ] **DF-4 — Repository hygiene and closing.** Route: inline (two mechanical lines plus the gap-analysis defects table). Forecast 20-60.
   - `instance/` in `.gitignore`; the systemd `Documentation=` link points to `docs/operaciones.md`; every fixed defect marked "Corregido" in the gap analysis.
@@ -50,8 +50,9 @@ Baseline at `999df34`: 1,329 tests (PostgreSQL via `TEST_POSTGRES_URI`).
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
 | DF-1 | Done | `32e4fdf` (`audits.upcoming(session, actor, *, today, within_days)` requiring `read` on audits, both window ends included, `COMPLETADA` and `CANCELADA` left out, ordered by date then id; the dashboard computes the audit count and the upcoming list only when `can('read', 'audits')`; card `#auditorias-proximas`; dashboard sections of both guides) | RED: `no attribute 'upcoming'` (2), OPERATIVO saw the audit label, areas and dates, upcoming count `3 != 5` with cancelled and completed audits, missing card. GREEN: 6 new tests; 1,335 tests OK incl. PostgreSQL | Range `999df34..32e4fdf`: **medium**, `under_budget` (pending in the slice) |
-| DF-2..DF-4 | Pending | — | — | — |
+| DF-2 | Done | `5c2f18b` (`_monthly_report_context` resolves `today` once and returns it as `generado`, so the generation date and the objectives cutoff use the same day; the header shows "Periodo: <mes> de <año>"; the scheduled e-mail passes its run date; both guides) | RED: 3 new tests found "Generado el 30/09/2026" instead of the generation day (PDF, HTML and the scheduled e-mail). GREEN: 1,338 tests OK incl. PostgreSQL; adapted `tests/test_report_period.py` and `tests/test_scheduled_notifications.py` (standing approval for tests that encode the old behaviour) | Pending in the slice |
+| DF-3..DF-4 | Pending | — | — | — |
 
 ## Next step
 
-DF-2.
+DF-3.
