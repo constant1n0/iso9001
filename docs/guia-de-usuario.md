@@ -12,13 +12,14 @@ La guía cita los textos de la interfaz exactamente, en negrita: por ejemplo,
 **No conformidades**. La sección [Términos](#términos), al final, explica
 algunos términos con un significado propio en la aplicación.
 
-La documentación técnica está en inglés:
+Documentación técnica:
 
 - la instalación y la administración del servidor, en la
-  [guía de operaciones](operations.md);
+  [guía de operaciones](operaciones.md);
 - el servidor MCP para agentes de IA, en la [guía del servidor MCP](mcp.md);
 - la arquitectura, la matriz de permisos y las reglas de estado, en la
-  [capa de servicios](architecture/services.md).
+  [capa de servicios](architecture/services.md) (en inglés, para
+  desarrolladores).
 
 ## Contenido
 
@@ -183,7 +184,7 @@ aprobar en cada módulo.
 Los agentes de IA (por ejemplo, Claude Code o Codex) trabajan con el SGC a
 través de su servidor MCP. Un administrador emite a cada agente un token de
 API desde la línea de órdenes del servidor (véase
-[API tokens](operations.md#api-tokens) en la guía de operaciones, en inglés).
+[Tokens de API](operaciones.md#tokens-de-api) en la guía de operaciones).
 
 - Un token actúa como el usuario al que se emitió, con el rol de ese usuario.
   Sus permisos solo pueden reducir los derechos del rol: un token `read` solo
@@ -590,7 +591,7 @@ Cada revisión puede llevar un fichero: PDF, DOCX, XLSX u ODT.
 
 Cómo almacena el servidor los ficheros y cómo se hacen sus copias de
 seguridad se explica en la
-[guía de operaciones](operations.md#document-attachments) (en inglés).
+[guía de operaciones](operaciones.md#ficheros-adjuntos-de-los-documentos).
 
 ### Baja
 
@@ -1010,7 +1011,7 @@ la zona horaria de la organización. Se envían a los usuarios activos con
 dirección de correo electrónico; los demás se omiten. Los correos de
 auditorías y de documentos no se envían cuando no hay nada que enumerar.
 La parte del servidor (Redis y Celery) se describe en la
-[guía de operaciones](operations.md#redis-and-celery) (en inglés).
+[guía de operaciones](operaciones.md#redis-y-celery).
 
 | Asunto | Destinatarios | Cuándo | Contenido |
 |---|---|---|---|
