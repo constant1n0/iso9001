@@ -54,12 +54,12 @@ class GuideTestCase(unittest.TestCase):
             "~/.codex/config.toml", "bearer_token_env_var", "~/.pi/agent/mcp.json",
             "opencode.json", '"type": "remote"', "OpenClaw", '"transport": "streamable-http"',
             "claude_desktop_config.json", "mcp-remote", "--header-file",
-            "Smoke test", "Verification status",
+            "## Prueba de humo", "### Estado de la verificación",
         ):
             self.assertIn(expected, self.text)
 
     def test_every_client_has_a_smoke_test_item(self) -> None:
-        checklist = self.text.split("Smoke test", 1)[1]
+        checklist = self.text.split("\n## Prueba de humo\n", 1)[1]
         for client in ("Claude Code", "Codex", "Pi", "OpenCode", "OpenClaw", "Claude Desktop"):
             self.assertIn(client, checklist)
 

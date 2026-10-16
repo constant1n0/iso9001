@@ -2,9 +2,9 @@
 
 Every write to a quality record goes through a framework-free service in
 `app/services/`. The Flask routes are thin adapters; the MCP server
-(`app/mcp_server/`, see [MCP server](../mcp.md)) is another adapter over the
-same functions, so both share one validation, one authorization rule and one
-audit trail.
+(`app/mcp_server/`, see [MCP server](../mcp.md), in Spanish) is another
+adapter over the same functions, so both share one validation, one
+authorization rule and one audit trail.
 
 ## Anatomy of a service call
 

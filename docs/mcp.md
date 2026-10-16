@@ -1,353 +1,407 @@
-# MCP server
+# Servidor MCP
 
-AI agents operate the QMS through an MCP server that acts as a real user. It
-runs the same services, policy, audit log and attribution as the web UI, and it
-can never delete.
+Los agentes de IA trabajan con el SGC a través de un servidor MCP que actúa
+como un usuario real. Usa los mismos servicios, la misma política de permisos,
+el mismo registro de auditoría y la misma atribución que la interfaz web, y
+nunca puede eliminar.
 
-## Architecture
+## Contenido
 
-- `app/mcp_server/` is an adapter over `app/services/` (see
-  [services](architecture/services.md)). The package is not named `mcp` so it
-  cannot shadow the SDK (`mcp==2.3.0`).
-- Five generic tools, with the module as a parameter, keep the agent's context
-  small:
+- [Arquitectura](#arquitectura)
+- [Módulos](#módulos)
+- [Emisión de un token](#emisión-de-un-token)
+- [Configuración del servidor](#configuración-del-servidor)
+  - [Límites de peticiones](#límites-de-peticiones)
+- [Enrutamiento con Traefik](#enrutamiento-con-traefik)
+- [Configuración de los clientes](#configuración-de-los-clientes)
+  - [Claude Code](#claude-code)
+  - [Codex](#codex)
+  - [Pi](#pi)
+  - [OpenCode](#opencode)
+  - [OpenClaw](#openclaw)
+  - [Claude Desktop](#claude-desktop)
+  - [stdio local (cualquier cliente que lance una orden)](#stdio-local-cualquier-cliente-que-lance-una-orden)
+  - [Estado de la verificación](#estado-de-la-verificación)
+- [Prueba de humo](#prueba-de-humo)
 
-  | Tool | Purpose |
+## Arquitectura
+
+- `app/mcp_server/` es un adaptador sobre `app/services/` (véase la
+  [capa de servicios](architecture/services.md), en inglés). El paquete no se
+  llama `mcp` para no ocultar el SDK (`mcp==2.3.0`).
+- Cinco herramientas genéricas, con el módulo como parámetro, mantienen
+  reducido el contexto del agente:
+
+  | Herramienta | Finalidad |
   |---|---|
-  | `qms_modules` | The 22 modules with fields, allowed values, filters and what the caller may do |
-  | `qms_list` | One bounded page of a module, with the filters `qms_modules` lists |
-  | `qms_get` | One record by `id` |
-  | `qms_create` | Create a record |
-  | `qms_update` | Overwrite the given fields of a record |
+  | `qms_modules` | Los 22 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
+  | `qms_list` | Una página acotada de un módulo, con los filtros que enumera `qms_modules` |
+  | `qms_get` | Un registro por su `id` |
+  | `qms_create` | Crea un registro |
+  | `qms_update` | Sobrescribe los campos indicados de un registro |
 
-  There is no delete tool. Records never include password or token fields.
-- Each call runs in its own Flask application context and session. A write
-  commits after the service returns; any error rolls back. Domain errors reach
-  the agent with their Spanish message; unexpected errors reach it as a generic
-  message and are logged on the server.
-- The actor is the token's owner with the token's scopes, channel `mcp`:
-  `read` reads, `write` writes, and the owner's role still applies (an
-  `OPERATIVO` token cannot write the JSON registers). Audit rows and `created_by`
-  / `updated_by` carry the owner.
-- Transports: stateless Streamable HTTP at `/mcp` (JSON responses) for remote
-  clients, and stdio for a local process. The HTTP app answers the 2025-06-18
-  and 2025-11-25 `initialize` handshake and stateless 2026-07-28 requests.
+  No existe ninguna herramienta de eliminación. Los registros nunca incluyen
+  campos de contraseña ni de token.
+- Cada llamada se ejecuta en su propio contexto de aplicación de Flask y en su
+  propia sesión. Una escritura se confirma cuando el servicio termina; cualquier
+  error la deshace. Los errores de dominio llegan al agente con su mensaje en
+  español; los errores inesperados le llegan como un mensaje genérico y se
+  registran en el servidor.
+- Actúa el propietario del token, con los ámbitos del token y el canal `mcp`:
+  `read` permite leer y `write` escribir, y el rol del propietario sigue
+  aplicándose (un token de un usuario `OPERATIVO` no puede escribir en los
+  registros JSON). Las filas de auditoría y `created_by` / `updated_by`
+  registran al propietario.
+- Transportes: Streamable HTTP sin estado en `/mcp` (respuestas JSON) para los
+  clientes remotos, y stdio para un proceso local. La aplicación HTTP atiende
+  la negociación `initialize` de las versiones 2025-06-18 y 2025-11-25 y las
+  peticiones sin estado de la versión 2026-07-28.
 
-## Modules
+## Módulos
 
-`qms_modules` lists 22 modules: `no_conformidades`, `auditorias`,
+`qms_modules` enumera 22 módulos: `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `riesgos_oportunidades`, `recursos_capacitacion`,
 `procesos`, `indicadores_auditoria`, `personas`, `competencias_requeridas`,
 `competencias_acreditadas`, `acciones_correctivas`, `objetivos_calidad`,
-`mediciones_objetivo`, `revisiones_direccion` and `acciones_revision`. Each
-field has a
-`type`, a `required` flag, `allowed` values for enums and, where the flags do
-not say enough, a short `note`.
+`mediciones_objetivo`, `revisiones_direccion` y `acciones_revision`. Cada
+campo tiene un `type`, un indicador `required`, los valores `allowed` de los
+enumerados y, cuando los indicadores no bastan, una breve `note`.
 
-Nonconformities and corrective actions (ISO 9001 clause 10.2):
+No conformidades y acciones correctivas (cláusula 10.2 de ISO 9001):
 
-- `no_conformidades`: `descripcion` and `fecha_detectada` are required;
-  `origen` is `auditoria`, `cliente`, `proceso`, `proveedor` or `otro`;
-  `gravedad` is `mayor`, `menor` or `observacion`; `contencion` and
-  `causa_raiz` are text; `responsable_id` cites a person, and `responsable`
-  and `accion_correctiva` are legacy free text. `estado` is never written:
-  a record starts `abierta` and then follows its corrective actions. Records
-  show the Spanish labels (`"Acción planificada"`, `"Cliente"`) plus
-  `fecha_cierre` and `motivo_cancelacion`. Filters: `descripcion`
-  (contains), `estado`, `origen`, `gravedad` (member names such as
-  `accion_planificada`, `cliente`, `mayor`) and `fecha_detectada`; any other
-  enum value is refused with the allowed list. A `cerrada` or `cancelada`
-  record refuses updates.
-- `acciones_correctivas`: `no_conformidad_id` (an open nonconformity; it
-  never changes), `descripcion`, `responsable_id` (the owner, a person),
-  `fecha_prevista` and `fecha_realizada` (not before the detection date).
-  Records add the derived `estado` (`Planificada`, `Realizada`, `Verificada
-  eficaz`, `Verificada no eficaz`) and the verification columns, which no
-  tool writes. Filters: `no_conformidad_id`, `responsable_id` and `estado`
-  (member names such as `verificada_eficaz`). A verified action is
-  read-only, and every write moves the nonconformity's state along.
-- Web-only: verifying an action's effectiveness (administrators and
-  auditors, never the action's owner), closing a nonconformity once its
-  actions proved effective, cancelling it and reopening it. `qms_update`
-  refuses `estado` and the verification fields, and there is no delete tool.
+- `no_conformidades`: `descripcion` y `fecha_detectada` son obligatorios;
+  `origen` es `auditoria`, `cliente`, `proceso`, `proveedor` u `otro`;
+  `gravedad` es `mayor`, `menor` u `observacion`; `contencion` y
+  `causa_raiz` son texto; `responsable_id` cita a una persona, y `responsable`
+  y `accion_correctiva` son texto libre heredado. `estado` nunca se escribe:
+  un registro empieza en `abierta` y después sigue a sus acciones correctivas.
+  Los registros muestran las etiquetas en español (`"Acción planificada"`,
+  `"Cliente"`) además de `fecha_cierre` y `motivo_cancelacion`. Filtros:
+  `descripcion` (contiene), `estado`, `origen`, `gravedad` (nombres de miembro
+  como `accion_planificada`, `cliente`, `mayor`) y `fecha_detectada`;
+  cualquier otro valor de enumerado se rechaza con la lista de valores
+  admitidos. Un registro `cerrada` o `cancelada` rechaza las actualizaciones.
+- `acciones_correctivas`: `no_conformidad_id` (una no conformidad abierta;
+  nunca cambia), `descripcion`, `responsable_id` (el responsable, una
+  persona), `fecha_prevista` y `fecha_realizada` (no anterior a la fecha de
+  detección). Los registros añaden el `estado` derivado (`Planificada`,
+  `Realizada`, `Verificada eficaz`, `Verificada no eficaz`) y las columnas de
+  verificación, que ninguna herramienta escribe. Filtros: `no_conformidad_id`,
+  `responsable_id` y `estado` (nombres de miembro como `verificada_eficaz`).
+  Una acción verificada es de solo lectura, y cada escritura hace avanzar el
+  estado de la no conformidad.
+- Solo en la web: verificar la eficacia de una acción (administradores y
+  auditores, nunca el responsable de la acción), cerrar una no conformidad
+  cuando sus acciones han demostrado ser eficaces, cancelarla y reabrirla.
+  `qms_update` rechaza `estado` y los campos de verificación, y no existe
+  ninguna herramienta de eliminación.
 
-Internal audits (ISO 9001 clause 9.2). The three modules share the audits
-grant: administrators and auditors read and write, and no token deletes.
+Auditorías internas (cláusula 9.2 de ISO 9001). Los tres módulos comparten el
+permiso de las auditorías: los administradores y los auditores leen y
+escriben, y ningún token elimina.
 
-- `programas_auditoria`: one programme per year. `anio` (2000-2100),
-  `objetivos` and `alcance` are required. Records show `estado` (`"Borrador"`
-  or `"Aprobado"`), `aprobado_en` and `aprobado_por_id`, which no tool writes.
-  An approved programme's year never changes, nor does a draft's once it has
-  audits. Filters: `anio` and `estado` (member names `borrador`,
-  `aprobado`).
-- `auditorias` adds planning fields to `area_auditada`, `fecha`, `auditor` /
-  `auditor_id` (the lead auditor), `resultado`, `accion_correctiva` and
-  `estado`:
-  - `programa_id` puts the audit in a programme; its `fecha` must fall in the
-    programme's year;
-  - `alcance` and `criterios` are text;
-  - `responsable_area_id` cites the audited-area owner (a person);
-  - `equipo_ids` is a list of people that replaces the team; records return
-    it too.
+- `programas_auditoria`: un programa por año. `anio` (2000-2100),
+  `objetivos` y `alcance` son obligatorios. Los registros muestran `estado`
+  (`"Borrador"` o `"Aprobado"`), `aprobado_en` y `aprobado_por_id`, que
+  ninguna herramienta escribe. El año de un programa aprobado nunca cambia, ni
+  tampoco el de un borrador una vez que tiene auditorías. Filtros: `anio` y
+  `estado` (nombres de miembro `borrador`, `aprobado`).
+- `auditorias` añade campos de planificación a `area_auditada`, `fecha`,
+  `auditor` / `auditor_id` (el auditor jefe), `resultado`,
+  `accion_correctiva` y `estado`:
+  - `programa_id` incluye la auditoría en un programa; su `fecha` debe caer
+    dentro del año del programa;
+  - `alcance` y `criterios` son texto;
+  - `responsable_area_id` cita al responsable del área auditada (una
+    persona);
+  - `equipo_ids` es una lista de personas que sustituye al equipo; los
+    registros también la devuelven.
 
-  Neither the lead auditor nor a team member may be the audited-area owner.
-  Filters: `area`, `auditor`, `estado`, `fecha_inicio`, `fecha_fin` and
-  `programa_id`.
-- `hallazgos_auditoria`: `auditoria_id` (it never changes; a cancelled audit
-  takes no findings), `tipo` (`nc_mayor`, `nc_menor`, `observacion`,
-  `oportunidad_mejora`) and `descripcion` are required; `clausula` (dotted
-  numbers from 4 to 10, such as `8.5.1`) and `evidencia` are optional.
-  - A `nc_mayor` or `nc_menor` finding creates its nonconformity in the same
-    write (origin `auditoria`, severity `mayor` or `menor`, the audit's date,
-    the audited-area owner as responsible when active). Records return its id
-    as `no_conformidad_id`, which no tool writes.
-  - Changing the type never deletes that nonconformity; the severity follows
-    the type only while the nonconformity is `abierta`.
-  - Filters: `auditoria_id` and `tipo` (member names).
-- Web-only: approving a programme (administrators) and every delete. The
-  audit and programme PDFs are web pages too.
+  Ni el auditor jefe ni un miembro del equipo pueden ser el responsable del
+  área auditada. Filtros: `area`, `auditor`, `estado`, `fecha_inicio`,
+  `fecha_fin` y `programa_id`.
+- `hallazgos_auditoria`: `auditoria_id` (nunca cambia; una auditoría
+  cancelada no admite hallazgos), `tipo` (`nc_mayor`, `nc_menor`,
+  `observacion`, `oportunidad_mejora`) y `descripcion` son obligatorios;
+  `clausula` (números separados por puntos del 4 al 10, como `8.5.1`) y
+  `evidencia` son opcionales.
+  - Un hallazgo `nc_mayor` o `nc_menor` crea su no conformidad en la misma
+    escritura (origen `auditoria`, gravedad `mayor` o `menor`, la fecha de la
+    auditoría y, como responsable, el responsable del área auditada cuando
+    está activo). Los registros devuelven su id como `no_conformidad_id`, que
+    ninguna herramienta escribe.
+  - Cambiar el tipo nunca elimina esa no conformidad; la gravedad sigue al
+    tipo solo mientras la no conformidad está `abierta`.
+  - Filtros: `auditoria_id` y `tipo` (nombres de miembro).
+- Solo en la web: aprobar un programa (administradores) y todas las
+  eliminaciones. Los PDF de la auditoría y del programa también son páginas
+  web.
 
-Documents (ISO 9001 clause 7.5):
+Documentos (cláusula 7.5 de ISO 9001):
 
-- `documentos` is read-only through the MCP server: it declares no writable
-  field, `qms_modules` shows `create` and `update` as false for every role, and
-  `qms_create` and `qms_update` are refused. The revision workflow, file
-  attachments and withdrawal are web-only.
-- A record has the document's own fields (`code`, `title`, `category`,
-  `owner_id`, `next_review_date` and the `withdrawn_*` fields) plus
-  `effective_revision`: the revision in force (`numero`, `content`,
-  `effective_from`, `legacy_version`), or `null` when there is none. Drafts,
-  revisions in review and approved revisions not yet published never reach
-  the agent. Administrators and auditors list every document; other roles only
-  documents with a revision in force.
-- Filters: `category` (member names such as `PROCEDIMIENTO_OPERATIVO`),
-  `owner_id` (the owning person) and `status`: `vigente` (in force),
-  `sin_publicar` (in use with no revision in force) or `de_baja` (withdrawn).
+- `documentos` es de solo lectura a través del servidor MCP: no declara ningún
+  campo escribible, `qms_modules` muestra `create` y `update` como falsos para
+  todos los roles, y `qms_create` y `qms_update` se rechazan. El flujo de
+  revisiones, los ficheros adjuntos y la baja solo están en la web.
+- Un registro tiene los campos propios del documento (`code`, `title`,
+  `category`, `owner_id`, `next_review_date` y los campos `withdrawn_*`)
+  además de `effective_revision`: la revisión vigente (`numero`, `content`,
+  `effective_from`, `legacy_version`), o `null` cuando no hay ninguna. Los
+  borradores, las revisiones pendientes de aprobación y las revisiones
+  aprobadas aún no publicadas nunca llegan al agente. Los administradores y
+  los auditores ven todos los documentos; los demás roles, solo los documentos
+  con una revisión vigente.
+- Filtros: `category` (nombres de miembro como `PROCEDIMIENTO_OPERATIVO`),
+  `owner_id` (la persona propietaria) y `status`: `vigente` (en vigor),
+  `sin_publicar` (en uso sin revisión vigente) o `de_baja` (retirado).
 
-People and competence (ISO 9001 clauses 5.3 and 7.2):
+Personas y competencia (cláusulas 5.3 y 7.2 de ISO 9001):
 
-- `personas`: people who work under the QMS, separate from login users.
-  `rol_ids` (a list of role ids) replaces the roles held, `user_id` links at
-  most one user, `activo` deactivates; the record also returns `rol_ids`.
-- `competencias_requeridas`: competence a role (`rol_id`) requires; `tipo` is
-  `educacion`, `formacion`, `habilidad` or `experiencia`.
-- `competencias_acreditadas`: competence a person (`persona_id`) has
-  demonstrated, optionally for a requirement (`requisito_id`) and with a
-  training as evidence (`capacitacion_id`). `evaluacion_eficacia` other than
-  `pendiente` needs `fecha_evaluacion` and `evaluador_id` (a person).
-- Person fields elsewhere: `persona_id` in `capacitaciones`, `responsable_id`
-  in `no_conformidades` and `auditor_id` in `auditorias` are ids of
-  `personas` records (an existing person, active when newly chosen; `null`
-  clears the link). The free-text `personal`, `responsable` and `auditor` stay
-  as legacy names and are never matched to a person. `personal` and `auditor`
-  are not flagged required: a create needs them only when no person is cited,
-  and a blank name takes the cited person's name (their `note` says so).
+- `personas`: las personas que trabajan bajo el SGC, distintas de los
+  usuarios que inician sesión. `rol_ids` (una lista de ids de rol) sustituye
+  los roles que desempeña, `user_id` vincula como máximo un usuario y `activo`
+  la desactiva; el registro también devuelve `rol_ids`.
+- `competencias_requeridas`: la competencia que exige un rol (`rol_id`);
+  `tipo` es `educacion`, `formacion`, `habilidad` o `experiencia`.
+- `competencias_acreditadas`: la competencia que una persona (`persona_id`)
+  ha demostrado, opcionalmente para un requisito (`requisito_id`) y con una
+  capacitación como evidencia (`capacitacion_id`). Un `evaluacion_eficacia`
+  distinto de `pendiente` necesita `fecha_evaluacion` y `evaluador_id` (una
+  persona).
+- Campos de persona en otros módulos: `persona_id` en `capacitaciones`,
+  `responsable_id` en `no_conformidades` y `auditor_id` en `auditorias` son
+  ids de registros de `personas` (una persona existente, que debe estar activa
+  cuando es una nueva elección; `null` elimina el vínculo). Los campos de
+  texto libre `personal`, `responsable` y `auditor` se mantienen como nombres
+  heredados y nunca se asocian a una persona. `personal` y `auditor` no están
+  marcados como obligatorios: una creación solo los necesita cuando no se cita
+  ninguna persona, y un nombre en blanco toma el nombre de la persona citada
+  (su `note` lo indica).
 
-The required-versus-demonstrated matrix is a web page
-(`/competencias/matriz`); agents read the same data from these modules.
+La matriz de competencias requeridas frente a demostradas es una página web
+(`/competencias/matriz`); los agentes leen los mismos datos desde estos
+módulos.
 
-Quality objectives (ISO 9001:2026 clause 6.2). Both modules share one grant:
-every role reads, and only ADMIN or AUDITOR tokens (with the `write` scope)
-create and update. No token deletes.
+Objetivos de la calidad (cláusula 6.2 de ISO 9001:2026). Ambos módulos
+comparten un mismo permiso: todos los roles leen, y solo los tokens de ADMIN o
+AUDITOR (con el ámbito `write`) crean y actualizan. Ningún token elimina.
 
-- Numbers (`meta`, `valor_inicial`, `valor` and `ultimo_valor`) come back as
-  decimal strings with four decimals, such as `"95.0000"`. They are written as
-  finite numbers or decimal text, rounded to four decimals.
-- Enums come back as their Spanish label (`sentido` shows `"≥"` or `"≤"`); writes
-  and filters take the member name.
-- `objetivos_calidad`: `titulo`, `indicador`, `meta`, `sentido` (`mayor_igual`
-  or `menor_igual`), `responsable_id` (a person), `fecha_inicio`,
-  `fecha_limite` and `frecuencia` (`mensual`, `trimestral`, `semestral`,
-  `anual`) are required.
-  - Optional: `descripcion`, `proceso_id` (a `procesos` record), `unidad`,
-    `valor_inicial`, `anio` (2000-2100, by default the year of
-    `fecha_inicio`), `recursos` and `evaluacion`.
-  - `estado` starts `activo`; `alcanzado`, `no_alcanzado` and `cancelado`
-    close the objective, and `activo` reopens it.
-  - `fecha_limite` is never before `fecha_inicio`, and the period always keeps
-    the objective's measurements inside it. `meta` and `sentido` cannot change
-    once the objective has measurements.
-  - Records add the summary: `ultimo_valor` and `ultima_fecha` (the latest
-    measurement), `cumple` (whether it meets the target), `tendencia`
-    (`sube`, `baja` or `estable` from the measurement before), `proxima_medicion`
-    and `medicion_vencida`. The next measurement is due one frequency period
-    after the latest one, or after `fecha_inicio` without one, and never after
-    `fecha_limite`; it is `null` when the objective is not `activo` or was
-    measured on its deadline.
-  - Filters: `anio`, `estado`, `responsable_id` and `proceso_id`.
-- `mediciones_objetivo`: `objetivo_id`, `fecha` and `valor` are required;
-  `comentario` and `registrado_por_id` (a person) are optional.
-  - The objective must be `activo`, and a measurement never moves to another
-    objective.
-  - `fecha` lies in the objective's period and is never after the server's
-    local date (`APP_TIMEZONE`); there is one measurement per objective and
-    date.
-  - Records add `cumple`. Filter: `objetivo_id`.
-- Web-only: every delete and the yearly objectives PDF.
+- Los números (`meta`, `valor_inicial`, `valor` y `ultimo_valor`) se
+  devuelven como cadenas decimales con cuatro decimales, como `"95.0000"`. Se
+  escriben como números finitos o como texto decimal, redondeados a cuatro
+  decimales.
+- Los enumerados se devuelven con su etiqueta en español (`sentido` muestra
+  `"≥"` o `"≤"`); las escrituras y los filtros usan el nombre del miembro.
+- `objetivos_calidad`: `titulo`, `indicador`, `meta`, `sentido`
+  (`mayor_igual` o `menor_igual`), `responsable_id` (una persona),
+  `fecha_inicio`, `fecha_limite` y `frecuencia` (`mensual`, `trimestral`,
+  `semestral`, `anual`) son obligatorios.
+  - Opcionales: `descripcion`, `proceso_id` (un registro de `procesos`),
+    `unidad`, `valor_inicial`, `anio` (2000-2100; por defecto, el año de
+    `fecha_inicio`), `recursos` y `evaluacion`.
+  - `estado` empieza en `activo`; `alcanzado`, `no_alcanzado` y `cancelado`
+    cierran el objetivo, y `activo` lo reabre.
+  - `fecha_limite` nunca es anterior a `fecha_inicio`, y el periodo siempre
+    deja dentro las mediciones del objetivo. `meta` y `sentido` no pueden
+    cambiar una vez que el objetivo tiene mediciones.
+  - Los registros añaden el resumen: `ultimo_valor` y `ultima_fecha` (la
+    última medición), `cumple` (si alcanza la meta), `tendencia` (`sube`,
+    `baja` o `estable` respecto a la medición anterior), `proxima_medicion` y
+    `medicion_vencida`. La siguiente medición vence un periodo de la
+    frecuencia después de la última, o después de `fecha_inicio` si no hay
+    ninguna, y nunca después de `fecha_limite`; es `null` cuando el objetivo
+    no está `activo` o se midió en su fecha límite.
+  - Filtros: `anio`, `estado`, `responsable_id` y `proceso_id`.
+- `mediciones_objetivo`: `objetivo_id`, `fecha` y `valor` son obligatorios;
+  `comentario` y `registrado_por_id` (una persona) son opcionales.
+  - El objetivo debe estar `activo`, y una medición nunca pasa a otro
+    objetivo.
+  - `fecha` cae dentro del periodo del objetivo y nunca es posterior a la
+    fecha local del servidor (`APP_TIMEZONE`); hay una medición por objetivo y
+    fecha.
+  - Los registros añaden `cumple`. Filtro: `objetivo_id`.
+- Solo en la web: todas las eliminaciones y el PDF anual de objetivos.
 
-Management reviews (ISO 9001 clause 9.3). Both modules share one grant: only
-ADMIN or AUDITOR tokens read them, and only those tokens (with the `write`
-scope) create and update. No token deletes, holds or closes a review.
+Revisiones por la dirección (cláusula 9.3 de ISO 9001). Ambos módulos
+comparten un mismo permiso: solo los tokens de ADMIN o AUDITOR los leen, y
+solo esos tokens (con el ámbito `write`) crean y actualizan. Ningún token
+elimina, celebra ni cierra una revisión.
 
-- `revisiones_direccion`: `fecha` (the meeting), `periodo_desde` and
-  `periodo_hasta` are required; the period starts on or before its end, which
-  is on or before the meeting.
-  - Optional: `asistente_ids` (people; it replaces the attendees), one comment
-    per input of 9.3.2 (`comentario_acciones_previas`, `comentario_contexto`,
-    `comentario_desempeno`, `comentario_recursos`, `comentario_riesgos`,
-    `comentario_mejora`) and `conclusiones`.
-  - `estado` (`borrador`, `celebrada`, `cerrada`) is never written. Holding
-    a review, which freezes its inputs into `datos_entrada` and records
-    `celebrada_por_id`, and closing it, which records `fecha_cierre`, are
-    web-only, for administrators.
-  - A draft takes every field; a held review only its comments and
-    conclusions; a closed one nothing. Moving `fecha` past an action's
-    completion date is refused.
-  - Records add `asistente_ids` and `preview`: the inputs of the period,
-    frozen once held and computed live in a draft. `fecha_corte` is
-    `periodo_hasta`, or the server's local date when earlier; each section
-    (`acciones_previas`, `contexto`, `satisfaccion`, `objetivos`,
-    `indicadores`, `no_conformidades`, `auditorias`, `mejoras`,
-    `capacitaciones`) counts the period up to it, and its lists hold at most
-    ten items.
-  - Filters: `estado` and `anio` (the year of the meeting).
+- `revisiones_direccion`: `fecha` (la reunión), `periodo_desde` y
+  `periodo_hasta` son obligatorios; el periodo no empieza después de su fin, y
+  este no es posterior a la reunión.
+  - Opcionales: `asistente_ids` (personas; sustituye a los asistentes), un
+    comentario por cada entrada de 9.3.2 (`comentario_acciones_previas`,
+    `comentario_contexto`, `comentario_desempeno`, `comentario_recursos`,
+    `comentario_riesgos`, `comentario_mejora`) y `conclusiones`.
+  - `estado` (`borrador`, `celebrada`, `cerrada`) nunca se escribe. Celebrar
+    una revisión, lo que congela sus entradas en `datos_entrada` y registra
+    `celebrada_por_id`, y cerrarla, lo que registra `fecha_cierre`, solo se
+    hacen en la web y corresponden a los administradores.
+  - Un borrador admite todos los campos; una revisión celebrada, solo sus
+    comentarios y conclusiones; una cerrada, ninguno. Se rechaza llevar
+    `fecha` más allá de la fecha de finalización de una acción.
+  - Los registros añaden `asistente_ids` y `preview`: las entradas del
+    periodo, congeladas una vez celebrada la revisión y calculadas en vivo en
+    un borrador. `fecha_corte` es `periodo_hasta`, o la fecha local del
+    servidor cuando es anterior; cada sección (`acciones_previas`,
+    `contexto`, `satisfaccion`, `objetivos`, `indicadores`,
+    `no_conformidades`, `auditorias`, `mejoras`, `capacitaciones`) recuenta el
+    periodo hasta esa fecha, y sus listas contienen como máximo diez
+    elementos.
+  - Filtros: `estado` y `anio` (el año de la reunión).
 - `acciones_revision`: `revision_id`, `tipo` (`mejora`, `cambio_sgc`,
-  `recursos`), `descripcion`, `responsable_id` (a person) and `fecha_limite`
-  are required; `estado` (`pendiente` by default, `en_curso`, `completada`,
-  `cancelada`), `fecha_completada` and `resultado` are optional.
-  - The review must not be closed, and an action never moves to another
-    review. Once the review is closed, only `estado`, `fecha_completada` and
-    `resultado` change.
-  - `fecha_completada` is given exactly when the action is `completada`; it is
-    never after the server's local date nor before the review's date.
-  - Records add `vencida`: `pendiente` or `en_curso` past `fecha_limite`.
-  - Filters: `revision_id`, `estado`, `responsable_id`, `tipo` and `vencida`.
-- Web-only: holding, closing, every delete and the minutes PDF.
+  `recursos`), `descripcion`, `responsable_id` (una persona) y `fecha_limite`
+  son obligatorios; `estado` (`pendiente` por defecto, `en_curso`,
+  `completada`, `cancelada`), `fecha_completada` y `resultado` son opcionales.
+  - La revisión no debe estar cerrada, y una acción nunca pasa a otra
+    revisión. Una vez cerrada la revisión, solo cambian `estado`,
+    `fecha_completada` y `resultado`.
+  - `fecha_completada` se indica exactamente cuando la acción está
+    `completada`; nunca es posterior a la fecha local del servidor ni anterior
+    a la fecha de la revisión.
+  - Los registros añaden `vencida`: `pendiente` o `en_curso` con la
+    `fecha_limite` superada.
+  - Filtros: `revision_id`, `estado`, `responsable_id`, `tipo` y `vencida`.
+- Solo en la web: celebrar, cerrar, todas las eliminaciones y el PDF del acta.
 
-## Issue a token
+## Emisión de un token
 
-From a trusted shell on the server (see [API tokens](operaciones.md#tokens-de-api)
-in the operations guide, in Spanish, for all options):
+Desde una consola de confianza en el servidor (véase
+[Tokens de API](operaciones.md#tokens-de-api) en la guía de operaciones, con
+todas las opciones):
 
 ```bash
 venv/bin/flask --app run.py create-api-token --user ana --name "Claude Code" --scope read --scope write --days 90
 ```
 
-The token (`iso_<prefix>_<secret>`) is printed once. Export it on the machine
-that runs the client, never in a file under version control:
+El token (`iso_<prefix>_<secret>`) se imprime una sola vez. Expórtelo en la
+máquina que ejecuta el cliente, nunca en un fichero sujeto al control de
+versiones:
 
 ```bash
 export ISO9001_TOKEN='iso_xxxxxxxx_...'
 ```
 
-Use a dedicated user per agent with the lowest role that works, and `read`
-only when the agent does not need to write. Revoke with `revoke-api-token`.
+Use un usuario dedicado para cada agente, con el rol más bajo que funcione, y
+solo `read` cuando el agente no necesite escribir. Revóquelo con
+`revoke-api-token`.
 
-## Server configuration
+## Configuración del servidor
 
-Set these in the application's `.env` (the systemd unit reads it):
+Defina estas variables en el `.env` de la aplicación (la unidad de systemd lo
+lee):
 
-| Variable | Default | Meaning |
+| Variable | Valor por defecto | Significado |
 |---|---|---|
-| `SECRET_KEY`, `DATABASE_URI` | required | The usual application settings; rotating `SECRET_KEY` invalidates every token |
-| `MCP_HOST` | `127.0.0.1` | Interface to bind |
-| `MCP_PORT` | `8765` | Port to bind |
-| `MCP_ALLOWED_HOSTS` | `127.0.0.1:<port>`, `localhost:<port>`, `[::1]:<port>` | Comma-separated `Host` values accepted; anything else gets 421. Add the public host name |
-| `MCP_TRUSTED_PROXIES` | `127.0.0.1` | Comma-separated proxy addresses whose `X-Forwarded-For` is believed (uvicorn `forwarded_allow_ips`); `*` is refused |
-| `ISO9001_MCP_TOKEN` | none | stdio only: the token the process acts as; it refuses to start without a valid one and checks it again on every tool call |
-| `MCP_TOKEN_RATE_LIMIT` | `120/minute` | HTTP only: requests per API token, counted after authentication |
-| `MCP_AUTH_FAILURE_RATE_LIMIT` | `20/minute` | HTTP only: failed bearer authentications per client address |
-| `RATELIMIT_STORAGE_URI` | `memory://` | Where both limits are counted, shared with the web application (Redis in production) |
+| `SECRET_KEY`, `DATABASE_URI` | obligatorio | Los ajustes habituales de la aplicación; cambiar `SECRET_KEY` invalida todos los tokens |
+| `MCP_HOST` | `127.0.0.1` | Interfaz en la que escucha |
+| `MCP_PORT` | `8765` | Puerto en el que escucha |
+| `MCP_ALLOWED_HOSTS` | `127.0.0.1:<port>`, `localhost:<port>`, `[::1]:<port>` | Valores de `Host` admitidos, separados por comas; cualquier otro recibe 421. Añada el nombre de host público |
+| `MCP_TRUSTED_PROXIES` | `127.0.0.1` | Direcciones de proxy, separadas por comas, cuyo `X-Forwarded-For` se acepta (`forwarded_allow_ips` de uvicorn); `*` se rechaza |
+| `ISO9001_MCP_TOKEN` | ninguno | Solo stdio: el token con el que actúa el proceso; no arranca sin uno válido y lo vuelve a comprobar en cada llamada a una herramienta |
+| `MCP_TOKEN_RATE_LIMIT` | `120/minute` | Solo HTTP: peticiones por token de API, contadas después de la autenticación |
+| `MCP_AUTH_FAILURE_RATE_LIMIT` | `20/minute` | Solo HTTP: autenticaciones *bearer* fallidas por dirección de cliente |
+| `RATELIMIT_STORAGE_URI` | `memory://` | Dónde se cuentan ambos límites; lo comparte con la aplicación web (Redis en producción) |
 
-Run it with the systemd unit `iso9001-mcp.service` (copy it, then
-`daemon-reload`, `enable` and `start`, as the header of the file shows), or by
-hand:
+Ejecútelo con la unidad de systemd `iso9001-mcp.service` (cópiela y después
+ejecute `daemon-reload`, `enable` y `start`, como indica la cabecera del
+fichero), o a mano:
 
 ```bash
 venv/bin/python -m app.mcp_server --transport http --host 127.0.0.1 --port 8765
 ```
 
-stdio re-authenticates the configured token on every tool call, so revoking it,
-letting it expire, deactivating its owner or changing the owner's role takes
-effect on the next call (a rejected call returns a tool error; the server keeps
-running).
+stdio vuelve a autenticar el token configurado en cada llamada a una
+herramienta, de modo que revocarlo, dejar que caduque, desactivar a su
+propietario o cambiar el rol del propietario surte efecto en la siguiente
+llamada (una llamada rechazada devuelve un error de herramienta; el servidor
+sigue en marcha).
 
-`qms_list` pages every module in the database: each service's `list_page`
-counts and fetches one page with the same filters and order as its `list_`
-(a test checks that every registered service has one).
+`qms_list` pagina todos los módulos en la base de datos: el `list_page` de
+cada servicio cuenta y obtiene una página con los mismos filtros y el mismo
+orden que su `list_` (una prueba comprueba que todos los servicios
+registrados lo tienen).
 
-A missing or invalid token gets `401` with `WWW-Authenticate: Bearer`; failures
-are written to the security log (prefix and reason, never the token). Deploying
-to production needs its own authorization.
+Un token ausente o no válido recibe `401` con `WWW-Authenticate: Bearer`; los
+fallos se escriben en el registro de seguridad (prefijo y motivo, nunca el
+token). El despliegue en producción necesita su propia autorización.
 
-### Rate limits
+### Límites de peticiones
 
-The HTTP transport applies two limits, written in `limits` notation (one rate
-such as `120/minute`; a value that is not exactly one rate of at least one
-request stops the server at start-up with exit code 2):
+El transporte HTTP aplica dos límites, escritos en la notación de `limits`
+(una sola tasa, como `120/minute`; un valor que no sea exactamente una tasa de
+al menos una petición detiene el servidor al arrancar con el código de salida
+2):
 
-- **Per token** (`MCP_TOKEN_RATE_LIMIT`, default `120/minute`): every
-  authenticated request counts against its token. Over the limit the request
-  gets `429` and the security log records
+- **Por token** (`MCP_TOKEN_RATE_LIMIT`, por defecto `120/minute`): cada
+  petición autenticada cuenta para su token. Por encima del límite, la
+  petición recibe `429` y el registro de seguridad anota
   `API_TOKEN_RATE_LIMITED | prefix=<prefix> | ip=<address>`.
-- **Per address, failed tokens** (`MCP_AUTH_FAILURE_RATE_LIMIT`, default
-  `20/minute`): every failed bearer authentication (missing, malformed, unknown,
-  revoked, expired...) counts against the client address, after the token is
-  looked up, with one atomic hit, so parallel attempts cannot overshoot it.
-  Once an address is over the limit, its failing requests get `429` instead of
-  `401` and the security log records `MCP_AUTH_RATE_LIMITED | ip=<address>`
-  next to the usual `API_TOKEN_AUTH_FAILED` line. A valid token from the same
-  address is never refused by this limit, only by its own per-token limit.
-  Requests without a client address share one failure bucket (`-`).
+- **Por dirección, tokens fallidos** (`MCP_AUTH_FAILURE_RATE_LIMIT`, por
+  defecto `20/minute`): cada autenticación *bearer* fallida (ausente, mal
+  formada, desconocida, revocada, caducada...) cuenta para la dirección del
+  cliente, después de buscar el token, con un único incremento atómico, de
+  modo que los intentos en paralelo no pueden sobrepasarlo. Una vez que una
+  dirección supera el límite, sus peticiones fallidas reciben `429` en lugar
+  de `401` y el registro de seguridad anota `MCP_AUTH_RATE_LIMITED | ip=<address>`
+  junto a la línea habitual `API_TOKEN_AUTH_FAILED`. Este límite nunca rechaza
+  un token válido desde la misma dirección; solo lo hace su propio límite por
+  token. Las peticiones sin dirección de cliente comparten un mismo contador
+  de fallos (`-`).
 
-A refusal is `429` with a `Retry-After` header (seconds) and the body
-`{"error": "Demasiadas solicitudes. Inténtelo de nuevo más tarde."}`. Requests
-under both limits behave exactly as without them. The windows are moving
-windows when the storage supports them (memory and Redis do), otherwise fixed
-windows, counted in `RATELIMIT_STORAGE_URI` under the keys
-`iso9001:mcp:token:<prefix>` and `iso9001:mcp:auth-fail:<address>`; the address
-is the one uvicorn resolves, so behind Traefik keep `MCP_TRUSTED_PROXIES` right
-or every caller shares the proxy's budget.
+Un rechazo es un `429` con una cabecera `Retry-After` (en segundos) y el
+cuerpo `{"error": "Demasiadas solicitudes. Inténtelo de nuevo más tarde."}`.
+Las peticiones por debajo de ambos límites se comportan exactamente igual que
+sin ellos. Las ventanas son deslizantes cuando el almacenamiento lo admite
+(memoria y Redis lo admiten) y fijas en caso contrario, y se cuentan en
+`RATELIMIT_STORAGE_URI` con las claves `iso9001:mcp:token:<prefix>` e
+`iso9001:mcp:auth-fail:<address>`; la dirección es la que resuelve uvicorn,
+así que, detrás de Traefik, mantenga `MCP_TRUSTED_PROXIES` correcto o todos
+los clientes compartirán el cupo del proxy.
 
-The limits fail open: if the storage stops answering (Redis down), requests are
-served without limits and the `app.mcp_server.rate_limit` logger writes one
-warning naming the error type (never the storage URI), plus one info line when
-the storage answers again. A `redis://` or `rediss://` storage whose
-`RATELIMIT_STORAGE_OPTIONS` lack `socket_connect_timeout` / `socket_timeout`
-gets one second for each, so a stalled Redis delays a request by about a
-second instead of the TCP timeout. An unusable
-`RATELIMIT_STORAGE_URI` (unknown scheme, malformed, driver not installed) stops
-the server at start-up with exit code 2 and a message without its credentials.
+Los límites fallan en abierto (*fail open*): si el almacenamiento deja de
+responder (Redis caído), las peticiones se atienden sin límites y el
+registrador `app.mcp_server.rate_limit` escribe un aviso con el tipo de error
+(nunca el URI del almacenamiento), más una línea informativa cuando el
+almacenamiento vuelve a responder. Un almacenamiento `redis://` o `rediss://`
+cuyas `RATELIMIT_STORAGE_OPTIONS` no incluyan `socket_connect_timeout` /
+`socket_timeout` recibe un segundo para cada uno, de modo que un Redis
+bloqueado retrasa una petición alrededor de un segundo en lugar del tiempo de
+espera de TCP. Un `RATELIMIT_STORAGE_URI` inutilizable (esquema desconocido,
+mal formado, controlador no instalado) detiene el servidor al arrancar con el
+código de salida 2 y un mensaje sin sus credenciales.
 
-stdio has no rate limits: it runs locally as one configured token, so whoever
-can start it already has access to the server itself.
+stdio no tiene límites de peticiones: se ejecuta en local con un único token
+configurado, así que quien puede iniciarlo ya tiene acceso al propio servidor.
 
-## Traefik routing
+## Enrutamiento con Traefik
 
-The server speaks plain HTTP on `127.0.0.1:8765`; Traefik terminates TLS. Route
-either a path or a subdomain to that address and keep the original `Host`
-header (Traefik's default):
+El servidor habla HTTP sin cifrar en `127.0.0.1:8765`; Traefik termina TLS.
+Encamine una ruta o un subdominio a esa dirección y conserve la cabecera
+`Host` original (el comportamiento por defecto de Traefik):
 
-- Path: `PathPrefix(`/mcp`)` on the QMS host, service URL `http://127.0.0.1:8765`.
-- Subdomain: `Host(`mcp.qms.example.com`)`, same service URL.
+- Ruta: `PathPrefix(`/mcp`)` en el host del SGC, URL del servicio `http://127.0.0.1:8765`.
+- Subdominio: `Host(`mcp.qms.example.com`)`, la misma URL del servicio.
 
-Traefik runs on the same host, so its connection comes from `127.0.0.1` and the
-default `MCP_TRUSTED_PROXIES` is right: the security log then records the real
-caller from `X-Forwarded-For`. Requests from any other peer cannot set that
-header's effect. If the proxy runs elsewhere, list its address in
+Traefik se ejecuta en la misma máquina, así que su conexión procede de
+`127.0.0.1` y el valor por defecto de `MCP_TRUSTED_PROXIES` es correcto: el
+registro de seguridad anota entonces el cliente real a partir de
+`X-Forwarded-For`. Esa cabecera no tiene efecto en las peticiones de ningún
+otro par. Si el proxy se ejecuta en otra máquina, incluya su dirección en
 `MCP_TRUSTED_PROXIES`.
 
-Then set `MCP_ALLOWED_HOSTS` to the public host name (for example
-`MCP_ALLOWED_HOSTS=qms.example.com`) and restart the unit. The client URL is
-`https://<host>/mcp`. Never expose port 8765 without TLS: the bearer token
-travels in a header.
+A continuación, defina `MCP_ALLOWED_HOSTS` con el nombre de host público (por
+ejemplo, `MCP_ALLOWED_HOSTS=qms.example.com`) y reinicie la unidad. La URL del
+cliente es `https://<host>/mcp`. Nunca exponga el puerto 8765 sin TLS: el
+token *bearer* viaja en una cabecera.
 
-## Client configuration
+## Configuración de los clientes
 
-Replace `https://qms.example.com/mcp` with your URL. Every remote client sends
-`Authorization: Bearer <token>`.
+Sustituya `https://qms.example.com/mcp` por su URL. Todos los clientes remotos
+envían `Authorization: Bearer <token>`.
 
 ### Claude Code
 
@@ -356,20 +410,20 @@ claude mcp add-json --scope user iso9001 \
   '{"type":"http","url":"https://qms.example.com/mcp","headers":{"Authorization":"Bearer ${ISO9001_TOKEN}"}}'
 ```
 
-The single quotes keep `${ISO9001_TOKEN}` literal: Claude Code stores the
-placeholder and expands it from the environment when it connects, so the token
-never lands in `~/.claude.json`. This also works, but the shell expands the
-variable first and the token is stored in plain text:
+Las comillas simples mantienen literal `${ISO9001_TOKEN}`: Claude Code guarda
+el marcador de posición y lo expande desde el entorno al conectarse, de modo
+que el token nunca llega a `~/.claude.json`. Lo siguiente también funciona,
+pero la shell expande antes la variable y el token se guarda en texto plano:
 
 ```bash
 claude mcp add --transport http iso9001 https://qms.example.com/mcp \
   --header "Authorization: Bearer ${ISO9001_TOKEN}"
 ```
 
-Avoid `--scope project`: it writes `.mcp.json` into the repository (and needs
-per-project approval).
+Evite `--scope project`: escribe `.mcp.json` en el repositorio (y necesita una
+aprobación por proyecto).
 
-Local stdio instead (the token is read once at start):
+Como alternativa, stdio local (el token se lee una sola vez al arrancar):
 
 ```bash
 claude mcp add iso9001-local --transport stdio --env ISO9001_MCP_TOKEN="$ISO9001_TOKEN" \
@@ -388,7 +442,7 @@ bearer_token_env_var = "ISO9001_TOKEN"
 
 ### Pi
 
-`~/.pi/agent/mcp.json` (or a project `.pi/mcp.json`):
+`~/.pi/agent/mcp.json` (o un `.pi/mcp.json` de proyecto):
 
 ```json
 {
@@ -401,9 +455,9 @@ bearer_token_env_var = "ISO9001_TOKEN"
 }
 ```
 
-Pi calls MCP tools from its code mode by default (`mcp__iso9001__qms_modules`).
-A project `.pi/mcp.json` is read by `pi -p`, but `pi mcp list` ignores it until
-the project is trusted.
+Pi llama a las herramientas MCP desde su modo de código por defecto
+(`mcp__iso9001__qms_modules`). `pi -p` lee un `.pi/mcp.json` de proyecto, pero
+`pi mcp list` lo ignora hasta que el proyecto se marca como de confianza.
 
 ### OpenCode
 
@@ -423,9 +477,9 @@ the project is trusted.
 }
 ```
 
-`opencode mcp list` shows whether it connected. For one-shot runs
-(`opencode run`) close standard input (`< /dev/null`); a run left waiting on it
-never reached the server.
+`opencode mcp list` muestra si se ha conectado. Para las ejecuciones puntuales
+(`opencode run`), cierre la entrada estándar (`< /dev/null`); una ejecución que
+se quedó esperándola nunca llegó al servidor.
 
 ### OpenClaw
 
@@ -443,15 +497,15 @@ never reached the server.
 }
 ```
 
-`openclaw mcp probe iso9001` lists the tools. `openclaw agent` runs through the
-gateway, which reads the gateway's own configuration; add `--local` to use the
-configuration above directly.
+`openclaw mcp probe iso9001` enumera las herramientas. `openclaw agent` se
+ejecuta a través de la pasarela (*gateway*), que lee su propia configuración;
+añada `--local` para usar directamente la configuración anterior.
 
 ### Claude Desktop
 
-Claude Desktop starts local processes only, so use `mcp-remote` as a bridge.
-Keep the token out of the process list with a header file (one `Name: value`
-per line, mode `600`):
+Claude Desktop solo inicia procesos locales, así que use `mcp-remote` como
+puente. Mantenga el token fuera de la lista de procesos con un fichero de
+cabeceras (un `Name: value` por línea, modo `600`):
 
 ```bash
 umask 077
@@ -475,7 +529,7 @@ printf 'Authorization: Bearer %s\n' "$ISO9001_TOKEN" > ~/.iso9001-mcp-headers
 }
 ```
 
-### Local stdio (any client that launches a command)
+### stdio local (cualquier cliente que lance una orden)
 
 ```json
 {
@@ -490,38 +544,43 @@ printf 'Authorization: Bearer %s\n' "$ISO9001_TOKEN" > ~/.iso9001-mcp-headers
 }
 ```
 
-### Verification status
+### Estado de la verificación
 
-- **Claude Code**: connected to production over Streamable HTTP with a
-  personal token, reported by the maintainer (2026-10-06).
-- **Codex 0.157, OpenCode 1.18, Pi 1.0, OpenClaw 2026.7 and Claude Code**: the
-  snippets above (with a local URL) connected to a local server built from
-  `main@69bcfa7` and called `qms_modules` with a read-only token, each through
-  its normal one-shot command; the server log recorded the calls (2026-10-06).
-  Each client's `${...}` or `{env:...}` placeholder was expanded from the
-  environment.
-- **Claude Desktop through `mcp-remote`**: not tested (no Linux build); the
-  `--header` / `--header-file` options follow the `mcp-remote` v0.14.3
-  documentation.
+- **Claude Code**: conectado a producción mediante Streamable HTTP con un
+  token personal, según informó el responsable del mantenimiento
+  (2026-10-06).
+- **Codex 0.157, OpenCode 1.18, Pi 1.0, OpenClaw 2026.7 y Claude Code**: los
+  fragmentos anteriores (con una URL local) se conectaron a un servidor local
+  construido a partir de `main@69bcfa7` y llamaron a `qms_modules` con un
+  token de solo lectura, cada uno mediante su orden habitual de ejecución
+  puntual; el registro del servidor anotó las llamadas (2026-10-06). El
+  marcador de posición `${...}` o `{env:...}` de cada cliente se expandió
+  desde el entorno.
+- **Claude Desktop mediante `mcp-remote`**: sin probar (no hay versión para
+  Linux); las opciones `--header` / `--header-file` siguen la documentación de
+  `mcp-remote` v0.14.3.
 
-The server is stateless: it sends no `Mcp-Session-Id` and answers with JSON.
+El servidor no tiene estado: no envía `Mcp-Session-Id` y responde con JSON.
 
-## Smoke test
+## Prueba de humo
 
-Per client, after configuring it with a `read` token for a user that can read
-non-conformities:
+Para cada cliente, después de configurarlo con un token `read` de un usuario
+que pueda leer no conformidades:
 
-1. **Claude Code:** `claude mcp list` shows `iso9001` connected; ask it to run
-   `qms_modules`, then list non-conformities.
-2. **Codex:** `codex mcp list` shows the server; ask it to call `qms_modules`.
-3. **Pi:** open the MCP panel (`/mcp`) and check the five `qms_*` tools; call
+1. **Claude Code:** `claude mcp list` muestra `iso9001` conectado; pídale que
+   ejecute `qms_modules` y que después enumere las no conformidades.
+2. **Codex:** `codex mcp list` muestra el servidor; pídale que llame a
    `qms_modules`.
-4. **OpenCode:** `opencode mcp list` shows `iso9001` connected; call `qms_modules`.
-5. **OpenClaw:** check the server is listed with the five tools; call `qms_modules`.
-6. **Claude Desktop:** restart it, check the tools icon lists `iso9001`, and ask
-   for the modules.
+3. **Pi:** abra el panel MCP (`/mcp`) y compruebe las cinco herramientas
+   `qms_*`; llame a `qms_modules`.
+4. **OpenCode:** `opencode mcp list` muestra `iso9001` conectado; llame a
+   `qms_modules`.
+5. **OpenClaw:** compruebe que el servidor aparece con las cinco herramientas;
+   llame a `qms_modules`.
+6. **Claude Desktop:** reinícielo, compruebe que el icono de herramientas
+   incluye `iso9001` y pídale los módulos.
 
-Then, once, with a `write` token for a test user: create a non-conformity, read
-it back with `qms_get` and confirm the audit row has channel `mcp`. A wrong
-token must give `401` (for example `curl -i -X POST https://qms.example.com/mcp`
-without a header).
+A continuación, una sola vez, con un token `write` de un usuario de prueba:
+cree una no conformidad, léala con `qms_get` y confirme que la fila de
+auditoría tiene el canal `mcp`. Un token incorrecto debe dar `401` (por
+ejemplo, `curl -i -X POST https://qms.example.com/mcp` sin cabecera).
