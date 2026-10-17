@@ -76,10 +76,31 @@ Baseline at `24acc63`: 1,353 tests. Migrations are tested on PostgreSQL (`TEST_P
 - The RO-2 writer ran `git rm`, staging two deletions, and restored the index itself; the parent checked the index was clean before committing.
 - Never deploy RO-1 without RO-2: the old service keeps writing `riesgos_oportunidades` until RO-2 drops it.
 
-## Production deployment (pending authorization)
+## Delivery
 
-Two migrations (`c6e8a2f4b1d9` new registers and the copy, `e3b5d7f9a1c4` re-sync and drop of `riesgos_oportunidades`) on top of `a9c1e3f5d7b2`: back up the database and the code, fast-forward, `flask db upgrade`, `flask db check`, then the user restarts the four services. MCP clients configured with the old module `riesgos_oportunidades` must use `riesgos`, `oportunidades` and `acciones_riesgo`. Smoke tests: `/riesgos/` and `/oportunidades/` redirect to the login, `qms_modules` lists 24 modules.
+| Slice | Pull request | Commits | Merged as |
+|---|---|---|---|
+| 1 | [#131](https://github.com/constant1n0/iso9001/pull/131) | tracker, RO-1 | merged |
+| 2 | [#132](https://github.com/constant1n0/iso9001/pull/132) | RO-2 services, MCP, review inputs (one-off `size:exception`, 1,771 lines) | merged |
+| 3 | [#133](https://github.com/constant1n0/iso9001/pull/133) | RO-2 old register retired | `7416a4b` |
+| 4 | [#134](https://github.com/constant1n0/iso9001/pull/134) | RO-3 service filters | merged |
+| 5 | [#135](https://github.com/constant1n0/iso9001/pull/135) | RO-3 screens | merged |
+| 6 | [#136](https://github.com/constant1n0/iso9001/pull/136) | RO-3 dashboard card | `2596b02` |
+| 7 | [#137](https://github.com/constant1n0/iso9001/pull/137) | RO-4 PDFs and docs, closing record | `bd945c6` |
+
+## Production deployment (2026-10-17)
+
+`main@bd945c6` runs on `vulcano`. The user authorized this deployment over SSH as `dcm`, with no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `6b77c96`, clean, migration `a9c1e3f5d7b2`. The pre-migration row count failed (a quoting error in the agent's query) and the deployment went on without it; the count was taken afterwards from the pre-migration backup |
+| Backups | `~/work/backups/calidad-*-pre-bd945c6.dump` (`pg_dump -Fc`, 346 entries listed by `pg_restore -l`) and `iso9001-code-*-pre-bd945c6.tar.gz` (without `instance/documents`), both mode 600 |
+| Code | Incremental git bundle `6b77c96..main`, fast-forward to `bd945c6`; no dependency changes; `pip check` clean |
+| Database | `flask db upgrade` `a9c1e3f5d7b2` → `c6e8a2f4b1d9` → `e3b5d7f9a1c4`; `flask db check` clean. The old register had 0 rows in the backup; afterwards 0 risks, 0 opportunities, 0 actions, and `riesgos_oportunidades` is gone |
+| Restart (user, with sudo) | All four services |
+| Smoke tests | Services active, no error entries in the journal; `/login` 200; `/`, `/riesgos/`, `/oportunidades/` and `/riesgos/pdf` redirect to the login; `/mcp` 401 with `WWW-Authenticate: Bearer`; 24 MCP modules including `riesgos`, `oportunidades` and `acciones_riesgo`, without `riesgos_oportunidades` |
 
 ## Next step
 
-**Feature complete** once RO-4 merges. Next: the production deployment above, after explicit authorization.
+**Feature complete and deployed.** Wave 2 continues with the gap analysis order: screens for the MCP-only registers (roles, processes, training resources, audit indicators), external providers (8.4), context and scope (4.1–4.3), planning of changes (6.3), customers and complaints (8.2, 9.1.2), nonconforming outputs (8.7).
