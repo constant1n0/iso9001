@@ -29,7 +29,6 @@ from .routes import (
     auth_routes,
     main_routes,
     parte_interesada_routes,
-    riesgo_oportunidad_routes,
     rol_responsabilidad_routes,
     recurso_capacitacion_routes,
     proceso_operacion_routes,
@@ -139,7 +138,6 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
     app.register_blueprint(auth_routes.bp)
     app.register_blueprint(main_routes.bp)
     app.register_blueprint(parte_interesada_routes.bp)
-    app.register_blueprint(riesgo_oportunidad_routes.bp)
     app.register_blueprint(rol_responsabilidad_routes.bp)
     app.register_blueprint(recurso_capacitacion_routes.bp)
     app.register_blueprint(proceso_operacion_routes.bp)

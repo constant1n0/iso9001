@@ -43,13 +43,11 @@ from app.models import (
     ProgramaAuditoria,
     RecursoCapacitacion,
     RevisionDireccion,
-    RiesgoOportunidad,
     RoleEnum,
     RolResponsabilidad,
     SatisfaccionCliente,
     SentidoObjetivo,
     TipoAccionRevision,
-    TipoEnum,
     TipoHallazgo,
     User,
 )
@@ -283,8 +281,6 @@ ENDPOINTS = [
            {"area_auditoria": "Ventas"}, {"resultado": "ok"}),
     *_json("ROLES_RESPONSIBILITIES", "/rol_responsabilidad/", {"rol": "Nuevo"},
            {"descripcion_politica_calidad": "x"}),
-    *_json("RISKS_OPPORTUNITIES", "/riesgo_oportunidad/",
-           {"tipo": "Riesgo", "descripcion": "d"}, {"plan_accion": "x"}),
     *_json("TRAINING_RESOURCES", "/recurso_capacitacion/",
            {"recurso_necesario": "Sala"}, {"descripcion_documentacion": "x"}),
     *_json("PROCESS_OPERATIONS", "/proceso_operacion/", {"proceso": "Nuevo"},
@@ -325,7 +321,9 @@ ALLOWED = {
 # Policy entries without routes. AUDIT_LOG has no adapter yet. The API_TOKENS
 # matrix (issue, list, revoke any token) stays CLI-only; "Mi perfil" bypasses it
 # with an ownership check, so tests/test_profile_routes.py characterizes it.
-NO_ROUTES = {"AUDIT_LOG", "API_TOKENS"}
+# RISKS_OPPORTUNITIES lost its JSON endpoints in RO-2 of risks-opportunities and
+# gets its screens in RO-3; until then only the MCP modules reach it.
+NO_ROUTES = {"AUDIT_LOG", "API_TOKENS", "RISKS_OPPORTUNITIES"}
 
 
 def allowed_roles(endpoint: Endpoint) -> set:
@@ -382,7 +380,6 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                     ParteInteresada(nombre="Seed"),
                     AuditoriaIndicador(area_auditoria="Seed"),
                     RolResponsabilidad(rol="Seed"),
-                    RiesgoOportunidad(tipo=TipoEnum.Riesgo, descripcion="d"),
                     RecursoCapacitacion(recurso_necesario="Seed"),
                     ProcesoOperacion(proceso="Seed"),
                     RolResponsabilidad(rol="Seed 2"),  # role 1 stays deletable
