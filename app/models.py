@@ -107,7 +107,9 @@ class RolResponsabilidad(RecordMetadataMixin, db.Model):
     compromiso_calidad = db.Column(db.Boolean, default=False)
     descripcion_politica_calidad = db.Column(db.Text)
 
-# Modelo para gestionar Riesgos y Oportunidades dentro del SGC
+# Modelo para gestionar Riesgos y Oportunidades dentro del SGC. Replaced by
+# ``Riesgo`` and ``Oportunidad`` (``risks-opportunities``, decision RO5): its rows
+# are copied there and the table goes away with the old service (RO-2).
 class RiesgoOportunidad(RecordMetadataMixin, db.Model):
     __tablename__ = 'riesgos_oportunidades'
     id_riesgo = db.Column(db.Integer, primary_key=True)
@@ -1084,6 +1086,332 @@ class AccionRevision(RecordMetadataMixin, db.Model):
 
     def __repr__(self):
         return f'<AccionRevision {self.id} {self.estado.name if self.estado else None}>'
+
+
+class OrigenRiesgo(enum.Enum):
+    """Whether a risk or an opportunity arises inside or outside the organization (RO1)."""
+
+    interno = 'Interno'
+    externo = 'Externo'
+
+
+class TratamientoRiesgo(enum.Enum):
+    """How a risk is treated (ISO 9001 clause 6.1.2, decision RO1)."""
+
+    aceptar = 'Aceptar'
+    mitigar = 'Mitigar'
+    transferir = 'Transferir'
+    evitar = 'Evitar'
+
+
+class EstadoRiesgo(enum.Enum):
+    """Where a risk stands (decision RO1)."""
+
+    identificado = 'Identificado'
+    en_tratamiento = 'En tratamiento'
+    controlado = 'Controlado'
+    cerrado = 'Cerrado'
+
+
+class DecisionOportunidad(enum.Enum):
+    """What is decided about an opportunity (decision RO2)."""
+
+    aprovechar = 'Aprovechar'
+    posponer = 'Posponer'
+    descartar = 'Descartar'
+
+
+class EstadoOportunidad(enum.Enum):
+    """Where an opportunity stands (decision RO2)."""
+
+    identificada = 'Identificada'
+    en_curso = 'En curso'
+    aprovechada = 'Aprovechada'
+    descartada = 'Descartada'
+
+
+class EstadoAccionRiesgo(enum.Enum):
+    """Where an action on a risk or an opportunity stands (decision RO3)."""
+
+    pendiente = 'Pendiente'
+    en_curso = 'En curso'
+    completada = 'Completada'
+    cancelada = 'Cancelada'
+
+
+class EficaciaAccion(enum.Enum):
+    """Result of evaluating a completed action's effectiveness (6.1.2 b, decision RO3)."""
+
+    eficaz = 'Eficaz'
+    no_eficaz = 'No eficaz'
+
+
+class NivelRiesgo(enum.Enum):
+    """A risk's level, from the product of likelihood and impact (decision RO1)."""
+
+    bajo = 'Bajo'
+    medio = 'Medio'
+    alto = 'Alto'
+    critico = 'Crítico'
+
+
+class PrioridadOportunidad(enum.Enum):
+    """An opportunity's priority, from the product of benefit and feasibility (RO2)."""
+
+    baja = 'Baja'
+    media = 'Media'
+    alta = 'Alta'
+
+
+ESCALA_MIN, ESCALA_MAX = 1, 5  # every assessment scale of the registers (RO1, RO2)
+
+
+def _scale_product(first: int | None, second: int | None) -> int | None:
+    """Product of a 1-5 pair, ``None`` for a pending assessment (both ``None``, RO4).
+
+    Raises ``ValueError`` for half an assessment or a value off the scale; the
+    registers' CHECK constraints refuse the same.
+    """
+    if first is None and second is None:
+        return None
+    for value in (first, second):
+        if (isinstance(value, bool) or not isinstance(value, int)
+                or not ESCALA_MIN <= value <= ESCALA_MAX):
+            raise ValueError(f'Assessment values must be integers from {ESCALA_MIN} to '
+                             f'{ESCALA_MAX}, both given or both None: {first!r}, {second!r}')
+    return first * second
+
+
+def nivel(probabilidad: int | None, impacto: int | None) -> NivelRiesgo | None:
+    """A risk's level: ``bajo`` 1-4, ``medio`` 5-9, ``alto`` 10-16, ``critico`` 20-25.
+
+    ``None`` while the risk is not assessed yet (decision RO4).
+
+    Raises:
+        ValueError: half an assessment, or a value that is not an integer from 1 to 5.
+    """
+    product = _scale_product(probabilidad, impacto)
+    if product is None:
+        return None
+    if product <= 4:
+        return NivelRiesgo.bajo
+    if product <= 9:
+        return NivelRiesgo.medio
+    if product <= 16:
+        return NivelRiesgo.alto
+    return NivelRiesgo.critico
+
+
+def prioridad(beneficio: int | None, viabilidad: int | None) -> PrioridadOportunidad | None:
+    """An opportunity's priority: ``baja`` 1-6, ``media`` 8-12, ``alta`` 15-25.
+
+    ``None`` while the opportunity is not assessed yet (decision RO4).
+
+    Raises:
+        ValueError: half an assessment, or a value that is not an integer from 1 to 5.
+    """
+    product = _scale_product(beneficio, viabilidad)
+    if product is None:
+        return None
+    if product <= 6:
+        return PrioridadOportunidad.baja
+    if product <= 12:
+        return PrioridadOportunidad.media
+    return PrioridadOportunidad.alta
+
+
+def _scale_pair(first: str, second: str) -> str:
+    """CHECK: both columns on the 1-5 scale, or both NULL (assessment pending, RO4).
+
+    Spelled out with ``IS NOT NULL``: a CHECK whose expression is NULL passes.
+    """
+    return (f'({first} IS NULL AND {second} IS NULL) OR '
+            f'({first} IS NOT NULL AND {second} IS NOT NULL AND '
+            f'{first} BETWEEN {ESCALA_MIN} AND {ESCALA_MAX} AND '
+            f'{second} BETWEEN {ESCALA_MIN} AND {ESCALA_MAX})')
+
+
+# RO3: an action belongs to exactly one risk or one opportunity, and its
+# effectiveness (result and date together) is evaluated only once completed.
+_ONE_REGISTER = ('(riesgo_id IS NOT NULL AND oportunidad_id IS NULL) OR '
+                 '(riesgo_id IS NULL AND oportunidad_id IS NOT NULL)')
+_EVALUATION = ("(eficacia IS NULL AND fecha_evaluacion IS NULL) OR "
+               "(eficacia IS NOT NULL AND fecha_evaluacion IS NOT NULL "
+               "AND estado = 'completada')")
+
+
+def _register_links(table: str) -> tuple:
+    """Interested party, process and owner of a risk or an opportunity, all optional.
+
+    ``ON DELETE RESTRICT`` keeps a cited party, process or person; the owner is
+    NULL only on rows migrated from ``riesgos_oportunidades`` (the services
+    require it for new records).
+    """
+    return (
+        db.ForeignKeyConstraint(
+            ['parte_interesada_id'], ['partes_interesadas.id_interesado'],
+            name=f'fk_{table}_parte_interesada_id_partes_interesadas', ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['proceso_id'], ['procesos_operacion.id_proceso'],
+            name=f'fk_{table}_proceso_id_procesos_operacion', ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['responsable_id'], ['personas.id'],
+            name=f'fk_{table}_responsable_id_personas', ondelete='RESTRICT',
+        ),
+        db.Index(f'ix_{table}_parte_interesada_id', 'parte_interesada_id'),
+        db.Index(f'ix_{table}_proceso_id', 'proceso_id'),
+        db.Index(f'ix_{table}_responsable_id', 'responsable_id'),
+    )
+
+
+class Riesgo(RecordMetadataMixin, db.Model):
+    """A risk of the QMS (ISO 9001 clause 6.1, decisions RO1 and RO4 of ``risks-opportunities``).
+
+    Assessed by likelihood and impact (1-5) before its actions and again after
+    them (``*_residual``); a pair is either complete or still pending. The level
+    is computed (``nivel``), never stored. Its actions (``AccionRiesgo``) keep
+    it from being deleted.
+    """
+
+    __tablename__ = 'riesgos'
+    __table_args__ = (
+        db.CheckConstraint(_scale_pair('probabilidad', 'impacto'),
+                           name='ck_riesgos_valoracion'),
+        db.CheckConstraint(_scale_pair('probabilidad_residual', 'impacto_residual'),
+                           name='ck_riesgos_valoracion_residual'),
+        *_register_links('riesgos'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    titulo = db.Column(db.String(200), nullable=False)
+    descripcion = db.Column(db.Text, nullable=False)
+    origen = db.Column(text_enum(OrigenRiesgo, 'ck_riesgos_origen'), nullable=False)
+    parte_interesada_id = db.Column(db.Integer, nullable=True)
+    proceso_id = db.Column(db.Integer, nullable=True)
+    responsable_id = db.Column(db.Integer, nullable=True)
+    probabilidad = db.Column(db.Integer)
+    impacto = db.Column(db.Integer)
+    tratamiento = db.Column(text_enum(TratamientoRiesgo, 'ck_riesgos_tratamiento'))
+    probabilidad_residual = db.Column(db.Integer)
+    impacto_residual = db.Column(db.Integer)
+    estado = db.Column(
+        text_enum(EstadoRiesgo, 'ck_riesgos_estado'),
+        nullable=False,
+        default=EstadoRiesgo.identificado,
+        server_default=EstadoRiesgo.identificado.name,
+    )
+    fecha_identificacion = db.Column(db.Date, nullable=False)
+    fecha_revision = db.Column(db.Date)  # the next review
+    notas = db.Column(db.Text)
+
+    @property
+    def nivel(self) -> NivelRiesgo | None:
+        """Level before the actions; ``None`` while not assessed."""
+        return nivel(self.probabilidad, self.impacto)
+
+    @property
+    def nivel_residual(self) -> NivelRiesgo | None:
+        """Level after the actions; ``None`` while not assessed."""
+        return nivel(self.probabilidad_residual, self.impacto_residual)
+
+    def __repr__(self):
+        return f'<Riesgo {self.id} {self.titulo}>'
+
+
+class Oportunidad(RecordMetadataMixin, db.Model):
+    """An opportunity for the QMS (ISO 9001 clause 6.1, decisions RO2 and RO4).
+
+    The frame of ``Riesgo`` with benefit and feasibility (1-5) instead of
+    likelihood and impact, a decision instead of a treatment, and no residual
+    assessment. The priority is computed (``prioridad``), never stored.
+    """
+
+    __tablename__ = 'oportunidades'
+    __table_args__ = (
+        db.CheckConstraint(_scale_pair('beneficio', 'viabilidad'),
+                           name='ck_oportunidades_valoracion'),
+        *_register_links('oportunidades'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    titulo = db.Column(db.String(200), nullable=False)
+    descripcion = db.Column(db.Text, nullable=False)
+    origen = db.Column(text_enum(OrigenRiesgo, 'ck_oportunidades_origen'), nullable=False)
+    parte_interesada_id = db.Column(db.Integer, nullable=True)
+    proceso_id = db.Column(db.Integer, nullable=True)
+    responsable_id = db.Column(db.Integer, nullable=True)
+    beneficio = db.Column(db.Integer)
+    viabilidad = db.Column(db.Integer)
+    decision = db.Column(text_enum(DecisionOportunidad, 'ck_oportunidades_decision'))
+    estado = db.Column(
+        text_enum(EstadoOportunidad, 'ck_oportunidades_estado'),
+        nullable=False,
+        default=EstadoOportunidad.identificada,
+        server_default=EstadoOportunidad.identificada.name,
+    )
+    fecha_identificacion = db.Column(db.Date, nullable=False)
+    fecha_revision = db.Column(db.Date)  # the next review
+    notas = db.Column(db.Text)
+
+    @property
+    def prioridad(self) -> PrioridadOportunidad | None:
+        """Priority from benefit and feasibility; ``None`` while not assessed."""
+        return prioridad(self.beneficio, self.viabilidad)
+
+    def __repr__(self):
+        return f'<Oportunidad {self.id} {self.titulo}>'
+
+
+class AccionRiesgo(RecordMetadataMixin, db.Model):
+    """An action on exactly one risk or one opportunity (6.1.2, decision RO3).
+
+    An owner, a deadline and its follow-up; a completed action records when,
+    and only then is its effectiveness evaluated (result and date together).
+    """
+
+    __tablename__ = 'acciones_riesgo'
+    __table_args__ = (
+        db.CheckConstraint(_ONE_REGISTER, name='ck_acciones_riesgo_un_registro'),
+        db.CheckConstraint(_ACTION_COMPLETION, name='ck_acciones_riesgo_completada'),
+        db.CheckConstraint(_EVALUATION, name='ck_acciones_riesgo_evaluacion'),
+        db.ForeignKeyConstraint(
+            ['riesgo_id'], ['riesgos.id'],
+            name='fk_acciones_riesgo_riesgo_id_riesgos', ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['oportunidad_id'], ['oportunidades.id'],
+            name='fk_acciones_riesgo_oportunidad_id_oportunidades', ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['responsable_id'], ['personas.id'],
+            name='fk_acciones_riesgo_responsable_id_personas', ondelete='RESTRICT',
+        ),
+        db.Index('ix_acciones_riesgo_riesgo_id', 'riesgo_id'),
+        db.Index('ix_acciones_riesgo_oportunidad_id', 'oportunidad_id'),
+        db.Index('ix_acciones_riesgo_responsable_id', 'responsable_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    riesgo_id = db.Column(db.Integer, nullable=True)
+    oportunidad_id = db.Column(db.Integer, nullable=True)
+    descripcion = db.Column(db.Text, nullable=False)
+    responsable_id = db.Column(db.Integer, nullable=False)
+    fecha_limite = db.Column(db.Date, nullable=False)
+    estado = db.Column(
+        text_enum(EstadoAccionRiesgo, 'ck_acciones_riesgo_estado'),
+        nullable=False,
+        default=EstadoAccionRiesgo.pendiente,
+        server_default=EstadoAccionRiesgo.pendiente.name,
+    )
+    fecha_completada = db.Column(db.Date)
+    eficacia = db.Column(text_enum(EficaciaAccion, 'ck_acciones_riesgo_eficacia'))
+    fecha_evaluacion = db.Column(db.Date)
+    comentario_eficacia = db.Column(db.Text)
+
+    def __repr__(self):
+        return f'<AccionRiesgo {self.id} {self.estado.name if self.estado else None}>'
 
 # Modelo para Control Documental
 class DocumentCategory(enum.Enum):

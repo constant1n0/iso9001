@@ -30,7 +30,8 @@ LATER_AUDITED_TABLES = frozenset(
     {"personas", "competencias_requeridas", "competencias_acreditadas",
      "acciones_correctivas", "document_revisions", "programas_auditoria",
      "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo",
-     "revisiones_direccion", "acciones_revision"}
+     "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades",
+     "acciones_riesgo"}
 )
 
 
@@ -899,6 +900,159 @@ class MigrationsTestCase(unittest.TestCase):
             self.assertFalse({reviews, actions, attendees}
                              & set(inspect(db.engine).get_table_names()))
             upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+
+    def test_risks_and_opportunities_move_to_their_registers_and_downgrade(self) -> None:
+        old, risks, opportunities, actions = (
+            "riesgos_oportunidades", "riesgos", "oportunidades", "acciones_riesgo")
+        expected = {
+            **{f"fk_{table}_{column}_{target}": (target, "RESTRICT")
+               for table in (risks, opportunities)
+               for column, target in (("parte_interesada_id", "partes_interesadas"),
+                                      ("proceso_id", "procesos_operacion"),
+                                      ("responsable_id", "personas"))},
+            f"fk_{actions}_riesgo_id_{risks}": (risks, "RESTRICT"),
+            f"fk_{actions}_oportunidad_id_{opportunities}": (opportunities, "RESTRICT"),
+            f"fk_{actions}_responsable_id_personas": ("personas", "RESTRICT"),
+        }
+        legacy = ("SELECT id_riesgo, tipo, descripcion, objetivo_calidad, plan_accion, "
+                  f"created_at, created_by_id FROM {old} ORDER BY id_riesgo")
+        moved = ("SELECT id, titulo, descripcion, origen, estado, fecha_identificacion, notas, "
+                 "fecha_revision, responsable_id, created_at, updated_at, created_by_id "
+                 "FROM {} ORDER BY id")
+        long_line = "Dependencia de un único proveedor de acero " * 6  # over 200 characters
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision="a9c1e3f5d7b2")
+            with db.engine.begin() as connection:
+                user_id = connection.execute(text(
+                    "INSERT INTO users (username, password, role) "
+                    "VALUES ('legacy', 'x', 'OPERATIVO') RETURNING id")).scalar_one()
+                connection.execute(text(
+                    f"INSERT INTO {old} (tipo, descripcion, objetivo_calidad, plan_accion, "
+                    "created_at, updated_at, created_by_id, updated_by_id) VALUES "
+                    "('Riesgo', :one, 'Retener talento', 'Plan de carrera', "
+                    " '2026-03-31 12:00+00', '2026-04-02 12:00+00', :user, :user), "
+                    "('Oportunidad', 'Nuevo mercado', NULL, 'Estudio de mercado', "
+                    " NULL, NULL, NULL, NULL), "
+                    "('Riesgo', :three, NULL, NULL, '2026-02-01 12:00+00', NULL, NULL, NULL), "
+                    "('Oportunidad', :four, 'Mejorar la imagen', '  ', "
+                    " '2026-04-15 12:00+00', NULL, NULL, NULL), "
+                    "('Riesgo', '  ', '', NULL, NULL, NULL, NULL, NULL)"
+                ), {"one": "Rotación de personal\nSalida de técnicos clave", "user": user_id,
+                    "three": f"{long_line}\nSegunda línea",
+                    "four": "\n  Certificar ISO 14001  \r\nAmpliar el alcance"})
+            before = self._rows(legacy)
+            upgrade(directory=MIGRATIONS_DIR)
+            (today,) = self._rows("SELECT CURRENT_DATE")[0]
+            created = {row[0]: row[5:] for row in self._rows(
+                f"SELECT id_riesgo, tipo, descripcion, objetivo_calidad, plan_accion, "
+                f"created_at, updated_at, created_by_id FROM {old}")}
+            self.assertEqual([
+                (1, "Rotación de personal", "Rotación de personal\nSalida de técnicos clave",
+                 "interno", "identificado", date(2026, 3, 31),
+                 "Objetivo de la calidad: Retener talento\n\nPlan de acción: Plan de carrera",
+                 None, None, *created[1]),
+                (3, long_line[:200].rstrip(), f"{long_line}\nSegunda línea", "interno",
+                 "identificado", date(2026, 2, 1), None, None, None, *created[3]),
+                (5, "Riesgo 5", "  ", "interno", "identificado", today, None, None, None,
+                 *created[5]),
+            ], self._rows(moved.format(risks)))
+            self.assertEqual([
+                (2, "Nuevo mercado", "Nuevo mercado", "interno", "identificada", today,
+                 "Plan de acción: Estudio de mercado", None, None, *created[2]),
+                (4, "Certificar ISO 14001", "\n  Certificar ISO 14001  \r\nAmpliar el alcance",
+                 "interno", "identificada", date(2026, 4, 15),
+                 "Objetivo de la calidad: Mejorar la imagen", None, None, *created[4]),
+            ], self._rows(moved.format(opportunities)))
+            self.assertEqual(user_id, created[1][2])
+            self.assertEqual(before, self._rows(legacy))  # kept until RO-2 drops it
+            self.assertEqual([(None,) * 6], self._rows(
+                "SELECT max(probabilidad), max(impacto), max(probabilidad_residual), "
+                "max(impacto_residual), max(tratamiento), max(parte_interesada_id) "
+                f"FROM {risks}"))
+            inspector = inspect(db.engine)
+            foreign_keys = {fk["name"]: (fk["referred_table"], fk["options"].get("ondelete"))
+                            for table in (risks, opportunities, actions)
+                            for fk in inspector.get_foreign_keys(table)}
+            self.assertLessEqual(expected.items(), foreign_keys.items())
+            for table, columns in ((risks, ("parte_interesada_id", "proceso_id",
+                                            "responsable_id")),
+                                   (opportunities, ("parte_interesada_id", "proceso_id",
+                                                    "responsable_id")),
+                                   (actions, ("riesgo_id", "oportunidad_id",
+                                              "responsable_id"))):
+                self.assertLessEqual({f"ix_{table}_{column}" for column in columns},
+                                     {index["name"] for index in inspector.get_indexes(table)})
+            with db.engine.begin() as connection:
+                # New rows are numbered after the copied ones.
+                self.assertEqual(6, connection.execute(text(
+                    f"INSERT INTO {risks} (titulo, descripcion, origen, fecha_identificacion) "
+                    "VALUES ('Nuevo', 'Nuevo', 'externo', '2026-10-17') RETURNING id"
+                )).scalar_one())
+                self.assertEqual(5, connection.execute(text(
+                    f"INSERT INTO {opportunities} (titulo, descripcion, origen, "
+                    "fecha_identificacion) VALUES ('Nueva', 'Nueva', 'externo', '2026-10-17') "
+                    "RETURNING id")).scalar_one())
+                for statement in (
+                    "INSERT INTO personas (nombre) VALUES ('Ana')",
+                    "INSERT INTO procesos_operacion (proceso) VALUES ('Compras')",
+                    "INSERT INTO partes_interesadas (nombre) VALUES ('Clientes')",
+                    f"UPDATE {risks} SET responsable_id = (SELECT id FROM personas), "
+                    "proceso_id = (SELECT id_proceso FROM procesos_operacion), "
+                    "parte_interesada_id = (SELECT id_interesado FROM partes_interesadas), "
+                    "probabilidad = 4, impacto = 5, tratamiento = 'mitigar', "
+                    "probabilidad_residual = 2, impacto_residual = 2, estado = 'controlado'",
+                    f"UPDATE {opportunities} SET responsable_id = (SELECT id FROM personas), "
+                    "beneficio = 3, viabilidad = 5, decision = 'aprovechar'",
+                    f"INSERT INTO {actions} (riesgo_id, descripcion, responsable_id, "
+                    f"fecha_limite) SELECT r.id, 'Plan de carrera', p.id, '2026-12-31' "
+                    f"FROM {risks} r, personas p WHERE r.id = 1",
+                    f"INSERT INTO {actions} (oportunidad_id, descripcion, responsable_id, "
+                    f"fecha_limite, estado, fecha_completada, eficacia, fecha_evaluacion) "
+                    f"SELECT o.id, 'Estudio', p.id, '2026-12-31', 'completada', '2026-11-30', "
+                    f"'eficaz', '2027-01-15' FROM {opportunities} o, personas p WHERE o.id = 2",
+                ):
+                    connection.execute(text(statement))
+            for statement in (
+                f"UPDATE {risks} SET probabilidad = NULL",  # half an assessment
+                f"UPDATE {risks} SET impacto = 6",
+                f"UPDATE {risks} SET impacto_residual = NULL",
+                f"UPDATE {risks} SET probabilidad_residual = 0",
+                f"UPDATE {risks} SET origen = 'Interno'",
+                f"UPDATE {risks} SET tratamiento = 'compartir'",
+                f"UPDATE {risks} SET estado = 'Identificado'",
+                f"UPDATE {opportunities} SET viabilidad = NULL",
+                f"UPDATE {opportunities} SET beneficio = 0",
+                f"UPDATE {opportunities} SET decision = 'Aprovechar'",
+                f"UPDATE {opportunities} SET estado = 'identificado'",
+                f"UPDATE {actions} SET riesgo_id = 1, oportunidad_id = 2",
+                f"UPDATE {actions} SET riesgo_id = NULL, oportunidad_id = NULL",
+                f"UPDATE {actions} SET estado = 'completada' WHERE riesgo_id = 1",
+                f"UPDATE {actions} SET fecha_completada = '2026-11-30' WHERE riesgo_id = 1",
+                f"UPDATE {actions} SET eficacia = 'eficaz', fecha_evaluacion = '2027-01-15' "
+                "WHERE riesgo_id = 1",
+                f"UPDATE {actions} SET fecha_evaluacion = NULL",
+                f"UPDATE {actions} SET estado = 'Pendiente'",
+                f"UPDATE {actions} SET eficacia = 'Eficaz'",
+                f"DELETE FROM {risks} WHERE id = 1",
+                f"DELETE FROM {opportunities} WHERE id = 2",
+                "DELETE FROM personas",
+                "DELETE FROM procesos_operacion",
+                "DELETE FROM partes_interesadas",
+            ):
+                with self.subTest(refused=statement):
+                    with self.assertRaises(IntegrityError):
+                        with db.engine.begin() as connection:
+                            connection.execute(text(statement))
+            downgrade(directory=MIGRATIONS_DIR, revision="a9c1e3f5d7b2")
+            self.assertFalse({risks, opportunities, actions}
+                             & set(inspect(db.engine).get_table_names()))
+            self.assertEqual(before, self._rows(legacy))
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([(3, 2, 0)], self._rows(
+                f"SELECT (SELECT count(*) FROM {risks}), (SELECT count(*) FROM "
+                f"{opportunities}), (SELECT count(*) FROM {actions})"))
             self.assertEqual([], self._schema_differences())
 
 
