@@ -33,10 +33,11 @@ Replace the free-text risks-and-opportunities list with two registers, as ISO 90
 
 Route for every task: **delegated direct**.
 
-- [ ] **RO-1 — Models and migration.** Forecast 600-900.
+- [x] **RO-1 — Models and migration.** Forecast 600-900.
   - `Riesgo`, `Oportunidad`, `AccionRiesgo` with CHECK constraints (scales 1–5, exactly one parent, effectiveness only after completion); migration with the data move and its downgrade; people, process and interested-party delete protection; policy unchanged.
 - [ ] **RO-2 — Services, MCP and review inputs.** Forecast 1,100-1,500.
   - Services with RO1–RO4 rules (level and priority, residual assessment, review-date overdue, action lifecycle and effectiveness), MCP modules replacing `riesgos_oportunidades`, management-review inputs on the new registers with old frozen data still rendering (RO7), removal of the old service and JSON endpoints.
+  - From RO-1: a migration that re-syncs the old rows (the old service keeps writing until RO-2) and then drops `riesgos_oportunidades`, with a downgrade that recreates it and moves rows back with new ids (risk and opportunity ids can collide in one table) and declares the lossy fields; the service requires an owner on new records; the audited-model count drops to 25.
 - [ ] **RO-3 — Screens and dashboard.** Forecast 1,100-1,500.
   - Risk and opportunity lists with filters, details with their actions, forms, heat map (5 × 5, CSS only), dashboard card (high or critical risks without open actions, overdue reviews, records without assessment).
 - [ ] **RO-4 — PDF and docs.** Forecast 400-700.
@@ -54,8 +55,15 @@ Baseline at `24acc63`: 1,353 tests. Migrations are tested on PostgreSQL (`TEST_P
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| RO-1..RO-4 | Pending | — | — | — |
+| RO-1 | Done | `7feff60` (`Riesgo`, `Oportunidad`, `AccionRiesgo` with CHECK constraints for the 1–5 scales, both-or-neither pairs, exactly one parent, the completion date and effectiveness only after completion; `nivel` and `prioridad` helpers; migration `c6e8a2f4b1d9` creates the tables and copies each old row by type keeping its id (option a: the old table stays until RO-2); title from the first non-blank line; notes labelled "Objetivo de la calidad" and "Plan de acción"; delete protection for people, processes and interested parties) | RED: 28 errors (`no attribute 'Riesgo'`, `'nivel'`) and 3 `Conflict not raised`; migration `UndefinedTable: riesgos`. GREEN: 1,385 tests OK incl. PostgreSQL; adapted `tests/test_attribution.py` (23 → 26) and `tests/test_migrations.py` | Pending |
+| RO-2..RO-4 | Pending | — | — | — |
+
+## Findings during implementation
+
+- A CHECK such as `(a IS NULL AND b IS NULL) OR (a BETWEEN 1 AND 5 AND b BETWEEN 1 AND 5)` accepts half a pair, because the second branch is NULL and a NULL CHECK passes; each branch needs explicit `IS NOT NULL`.
+- Alembic's `compare_metadata` does not compare CHECK constraints, so the migration tests run refused statements to prove them.
+- Never deploy RO-1 without RO-2: the old service keeps writing `riesgos_oportunidades` until RO-2 drops it.
 
 ## Next step
 
-RO-1.
+RO-2.
