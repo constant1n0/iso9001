@@ -26,6 +26,8 @@ Replace the free-text risks-and-opportunities list with two registers, as ISO 90
 | RO6 | Access keeps the current grant of `RISKS_OPPORTUNITIES`: every role reads; ADMIN and AUDITOR create and update; ADMIN deletes; `mcp` never deletes | Existing policy (`_JSON_REGISTER`) |
 | RO7 | The management review keeps reading reviews already held: their frozen inputs keep the old `riesgos_oportunidades` keys and must still render; new reviews count risks by level and opportunities by priority | Assistant design |
 | Delivery | `auto-chain`, `stacked-to-main`; push, PR and merge when CI is green; standing Wave 2 `size:exception` (ask only above 1,500 lines); production deployment needs explicit authorization | User authorizations (2026-10-02, 2026-10-17) |
+| Size RO-2 | One-off `size:exception` for the services pull request (1,771 lines) | User (2026-10-17) |
+| Surface RO-2 | `app/schemas.py` added to remove the dead `RiesgoOportunidadSchema` | User (2026-10-17) |
 | Test adaptations | Standing Wave 2 approval: existing tests that only need adapting to an approved design may join a writer's surface, reported here and in the PR; application code outside the planned surface still needs approval | User (2026-10-17) |
 | RDD | On (global); assess every work-unit commit | `gentle-ai review mode status` |
 
@@ -35,7 +37,7 @@ Route for every task: **delegated direct**.
 
 - [x] **RO-1 — Models and migration.** Forecast 600-900.
   - `Riesgo`, `Oportunidad`, `AccionRiesgo` with CHECK constraints (scales 1–5, exactly one parent, effectiveness only after completion); migration with the data move and its downgrade; people, process and interested-party delete protection; policy unchanged.
-- [ ] **RO-2 — Services, MCP and review inputs.** Forecast 1,100-1,500.
+- [x] **RO-2 — Services, MCP and review inputs.** Forecast 1,100-1,500.
   - Services with RO1–RO4 rules (level and priority, residual assessment, review-date overdue, action lifecycle and effectiveness), MCP modules replacing `riesgos_oportunidades`, management-review inputs on the new registers with old frozen data still rendering (RO7), removal of the old service and JSON endpoints.
   - **Acceptance check (RO-1 review):** a test writes to the old table after the RO-1 copy and proves the RO-2 migration carries that row into the new registers before the drop.
   - From RO-1: a migration that re-syncs the old rows (the old service keeps writing until RO-2) and then drops `riesgos_oportunidades`, with a downgrade that recreates it and moves rows back with new ids (risk and opportunity ids can collide in one table) and declares the lossy fields; the service requires an owner on new records; the audited-model count drops to 25.
@@ -57,14 +59,18 @@ Baseline at `24acc63`: 1,353 tests. Migrations are tested on PostgreSQL (`TEST_P
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
 | RO-1 | Done | `7feff60` (`Riesgo`, `Oportunidad`, `AccionRiesgo` with CHECK constraints for the 1–5 scales, both-or-neither pairs, exactly one parent, the completion date and effectiveness only after completion; `nivel` and `prioridad` helpers; migration `c6e8a2f4b1d9` creates the tables and copies each old row by type keeping its id (option a: the old table stays until RO-2); title from the first non-blank line; notes labelled "Objetivo de la calidad" and "Plan de acción"; delete protection for people, processes and interested parties) | RED: 28 errors (`no attribute 'Riesgo'`, `'nivel'`) and 3 `Conflict not raised`; migration `UndefinedTable: riesgos`. GREEN: 1,385 tests OK incl. PostgreSQL; adapted `tests/test_attribution.py` (23 → 26) and `tests/test_migrations.py` | Range `24acc63..f9e1941`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-46a38e440d287493` **approved** and acknowledged; its warning needs no change (`_ACTION_COMPLETION` is the shared MR3 constraint in `app/models.py`, the same text as the migration's `COMPLETION`, and the refused-statement tests prove it); its suggestion is an RO-2 acceptance check (re-sync before the drop) |
-| RO-2..RO-4 | Pending | — | — | — |
+| RO-2 | Done | `09ee964` (`app/services/risks.py`: registers `risks`, `opportunities`, `actions` with `create` and `update` taking `today`, the computed `nivel` and `prioridad` filters in SQL from `LEVEL_RANGES` and `PRIORITY_RANGES`, `revision_vencida`, `is_open`, `is_overdue`, `attention` with five keys; MCP modules `riesgos`, `oportunidades`, `acciones_riesgo` replacing `riesgos_oportunidades` (24 modules); review inputs by level and priority, with reviews held before still rendering their old frozen keys), `6a7cbd2` (migration `e3b5d7f9a1c4`: re-sync (delete stale copies, refresh, insert missing), drop the old table and the `tipoenum` type; downgrade moves rows back with new ids and rebuilds the new tables from the old one, lossy fields in its docstring; old model, `RiesgoOportunidadSchema`, service, JSON routes and MCP module removed) | RED: 20 `cannot import name 'risks'`, `Módulo desconocido: «riesgos»`, the migration test found the old table, review tests missing «Nivel: Crítico», MCP `24 != 22`, attribution `25 != 26`. GREEN: `09ee964` alone 1,409 tests OK; both commits 1,397 tests OK incl. PostgreSQL; acceptance check: a row written to the old table after `c6e8a2f4b1d9` reaches the new registers | Pending |
+| RO-3..RO-4 | Pending | — | — | — |
 
 ## Findings during implementation
 
 - A CHECK such as `(a IS NULL AND b IS NULL) OR (a BETWEEN 1 AND 5 AND b BETWEEN 1 AND 5)` accepts half a pair, because the second branch is NULL and a NULL CHECK passes; each branch needs explicit `IS NOT NULL`.
 - Alembic's `compare_metadata` does not compare CHECK constraints, so the migration tests run refused statements to prove them.
+- Review inputs pass through `audit.json_safe`, which turns enums into Spanish labels, so input lists store member names explicitly. 9.3.2 e (effectiveness of actions on risks) stays comment-only in the review: a follow-up.
+- Test adaptations (standing approval, RO-2): `tests/test_migrations.py` (RO-1 test pinned to `c6e8a2f4b1d9`, acceptance check), `tests/test_attribution.py` (26 → 25), `tests/test_access_characterization.py` (JSON entries removed, `RISKS_OPPORTUNITIES` in `NO_ROUTES`), the MCP tests (slugs, 22 → 24 modules), `tests/test_management_reviews.py`; the risk parts of `tests/test_risks_resources_service.py` and `tests/test_risks_resources_routes.py` removed.
+- The RO-2 writer ran `git rm`, staging two deletions, and restored the index itself; the parent checked the index was clean before committing.
 - Never deploy RO-1 without RO-2: the old service keeps writing `riesgos_oportunidades` until RO-2 drops it.
 
 ## Next step
 
-RO-2.
+RO-3.
