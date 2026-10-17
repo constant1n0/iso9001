@@ -57,10 +57,26 @@ Baseline at `999df34`: 1,329 tests (PostgreSQL via `TEST_POSTGRES_URI`).
 | DF-4 | Done | `50d5397` (`instance/` in `.gitignore`; the four systemd units link `docs/operaciones.md` or `docs/mcp.md`; the gap analysis marks the four defects fixed and drops the "open defect" notes from 7.5.2, 7.5.3, 9.1.1, 9.2 and the roles section) | Structural readback; `git check-ignore` matches `instance/documents/…`; 1,346 tests OK (includes the documentation link test) | Pending in the slice |
 | DF-5 | Done | `4dfe32c` (`app/session_lifetime.py`: sign-in stamps `_signed_in_at` and `_seen_at`; a `before_request` hook signs out after `SESSION_IDLE_TIMEOUT` (8 h) idle or `SESSION_ABSOLUTE_LIFETIME` (12 h) after sign-in, or a session without stamps, with the flash "La sesión ha caducado. Inicie sesión de nuevo." and a `SESSION_EXPIRED` security-log line; `_seen_at` refreshed at most once a minute; browser-session cookie again; `PERMANENT_SESSION_LIFETIME` is a 7-day backstop (review follow-up), so Flask's cookie-age check never pre-empts the expiry message, even for a session left open overnight; the hook clears the session before `logout_user`, so a remember cookie is deleted; dashboard audit figure shown on its own value; gap-analysis locations point to the fixed code) | RED: 12 of 13 new session tests on `86c999b`; the idle-message test failed with the 8-hour cookie age. GREEN: 1,352 tests OK incl. PostgreSQL; a token (MCP) request after 20 shifted hours still answers 200. Test adaptations: 16 test helpers now stamp the session they build (`tests/register_routes.py`, `test_access_characterization`, `test_audit_routes`, `test_audit_screens`, `test_corrective_action_routes`, `test_dashboard_audits`, `test_document_routes`, `test_document_screens`, `test_nonconformity_routes`, `test_profile_routes`, `test_rate_limit_storage`, `test_ui_permissions`, `test_user_account_actions`, `test_user_routes`, `test_web_authorization`, `test_user_account_state`) | Range `212bdb7..d941e2e`: **high** (authentication), consent granted, four-lens review `review-684b65f2ab928a50` **approved** and acknowledged; follow-up `d8084b4`: the cookie-age limit became a 7-day backstop so an overnight-idle session gets the expiry message and log line (reliability warning), the defects-table title now names the real gap (readability warning), the test literals are commented as contract pins, and a test pins the audit figure on its own value |
 
-## Production deployment (pending authorization)
+## Delivery
 
-No migration. Fast-forward and restart: sessions opened before the deployment carry no sign-in stamps, so every user signs in again once; the systemd unit files changed only in `Documentation=`, so reinstalling them is optional (`sudo cp` plus `systemctl daemon-reload`, by the user). Smoke tests: sign-in sets a session cookie without an expiry; an OPERATIVO dashboard shows no audit card.
+| Slice | Pull request | Commits | Merged as |
+|---|---|---|---|
+| 1 | [#127](https://github.com/constant1n0/iso9001/pull/127) | tracker, DF-1 | merged |
+| 2 | [#128](https://github.com/constant1n0/iso9001/pull/128) | DF-2 | merged |
+| 3 | [#129](https://github.com/constant1n0/iso9001/pull/129) | DF-3, DF-4, DF-5 and review follow-ups, in one slice so `main` never held the rejected permanent-session design | `6b77c96` |
+
+## Production deployment (2026-10-17)
+
+`main@6b77c96` runs on `vulcano` (it also brings the documentation refresh, PRs #118-#126). The user authorized this deployment over SSH as `dcm`, with no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `60f62c6`, clean, migration `a9c1e3f5d7b2` |
+| Backups | `~/work/backups/calidad-*-pre-6b77c96.dump` (`pg_dump -Fc`, 346 entries listed by `pg_restore -l`) and `iso9001-code-*-pre-6b77c96.tar.gz` (without `instance/documents`), both mode 600 |
+| Code | Incremental git bundle `60f62c6..main`, fast-forward to `6b77c96`; no dependency or migration changes; `pip check` and `flask db check` clean |
+| Restart (user, with sudo) | All four services. The installed systemd units were not replaced: they differ from the repository only in comments, `Description` (the old "ABSOLUT ISO9001" name) and `Documentation=` |
+| Smoke tests | Services active, no error entries in the journal; `/login` 200; `/` and `/revisiones-direccion/` redirect to the login; the session cookie carries `Secure`, `HttpOnly`, `Path` and `SameSite` and no `Expires` or `Max-Age` (a browser-session cookie); `/mcp` 401 with `WWW-Authenticate: Bearer`; 22 MCP modules. The OPERATIVO dashboard check needs a signed-in OPERATIVO user and is covered by the tests |
 
 ## Next step
 
-Review DF-5's range, deliver one pull request per task, then the production deployment above after explicit authorization.
+**Feature complete and deployed.** Optional for the user: install the updated systemd unit files (`sudo cp ~/work/iso9001/iso9001*.service /etc/systemd/system/ && sudo systemctl daemon-reload`).
