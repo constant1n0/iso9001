@@ -20,6 +20,7 @@ from app.extensions import db
 from app.models import (
     AccionCorrectiva,
     AccionRevision,
+    AccionRiesgo,
     Auditoria,
     AuditoriaIndicador,
     Capacitacion,
@@ -29,6 +30,7 @@ from app.models import (
     Document,
     DocumentCategory,
     DocumentRevision,
+    EstadoAccionRiesgo,
     EstadoRevision,
     EstadoRevisionDireccion,
     FrecuenciaMedicion,
@@ -37,12 +39,15 @@ from app.models import (
     Mejora,
     NoConformidad,
     ObjetivoCalidad,
+    Oportunidad,
+    OrigenRiesgo,
     ParteInteresada,
     Person,
     ProcesoOperacion,
     ProgramaAuditoria,
     RecursoCapacitacion,
     RevisionDireccion,
+    Riesgo,
     RoleEnum,
     RolResponsabilidad,
     SatisfaccionCliente,
@@ -148,6 +153,33 @@ REVIEW = dict(fecha="2026-07-10", periodo_desde="2026-04-01", periodo_hasta="202
 REVIEW_ACTION = dict(tipo="mejora", descripcion="Seguir", responsable_id="1",
                      fecha_limite="2026-12-31", estado="pendiente", fecha_completada="",
                      resultado="")
+
+# Risks and opportunities (RO-3); dated well before any day the suite runs on.
+REGISTER = dict(descripcion="Descripción", origen="interno", parte_interesada_id="",
+                proceso_id="", responsable_id="1", estado="", fecha_identificacion="2026-02-01",
+                fecha_revision="", notas="")
+RISK = REGISTER | dict(titulo="Riesgo", estado="identificado", probabilidad="4", impacto="5",
+                       tratamiento="mitigar", probabilidad_residual="", impacto_residual="")
+OPPORTUNITY = REGISTER | dict(titulo="Oportunidad", estado="identificada", beneficio="3",
+                              viabilidad="4", decision="")
+RISK_ACTION = dict(descripcion="Seguir", responsable_id="1", fecha_limite="2026-12-31",
+                   estado="completada", fecha_completada="2026-02-28")
+EVALUATION = dict(eficacia="eficaz", fecha_evaluacion="2026-03-01", comentario_eficacia="")
+
+
+def _register(base, new, action_id):
+    """A risk or opportunity register: record 1 has action ``action_id``; record 2 none."""
+    item = f"{base}1/acciones/{action_id}"
+    form = RISK if base == "/riesgos/" else OPPORTUNITY
+    return [
+        *_html("RISKS_OPPORTUNITIES", base, (new, form), ("1/editar", form), "2/eliminar"),
+        Endpoint("RISKS_OPPORTUNITIES", "read", "GET", f"{base}1", 200),
+        Endpoint("RISKS_OPPORTUNITIES", "create", "POST", f"{base}1/acciones/nueva", 302,
+                 RISK_ACTION),
+        Endpoint("RISKS_OPPORTUNITIES", "update", "POST", f"{item}/editar", 302, RISK_ACTION),
+        Endpoint("RISKS_OPPORTUNITIES", "update", "POST", f"{item}/eficacia", 302, EVALUATION),
+        Endpoint("RISKS_OPPORTUNITIES", "delete", "POST", f"{item}/eliminar", 302),
+    ]
 
 
 def _html(resource, base, create, update, delete):
@@ -275,6 +307,10 @@ ENDPOINTS = [
              "/revisiones-direccion/1/acciones/1/editar", 302, REVIEW_ACTION),
     Endpoint("MANAGEMENT_REVIEW", "delete", "POST",
              "/revisiones-direccion/1/acciones/1/eliminar", 302),
+    # Risk 1 holds the completed action 1 and opportunity 1 the completed action 2;
+    # risk 2 and opportunity 2 have none, so deleting them succeeds (RO-3).
+    *_register("/riesgos/", "nuevo", 1),
+    *_register("/oportunidades/", "nueva", 2),
     *_json("IMPROVEMENTS", "/mejoras/api/", {"no_conformidad": "NC"},
            {"accion_correctiva": "x"}),
     *_json("AUDIT_INDICATORS", "/auditoria_indicador/",
@@ -321,9 +357,7 @@ ALLOWED = {
 # Policy entries without routes. AUDIT_LOG has no adapter yet. The API_TOKENS
 # matrix (issue, list, revoke any token) stays CLI-only; "Mi perfil" bypasses it
 # with an ownership check, so tests/test_profile_routes.py characterizes it.
-# RISKS_OPPORTUNITIES lost its JSON endpoints in RO-2 of risks-opportunities and
-# gets its screens in RO-3; until then only the MCP modules reach it.
-NO_ROUTES = {"AUDIT_LOG", "API_TOKENS", "RISKS_OPPORTUNITIES"}
+NO_ROUTES = {"AUDIT_LOG", "API_TOKENS"}
 
 
 def allowed_roles(endpoint: Endpoint) -> set:
@@ -432,6 +466,11 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                         for held in ({}, {}, dict(estado=EstadoRevisionDireccion.celebrada,
                                                   datos_entrada={}))
                     ),
+                    *(
+                        model(titulo=titulo, descripcion="d", origen=OrigenRiesgo.interno,
+                              responsable_id=1, fecha_identificacion=date(2026, 2, 1))
+                        for model in (Riesgo, Oportunidad) for titulo in ("Seed", "Sin acciones")
+                    ),
                 ]
             )
             db.session.flush()  # the measurement cites objective 1, the action review 1
@@ -442,6 +481,12 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                 AccionRevision(revision_id=1, tipo=TipoAccionRevision.mejora, descripcion="Seed",
                                responsable_id=1, fecha_limite=date(2026, 12, 31))
             )
+            db.session.add_all([
+                AccionRiesgo(descripcion="Seed", responsable_id=1, fecha_limite=date(2026, 12, 31),
+                             estado=EstadoAccionRiesgo.completada,
+                             fecha_completada=date(2026, 2, 28), **parent)
+                for parent in (dict(riesgo_id=1), dict(oportunidad_id=1))
+            ])
             db.session.commit()
         client = self.app.test_client()
         if role is not None:

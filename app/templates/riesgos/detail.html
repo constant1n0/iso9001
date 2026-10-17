@@ -1,0 +1,133 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form, empty_state %}
+{% from "riesgos/_macros.html" import nivel_badge, prioridad_badge, accion_badge, eficacia_badge, dia, etiqueta %}
+{% set riesgo = kind.band == 'nivel' %}
+{% set base = kind.bp.name %}
+{% macro item(titulo) %}<li class="list__item"><span class="list__primary">{{ titulo }}</span><span class="list__secondary">{{ caller() }}</span></li>{% endmacro %}
+{% block title %}{{ registro.titulo }}{% endblock %}
+{% block crumb %}Calidad · {{ kind.labels.plural }}{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 6.1 · ' ~ kind.labels.one, registro.titulo) %}
+    {% if can('update', 'risks_opportunities') %}
+    <a class="btn" href="{{ url_for(base ~ '.edit_record', record_id=registro.id) }}">Editar</a>
+    {% endif %}
+    {% if not acciones and can('delete', 'risks_opportunities') %}
+    {{ delete_form(url_for(base ~ '.delete_record', record_id=registro.id), kind.labels.delete.format(registro.titulo)) }}
+    {% endif %}
+{% endcall %}
+
+<section class="grid grid--2" aria-label="Valoración e identificación">
+    <article class="card">
+        <header class="card__header">
+            <h2 class="card__title">Valoración</h2>
+            <span class="badge">{{ registro.estado.value }}</span>
+        </header>
+        <ul class="list">
+            {% if riesgo %}
+            {% call item('Probabilidad') %}{{ registro.probabilidad or '—' }}{% endcall %}
+            {% call item('Impacto') %}{{ registro.impacto or '—' }}{% endcall %}
+            {% call item('Nivel') %}{{ nivel_badge(registro.nivel) }}{% endcall %}
+            {% call item('Tratamiento') %}{{ etiqueta(registro.tratamiento) }}{% endcall %}
+            {% call item('Probabilidad residual') %}{{ registro.probabilidad_residual or '—' }}{% endcall %}
+            {% call item('Impacto residual') %}{{ registro.impacto_residual or '—' }}{% endcall %}
+            {% call item('Nivel residual') %}{{ nivel_badge(registro.nivel_residual) }}{% endcall %}
+            {% else %}
+            {% call item('Beneficio') %}{{ registro.beneficio or '—' }}{% endcall %}
+            {% call item('Viabilidad') %}{{ registro.viabilidad or '—' }}{% endcall %}
+            {% call item('Prioridad') %}{{ prioridad_badge(registro.prioridad) }}{% endcall %}
+            {% call item('Decisión') %}{{ etiqueta(registro.decision) }}{% endcall %}
+            {% endif %}
+        </ul>
+    </article>
+    <article class="card">
+        <header class="card__header"><h2 class="card__title">Identificación</h2></header>
+        <ul class="list">
+            {% call item('Origen') %}{{ registro.origen.value }}{% endcall %}
+            {% call item('Parte interesada') %}{{ parte or '—' }}{% endcall %}
+            {% call item('Proceso') %}{{ proceso or '—' }}{% endcall %}
+            {% call item('Responsable') %}{{ personas.get(registro.responsable_id, '—') }}{% endcall %}
+            {% call item('Fecha de identificación') %}{{ dia(registro.fecha_identificacion) }}{% endcall %}
+            {% call item('Próxima revisión') %}{{ dia(registro.fecha_revision) }}{% if revision_vencida %} <span class="badge badge--warn">Revisión vencida</span>{% endif %}{% endcall %}
+        </ul>
+    </article>
+</section>
+
+<section class="grid grid--2" aria-label="Descripción y notas">
+    {% for titulo, texto in [('Descripción', registro.descripcion), ('Notas', registro.notas)] %}
+    <article class="card">
+        <header class="card__header"><h2 class="card__title">{{ titulo }}</h2></header>
+        {% if texto %}<div class="card__body"><p class="card__text">{{ texto }}</p></div>{% else %}<p class="empty">Sin indicar.</p>{% endif %}
+    </article>
+    {% endfor %}
+</section>
+
+<section aria-labelledby="acciones">
+    <div class="section-header">
+        <h2 id="acciones">Acciones</h2>
+        {% if abierto and can('create', 'risks_opportunities') %}
+        <a class="btn btn--primary btn--sm" href="{{ url_for(base ~ '.new_action', record_id=registro.id) }}">+ Nueva acción</a>
+        {% endif %}
+    </div>
+    {% if not abierto %}<p class="muted">{{ kind.closed }}</p>{% endif %}
+    {% if acciones %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Descripción</th>
+                    <th scope="col">Responsable</th>
+                    <th scope="col">Fecha límite</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col">Finalizada</th>
+                    <th scope="col">Eficacia</th>
+                    <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for accion in acciones %}
+                <tr id="accion-{{ accion.id }}">
+                    <td>{{ accion.descripcion }}</td>
+                    <td>{{ personas.get(accion.responsable_id, '—') }}</td>
+                    <td class="date">{{ dia(accion.fecha_limite) }}{% if accion.id in vencidas %} <span class="badge badge--danger">Vencida</span>{% endif %}</td>
+                    <td>{{ accion_badge(accion) }}</td>
+                    <td class="date">{{ dia(accion.fecha_completada) }}</td>
+                    <td>{{ eficacia_badge(accion) }}{% if accion.fecha_evaluacion %} · {{ dia(accion.fecha_evaluacion) }}{% endif %}{% if accion.comentario_eficacia %}<br><span class="muted">{{ accion.comentario_eficacia }}</span>{% endif %}</td>
+                    <td>
+                        <div class="table__actions">
+                            {% if can('update', 'risks_opportunities') %}
+                            <a class="btn btn--sm" href="{{ url_for(base ~ '.edit_action', record_id=registro.id, action_id=accion.id) }}">Editar</a>
+                            {% if accion.estado.name == 'completada' %}
+                            <a class="btn btn--sm" href="{{ url_for(base ~ '.evaluate_action', record_id=registro.id, action_id=accion.id) }}">{{ 'Reevaluar' if accion.eficacia else 'Evaluar eficacia' }}</a>
+                            {% endif %}
+                            {% endif %}
+                            {% if can('delete', 'risks_opportunities') %}
+                            {{ delete_form(url_for(base ~ '.delete_action', record_id=registro.id, action_id=accion.id), '¿Eliminar la acción?') }}
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        {{ empty_state('Sin acciones todavía.') }}
+    {% endif %}
+</section>
+{% endblock %}

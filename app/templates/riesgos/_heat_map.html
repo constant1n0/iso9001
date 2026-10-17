@@ -1,0 +1,35 @@
+{# The risks' heat map (``mapa``): likelihood on rows, 5 at the top; impact on columns.
+   Each cell counts the open assessed risks there and links to the list filtered by it;
+   its band shows as a colour class and as text for screen readers. CSS only. #}
+<section class="card heatmap-card" aria-labelledby="mapa-calor">
+    <header class="card__header">
+        <h2 class="card__title" id="mapa-calor">Mapa de calor</h2>
+        <span class="card__meta">Riesgos abiertos valorados</span>
+    </header>
+    <div class="card__body heatmap-wrap">
+        <table class="heatmap">
+            <caption class="visually-hidden">Riesgos abiertos por probabilidad (filas) e impacto (columnas)</caption>
+            <thead>
+                <tr>
+                    <th scope="col"><span class="visually-hidden">Probabilidad</span></th>
+                    {% for celda in mapa[0][1] %}<th scope="col">Impacto {{ celda.impacto }}</th>{% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for probabilidad, celdas in mapa %}
+                <tr>
+                    <th scope="row">Probabilidad {{ probabilidad }}</th>
+                    {% for celda in celdas %}
+                    <td id="celda-{{ probabilidad }}-{{ celda.impacto }}" class="heatmap__cell heatmap__cell--{{ celda.nivel.name }}"><a href="{{ celda.url }}"{% if celda.actual %} aria-current="true"{% endif %}>{{ celda.cuantos }}<span class="visually-hidden"> {{ 'riesgo abierto' if celda.cuantos == 1 else 'riesgos abiertos' }} con probabilidad {{ probabilidad }} e impacto {{ celda.impacto }}: nivel {{ celda.nivel.value }}</span></a></td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <ul class="heatmap__legend" aria-label="Niveles">
+            {% for banda, (desde, hasta) in bandas %}
+            <li><span class="heatmap__swatch heatmap__cell--{{ banda.name }}"></span>{{ banda.value }} ({{ desde }}–{{ hasta }})</li>
+            {% endfor %}
+        </ul>
+    </div>
+</section>

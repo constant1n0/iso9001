@@ -17,9 +17,11 @@ import enum
 from decimal import Decimal
 
 from .models import (
-    CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAccionRevision,
-    EstadoAuditoriaEnum, FrecuenciaMedicion, GravedadNoConformidad, OrigenNoConformidad,
-    ResultadoVerificacion, RoleEnum, SentidoObjetivo, TipoAccionRevision, TipoHallazgo,
+    ESCALA_MAX, ESCALA_MIN, CompetenceEvaluation, CompetenceType, DecisionOportunidad,
+    DocumentCategory, EficaciaAccion, EstadoAccionRevision, EstadoAccionRiesgo,
+    EstadoAuditoriaEnum, EstadoOportunidad, EstadoRiesgo, FrecuenciaMedicion,
+    GravedadNoConformidad, OrigenNoConformidad, OrigenRiesgo, ResultadoVerificacion, RoleEnum,
+    SentidoObjetivo, TipoAccionRevision, TipoHallazgo, TratamientoRiesgo,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -522,3 +524,94 @@ class AccionRevisionForm(BaseForm):
     fecha_completada = DateField('Fecha de finalización (solo si está completada)',
                                  validators=[Optional()])
     resultado = TextAreaField('Resultado')
+
+
+# Risks, opportunities and their actions (``risks-opportunities``, RO-3). The
+# routes fill the interested party, process and people pickers; the service has
+# the last word on every value (each 1-5 pair given whole or left empty, the
+# residual pair after the assessment, the review not before the identification,
+# completion and effectiveness dates never in the future).
+NO_PARTY = ('', '— Sin parte interesada —')
+NOT_ASSESSED = ('', 'Sin valorar')
+
+
+def party_choices(parties):
+    """The empty choice, then each interested party (``ParteInteresada``) in the given order."""
+    return [NO_PARTY, *((p.id_interesado, p.nombre) for p in parties)]
+
+
+def optional_member(value):
+    """Select value to a member name, or ``None`` for the empty choice."""
+    return member_name(value) or None
+
+
+def _choice(label, enum_cls, empty=None):
+    """A select over ``enum_cls`` by member name; with ``empty``, it may be left blank."""
+    members = [(m.name, m.value) for m in enum_cls]
+    if empty is None:
+        return SelectField(label, coerce=member_name, choices=members,
+                           validators=[DataRequired()])
+    return SelectField(label, coerce=optional_member, choices=[('', empty), *members])
+
+
+def _scale(label):
+    """A 1-5 value of an assessment; the empty choice leaves it pending (RO4)."""
+    return SelectField(label, coerce=optional_id, choices=[
+        NOT_ASSESSED, *((n, str(n)) for n in range(ESCALA_MIN, ESCALA_MAX + 1))])
+
+
+class _RegisterRecord(BaseForm):  # the field order follows the declarations
+    titulo = StringField('Título', validators=[DataRequired(), Length(max=200)])
+    descripcion = TextAreaField('Descripción', validators=[DataRequired()])
+    origen = _choice('Origen', OrigenRiesgo)
+    parte_interesada_id = SelectField('Parte interesada', coerce=optional_id,
+                                      choices=[NO_PARTY])
+    proceso_id = SelectField('Proceso', coerce=optional_id, choices=[NO_PROCESS])
+    responsable_id = required_person_field('Responsable')
+
+
+class _RiskAssessment(BaseForm):
+    probabilidad = _scale('Probabilidad (1-5)')
+    impacto = _scale('Impacto (1-5)')
+    tratamiento = _choice('Tratamiento', TratamientoRiesgo, '— Sin decidir —')
+    probabilidad_residual = _scale('Probabilidad residual (tras las acciones)')
+    impacto_residual = _scale('Impacto residual (tras las acciones)')
+    estado = _choice('Estado', EstadoRiesgo)
+
+
+class _OpportunityAssessment(BaseForm):
+    beneficio = _scale('Beneficio (1-5)')
+    viabilidad = _scale('Viabilidad (1-5)')
+    decision = _choice('Decisión', DecisionOportunidad, '— Sin decidir —')
+    estado = _choice('Estado', EstadoOportunidad)
+
+
+class _RegisterDates(BaseForm):
+    fecha_identificacion = DateField('Fecha de identificación', validators=[DataRequired()])
+    fecha_revision = DateField('Próxima revisión', validators=[Optional()])
+    notas = TextAreaField('Notas')
+
+
+class RiesgoForm(_RegisterRecord, _RiskAssessment, _RegisterDates):
+    """A risk: what and whose it is, its assessments, state, dates and notes."""
+
+
+class OportunidadForm(_RegisterRecord, _OpportunityAssessment, _RegisterDates):
+    """An opportunity: what and whose it is, its assessment, decision, state and dates."""
+
+
+class AccionRiesgoForm(BaseForm):
+    descripcion = TextAreaField('Descripción', validators=[DataRequired()])
+    responsable_id = required_person_field('Responsable')
+    fecha_limite = DateField('Fecha límite', validators=[DataRequired()])
+    estado = _choice('Estado', EstadoAccionRiesgo)
+    fecha_completada = DateField('Fecha de finalización (solo si está completada)',
+                                 validators=[Optional()])
+
+
+class EficaciaAccionForm(BaseForm):
+    eficacia = SelectField('Resultado', coerce=member_name, validators=[DataRequired()],
+                           choices=[('', '— Elige un resultado —'),
+                                    *((e.name, e.value) for e in EficaciaAccion)])
+    fecha_evaluacion = DateField('Fecha de la evaluación', validators=[DataRequired()])
+    comentario_eficacia = TextAreaField('Comentario')

@@ -1,0 +1,30 @@
+{# Shared by the risk and opportunity pages (clause 6.1). #}
+
+{# A risk's level, or «Sin valorar» while it is not assessed (RO4). #}
+{% macro nivel_badge(nivel) -%}
+{%- if nivel is none %}<span class="badge">Sin valorar</span>
+{%- else %}<span class="badge{{ {'bajo': ' badge--ok', 'medio': ' badge--warn', 'alto': ' badge--alto', 'critico': ' badge--danger'}[nivel.name] }}">{{ nivel.value }}</span>{% endif -%}
+{%- endmacro %}
+
+{# An opportunity's priority, or «Sin valorar». #}
+{% macro prioridad_badge(prioridad) -%}
+{%- if prioridad is none %}<span class="badge">Sin valorar</span>
+{%- else %}<span class="badge{{ {'baja': '', 'media': ' badge--warn', 'alta': ' badge--ok'}[prioridad.name] }}">{{ prioridad.value }}</span>{% endif -%}
+{%- endmacro %}
+
+{# The level of a risk or the priority of an opportunity, by ``band``. #}
+{% macro banda(registro, band) %}{% if band == 'nivel' %}{{ nivel_badge(registro.nivel) }}{% else %}{{ prioridad_badge(registro.prioridad) }}{% endif %}{% endmacro %}
+
+{% macro accion_badge(accion) -%}
+<span class="badge{{ {'completada': ' badge--ok', 'en_curso': ' badge--warn'}.get(accion.estado.name, '') }}">{{ accion.estado.value }}</span>
+{%- endmacro %}
+
+{% macro eficacia_badge(accion) -%}
+{%- if accion.eficacia %}<span class="badge {{ 'badge--ok' if accion.eficacia.name == 'eficaz' else 'badge--danger' }}">{{ accion.eficacia.value }}</span>
+{%- else %}—{% endif -%}
+{%- endmacro %}
+
+{% macro dia(value) %}{{ value.strftime('%d/%m/%Y') if value else '—' }}{% endmacro %}
+
+{# A member's label, or a dash. #}
+{% macro etiqueta(member) %}{{ member.value if member else '—' }}{% endmacro %}
