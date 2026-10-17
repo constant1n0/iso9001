@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 from test_audit_screens import ADMIN, AUDITOR, OPERATIVO, SYSTEM
 from test_audit_screens import TODAY as GENERATED  # the date ``pdf_html`` renders with
-from test_management_review_screens import BASE, ROUTES, ReviewScreensBase
+from test_management_review_screens import BASE, OLD_FROZEN, ROUTES, ReviewScreensBase
 
 from app.extensions import db
 from app.forms import REVIEW_INPUTS
@@ -110,6 +110,29 @@ class MinutesPdfTestCase(ReviewScreensBase):
         self.nonconformity(date(2026, 6, 1))
         _, sections, _ = self.minutes(rid)
         self.assertEqual("2", self.pdf_fields(sections[PERFORMANCE])["Detectadas en el periodo"])
+
+    def test_the_minutes_carry_the_risk_registers_or_the_old_frozen_risks(self) -> None:
+        self.registers()
+        draft = self.review([self.ana])
+        old = self.held_with(OLD_FROZEN)
+        self.login(AUDITOR)
+        _, sections, _ = self.minutes(draft)
+        figures = self.pdf_fields(sections[CONTEXT])
+        self.assertEqual(("2", "1", "1", "1", "1"), tuple(figures[label] for label in (
+            "Riesgos registrados", "Nivel: Crítico", "Nivel: Sin valorar",
+            "Abiertos con nivel alto o crítico", "Prioridad: Alta")))
+        self.assertNotIn("Registrados: Riesgo", figures)
+        self.assertIn("<td>Fallo de proveedor</td><td>Crítico</td><td>Eva Ruiz</td>"
+                      "<td>Identificado</td>", sections[CONTEXT])
+        header, sections, html = self.minutes(old)
+        figures = self.pdf_fields(sections[CONTEXT])
+        self.assertEqual(("2", "1", "1", "1"), tuple(figures[label] for label in (
+            "Registrados: Riesgo", "Registrados: Oportunidad", "Nuevos en el periodo",
+            "Modificados en el periodo")))
+        self.assertIn("<td>Riesgo</td><td>Fallo de proveedor</td>", sections[CONTEXT])
+        self.assertNotIn("Nivel:", html)
+        self.assertEqual("30/06/2026", header["Fecha de corte de los datos"])
+        self.assertIn(FROZEN_NOTE, html)
 
     def test_a_minutes_pdf_that_cannot_be_rendered_returns_to_the_review(self) -> None:
         rid = self.review([self.ana])

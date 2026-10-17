@@ -16,7 +16,7 @@ in ``test_dashboard``, so they can ship in their own commit.
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, datetime, timezone
 from unittest.mock import patch
 
 from test_audit_screens import ADMIN, AUDITOR, OPERATIVO, SYSTEM, ScreensBase
@@ -26,7 +26,7 @@ from app.extensions import db
 from app.forms import REVIEW_INPUTS
 from app.models import (
     AccionRevision, EstadoAccionRevision, EstadoRevisionDireccion, GravedadNoConformidad,
-    NoConformidad, RevisionDireccion,
+    NoConformidad, Oportunidad, RevisionDireccion, Riesgo,
 )
 from app.routes.management_review_routes import input_sections
 from app.services import management_reviews as mr
@@ -41,6 +41,17 @@ REVIEW_FORM = {"fecha": "2026-07-10", "periodo_desde": "2026-04-01",
                "comentario_contexto": "Nuevo competidor en la zona", "comentario_desempeno": "",
                "comentario_recursos": "", "comentario_riesgos": "", "comentario_mejora": ""}
 COMMENTS = {name: REVIEW_FORM[name] for name in mr.COMMENT_FIELDS}
+# The risk inputs a review held before RO-2 of ``risks-opportunities`` froze (RO7).
+OLD_FROZEN = {
+    "periodo": {"desde": "2026-04-01", "hasta": "2026-06-30"}, "fecha_corte": "2026-06-30",
+    "contexto": {
+        "partes_interesadas": {"total": 1, "nuevas": 0, "modificadas": 0, "lista": []},
+        "riesgos_oportunidades": {
+            "por_tipo": {"Riesgo": 2, "Oportunidad": 1}, "nuevos": 1, "modificados": 1,
+            "lista": [{"tipo": "Riesgo", "descripcion": "Fallo de proveedor"},
+                      {"tipo": "Oportunidad", "descripcion": "Nuevo mercado"}]},
+    },
+}
 ACTION_FORM = {"tipo": "recursos", "descripcion": "Contratar un técnico de calidad",
                "fecha_limite": "2026-10-31", "estado": "pendiente", "fecha_completada": "",
                "resultado": ""}
@@ -82,6 +93,30 @@ class ReviewScreensBase(ScreensBase):
                 if step == "close":
                     mr.reviews.update(db.session, SYSTEM, review_id, {"conclusiones": "Conforme"})
                 getattr(mr, step)(db.session, SYSTEM, review_id, today=TODAY)
+            db.session.commit()
+
+    def held_with(self, frozen: dict) -> int:
+        """A review held with ``frozen`` inputs (core insert: an older shape, RO7)."""
+        with self.app.app_context():
+            result = db.session.execute(RevisionDireccion.__table__.insert().values(
+                fecha=date(2026, 7, 10), periodo_desde=date(2026, 4, 1),
+                periodo_hasta=date(2026, 6, 30), estado=EstadoRevisionDireccion.celebrada,
+                datos_entrada=frozen))
+            db.session.commit()
+            return result.inserted_primary_key[0]
+
+    def registers(self) -> None:
+        """A critical risk Eva owns, an unassessed one and a high-priority opportunity,
+        all created in the second quarter (core inserts: source records)."""
+        stamp = datetime(2026, 4, 2, 9, tzinfo=timezone.utc)
+        base = {"descripcion": "d", "origen": "interno", "fecha_identificacion": date(2026, 4, 2),
+                "created_at": stamp, "updated_at": stamp}
+        with self.app.app_context():
+            for values in ({"titulo": "Fallo de proveedor", "probabilidad": 4, "impacto": 5,
+                            "responsable_id": self.eva}, {"titulo": "Sin valorar"}):
+                db.session.execute(Riesgo.__table__.insert().values(**(base | values)))
+            db.session.execute(Oportunidad.__table__.insert().values(
+                **base, titulo="Nuevo mercado", beneficio=5, viabilidad=4))
             db.session.commit()
 
     def nonconformity(self, fecha: date) -> None:
@@ -231,6 +266,35 @@ class WebFlowTestCase(ReviewScreensBase):
         self.assertEqual(list(REVIEW_INPUTS.values()), [s["titulo"] for s in sections])
         self.assertEqual({"—"}, {value for s in sections for b in s["bloques"]
                                  for _, value in b["cifras"]})
+
+    def test_the_inputs_show_the_risk_registers_and_old_frozen_risks_still_render(self) -> None:
+        self.registers()
+        rid = self.review([self.ana])
+        self.login(AUDITOR)
+        inputs = self.inputs(rid)
+        for label, value in (("Riesgos registrados", "2"), ("Nivel: Crítico", "1"),
+                             ("Nivel: Bajo", "0"), ("Nivel: Sin valorar", "1"),
+                             ("Riesgos nuevos en el periodo", "2"),
+                             ("Abiertos con nivel alto o crítico", "1"),
+                             ("Oportunidades registradas", "1"), ("Prioridad: Alta", "1"),
+                             ("Oportunidades nuevas en el periodo", "1")):
+            with self.subTest(label=label):
+                self.assertEqual(value, self.figure(inputs, label))
+        for text in ("Fallo de proveedor", "Eva Ruiz", "Identificado", "Nuevo mercado",
+                     "Identificada"):
+            self.assertIn(text, inputs)
+        self.assertNotIn("Registrados: Riesgo", inputs)
+        old = self.html(f"{BASE}/{self.held_with(OLD_FROZEN)}")
+        for label, value in (("Registrados: Riesgo", "2"), ("Registrados: Oportunidad", "1"),
+                             ("Nuevos en el periodo", "1"), ("Modificados en el periodo", "1")):
+            with self.subTest(old=label):
+                self.assertEqual(value, self.figure(old, label))
+        for text in ("Fallo de proveedor", "Nuevo mercado"):
+            self.assertIn(text, old)
+        self.assertNotIn("Nivel:", old)
+        titles = [b["titulo"] for s in input_sections(OLD_FROZEN) for b in s["bloques"]]
+        self.assertIn("Riesgos y oportunidades", titles)
+        self.assertNotIn("Oportunidades", titles)
 
     def test_the_list_counts_attendees_and_actions_and_filters_by_year_and_state(self) -> None:
         current = self.review([self.ana, self.luis])

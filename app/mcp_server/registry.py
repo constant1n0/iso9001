@@ -16,16 +16,17 @@ from sqlalchemy.orm import object_session
 
 from ..audit_notifications import local_today
 from ..models import (
-    CompetenceEvaluation, CompetenceType, DocumentCategory, EstadoAccionCorrectiva,
-    EstadoAccionRevision, EstadoAuditoriaEnum, EstadoNoConformidad, EstadoObjetivo,
-    EstadoProgramaAuditoria, EstadoRevisionDireccion, FrecuenciaMedicion,
-    GravedadNoConformidad, OrigenNoConformidad, SentidoObjetivo, TipoAccionRevision, TipoEnum,
-    TipoHallazgo,
+    CompetenceEvaluation, CompetenceType, DecisionOportunidad, DocumentCategory, EficaciaAccion,
+    EstadoAccionCorrectiva, EstadoAccionRevision, EstadoAccionRiesgo, EstadoAuditoriaEnum,
+    EstadoNoConformidad, EstadoObjetivo, EstadoOportunidad, EstadoProgramaAuditoria,
+    EstadoRevisionDireccion, EstadoRiesgo, FrecuenciaMedicion, GravedadNoConformidad,
+    NivelRiesgo, OrigenNoConformidad, OrigenRiesgo, PrioridadOportunidad, SentidoObjetivo,
+    TipoAccionRevision, TipoHallazgo, TratamientoRiesgo,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, competence, corrective_actions,
     document_revisions, documents, improvements, management_reviews,
-    nonconformities, people, process_operations, quality_objectives, risks_opportunities,
+    nonconformities, people, process_operations, quality_objectives, risks,
     roles_responsibilities, satisfaction, stakeholders, training, training_resources,
 )
 from ..services.policy import Resource
@@ -115,6 +116,21 @@ def _review_action_extras(action: Any) -> dict[str, Any]:
     return {"vencida": management_reviews.is_overdue(action, today=local_today())}
 
 
+def _risk_extras(risk: Any) -> dict[str, Any]:
+    """The levels before and after the actions and whether the review is overdue."""
+    return {"nivel": risk.nivel, "nivel_residual": risk.nivel_residual,
+            "revision_vencida": risks.revision_vencida(risk, today=local_today())}
+
+
+def _opportunity_extras(opportunity: Any) -> dict[str, Any]:
+    return {"prioridad": opportunity.prioridad,
+            "revision_vencida": risks.revision_vencida(opportunity, today=local_today())}
+
+
+def _risk_action_extras(action: Any) -> dict[str, Any]:
+    return {"vencida": risks.is_overdue(action, today=local_today())}
+
+
 @dataclass(frozen=True)
 class _DatedWrites:
     """A register whose writes take the adapter's date (``local_today``), used like a service."""
@@ -164,6 +180,92 @@ def _legacy_name(name: str, link: str) -> FieldDef:
         f"Legacy free-text name, never matched to a person. Required on create unless "
         f"«{link}» cites a person (personas); left blank, it takes that person's name."
     ))
+
+
+def _register_fields(estado: type, assessment: tuple[FieldDef, ...]) -> tuple[FieldDef, ...]:
+    """Fields a risk and an opportunity share, around their assessment."""
+    return (
+        _f("titulo", required=True), _f("descripcion", required=True),
+        _f("origen", "enum", True, members=OrigenRiesgo),
+        _f("parte_interesada_id", "integer", note="Interested party (partes_interesadas)."),
+        _f("proceso_id", "integer", note="Process (procesos) it belongs to."),
+        _f("responsable_id", "integer", True, note=(
+            "Person (personas) who owns it; records migrated from the old register may "
+            "have none.")),
+        *assessment,
+        _f("estado", "enum", members=estado, note=f"Starts {next(iter(estado)).name}."),
+        _f("fecha_identificacion", "date", note="Defaults to today; never in the future."),
+        _f("fecha_revision", "date", note="Next review; not before fecha_identificacion."),
+        _f("notas"),
+    )
+
+
+def _register_filters(band: FieldDef, estado: type) -> tuple[FieldDef, ...]:
+    return (
+        _f("estado", "enum", members=estado), band,
+        _f("responsable_id", "integer"), _f("proceso_id", "integer"),
+        _f("origen", "enum", members=OrigenRiesgo),
+        _f("sin_valorar", "boolean", note="Not assessed yet."),
+        _f("revision_vencida", "boolean", note="Open, with fecha_revision before today."),
+    )
+
+
+def _scale(name: str, note: str = "") -> FieldDef:
+    return _f(name, "integer", note=note or "1 to 5; give both values of the pair or neither.")
+
+
+def _risk_modules() -> tuple[Module, ...]:
+    """Risks, opportunities and their actions (6.1), sharing ``RISKS_OPPORTUNITIES`` (RO6).
+
+    Enums show the Spanish label; the filters take the member name. Risk records add
+    ``nivel`` and ``nivel_residual`` (bajo 1-4, medio 5-9, alto 10-16, critico 20-25 from
+    the product of the pair), opportunity records ``prioridad`` (baja 1-6, media 8-12,
+    alta 15-25); both add ``revision_vencida``, action records ``vencida``.
+    """
+    residual = "Residual value after the actions, 1 to 5; needs probabilidad and impacto."
+    return (
+        Module("riesgos", "Risks", Resource.RISKS_OPPORTUNITIES,
+               _DatedRegister(risks.risks), (
+            *_register_fields(EstadoRiesgo, (
+                _scale("probabilidad"), _scale("impacto"),
+                _f("tratamiento", "enum", members=TratamientoRiesgo),
+                _scale("probabilidad_residual", residual), _scale("impacto_residual", residual),
+            )),
+        ), _register_filters(_f("nivel", "enum", members=NivelRiesgo), EstadoRiesgo),
+            extras=_risk_extras),
+        Module("oportunidades", "Opportunities", Resource.RISKS_OPPORTUNITIES,
+               _DatedRegister(risks.opportunities), (
+            *_register_fields(EstadoOportunidad, (
+                _scale("beneficio"), _scale("viabilidad"),
+                _f("decision", "enum", members=DecisionOportunidad),
+            )),
+        ), _register_filters(_f("prioridad", "enum", members=PrioridadOportunidad),
+                             EstadoOportunidad),
+            extras=_opportunity_extras),
+        Module("acciones_riesgo", "Actions on risks and opportunities",
+               Resource.RISKS_OPPORTUNITIES, _DatedRegister(risks.actions), (
+            _f("riesgo_id", "integer", note=(
+                "Risk (riesgos) the action addresses; give it or oportunidad_id, not both. "
+                "It cannot change later, and a cerrado risk takes no new actions.")),
+            _f("oportunidad_id", "integer", note=(
+                "Opportunity (oportunidades); an aprovechada or descartada one takes no new "
+                "actions.")),
+            _f("descripcion", required=True),
+            _f("responsable_id", "integer", True, note="Person (personas) who owns the action."),
+            _f("fecha_limite", "date", True),
+            _f("estado", "enum", members=EstadoAccionRiesgo, note="Starts pendiente."),
+            _f("fecha_completada", "date", note=(
+                "Given exactly when estado is completada; not in the future.")),
+            _f("eficacia", "enum", members=EficaciaAccion, note=(
+                "Effectiveness, with fecha_evaluacion, once completada.")),
+            _f("fecha_evaluacion", "date", note=(
+                "Not before fecha_completada nor in the future.")),
+            _f("comentario_eficacia"),
+        ), (_f("riesgo_id", "integer"), _f("oportunidad_id", "integer"),
+            _f("estado", "enum", members=EstadoAccionRiesgo), _f("responsable_id", "integer"),
+            _f("vencida", "boolean", note="Pendiente or en_curso past fecha_limite.")),
+            extras=_risk_action_extras),
+    )
 
 
 # ``responsable_id``, ``auditor_id`` and ``persona_id`` are ids of ``personas``
@@ -260,11 +362,6 @@ _MODULES = (
            Resource.ROLES_RESPONSIBILITIES, roles_responsibilities, (
         _f("rol", required=True), _f("compromiso_calidad", "boolean"),
         _f("descripcion_politica_calidad"),
-    )),
-    Module("riesgos_oportunidades", "Risks and opportunities",
-           Resource.RISKS_OPPORTUNITIES, risks_opportunities, (
-        _f("tipo", "enum", True, TipoEnum.__members__), _f("descripcion", required=True),
-        _f("objetivo_calidad"), _f("plan_accion"),
     )),
     Module("recursos_capacitacion", "Training resources", Resource.TRAINING_RESOURCES,
            training_resources, (
@@ -408,6 +505,7 @@ _MODULES = (
         _f("responsable_id", "integer"), _f("tipo", "enum", members=TipoAccionRevision),
         _f("vencida", "boolean", note="Pendiente or en_curso past fecha_limite.")),
         extras=_review_action_extras),
+    *_risk_modules(),
 )
 
 MODULES: dict[str, Module] = {module.slug: module for module in _MODULES}
