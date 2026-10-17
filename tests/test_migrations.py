@@ -943,7 +943,7 @@ class MigrationsTestCase(unittest.TestCase):
                     "three": f"{long_line}\nSegunda línea",
                     "four": "\n  Certificar ISO 14001  \r\nAmpliar el alcance"})
             before = self._rows(legacy)
-            upgrade(directory=MIGRATIONS_DIR)
+            upgrade(directory=MIGRATIONS_DIR, revision="c6e8a2f4b1d9")  # RO-2 drops the old table
             (today,) = self._rows("SELECT CURRENT_DATE")[0]
             created = {row[0]: row[5:] for row in self._rows(
                 f"SELECT id_riesgo, tipo, descripcion, objetivo_calidad, plan_accion, "
@@ -1053,6 +1053,103 @@ class MigrationsTestCase(unittest.TestCase):
             self.assertEqual([(3, 2, 0)], self._rows(
                 f"SELECT (SELECT count(*) FROM {risks}), (SELECT count(*) FROM "
                 f"{opportunities}), (SELECT count(*) FROM {actions})"))
+            self.assertEqual([], self._schema_differences())
+
+    def test_rows_written_after_the_copy_reach_the_registers_and_move_back(self) -> None:
+        """RO-2 (e3b5d7f9a1c4) re-syncs the old table into the registers, then drops it."""
+        old, risks, opportunities, actions = (
+            "riesgos_oportunidades", "riesgos", "oportunidades", "acciones_riesgo")
+        legacy = ("SELECT id_riesgo, tipo, descripcion, objetivo_calidad, plan_accion, "
+                  f"created_at, updated_at, created_by_id FROM {old} ORDER BY id_riesgo")
+        moved = "SELECT id, titulo, descripcion, notas, updated_at FROM {} ORDER BY id"
+        insert = (f"INSERT INTO {old} (tipo, descripcion, objetivo_calidad, plan_accion, "
+                  "created_at, updated_at) VALUES (:tipo, :descripcion, :objetivo, :plan, "
+                  ":created, :created)")
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision="a9c1e3f5d7b2")
+            with db.engine.begin() as connection:
+                for tipo, descripcion, objetivo, plan in (
+                    ("Riesgo", "Rotación de personal", None, "Plan de carrera"),
+                    ("Oportunidad", "Nuevo mercado", "Crecer un 10 %", None),
+                    ("Riesgo", "Riesgo que se elimina", None, None),
+                    ("Oportunidad", "Cambia de tipo", None, None),
+                ):
+                    connection.execute(text(insert), {
+                        "tipo": tipo, "descripcion": descripcion, "objetivo": objetivo,
+                        "plan": plan, "created": "2026-03-01 12:00+00"})
+            upgrade(directory=MIGRATIONS_DIR, revision="c6e8a2f4b1d9")
+            with db.engine.begin() as connection:  # the old service keeps writing until RO-2
+                connection.execute(text(insert), {
+                    "tipo": "Riesgo", "descripcion": "Corte de suministro\nProveedor único",
+                    "objetivo": "Entregas a tiempo", "plan": "Segundo proveedor",
+                    "created": "2026-10-01 12:00+00"})
+                for statement in (
+                    f"UPDATE {old} SET descripcion = 'Rotación de técnicos', "
+                    "plan_accion = 'Plan de carrera y salario', "
+                    "updated_at = '2026-10-02 12:00+00' WHERE id_riesgo = 1",
+                    f"DELETE FROM {old} WHERE id_riesgo = 3",
+                    f"UPDATE {old} SET tipo = 'Riesgo' WHERE id_riesgo = 4",
+                ):
+                    connection.execute(text(statement))
+            upgrade(directory=MIGRATIONS_DIR)
+            tables = set(inspect(db.engine).get_table_names())
+            self.assertNotIn(old, tables)
+            self.assertEqual([(0,)], self._rows(
+                "SELECT count(*) FROM pg_type WHERE typname = 'tipoenum'"))
+            stamp = self._rows(f"SELECT updated_at FROM {risks} WHERE id = 1")[0][0]
+            self.assertEqual("2026-10-02", stamp.date().isoformat())
+            self.assertEqual([
+                (1, "Rotación de técnicos", "Rotación de técnicos",
+                 "Plan de acción: Plan de carrera y salario"),
+                (4, "Cambia de tipo", "Cambia de tipo", None),
+                (5, "Corte de suministro", "Corte de suministro\nProveedor único",
+                 "Objetivo de la calidad: Entregas a tiempo\n\n"
+                 "Plan de acción: Segundo proveedor"),
+            ], [row[:4] for row in self._rows(moved.format(risks))])
+            self.assertEqual([(2, "Nuevo mercado", "Nuevo mercado",
+                               "Objetivo de la calidad: Crecer un 10 %")],
+                             [row[:4] for row in self._rows(moved.format(opportunities))])
+            with db.engine.begin() as connection:
+                self.assertEqual(6, connection.execute(text(
+                    f"INSERT INTO {risks} (titulo, descripcion, origen, fecha_identificacion, "
+                    "notas) VALUES ('Nuevo', 'Riesgo nuevo', 'externo', '2026-10-17', "
+                    "'Nota libre') RETURNING id")).scalar_one())
+                self.assertEqual(3, connection.execute(text(
+                    f"INSERT INTO {opportunities} (titulo, descripcion, origen, "
+                    "fecha_identificacion) VALUES ('Nueva', 'Oportunidad nueva', 'interno', "
+                    "'2026-10-17') RETURNING id")).scalar_one())
+                for statement in (
+                    "INSERT INTO personas (nombre) VALUES ('Ana')",
+                    f"UPDATE {risks} SET probabilidad = 4, impacto = 4, "
+                    "responsable_id = (SELECT id FROM personas) WHERE id = 1",
+                    f"INSERT INTO {actions} (riesgo_id, descripcion, responsable_id, "
+                    f"fecha_limite) SELECT 1, 'Plan', id, '2026-12-31' FROM personas",
+                ):
+                    connection.execute(text(statement))
+            downgrade(directory=MIGRATIONS_DIR, revision="c6e8a2f4b1d9")
+            # Risks come back first, then opportunities, each in id order, with new ids.
+            self.assertEqual([
+                (1, "Riesgo", "Rotación de técnicos", None, "Plan de carrera y salario"),
+                (2, "Riesgo", "Cambia de tipo", None, None),
+                (3, "Riesgo", "Corte de suministro\nProveedor único", "Entregas a tiempo",
+                 "Segundo proveedor"),
+                (4, "Riesgo", "Riesgo nuevo", None, "Nota libre"),
+                (5, "Oportunidad", "Nuevo mercado", "Crecer un 10 %", None),
+                (6, "Oportunidad", "Oportunidad nueva", None, None),
+            ], [row[:5] for row in self._rows(legacy)])
+            self.assertEqual(stamp, self._rows(legacy)[0][6])
+            # The registers are rebuilt from it, as RO-1 left them: keyed by the old ids.
+            ids = "SELECT id FROM {} ORDER BY id"
+            self.assertEqual([(1,), (2,), (3,), (4,)], self._rows(ids.format(risks)))
+            self.assertEqual([(5,), (6,)], self._rows(ids.format(opportunities)))
+            self.assertEqual([(0, None)], self._rows(
+                f"SELECT (SELECT count(*) FROM {actions}), max(probabilidad) FROM {risks}"))
+            with db.engine.begin() as connection:
+                self.assertEqual(7, connection.execute(text(
+                    f"INSERT INTO {old} (tipo, descripcion) VALUES ('Riesgo', 'Otro') "
+                    "RETURNING id_riesgo")).scalar_one())
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([(1,), (2,), (3,), (4,), (7,)], self._rows(ids.format(risks)))
             self.assertEqual([], self._schema_differences())
 
 

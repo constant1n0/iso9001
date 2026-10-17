@@ -1,4 +1,7 @@
-"""JSON registers of risks and training resources as thin adapters over their services."""
+"""The training resources JSON register as a thin adapter over its service.
+
+The risks JSON endpoints went away in RO-2 of ``risks-opportunities``.
+"""
 
 from __future__ import annotations
 
@@ -7,23 +10,8 @@ import unittest
 from json_register_routes import JsonRegisterContract
 from register_routes import RegisterRoutesBase
 
-from app.models import RecursoCapacitacion, RiesgoOportunidad
-from app.services import risks_opportunities, training_resources
-
-
-class RiskRoutesTestCase(JsonRegisterContract, RegisterRoutesBase):
-    BASE = "/riesgo_oportunidad/"
-    MODEL = RiesgoOportunidad
-    PK = "id_riesgo"
-    CREATE = {"tipo": "Riesgo", "descripcion": "Corte de suministro", "plan_accion": "Stock"}
-    UPDATE = {"plan_accion": "Doble proveedor"}
-    UPDATED_KEY = "plan_accion"
-    SERVICE = risks_opportunities
-    SEED = {"tipo": "Oportunidad", "descripcion": "Nuevo mercado"}
-    BAD = ({"tipo": "Riesgo"}, {"descripcion": "d"}, {"tipo": "Amenaza", "descripcion": "d"})
-    PAGE_KEY = "descripcion"
-    PAGE_VALUES = (CREATE | {"descripcion": "A"}, CREATE | {"descripcion": "B"}, CREATE | {"descripcion": "C"})
-    test_a_duplicate_answers_409_and_leaves_the_session_usable = None  # no unique column
+from app.models import RecursoCapacitacion
+from app.services import training_resources
 
 
 class ResourceRoutesTestCase(JsonRegisterContract, RegisterRoutesBase):

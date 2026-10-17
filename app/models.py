@@ -43,11 +43,6 @@ class ResetTokenVerification:
     user: User
     expected_password_hash: str
 
-# Enum para definir el tipo de evaluación: Riesgo u Oportunidad
-class TipoEnum(enum.Enum):
-    Riesgo = 'Riesgo'
-    Oportunidad = 'Oportunidad'
-
 # Enum para definir los roles de usuario
 class RoleEnum(enum.Enum):
     ADMINISTRADOR = 'Administrador'
@@ -106,17 +101,6 @@ class RolResponsabilidad(RecordMetadataMixin, db.Model):
     rol = db.Column(db.String(50), nullable=False, unique=True, index=True)
     compromiso_calidad = db.Column(db.Boolean, default=False)
     descripcion_politica_calidad = db.Column(db.Text)
-
-# Modelo para gestionar Riesgos y Oportunidades dentro del SGC. Replaced by
-# ``Riesgo`` and ``Oportunidad`` (``risks-opportunities``, decision RO5): its rows
-# are copied there and the table goes away with the old service (RO-2).
-class RiesgoOportunidad(RecordMetadataMixin, db.Model):
-    __tablename__ = 'riesgos_oportunidades'
-    id_riesgo = db.Column(db.Integer, primary_key=True)
-    tipo = db.Column(db.Enum(TipoEnum), nullable=False)
-    descripcion = db.Column(db.Text, nullable=False)
-    objetivo_calidad = db.Column(db.Text)
-    plan_accion = db.Column(db.Text)
 
 # Modelo para Recursos y Capacitación del personal
 class RecursoCapacitacion(RecordMetadataMixin, db.Model):

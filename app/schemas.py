@@ -17,14 +17,11 @@ from .extensions import ma
 from .models import (
     ParteInteresada,
     RolResponsabilidad,
-    RiesgoOportunidad,
     RecursoCapacitacion,
     ProcesoOperacion,
     AuditoriaIndicador,
     Mejora,
-    TipoEnum
 )
-from marshmallow import fields
 
 # Esquema para Partes Interesadas
 class ParteInteresadaSchema(ma.SQLAlchemyAutoSchema):
@@ -36,14 +33,6 @@ class ParteInteresadaSchema(ma.SQLAlchemyAutoSchema):
 class RolResponsabilidadSchema(ma.SQLAlchemyAutoSchema):
     class Meta:
         model = RolResponsabilidad
-        load_instance = True
-
-# Esquema para Riesgos y Oportunidades
-class RiesgoOportunidadSchema(ma.SQLAlchemyAutoSchema):
-    tipo = fields.Enum(TipoEnum, by_value=True)
-
-    class Meta:
-        model = RiesgoOportunidad
         load_instance = True
 
 # Esquema para Recursos y Capacitación

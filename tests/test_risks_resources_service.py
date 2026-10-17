@@ -1,4 +1,8 @@
-"""Risks and training resources services on the CRUD helper."""
+"""The training resources service on the CRUD helper.
+
+The risks register moved to ``tests/test_risks_service.py`` (RO-2 of
+``risks-opportunities``).
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,7 @@ import unittest
 from test_nonconformity_service import ServiceBase, actor as _actor, errors
 
 from app.extensions import db
-from app.models import RiesgoOportunidad, TipoEnum, RoleEnum
+from app.models import RoleEnum
 
 
 def actor(**kwargs):
@@ -15,44 +19,10 @@ def actor(**kwargs):
     return _actor(role=RoleEnum.ADMINISTRADOR, **kwargs)
 
 
-def risks():
-    from app.services import risks_opportunities
-
-    return risks_opportunities
-
-
 def resources():
     from app.services import training_resources
 
     return training_resources
-
-
-class RiskServiceTestCase(ServiceBase):
-    def test_the_type_accepts_the_enum_value_and_rejects_anything_else(self) -> None:
-        record = risks().create(db.session, actor(), {"tipo": "Oportunidad", "descripcion": "d"})
-        self.assertIs(TipoEnum.Oportunidad, record.tipo)
-        for bad in ("Amenaza", None, 1):
-            with self.assertRaises(errors().ValidationError):
-                risks().create(db.session, actor(), {"tipo": bad, "descripcion": "d"})
-            db.session.rollback()
-
-    def test_the_description_is_required_and_the_other_texts_are_optional(self) -> None:
-        for data in ({"tipo": "Riesgo"}, {"tipo": "Riesgo", "descripcion": " "}):
-            with self.assertRaises(errors().ValidationError):
-                risks().create(db.session, actor(), data)
-            db.session.rollback()
-        record = risks().create(db.session, actor(), {"tipo": "Riesgo", "descripcion": "d", "plan_accion": ""})
-        self.assertEqual((None, None), (record.plan_accion, record.objetivo_calidad))
-
-    def test_updates_audit_only_changes_and_missing_records_raise_not_found(self) -> None:
-        record = risks().create(db.session, actor(), {"tipo": "Riesgo", "descripcion": "d"})
-        risks().update(db.session, actor(), record.id_riesgo, {"descripcion": "d"})
-        risks().update(db.session, actor(), record.id_riesgo, {"plan_accion": "p"})
-        self.assertEqual(["create", "update"], [row.action for row in self.audit_rows()])
-        with self.assertRaises(errors().NotFound) as caught:
-            risks().delete(db.session, actor(), 999)
-        self.assertEqual("Riesgo u oportunidad no encontrado.", caught.exception.message)
-        self.assertIsNone(db.session.query(RiesgoOportunidad).filter_by(descripcion="x").first())
 
 
 class ResourceServiceTestCase(ServiceBase):
