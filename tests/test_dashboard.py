@@ -110,9 +110,14 @@ class RiskCardTestCase(RiskScreensBase):
         closed = self.risk(titulo="Cerrado sin valorar")
         self.update("risks", closed, {"estado": "cerrado"})
         waiting = self.opportunity(titulo="Oportunidad sin valorar")
+        overdue = self.opportunity(titulo="Oportunidad por revisar", beneficio=3, viabilidad=3,
+                                   fecha_identificacion=date(2026, 1, 1),
+                                   fecha_revision=date(2026, 10, 16))
         expected = [
             (f"{RISKS}/?alto_sin_accion=1", "Riesgos altos o críticos sin acción abierta", {high}),
             (f"{RISKS}/?revision_vencida=1", "Riesgos con la revisión vencida", {late}),
+            (f"{OPPORTUNITIES}/?revision_vencida=1", "Oportunidades con la revisión vencida",
+             {overdue}),
             (f"{RISKS}/?sin_valorar=1&abierto=1", "Riesgos sin valorar", {pending}),
             (f"{OPPORTUNITIES}/?sin_valorar=1&abierto=1", "Oportunidades sin valorar", {waiting}),
         ]
@@ -131,5 +136,6 @@ class RiskCardTestCase(RiskScreensBase):
         self.assertNotIn("sin acción abierta", self.card())
         for rid in (late, pending):
             self.update("risks", rid, {"estado": "cerrado"})
-        self.update("opportunities", waiting, {"estado": "descartada"})
+        for oid in (waiting, overdue):
+            self.update("opportunities", oid, {"estado": "descartada"})
         self.assertIn("Ningún riesgo ni oportunidad requiere atención.", self.card())

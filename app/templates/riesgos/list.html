@@ -22,6 +22,7 @@
 {% block crumb %}Calidad · {{ kind.labels.plural }}{% endblock %}
 {% block content %}
 {% call page_header('Cláusula 6.1 · Riesgos y oportunidades', kind.labels.plural) %}
+    <a class="btn" href="{{ url_for(kind.bp.name ~ '.export_pdf') }}" target="_blank" rel="noopener">PDF</a>
     {% if can('create', 'risks_opportunities') %}
     <a class="btn btn--primary" href="{{ url_for(kind.bp.name ~ '.new_record') }}">+ {{ kind.labels.new }}</a>
     {% endif %}

@@ -34,7 +34,7 @@ nunca puede eliminar.
 
   | Herramienta | Finalidad |
   |---|---|
-  | `qms_modules` | Los 22 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
+  | `qms_modules` | Los 24 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
   | `qms_list` | Una página acotada de un módulo, con los filtros que enumera `qms_modules` |
   | `qms_get` | Un registro por su `id` |
   | `qms_create` | Crea un registro |
@@ -59,13 +59,14 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 22 módulos: `no_conformidades`, `auditorias`,
+`qms_modules` enumera 24 módulos: `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
-`roles_responsabilidades`, `riesgos_oportunidades`, `recursos_capacitacion`,
-`procesos`, `indicadores_auditoria`, `personas`, `competencias_requeridas`,
+`roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
+`indicadores_auditoria`, `personas`, `competencias_requeridas`,
 `competencias_acreditadas`, `acciones_correctivas`, `objetivos_calidad`,
-`mediciones_objetivo`, `revisiones_direccion` y `acciones_revision`. Cada
+`mediciones_objetivo`, `revisiones_direccion`, `acciones_revision`,
+`riesgos`, `oportunidades` y `acciones_riesgo`. Cada
 campo tiene un `type`, un indicador `required`, los valores `allowed` de los
 enumerados y, cuando los indicadores no bastan, una breve `note`.
 
@@ -266,6 +267,63 @@ elimina, celebra ni cierra una revisión.
     `fecha_limite` superada.
   - Filtros: `revision_id`, `estado`, `responsable_id`, `tipo` y `vencida`.
 - Solo en la web: celebrar, cerrar, todas las eliminaciones y el PDF del acta.
+
+Riesgos y oportunidades (cláusula 6.1 de ISO 9001:2026). Los tres módulos
+sustituyen al antiguo `riesgos_oportunidades` y comparten un mismo permiso:
+todos los roles leen, y solo los tokens de ADMIN o AUDITOR (con el ámbito
+`write`) crean y actualizan. Ningún token elimina.
+
+- Los enumerados se devuelven con su etiqueta en español; las escrituras y
+  los filtros usan el nombre del miembro.
+- `riesgos` y `oportunidades` comparten estos campos: `titulo`, `descripcion`,
+  `origen` (`interno`, `externo`) y `responsable_id` (una persona) son
+  obligatorios; `parte_interesada_id` (un registro de `partes_interesadas`),
+  `proceso_id` (un registro de `procesos`), `estado`,
+  `fecha_identificacion` (por defecto, hoy; nunca futura), `fecha_revision`
+  (la próxima revisión; nunca anterior a la identificación) y `notas` son
+  opcionales. Los registros migrados del registro antiguo pueden no tener
+  responsable.
+- Cada valoración es una pareja de enteros de 1 a 5 que se indica entera o se
+  deja vacía (sin valorar).
+- `riesgos`: `probabilidad` e `impacto`; `tratamiento` (`aceptar`,
+  `mitigar`, `transferir`, `evitar`); `probabilidad_residual` e
+  `impacto_residual`, que necesitan antes la primera pareja. `estado` empieza
+  en `identificado` y pasa por `en_tratamiento`, `controlado` y `cerrado`.
+  - Los registros añaden `nivel` y `nivel_residual`, del producto de la
+    pareja (`"Bajo"` 1-4, `"Medio"` 5-9, `"Alto"` 10-16, `"Crítico"` 20-25;
+    `null` sin valorar), y `revision_vencida` (abierto, con `fecha_revision`
+    anterior a hoy).
+  - Filtros: `estado`, `nivel` (`bajo`, `medio`, `alto`, `critico`),
+    `responsable_id`, `proceso_id`, `origen`, `sin_valorar` y
+    `revision_vencida`.
+- `oportunidades`: `beneficio` y `viabilidad`; `decision` (`aprovechar`,
+  `posponer`, `descartar`). `estado` empieza en `identificada` y pasa por
+  `en_curso`, `aprovechada` y `descartada`; las dos últimas la cierran.
+  - Los registros añaden `prioridad` (`"Baja"` 1-6, `"Media"` 8-12,
+    `"Alta"` 15-25; `null` sin valorar) y `revision_vencida`.
+  - Filtros: `estado`, `prioridad` (`baja`, `media`, `alta`),
+    `responsable_id`, `proceso_id`, `origen`, `sin_valorar` y
+    `revision_vencida`.
+- `acciones_riesgo`: `riesgo_id` u `oportunidad_id` (uno de los dos; nunca
+  cambia), `descripcion`, `responsable_id` (una persona) y `fecha_limite` son
+  obligatorios.
+  - Un riesgo `cerrado` o una oportunidad `aprovechada` o `descartada` no
+    admite acciones nuevas.
+  - `estado` empieza en `pendiente` (`en_curso`, `completada`, `cancelada`);
+    `fecha_completada` se indica exactamente cuando la acción está
+    `completada` y nunca es futura.
+  - La eficacia (6.1.2 b) se evalúa solo en una acción `completada`:
+    `eficacia` (`eficaz`, `no_eficaz`) y `fecha_evaluacion` van juntas, la
+    fecha no es anterior a `fecha_completada` ni futura, y
+    `comentario_eficacia` es opcional.
+  - Los registros añaden `vencida`: `pendiente` o `en_curso` con la
+    `fecha_limite` superada.
+  - Filtros: `riesgo_id`, `oportunidad_id`, `estado`, `responsable_id` y
+    `vencida`.
+- «Hoy» es la fecha local del servidor (`APP_TIMEZONE`).
+- Solo en la web: todas las eliminaciones, el mapa de calor y los PDF de los
+  registros; los filtros `abierto`, `probabilidad`, `impacto` y
+  `alto_sin_accion` son de la lista web.
 
 ## Emisión de un token
 

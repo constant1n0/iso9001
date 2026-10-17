@@ -1,0 +1,123 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "_partials/pdf_base.html" %}
+{% from "_partials/pdf.html" import fields %}
+{% from "riesgos/_macros.html" import dia, etiqueta %}
+{% set riesgos = kind.band == 'nivel' %}
+{# A level or a priority with the product it comes from, or «Sin valorar» (RO4). #}
+{% macro valoracion(banda, primero, segundo) -%}
+{%- if banda %}{{ banda.value }} ({{ primero }} × {{ segundo }} = {{ primero * segundo }}){% else %}Sin valorar{% endif -%}
+{%- endmacro %}
+{% block title %}{{ kind.labels.report }}{% endblock %}
+{% block clause %}Cláusula 6.1 · Riesgos y oportunidades{% endblock %}
+{% block subtitle %}{{ kind.labels.report }} a {{ hoy.strftime('%d/%m/%Y') }}{% endblock %}
+{% block content %}
+{# PDF-only template (never served to a browser, so the CSP does not apply):
+   the heat map and the actions tables are multi-column tables the print theme lacks. #}
+<style>
+.grupo { margin: 8mm 0 4mm; font: 700 16pt/1.2 "Barlow Condensed"; }
+.registro { margin-bottom: 7mm; page-break-inside: avoid; }
+.registro h3 { margin: 0 0 3mm; font: 700 13pt/1.2 "Barlow Condensed"; }
+.registro h4 { margin: 0 0 1.5mm; color: #6b675f; font: 500 7.5pt "IBM Plex Mono"; letter-spacing: 0.08em; text-transform: uppercase; }
+.registro .texto { margin: 0 0 4mm; white-space: pre-wrap; }
+.tabla { width: 100%; border-collapse: collapse; margin-bottom: 4mm; font-size: 8pt; line-height: 1.35; }
+.tabla th, .tabla td { padding: 1.8mm 2mm; border-bottom: 0.3mm solid #d9d4c8; text-align: left; vertical-align: top; }
+.tabla thead th { border-top: 0.6mm solid #0a0a0a; color: #6b675f; font: 500 6.5pt "IBM Plex Mono"; letter-spacing: 0.06em; text-transform: uppercase; }
+.tabla tr { page-break-inside: avoid; }
+.mapa { border-collapse: collapse; margin: 2mm 0 2mm; font-size: 9pt; }
+.mapa th, .mapa td { width: 14mm; height: 8mm; border: 0.3mm solid #d9d4c8; text-align: center; vertical-align: middle; }
+.mapa th { color: #6b675f; font: 500 7pt "IBM Plex Mono"; }
+.mapa__celda--bajo { background: #e2f3df; }
+.mapa__celda--medio { background: #fbf3c4; }
+.mapa__celda--alto { background: #fbdcc0; }
+.mapa__celda--critico { background: #f6c3b8; }
+</style>
+{{ fields([(kind.labels.open_many, abiertos | length)] + recuentos + [
+    ('Sin valorar', sin_valorar),
+    ('Revisión vencida', vencidas | length),
+    (kind.labels.closed_many, cerrados | length),
+]) }}
+<p class="muted">Los recuentos por {{ 'nivel' if riesgos else 'prioridad' }}, sin valorar y con la revisión vencida son de los registros abiertos.</p>
+{% if mapa %}
+<h2>Mapa de calor</h2>
+<table class="mapa">
+    <thead>
+        <tr><th scope="col">P \ I</th>{% for celda in mapa[0][1] %}<th scope="col">{{ celda.impacto }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+        {% for probabilidad, celdas in mapa %}
+        <tr><th scope="row">{{ probabilidad }}</th>{% for celda in celdas %}<td id="mapa-{{ probabilidad }}-{{ celda.impacto }}" class="mapa__celda mapa__celda--{{ celda.nivel.name }}">{{ celda.cuantos }}</td>{% endfor %}</tr>
+        {% endfor %}
+    </tbody>
+</table>
+<p class="muted">Riesgos abiertos valorados por probabilidad (P, filas) e impacto (I, columnas). Niveles:
+    {% for banda, (desde, hasta) in bandas %}{{ banda.value }} {{ desde }}–{{ hasta }}{{ '; ' if not loop.last else '.' }}{% endfor %}</p>
+{% endif %}
+{% for grupo, titulo, vacio, registros in [
+    ('abiertos', kind.labels.open_many, kind.labels.no_open, abiertos),
+    ('cerrados', kind.labels.closed_many, kind.labels.no_closed, cerrados)] %}
+<h2 class="grupo" id="{{ grupo }}">{{ titulo }}</h2>
+{% for registro in registros %}
+{% set revision %}{{ dia(registro.fecha_revision) }}{% if registro.id in vencidas %} · vencida{% endif %}{% endset %}
+<section class="registro">
+    <h3>{{ registro.titulo }}</h3>
+    {% if riesgos %}
+    {{ fields([
+        ('Proceso', procesos.get(registro.proceso_id, '—')),
+        ('Responsable', personas.get(registro.responsable_id, '—')),
+        ('Origen', registro.origen.value),
+        ('Nivel', valoracion(registro.nivel, registro.probabilidad, registro.impacto)),
+        ('Tratamiento', etiqueta(registro.tratamiento)),
+        ('Nivel residual', valoracion(registro.nivel_residual, registro.probabilidad_residual, registro.impacto_residual)),
+        ('Estado', registro.estado.value),
+        ('Próxima revisión', revision),
+    ]) }}
+    {% else %}
+    {{ fields([
+        ('Proceso', procesos.get(registro.proceso_id, '—')),
+        ('Responsable', personas.get(registro.responsable_id, '—')),
+        ('Origen', registro.origen.value),
+        ('Prioridad', valoracion(registro.prioridad, registro.beneficio, registro.viabilidad)),
+        ('Decisión', etiqueta(registro.decision)),
+        ('Estado', registro.estado.value),
+        ('Próxima revisión', revision),
+    ]) }}
+    {% endif %}
+    <h4>Descripción</h4>
+    <p class="texto">{{ registro.descripcion }}</p>
+    <h4>Acciones</h4>
+    {% set suyas = acciones.get(registro.id, []) %}
+    {% if suyas %}
+    <table class="tabla">
+        <thead>
+            <tr><th>Descripción</th><th>Responsable</th><th>Fecha límite</th><th>Estado</th><th>Eficacia</th></tr>
+        </thead>
+        <tbody>
+            {% for accion in suyas %}
+            <tr><td>{{ accion.descripcion }}</td><td>{{ personas.get(accion.responsable_id, '—') }}</td><td>{{ dia(accion.fecha_limite) }}{% if accion.id in acciones_vencidas %} · vencida{% endif %}</td><td>{{ accion.estado.value }}</td><td>{% if accion.eficacia %}{{ accion.eficacia.value }}{% if accion.fecha_evaluacion %} · {{ dia(accion.fecha_evaluacion) }}{% endif %}{% if accion.comentario_eficacia %} · {{ accion.comentario_eficacia }}{% endif %}{% else %}—{% endif %}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="texto muted">Sin acciones.</p>
+    {% endif %}
+</section>
+{% else %}
+<p class="muted">{{ vacio }}</p>
+{% endfor %}
+{% endfor %}
+{% endblock %}

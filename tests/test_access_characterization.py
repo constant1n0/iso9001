@@ -174,6 +174,7 @@ def _register(base, new, action_id):
     return [
         *_html("RISKS_OPPORTUNITIES", base, (new, form), ("1/editar", form), "2/eliminar"),
         Endpoint("RISKS_OPPORTUNITIES", "read", "GET", f"{base}1", 200),
+        Endpoint("RISKS_OPPORTUNITIES", "read", "GET", f"{base}pdf", 200),  # RO-4
         Endpoint("RISKS_OPPORTUNITIES", "create", "POST", f"{base}1/acciones/nueva", 302,
                  RISK_ACTION),
         Endpoint("RISKS_OPPORTUNITIES", "update", "POST", f"{item}/editar", 302, RISK_ACTION),

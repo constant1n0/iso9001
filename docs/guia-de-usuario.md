@@ -32,6 +32,7 @@ Documentación técnica:
 - [No conformidades y acciones correctivas](#no-conformidades-y-acciones-correctivas)
 - [Control de documentos](#control-de-documentos)
 - [Programa de auditoría, auditorías y hallazgos](#programa-de-auditoría-auditorías-y-hallazgos)
+- [Riesgos y oportunidades](#riesgos-y-oportunidades)
 - [Objetivos de la calidad](#objetivos-de-la-calidad)
 - [Revisión por la dirección](#revisión-por-la-dirección)
 - [Otros registros](#otros-registros)
@@ -110,7 +111,7 @@ puede consultar.
 | Grupo | Opciones |
 |---|---|
 | (arriba) | **Panel** |
-| **Calidad** | **Objetivos de calidad** 6.2, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
+| **Calidad** | **Riesgos** 6.1, **Oportunidades** 6.1, **Objetivos de calidad** 6.2, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
 | **Clientes** | **Satisfacción** 9.1.2, **Partes interesadas** 4.2 |
 | **Personas y competencia** | **Personas** 7.2, **Competencias requeridas** 7.2, **Matriz de competencias** 7.2, **Capacitaciones** 7.2 |
 | **Documentación** | **Documentos** 7.5 |
@@ -171,10 +172,11 @@ aprobar en cada módulo.
 | Acciones correctivas | Consultar, crear, editar, eliminar; verificar | Consultar, crear, editar; verificar | Consultar, crear, editar |
 | Documentos | Consultar todas las revisiones, crear, editar, enviar a revisión, rechazar, publicar, adjuntar ficheros; aprobar, dar de baja | Consultar todas las revisiones, crear, editar, enviar a revisión, rechazar, publicar, adjuntar ficheros | Consultar la revisión vigente |
 | Programas de auditoría, auditorías y hallazgos | Consultar, crear, editar, eliminar; aprobar programas | Consultar, crear, editar | Sin acceso |
+| Riesgos, oportunidades y sus acciones | Consultar, crear, editar, eliminar; evaluar la eficacia de las acciones | Consultar, crear, editar; evaluar la eficacia de las acciones | Consultar |
 | Objetivos de la calidad y mediciones | Consultar, crear, editar, cambiar el estado, eliminar | Consultar, crear, editar, cambiar el estado | Consultar |
 | Revisiones por la dirección y sus acciones | Consultar, crear, editar, eliminar; celebrar, cerrar | Consultar, crear, editar | Sin acceso |
 | Mejoras, satisfacción del cliente, partes interesadas | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar, crear, editar |
-| Roles, riesgos y oportunidades, recursos de capacitación, procesos, indicadores de auditoría (sin pantallas) | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
+| Roles, recursos de capacitación, procesos, indicadores de auditoría (sin pantallas) | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
 
 - Nadie elimina usuarios ni documentos: los usuarios se desactivan y los
   documentos se dan de baja, de modo que el historial queda completo.
@@ -247,6 +249,13 @@ ninguna cifra, área ni fecha de auditoría.
   alcanzan su meta (**No cumple la meta**) o tienen una medición vencida
   (**Medición vencida**). Cuando los hay, un enlace muestra la lista de
   objetivos activos.
+- **Riesgos y oportunidades**: cuántos registros abiertos requieren atención,
+  cada cifra con un enlace a la lista filtrada por ellos: **Riesgos altos o
+  críticos sin acción abierta** (sin ninguna acción pendiente ni en curso),
+  **Riesgos con la revisión vencida**, **Oportunidades con la revisión
+  vencida**, **Riesgos sin valorar** y **Oportunidades sin valorar**. Solo
+  aparecen las cifras que no son cero; sin ninguna, la tarjeta muestra
+  **Ningún riesgo ni oportunidad requiere atención.**
 - **Acciones de la revisión por la dirección**, para administradores y
   auditores: las acciones vencidas, con su responsable y su fecha límite.
   Cuando las hay, un enlace abre el registro de acciones filtrado por ellas.
@@ -738,6 +747,141 @@ A partir de entonces:
 - eliminar un hallazgo (administradores) nunca elimina su no conformidad, y
   eliminar la no conformidad borra el vínculo del hallazgo.
 
+## Riesgos y oportunidades
+
+**Riesgos** (`/riesgos/`) y **Oportunidades** (`/oportunidades/`), en el menú
+**Calidad**, son los dos registros del apartado 6.1 de ISO 9001:2026, que trata
+los riesgos y las oportunidades como conceptos separados. Un riesgo se valora
+por su probabilidad y su impacto; una oportunidad, por su beneficio y su
+viabilidad. Cada registro tiene sus acciones, con responsable, fecha límite y
+evaluación de la eficacia, y una valoración residual en el caso de los
+riesgos. Todos los roles consultan los dos registros y sus PDF. Los
+administradores y los auditores crean y editan registros, y añaden, editan y
+evalúan acciones; solo los administradores eliminan.
+
+### El registro
+
+Pulse **+ Nuevo riesgo** o **+ Nueva oportunidad** y rellene:
+
+- **Título** y **Descripción**;
+- **Origen**: **Interno** o **Externo** a la organización;
+- **Parte interesada** (opcional; procede de **Partes interesadas**) y
+  **Proceso** (opcional; véase [Otros registros](#otros-registros));
+- **Responsable** (una persona);
+- la valoración, el **Tratamiento** del riesgo o la **Decisión** sobre la
+  oportunidad (véase [Valoración](#valoración)) y el **Estado** (véase
+  [Estados y revisión](#estados-y-revisión));
+- **Fecha de identificación**: el formulario empieza con la de hoy; nunca es
+  futura;
+- **Próxima revisión** (opcional): nunca anterior a la fecha de
+  identificación;
+- **Notas**.
+
+Un registro con acciones no se puede eliminar: **No se puede eliminar un
+riesgo que tiene acciones; elimina antes sus acciones.** (o el mismo mensaje
+para una oportunidad).
+
+### Valoración
+
+Cada valor va de 1 a 5. El producto de los dos valores de una pareja da el
+nivel del riesgo o la prioridad de la oportunidad:
+
+| Registro | Valores | Resultado |
+|---|---|---|
+| Riesgo | **Probabilidad (1-5)** × **Impacto (1-5)** | **Nivel**: **Bajo** 1–4, **Medio** 5–9, **Alto** 10–16, **Crítico** 20–25 |
+| Oportunidad | **Beneficio (1-5)** × **Viabilidad (1-5)** | **Prioridad**: **Baja** 1–6, **Media** 8–12, **Alta** 15–25 |
+
+- Los dos valores de una pareja se indican a la vez o se dejan los dos en
+  **Sin valorar**. Mientras tanto, el registro aparece como **Sin valorar**:
+  una tarea pendiente que señala el panel de control.
+- **Tratamiento** de un riesgo: **Aceptar**, **Mitigar**, **Transferir** o
+  **Evitar**. **Decisión** sobre una oportunidad: **Aprovechar**, **Posponer**
+  o **Descartar**. Los dos pueden quedar en **— Sin decidir —**.
+- **Valoración residual** de un riesgo: **Probabilidad residual (tras las
+  acciones)** e **Impacto residual (tras las acciones)** dan el **Nivel
+  residual** con las mismas bandas. Necesita antes la valoración del riesgo:
+  **La valoración residual necesita antes la valoración del riesgo
+  («probabilidad» e «impacto»).**
+
+### Estados y revisión
+
+| Registro | Estados abiertos | Estados cerrados |
+|---|---|---|
+| Riesgo | **Identificado**, **En tratamiento**, **Controlado** | **Cerrado** |
+| Oportunidad | **Identificada**, **En curso** | **Aprovechada**, **Descartada** |
+
+- El estado se cambia en el formulario del registro.
+- Un registro cerrado no admite acciones nuevas: **El riesgo está cerrado: no
+  admite acciones nuevas.** o **La oportunidad está aprovechada o descartada:
+  no admite acciones nuevas.** Sus acciones existentes se siguen editando y
+  evaluando.
+- **Regla de vencimiento.** Un registro abierto cuya **Próxima revisión** es
+  anterior a hoy muestra **Revisión vencida**. Un registro cerrado nunca está
+  vencido.
+
+### Acciones
+
+En la página del registro, **+ Nueva acción** registra:
+
+- **Descripción**;
+- **Responsable** (una persona);
+- **Fecha límite**;
+- **Estado**: **Pendiente** (al empezar), **En curso**, **Completada** o
+  **Cancelada**;
+- **Fecha de finalización (solo si está completada)**: obligatoria en una
+  acción completada, nunca futura y solo en ese estado.
+
+Una acción pendiente o en curso cuya fecha límite ya ha pasado muestra
+**Vencida**. Una acción nunca pasa a otro registro.
+
+**Evaluación de la eficacia (6.1.2 b).** Una acción completada muestra
+**Evaluar eficacia** (o **Reevaluar** si ya se evaluó), que registra:
+
+- **Resultado**: **Eficaz** o **No eficaz**;
+- **Fecha de la evaluación**: el formulario empieza con la de hoy; nunca es
+  anterior a la finalización de la acción ni futura;
+- **Comentario**.
+
+Solo se evalúa una acción completada: **Solo se evalúa la eficacia de una
+acción completada.**
+
+### Pantallas
+
+- **La lista** se filtra por **Estado**, **Nivel** (o **Prioridad**),
+  **Responsable**, **Proceso**, **Origen**, **Sin valorar**, **Revisión
+  vencida** y **Abierto** (o **Abierta**); los riesgos, además, por
+  **Probabilidad**, **Impacto** y **Alto o crítico sin acción abierta**.
+  Muestra de cada registro su proceso, su responsable, su nivel y su nivel
+  residual con el tratamiento (o su prioridad con la decisión), su estado, su
+  **Próxima revisión** (con una etiqueta si está vencida) y sus **Acciones
+  abiertas** (pendientes o en curso).
+- **El mapa de calor**, sobre la lista de riesgos, es una cuadrícula de 5 × 5:
+  la probabilidad en las filas (5 arriba) y el impacto en las columnas. Cada
+  casilla cuenta los riesgos abiertos valorados con esa probabilidad y ese
+  impacto, tiene el color de su nivel y abre la lista filtrada por ella.
+- **La página de un registro** muestra su **Valoración** (con el nivel antes y
+  después de las acciones en un riesgo), su **Identificación**, su
+  **Descripción**, sus **Notas** y la tabla **Acciones**.
+
+### PDF
+
+**PDF**, en cada lista, genera el registro completo a fecha de hoy:
+
+- un resumen de los registros abiertos: cuántos hay por nivel (o prioridad),
+  cuántos están **Sin valorar** y cuántos tienen la **Revisión vencida**, y
+  cuántos están cerrados;
+- en el de riesgos, el mapa de calor como tabla;
+- los registros abiertos y, en otra sección, los cerrados, cada grupo por
+  nivel (o prioridad) de mayor a menor, con los no valorados al final, y por
+  título. De cada registro: proceso, responsable, origen, nivel y nivel
+  residual con el tratamiento (o prioridad y decisión), estado, próxima
+  revisión y descripción;
+- una tabla de sus acciones: descripción, responsable, fecha límite, estado y
+  eficacia (resultado, fecha y comentario).
+
+Los riesgos por nivel y las oportunidades por prioridad son también entradas
+de la revisión por la dirección (véase [Entradas (9.3.2)](#entradas-932)).
+
 ## Objetivos de la calidad
 
 **Objetivos de calidad** (`/objetivos-calidad/`, apartado 6.2 de ISO
@@ -880,7 +1024,8 @@ registros del periodo, junto a su comentario:
   periodo, por estado, completadas después del periodo, vencidas y
   completadas en el periodo;
 - **b)** las partes interesadas, y los riesgos y oportunidades: registrados,
-  nuevos y modificados en el periodo;
+  nuevos y modificados en el periodo, los riesgos por nivel con los altos o
+  críticos abiertos y las oportunidades por prioridad;
 - **c)** la satisfacción del cliente (encuestas y puntuación media), los
   objetivos de la calidad (que cumplen la meta, que no la cumplen, sin
   medición, con una medición vencida, por estado), el desempeño de los
@@ -890,7 +1035,9 @@ registros del periodo, junto a su comentario:
   tipo);
 - **d)** la capacitación: sesiones, horas y temas;
 - **e)** la eficacia de las acciones tomadas para abordar los riesgos y las
-  oportunidades: ningún registro la recoge, así que la cubre el comentario;
+  oportunidades: cada acción registra la suya (véase
+  [Acciones](#acciones)), pero la revisión todavía no la resume, así que la
+  cubre el comentario;
 - **f)** las mejoras implantadas en el periodo.
 
 Las cifras cuentan el periodo hasta su final, o hasta hoy si el final es
@@ -957,7 +1104,6 @@ reglas de rol.
 | Registro | Apartado | Dónde | Campos |
 |---|---|---|---|
 | **Partes interesadas** | 4.2 | Menú **Clientes** | **Nombre** (único), **Necesidades y Expectativas**, **Requisitos Identificados**, **Objetivo Estratégico** |
-| Riesgos y oportunidades | 6.1 | Sin pantalla; módulo MCP `riesgos_oportunidades` | Tipo (**Riesgo** u **Oportunidad**), descripción, objetivo de calidad, plan de acción |
 | Roles y responsabilidades | 5.3 | Sin pantalla; módulo MCP `roles_responsabilidades` | Nombre del rol (único), compromiso con la calidad, descripción de la política de calidad |
 | **Capacitaciones** | 7.2 | Menú **Personas y competencia** | **Tema**, **Fecha**, **Personal** y **Persona**, **Duración en Horas**, **Evaluación Final** |
 | Recursos de capacitación | 7.1 | Sin pantalla; módulo MCP `recursos_capacitacion` | Recurso necesario, capacitación del personal (sí o no), documentación |
@@ -971,11 +1117,10 @@ Notas:
 - Los roles del SGC son los que se eligen en **Personas** y en **Competencias
   requeridas**; no se puede eliminar un rol que citan requisitos de
   competencia.
-- Los procesos son los que se eligen en los objetivos de la calidad; no se
-  puede eliminar un proceso que citan objetivos.
-- Los riesgos y oportunidades, las partes interesadas, los indicadores de
-  auditoría, las capacitaciones y las mejoras alimentan las entradas de la
-  revisión por la dirección.
+- Los procesos son los que se eligen en los objetivos de la calidad y en los
+  riesgos y oportunidades; no se puede eliminar un proceso que citan.
+- Las partes interesadas, los indicadores de auditoría, las capacitaciones y
+  las mejoras alimentan las entradas de la revisión por la dirección.
 - **Capacitaciones** se filtra por **Tema**, **Fecha** y **Personal**, y cada
   sesión tiene un **PDF** (**Registro de capacitación**). Una competencia
   acreditada puede citar una sesión como evidencia.
@@ -1061,10 +1206,14 @@ cuando alguien solicita un enlace o cuando un administrador lo envía (véase
 | De baja | Un documento retirado; no se elimina y queda de solo lectura |
 | Fecha de corte | La fecha hasta la que cuentan los datos de una revisión por la dirección |
 | Medición vencida | Un objetivo activo cuya siguiente medición debía haberse registrado ya |
+| Nivel, nivel residual | La gravedad de un riesgo según su probabilidad por su impacto, antes y después de sus acciones |
 | Obsoleto | Una revisión de un documento sustituida o retirada; se conserva como evidencia |
 | Persona | Quien trabaja bajo el SGC; no es lo mismo que una cuenta de usuario |
+| Prioridad | La importancia de una oportunidad según su beneficio por su viabilidad |
 | Propietario | La persona responsable de un documento y de su revisión periódica |
 | Revisión (de un documento) | Cada versión numerada de su texto; distinta de la revisión periódica y de la revisión por la dirección |
+| Revisión vencida | Un riesgo o una oportunidad abiertos cuya próxima revisión ya ha pasado |
 | SGC | Sistema de gestión de la calidad |
+| Sin valorar | Un riesgo o una oportunidad que aún no tiene valoración |
 | Token de API | La credencial con la que un agente de IA actúa en nombre de un usuario |
 | Vigente | La revisión de un documento que está en vigor; la única que ve el rol Operativo |
