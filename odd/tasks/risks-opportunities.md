@@ -25,7 +25,8 @@ Replace the free-text risks-and-opportunities list with two registers, as ISO 90
 | RO5 | Existing `riesgos_oportunidades` rows move to the register of their type, keeping description and dates; the quality-objective and action-plan texts are kept in a notes field; the old table and its JSON endpoints and MCP module go away (the MCP module is replaced by `riesgos`, `oportunidades` and `acciones_riesgo`); the downgrade moves them back | Assistant design (0 rows in production; the migration still has to be correct) |
 | RO6 | Access keeps the current grant of `RISKS_OPPORTUNITIES`: every role reads; ADMIN and AUDITOR create and update; ADMIN deletes; `mcp` never deletes | Existing policy (`_JSON_REGISTER`) |
 | RO7 | The management review keeps reading reviews already held: their frozen inputs keep the old `riesgos_oportunidades` keys and must still render; new reviews count risks by level and opportunities by priority | Assistant design |
-| Delivery | `auto-chain`, `stacked-to-main`; push, PR and merge when CI is green; production deployment needs explicit authorization | User authorization (2026-10-02) |
+| Delivery | `auto-chain`, `stacked-to-main`; push, PR and merge when CI is green; standing Wave 2 `size:exception` (ask only above 1,500 lines); production deployment needs explicit authorization | User authorizations (2026-10-02, 2026-10-17) |
+| Test adaptations | Standing Wave 2 approval: existing tests that only need adapting to an approved design may join a writer's surface, reported here and in the PR; application code outside the planned surface still needs approval | User (2026-10-17) |
 | RDD | On (global); assess every work-unit commit | `gentle-ai review mode status` |
 
 ## Tasks
