@@ -29,14 +29,16 @@ an agent can never delete anything.
   published, attachments, withdrawal and periodic review.
 - **Internal audits** (9.2): yearly audit programme, audits with independence
   checks, classified findings that open nonconformities.
+- **Risks and opportunities** (6.1): separate registers with assessment,
+  residual assessment, a heat map, actions with their effectiveness
+  evaluation, overdue reviews and PDFs.
 - **Quality objectives** (6.2): indicator, target, owner, measurements and
   trend.
 - **Management review** (9.3): inputs drawn from the registers, conclusions,
   actions and the minutes PDF.
 - **Earlier registers**: interested parties (4.2), processes (4.4, 8.1), roles
-  (5.3), risks and opportunities (6.1), training resources (7.1), training
-  (7.2), audit indicators (9.1), customer satisfaction (9.1.2) and
-  improvements (10.3).
+  (5.3), training resources (7.1), training (7.2), audit indicators (9.1),
+  customer satisfaction (9.1.2) and improvements (10.3).
 - **Reports and notifications** (9.1): PDFs of the records, a monthly quality
   report and scheduled e-mail alerts.
 

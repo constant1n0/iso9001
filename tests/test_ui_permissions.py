@@ -520,6 +520,8 @@ class UiPermissionsTestCase(unittest.TestCase):
                 with self.subTest(page=f"{base}/", role=role.name):
                     self.assertEqual(role in writers, f'href="{base}/{new}"' in html)
                     self.assertEqual(role in writers, f'href="{base}/{empty}/editar"' in html)
+                    # Every role reads the register PDF (RO-4).
+                    self.assertIn(f'href="{base}/pdf"', html)
 
     def test_navigation_links_follow_the_read_permission(self) -> None:
         expected = {"/auditorias/": {ADMIN, AUDITOR}, "/programas-auditoria/": {ADMIN, AUDITOR},

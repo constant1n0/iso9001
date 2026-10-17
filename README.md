@@ -65,15 +65,15 @@ No enlazar imágenes hasta que existan en el repositorio. -->
 | No conformidades y acciones correctivas | 10.2 | Contención, causa raíz, acciones correctivas, verificación de la eficacia, cierre y reapertura |
 | Control de documentos | 7.5 | Revisiones numeradas que se revisan, aprueban y publican, ficheros adjuntos, baja y revisión periódica |
 | Auditorías internas | 9.2 | Programa anual de auditoría, auditorías con alcance, equipo y comprobación de independencia, y hallazgos clasificados que abren no conformidades |
+| Riesgos y oportunidades | 6.1 | Registros separados de riesgos y de oportunidades con valoración, valoración residual, mapa de calor, acciones con la evaluación de su eficacia, revisiones vencidas y PDF |
 | Objetivos de la calidad | 6.2 | Indicador, meta, responsable, mediciones, tendencia y mediciones vencidas |
 | Revisión por la dirección | 9.3 | Entradas tomadas de los registros, conclusiones, acciones y acta en PDF |
 | Informes y notificaciones | 9.1 | PDF de los registros, informe mensual de calidad y avisos programados por correo electrónico |
 
 **Otros registros**, anteriores a los módulos de la tabla: partes interesadas
 (4.2), operaciones de los procesos (4.4, 8.1), roles y responsabilidades
-(5.3), riesgos y oportunidades (6.1), recursos de capacitación (7.1),
-capacitaciones (7.2), indicadores de auditoría (9.1), satisfacción del cliente
-(9.1.2) y mejoras (10.3). Los que no tienen pantallas se mantienen a través
+(5.3), recursos de capacitación (7.1), capacitaciones (7.2), indicadores de
+auditoría (9.1), satisfacción del cliente (9.1.2) y mejoras (10.3). Los que no tienen pantallas se mantienen a través
 del servidor MCP.
 
 La [guía de usuario](docs/guia-de-usuario.md) explica cada pantalla, los

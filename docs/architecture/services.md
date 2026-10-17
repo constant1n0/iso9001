@@ -57,12 +57,13 @@ bounded: the page is clamped to `1..crud.MAX_PAGE` and the size to
 | `audits.py`, `documents.py` | Audits, documents (bespoke) |
 | `audit_programmes.py`, `audit_findings.py` | Yearly audit programmes and their approval; audit findings and their nonconformities (see below) |
 | `document_revisions.py`, `document_files.py` | Document revisions and their workflow; attachment storage (see below) |
+| `risks.py` | Risks, opportunities and their actions: assessment bands, residual assessment, overdue reviews and actions, effectiveness, the heat map and the dashboard's flags (see below) |
 | `quality_objectives.py` | Quality objectives and their measurements, target checks and overdue measurements (see below) |
 | `management_reviews.py` | Management reviews, their inputs drawn from the registers, holding and closing, and their actions (see below) |
 | `people.py`, `competence.py` | People (each linked to at most one user and holding QMS roles), and competence required per role and demonstrated per person, with the required-versus-demonstrated matrix |
 | `crud.py` | Generic helper driven by a `Spec` (model, resource, fields, ordering) |
 | `training.py`, `satisfaction.py`, `stakeholders.py`, `improvements.py` | Plain HTML registers on `crud` |
-| `roles_responsibilities.py`, `risks_opportunities.py`, `training_resources.py`, `process_operations.py`, `audit_indicators.py` | JSON registers on `crud` |
+| `roles_responsibilities.py`, `training_resources.py`, `process_operations.py`, `audit_indicators.py` | JSON registers on `crud` |
 | `users.py` | User accounts: administration and self-service (see below) |
 | `api_tokens.py` | Bearer tokens for non-browser adapters (see below) |
 | `policy.py`, `actor.py`, `errors.py`, `audit.py`, `attribution.py`, `fields.py` | The shared kernel |
@@ -90,7 +91,8 @@ then the scopes, then the role.
 | Nonconformities, corrective actions, improvements, surveys, training, stakeholders | all roles | all roles | ADMIN |
 | Audits, audit programmes, audit findings | ADMIN, AUDITOR | ADMIN, AUDITOR (approve a programme: ADMIN) | ADMIN |
 | Documents | all roles (drafts: ADMIN, AUDITOR) | ADMIN, AUDITOR, never `mcp` (approve and withdraw: ADMIN) | nobody (withdrawn instead) |
-| Roles, risks and opportunities, training resources, process operations, audit indicators | all roles | ADMIN, AUDITOR | ADMIN |
+| Roles, training resources, process operations, audit indicators | all roles | ADMIN, AUDITOR | ADMIN |
+| Risks, opportunities and their actions (`RISKS_OPPORTUNITIES`) | all roles | ADMIN, AUDITOR | ADMIN |
 | People; competence requirements and records | all roles | ADMIN, AUDITOR | ADMIN |
 | Quality objectives and their measurements | all roles | ADMIN, AUDITOR | ADMIN |
 | Management reviews and their actions | ADMIN, AUDITOR | ADMIN, AUDITOR (hold and close: ADMIN, never `mcp`) | ADMIN |
@@ -192,6 +194,70 @@ audits and findings share the `AUDITS` resource.
   foreign key to `auditorias`; otherwise it is `DELETE_CONFLICT`.
 - The MCP adapter exposes the three modules without `approve` and without
   deletes. The web adapter adds the audit and programme PDFs.
+
+## Risks and opportunities
+
+Decisions RO1-RO4 and RO6 of `risks-opportunities` (ISO 9001:2026 clause 6.1).
+`risks` offers three registers on `crud` with the `Register` shape of
+`quality_objectives`: `risks` (`Riesgo`), `opportunities` (`Oportunidad`) and
+`actions` (`AccionRiesgo`), which share the `RISKS_OPPORTUNITIES` resource.
+`create` and `update` take `today`, a `date` from the adapter
+(`local_today()`), and so do the lists whose `revision_vencida` or `vencida`
+filter is used.
+
+- **Records**: choices are member names. An owner (`responsable_id`) is
+  required on create; rows migrated from the old `riesgos_oportunidades` table
+  may lack one until someone sets it. `proceso_id` and `parte_interesada_id`
+  cite an existing process and interested party. `fecha_identificacion`
+  defaults to `today` and is never after it (`IDENTIFIED_IN_FUTURE`);
+  `fecha_revision`, the next review, is never before it
+  (`REVIEW_BEFORE_IDENTIFICATION`).
+- **Assessment**: each 1-5 pair (likelihood and impact, the residual pair,
+  benefit and feasibility) is given whole or left empty (`HALF_ASSESSMENT`); a
+  pending pair is "sin valorar" (RO4). A risk's residual pair needs its first
+  pair (`RESIDUAL_WITHOUT_ASSESSMENT`).
+  - `nivel` and `nivel_residual` (`models.nivel`): `bajo` 1-4, `medio` 5-9,
+    `alto` 10-16, `critico` 20-25; `prioridad` (`models.prioridad`): `baja`
+    1-6, `media` 8-12, `alta` 15-25.
+  - The `nivel` and `prioridad` filters run in SQL on the same bands as
+    product ranges (`LEVEL_RANGES`, `PRIORITY_RANGES`).
+- **Open and overdue**: a record is open (`is_open`) unless it is a `cerrado`
+  risk or an `aprovechada` or `descartada` opportunity. Only an open record is
+  overdue for review (`revision_vencida`: `fecha_revision` before `today`).
+- **Delete**: a record with actions is refused (`RISK_HAS_ACTIONS`,
+  `OPPORTUNITY_HAS_ACTIONS`). The delete locks the row (`FOR UPDATE`); when an
+  action inserted meanwhile makes the database refuse it, the message names
+  the actions only if the violated constraint is the actions' foreign key to
+  that register, and is `DELETE_CONFLICT` otherwise.
+- **Actions** belong to exactly one risk or opportunity (`ONE_PARENT`), which
+  must exist and be open (`RISK_CLOSED`, `OPPORTUNITY_CLOSED`) and is read with
+  a shared lock (`FOR SHARE`); an action never moves (`PARENT_FIXED`).
+  - A `completada` action, and only one, has `fecha_completada`, never after
+    `today` (`COMPLETION_REQUIRED`, `COMPLETION_ONLY_WHEN_DONE`,
+    `COMPLETION_IN_FUTURE`).
+  - Its effectiveness (6.1.2 b: `eficacia` with `fecha_evaluacion`, given
+    together, `EVALUATION_PAIR`) is evaluated only once it is completed
+    (`EVALUATION_NOT_DONE`), on or after the completion and never after
+    `today`.
+  - An action is overdue (`is_overdue`, the `vencida` filter) when pending or
+    in progress after its deadline.
+- Every rule judges the record as the write would leave it. An unknown key is
+  refused before anything is looked up, and an edit that changes nothing
+  writes nothing.
+- `attention(session, actor, *, today)` gathers the dashboard's flags among
+  open records: high or critical risks without a pending or in-progress
+  action, overdue reviews of both registers and unassessed records of both.
+  `heat_map(session, actor)` counts the open assessed risks by (likelihood,
+  impact) cell. The screens also filter by `abierto`, risks by one cell
+  (`probabilidad`, `impacto`) and by `alto_sin_accion`, whose condition is
+  never NULL (an unassessed risk is plainly not one), so its negation keeps
+  the rest.
+- Adapters: the web screens with the heat map and the register PDFs
+  (`/riesgos/pdf`, `/oportunidades/pdf`), the dashboard card, the MCP modules
+  `riesgos`, `oportunidades` and `acciones_riesgo` (no deletes), and the
+  management review inputs, which count risks by level and opportunities by
+  priority (reviews held before keep their frozen `riesgos_oportunidades`
+  keys).
 
 ## Quality objectives
 

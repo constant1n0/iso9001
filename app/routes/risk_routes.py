@@ -37,18 +37,25 @@ administrators delete (policy ``RISKS_OPPORTUNITIES``, decision RO6).
   (``/eficacia``); either form asked for otherwise returns to the record's page
   with the reason.
 - A record with actions offers no delete; the service refuses it anyway.
+- Each list links its register as a PDF (``/pdf``, task RO-4), which every role
+  reads: a header with the open records by level (or priority), the unassessed
+  ones and those overdue for review, and for risks the heat map as a table; then
+  the open records and, in their own section, the closed ones, each ordered by
+  level (or priority) from the highest, unassessed last, then by title, with its
+  actions. A PDF that cannot be rendered is logged and flashed on the list.
 
 A service ``ValidationError`` or ``Conflict`` is rolled back and flashed on the
 re-rendered form, which keeps what was typed; a refused delete is flashed on the
 record's page.
 """
 
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from flask_login import login_required
 
@@ -66,6 +73,7 @@ from ..services import crud, people, process_operations, stakeholders
 from ..services import risks as ro
 from ..services.actor import Actor
 from ..services.errors import NotFound
+from ..utils.pdf import pdf_response, render_pdf
 from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
 from .auditoria_routes import committed
@@ -117,7 +125,11 @@ RISKS = Kind(
                 band='Nivel', open='Abierto', created='Riesgo «{}» creado.',
                 updated='Riesgo actualizado.', deleted='Riesgo eliminado.',
                 delete='¿Eliminar el riesgo «{}»?', empty='Todavía no hay riesgos.',
-                no_match='Ningún riesgo coincide con los filtros.'),
+                no_match='Ningún riesgo coincide con los filtros.',
+                report='Registro de riesgos', file='riesgos',
+                pdf_error='Error al generar el PDF de los riesgos.',
+                open_many='Riesgos abiertos', closed_many='Riesgos cerrados',
+                no_open='No hay riesgos abiertos.', no_closed='No hay riesgos cerrados.'),
     extra_filters=(('probabilidad', 'Probabilidad', SCALE, int),
                    ('impacto', 'Impacto', SCALE, int),
                    ('alto_sin_accion', 'Alto o crítico sin acción abierta', YES_NO, FLAGS.get)),
@@ -133,7 +145,13 @@ OPPORTUNITIES = Kind(
                 created='Oportunidad «{}» creada.', updated='Oportunidad actualizada.',
                 deleted='Oportunidad eliminada.', delete='¿Eliminar la oportunidad «{}»?',
                 empty='Todavía no hay oportunidades.',
-                no_match='Ninguna oportunidad coincide con los filtros.'),
+                no_match='Ninguna oportunidad coincide con los filtros.',
+                report='Registro de oportunidades', file='oportunidades',
+                pdf_error='Error al generar el PDF de las oportunidades.',
+                open_many='Oportunidades abiertas',
+                closed_many='Oportunidades aprovechadas o descartadas',
+                no_open='No hay oportunidades abiertas.',
+                no_closed='No hay oportunidades aprovechadas ni descartadas.'),
 )
 risks_bp, opportunities_bp = RISKS.bp, OPPORTUNITIES.bp
 
@@ -238,6 +256,61 @@ def _list(kind: Kind) -> ResponseReturnValue:
         mapa=_heat_map(actor, chosen) if kind is RISKS else None,
         bandas=ro.LEVEL_RANGES.items(),
     )
+
+
+# -- the register as a PDF -------------------------------------------------------------
+
+
+def _report(kind: Kind, actor: Actor, today: date) -> dict[str, Any]:
+    """The register PDF's context on ``today``.
+
+    Records are ordered by level (or priority) from the highest, the unassessed
+    last, then by title; ``abiertos`` and ``cerrados`` split them. ``recuentos``
+    counts the open ones by band, highest first; ``acciones`` holds each record's
+    actions by deadline.
+    """
+    ranks = {band: rank for rank, band in enumerate(reversed(list(kind.bands)))}
+    every = sorted(kind.register.list_(db.session, actor), key=lambda record: (
+        ranks.get(getattr(record, kind.band), len(ranks)), record.titulo.casefold(), record.id))
+    opened = [record for record in every if ro.is_open(record)]
+    acciones: defaultdict[int, list[AccionRiesgo]] = defaultdict(list)
+    for action in sorted(ro.actions.list_(db.session, actor),
+                         key=lambda action: (action.fecha_limite, action.id)):
+        if (parent := getattr(action, kind.parent_key)) is not None:
+            acciones[parent].append(action)
+    owned = [r.responsable_id for r in every]
+    owned += [a.responsable_id for found in acciones.values() for a in found]
+    bands = Counter(getattr(record, kind.band) for record in opened)
+    return dict(
+        kind=kind,
+        hoy=today,
+        abiertos=opened,
+        cerrados=[record for record in every if not ro.is_open(record)],
+        acciones=dict(acciones),
+        recuentos=[(band.value, bands[band]) for band in reversed(list(kind.bands))],
+        sin_valorar=bands[None],
+        vencidas={r.id for r in opened if ro.revision_vencida(r, today=today)},
+        acciones_vencidas={a.id for found in acciones.values() for a in found
+                           if ro.is_overdue(a, today=today)},
+        procesos={p.id_proceso: p.proceso for p in _processes(actor)},
+        personas=people.names(db.session, actor, owned),
+        mapa=_heat_map(actor, {}) if kind is RISKS else None,
+        bandas=ro.LEVEL_RANGES.items(),
+    )
+
+
+def _export_pdf(kind: Kind) -> ResponseReturnValue:
+    """The whole register as a PDF; one that cannot be rendered returns to the list."""
+    today = local_today()
+    context = _report(kind, current_actor(), today)
+    try:
+        pdf = render_pdf('riesgos/pdf_template.html', **context)
+    except Exception:
+        current_app.logger.exception('Error generating PDF for the register %s',
+                                     kind.labels['file'])
+        flash(kind.labels['pdf_error'], 'danger')
+        return redirect(url_for(f'{kind.bp.name}.list_records'))
+    return pdf_response(pdf, f"{kind.labels['file']}_{today:%Y-%m-%d}.pdf")
 
 
 # -- a record --------------------------------------------------------------------------
@@ -403,6 +476,7 @@ def _routes(kind: Kind) -> None:
     action = '/<int:record_id>/acciones/<int:action_id>'
     for rule, endpoint, permission, methods, view in (
         ('/', 'list_records', 'read', ['GET'], lambda: _list(kind)),
+        ('/pdf', 'export_pdf', 'read', ['GET'], lambda: _export_pdf(kind)),
         ('/<int:record_id>', 'show_record', 'read', ['GET'],
          lambda record_id: _show(kind, record_id)),
         (f'/{kind.new_path}', 'new_record', 'create', ['GET', 'POST'], lambda: _new(kind)),

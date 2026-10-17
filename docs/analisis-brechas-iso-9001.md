@@ -32,6 +32,7 @@ Este informe evalúa si la aplicación proporciona la información documentada y
 
 - información documentada: 7.5.1, 7.5.2 y 7.5.3;
 - competencia: 7.2;
+- riesgos y oportunidades: 6.1;
 - objetivos de la calidad: 6.2;
 - seguimiento y medición: 9.1.1;
 - auditoría interna: 9.2;
@@ -42,8 +43,8 @@ Cada entrada guarda quién la creó y quién la modificó por última vez, y que
 
 | Estado | Apartados en la reevaluación | En la línea base |
 |---|---|---|
-| Cubierto | 9 (6.2, 7.2, 7.5.1, 7.5.2, 7.5.3, 9.1.1, 9.2, 9.3, 10.2) | 0 |
-| Parcial | 16 | 22 |
+| Cubierto | 10 (6.1, 6.2, 7.2, 7.5.1, 7.5.2, 7.5.3, 9.1.1, 9.2, 9.3, 10.2) | 0 |
+| Parcial | 15 | 22 |
 | No cubierto | 6 (7.1.5, 7.1.6, 7.4, 8.3, 8.5, 8.6) | 8 |
 | Solo soporte documental | 3 (4.1, 4.3, 5.1) | 4 |
 
@@ -51,7 +52,7 @@ La columna de la línea base recoge la evaluación original. La versión anterio
 
 Estos son los hallazgos que un auditor plantearía con más probabilidad en la reevaluación:
 
-1. **6.1 Acciones para abordar riesgos y oportunidades:** el registro es una lista de texto (tipo, descripción, plan). No tiene valoración, responsable, estado, fecha de revisión ni vínculo con acciones, y no tiene pantalla web. ISO 9001:2026 trata los riesgos y las oportunidades como conceptos separados.
+1. **6.1 Acciones para abordar riesgos y oportunidades:** resuelto el 17/10/2026. El registro era una lista de texto (tipo, descripción, plan), sin valoración, responsable, estado, fecha de revisión, vínculo con acciones ni pantalla web; ahora riesgos y oportunidades son registros separados con valoración, acciones y evaluación de su eficacia (véase la fila 6.1).
 2. **4.4 Sistema de gestión de la calidad y sus procesos:** un proceso guarda un nombre, un criterio de calidad y una marca de control de proveedores. No tiene responsable, entradas, salidas, interacciones ni indicadores, y no tiene pantalla web.
 3. **8.4 Control de los procesos, productos y servicios suministrados externamente:** la aplicación solo guarda un booleano en el proceso y un origen de no conformidad. No hay registro de proveedores, ni aprobación, ni evaluación.
 4. **6.3 Planificación de los cambios:** solo se siguen los cambios decididos en una revisión por la dirección, como acciones de revisión del tipo `cambio_sgc`.
@@ -60,8 +61,8 @@ Estos son los hallazgos que un auditor plantearía con más probabilidad en la r
 
 **Implicación para el trabajo MCP:**
 
-- El servidor MCP está entregado: 22 módulos a través de cinco herramientas genéricas (`app/mcp_server/registry.py`, `_MODULES`). Cada registro de la fase 2 añade una entrada `Module` sobre su servicio.
-- Los cinco registros sin pantallas web (roles, riesgos y oportunidades, recursos de capacitación, procesos, indicadores de auditoría) ya son módulos MCP.
+- El servidor MCP está entregado: 24 módulos a través de cinco herramientas genéricas (`app/mcp_server/registry.py`, `_MODULES`). Cada registro de la fase 2 añade una entrada `Module` sobre su servicio.
+- Los cuatro registros sin pantallas web (roles, recursos de capacitación, procesos, indicadores de auditoría) ya son módulos MCP.
 
 ## Norma de referencia
 
@@ -73,7 +74,7 @@ El estudio usó la estructura de apartados de la edición 2015 con la Modificaci
 
 | Tema | Cambio | Impacto en la aplicación |
 |---|---|---|
-| Riesgos y oportunidades (6.1) | Se tratan como conceptos separados, con más peso de las oportunidades | Separar `RiesgoOportunidad` en registros distintos de riesgo y de oportunidad (abierto) |
+| Riesgos y oportunidades (6.1) | Se tratan como conceptos separados, con más peso de las oportunidades | Separar `RiesgoOportunidad` en registros distintos de riesgo y de oportunidad (hecho: `Riesgo` y `Oportunidad`, 17/10/2026) |
 | Planificación de los cambios (6.3) | Más planificación, comunicación, seguimiento y revisión de la eficacia de los cambios del SGC | `ChangeRecord` pasa a ser una prioridad, no un extra opcional (abierto) |
 | Liderazgo y compromiso (5.1) | Promover la cultura de la calidad y el comportamiento ético | Soporte documental: registros de evidencia y confirmaciones de lectura (abierto) |
 | Cambio climático (4.1, 4.2) | La Modificación 1:2024 se integra en el texto principal | Marca de pertinencia climática en las cuestiones de contexto y en los requisitos de las partes interesadas (abierto) |
@@ -117,7 +118,7 @@ Leyenda (cada letra es la inicial del estado: C de cubierto, P de parcial, N de 
 | 5.1 Liderazgo y compromiso | D | Las revisiones por la dirección registran asistentes, conclusiones y acciones (`RevisionDireccion`, `models.py:984-1044`). Marca `RolResponsabilidad.compromiso_calidad` (`models.py:107`) | Nada identifica a la alta dirección. No hay registros de evidencia del compromiso, la cultura de la calidad ni la ética (2026) |
 | 5.2 Política | P | La política puede ser un documento controlado: revisiones numeradas, aprobación por alguien distinto del autor, fecha de entrada en vigor e historial (`services/document_revisions.py:255-335`). Todos los roles leen la revisión vigente (`services/policy.py:126`; `DRAFT_READERS`, `services/document_revisions.py:83`). Texto libre heredado `RolResponsabilidad.descripcion_politica_calidad` (`models.py:108`) | No se registra que las personas hayan leído o confirmado la política. No hay categoría de política de la calidad (`DocumentCategory`, `models.py:1089-1100`). La política no está disponible para las partes interesadas externas a través de la aplicación |
 | 5.3 Roles, responsabilidades y autoridades en la organización | P | Las personas tienen roles del SGC (`persona_roles` y `Person`, `models.py:298-364`) con pantallas web (`routes/people_routes.py`). Los roles llevan requisitos de competencia (`CompetenceRequirement`, `models.py:409-429`). Una persona puede estar vinculada a un usuario de acceso (`Person.user_id`, `models.py:343`) | Un rol solo guarda un nombre, una marca y un texto de política, no sus responsabilidades y autoridades. Los roles no tienen pantalla web (`routes/rol_responsabilidad_routes.py:23`, solo JSON y MCP). Los roles no están vinculados a procesos |
-| 6.1 Acciones para abordar riesgos y oportunidades | P | `RiesgoOportunidad` (`models.py:111-117`), solo API JSON y MCP (`routes/riesgo_oportunidad_routes.py:23`). Los riesgos modificados en el periodo figuran entre las entradas de la revisión (`services/management_reviews.py:739`). Comentario de la revisión `comentario_riesgos` (`models.py:1020`) | Sin valoración, responsable, estado ni fecha de revisión. Sin vínculo con acciones, contexto o procesos, y sin pantalla web. Riesgos y oportunidades comparten un mismo registro (la edición 2026 los separa) |
+| 6.1 Acciones para abordar riesgos y oportunidades | **C** (antes P) | Registros separados de riesgos y de oportunidades (`Riesgo` y `Oportunidad`, `models.py`) con origen interno o externo, parte interesada, proceso, responsable, estado, fecha de identificación y próxima revisión. Valoración por probabilidad e impacto (`models.py`, `nivel`) y por beneficio y viabilidad (`prioridad`), con tratamiento o decisión y la valoración residual del riesgo. Acciones con responsable, fecha límite, estado y evaluación de la eficacia una vez completadas (`AccionRiesgo`, `models.py`; reglas en `services/risks.py`, `actions`). Revisiones vencidas (`services/risks.py`, `revision_vencida`) y avisos del panel de control (`attention`). Pantallas web con mapa de calor y un PDF por registro (`routes/risk_routes.py`, `RISKS`, `OPPORTUNITIES`, `_export_pdf`); módulos MCP `riesgos`, `oportunidades` y `acciones_riesgo` (`mcp_server/registry.py`, `_risk_modules`). Las entradas de la revisión cuentan los riesgos por nivel y las oportunidades por prioridad (`services/management_reviews.py`, `_risks`, `_opportunities`), con el comentario `comentario_riesgos` (`models.py`, `RevisionDireccion`) | Menor: la revisión por la dirección no resume la eficacia de las acciones (9.3.2 e), que cubre el comentario. Las no conformidades no citan riesgos (10.2.1 e), y las cuestiones de contexto (4.1) no son registros que un riesgo pueda citar |
 | 6.2 Objetivos de la calidad y planificación para lograrlos | **C** (antes P) | `ObjetivoCalidad` (`models.py:835-886`) tiene título, indicador, unidad, meta y sentido, valor inicial, responsable, periodo, frecuencia, recursos, método de evaluación y estado. Las mediciones son registros propios (`MedicionObjetivo`, `models.py:889-917`). La meta queda fijada en cuanto hay mediciones, y el avance, la tendencia y los retrasos se calculan en `services/quality_objectives.py` (`summary` en `:466`, `off_track` en `:519`). Todos los roles leen los objetivos (`services/policy.py:139`). Pantallas web, un PDF anual (`routes/quality_objective_routes.py:234`) y una tarjeta en el panel de control | Menor: «qué se va a hacer» (6.2.2 a) es texto libre (`descripcion`), no acciones con seguimiento. Sin vínculo con la política ni con los riesgos |
 | 6.3 Planificación de los cambios | P (antes N) | Una revisión por la dirección puede registrar un cambio en el SGC como acción del tipo `cambio_sgc` (`TipoAccionRevision`, `models.py:931-936`), con responsable, plazo, estado y resultado (`AccionRevision`, `models.py:1047-1086`) | No hay registro de cambios fuera de las revisiones por la dirección. No se registran el propósito, las consecuencias, la integridad, los recursos ni la eficacia de un cambio |
 | 7.1 Recursos | P | `RecursoCapacitacion` (`models.py:120-125`), solo API JSON y MCP (`routes/recurso_capacitacion_routes.py:23`). Registro de personas (7.1.2, `Person`). Comentario de la revisión `comentario_recursos` y acciones del tipo `recursos` (`models.py:1019`, `:936`) | Sin registros de infraestructura (7.1.3) ni de ambiente para la operación de los procesos (7.1.4). El registro de recursos de capacitación no tiene tipo, responsable ni estado, ni pantalla web |
@@ -161,7 +162,7 @@ Estas son las diez que quedan.
 
 | # | Brecha | Apartado | Por qué la señala un auditor | Cambio de dominio |
 |---|---|---|---|---|
-| 1 | Riesgos y oportunidades sin estructura | 6.1 | Apartado de planificación obligatorio, modificado en 2026, sin valoración, responsable, estado, revisión ni acciones | Registros separados de riesgo y de oportunidad con valoración, responsable, fecha de revisión y vínculos con acciones, procesos y contexto; pantallas web |
+| 1 | Riesgos y oportunidades sin estructura (resuelto el 17/10/2026) | 6.1 | Apartado de planificación obligatorio, modificado en 2026, sin valoración, responsable, estado, revisión ni acciones | Registros separados de riesgo y de oportunidad con valoración, responsable, fecha de revisión y vínculos con acciones, procesos y contexto; pantallas web |
 | 2 | Procesos y roles sin definir | 4.4, 8.1, 5.3 | Sin responsable de proceso, entradas, salidas ni interacciones. Los roles no recogen responsabilidades ni autoridades. Ninguno de los dos tiene pantalla web | Responsable, entradas, salidas, interacciones y criterios en `ProcesoOperacion`; responsabilidades y autoridades en los roles; pantallas; no conformidades, riesgos y objetivos vinculados a procesos |
 | 3 | Sin control de proveedores | 8.4 | Solo un booleano y un origen de no conformidad | `Supplier`, `SupplierEvaluation`, estado de proveedor aprobado, vínculos desde las no conformidades con origen `proveedor` |
 | 4 | Contexto y alcance sin registrar | 4.1, 4.2, 4.3 | Las cuestiones, la pertinencia del cambio climático, los requisitos de las partes interesadas y las exclusiones existen, como mucho, en un documento | `ContextIssue` con marca climática, `InterestedPartyRequirement`, un registro del alcance y las exclusiones, todo ello como entrada de la revisión |
@@ -176,15 +177,15 @@ Estas son las diez que quedan.
 
 - **Vínculos que aún faltan.**
   - Entregados: no conformidad → acción correctiva → eficacia; hallazgo de auditoría → no conformidad; objetivo → proceso; revisión → acciones.
-  - Aún pendientes: riesgo → acción; reclamación → no conformidad; no conformidad → proceso; mejora → su origen.
+  - Aún pendientes: reclamación → no conformidad; no conformidad → proceso; mejora → su origen.
   - Los clientes y los proveedores siguen siendo texto libre.
 - **Sin tratamiento de reclamaciones.** Las reclamaciones solo existen como no conformidades con origen `cliente`, junto a las encuestas de satisfacción.
 - **Roles poco granulares.**
   - El acceso sigue una matriz por recurso (`services/policy.py:117-141`) sobre tres roles.
   - Ningún rol distingue a quienes aprueban ni a la alta dirección. Las aprobaciones recaen en ADMINISTRADOR, con la regla «nunca el autor» para los documentos (`services/document_revisions.py:266-286`).
 - **El registro de auditoría no puede consultarse en la aplicación.** Todos los modelos se auditan (`services/audit.py:45`, `AUDITED_MODELS`) y las filas son de solo inserción (`:183-190`). Sin embargo, el registro solo tiene una entrada en la política de permisos (`policy.py:133`): ni pantalla ni módulo MCP. El historial debe mostrarse a un auditor desde la base de datos.
-- **Cinco registros sin pantallas web.**
-  - Los registros: roles (5.3), riesgos y oportunidades (6.1), procesos (4.4, 8.1), recursos de capacitación (7.1, 7.2) e indicadores de auditoría (9.1).
+- **Cuatro registros sin pantallas web.**
+  - Los registros: roles (5.3), procesos (4.4, 8.1), recursos de capacitación (7.1, 7.2) e indicadores de auditoría (9.1).
   - Solo son accesibles mediante los endpoints JSON (`routes/json_register.py:32`, `register_json_api`) y el servidor MCP.
   - Las personas, los requisitos de competencia y los objetivos ya eligen roles y procesos de esos registros.
 - **Siguen existiendo borrados definitivos** en los registros antiguos. Están limitados a los administradores y dejan una instantánea completa en el registro de auditoría, pero eliminan la propia entrada.
@@ -204,7 +205,7 @@ Esta era la propuesta de la línea base. La columna de estado recoge lo que entr
 | `Mejora` | Pasa a ser una oportunidad de mejora vinculada a su origen | Abierto |
 | `Capacitacion` | Vínculo con `Person` y `CompetenceRequirement`; resultado de eficacia | Hecho: `persona_id`; `CompetenceRecord.capacitacion_id` la vincula como evidencia y guarda la evaluación de la eficacia |
 | `SatisfaccionCliente` | Vínculo con `Customer`; `survey_type`, `channel` | Abierto |
-| `RiesgoOportunidad` | Separar en riesgo y oportunidad; `probability`, `severity`, `level`, `owner_id`, `status`, `review_date`, vínculos con contexto, proceso y acción | Abierto |
+| `RiesgoOportunidad` | Separar en riesgo y oportunidad; `probability`, `severity`, `level`, `owner_id`, `status`, `review_date`, vínculos con contexto, proceso y acción | Hecho: `Riesgo`, `Oportunidad` y `AccionRiesgo` (`app/models.py`), con probabilidad e impacto o beneficio y viabilidad, nivel o prioridad, responsable, estado, fecha de revisión y vínculos con parte interesada, proceso y acción |
 | `ProcesoOperacion` | `owner_id`, entradas, salidas, indicadores | Abierto (los objetivos ya se vinculan a procesos) |
 | `AuditoriaIndicador` | Fusionar en `Auditoria` o convertir en una entidad de indicador | Abierto; los objetivos de la calidad ya sirven como indicadores |
 
@@ -306,7 +307,7 @@ Cada fase añade herramientas MCP para los módulos que completa, sobre la capa 
 
 | # | Módulo | Apartados | Por qué en esta posición |
 |---|---|---|---|
-| 1 | Riesgos y oportunidades | 6.1 (también 9.3.2 e, 10.2.1 e) | Obligatorio y modificado en 2026. Hoy es una lista de texto sin valoración, responsable, estado ni pantalla, que las acciones correctivas y las revisiones no pueden citar |
+| 1 | Riesgos y oportunidades (**terminado**) | 6.1 (también 9.3.2 e, 10.2.1 e) | Entregado: registros separados con valoración, acciones y su eficacia, pantallas, mapa de calor, PDF y módulos MCP (véase la fila 6.1). Quedan pendientes 9.3.2 e y 10.2.1 e |
 | 2 | Procesos, roles y los demás registros JSON | 4.4, 8.1, 5.3, 7.1, 9.1 | El enfoque a procesos sustenta todo recorrido de auditoría. Los objetivos, las personas y la competencia ya dependen de los procesos y los roles, que no tienen pantallas. Incluye pantallas para los recursos de capacitación, y pantallas o retirada para los indicadores de auditoría |
 | 3 | Proveedores externos | 8.4 | Un hallazgo frecuente en certificación; solo existen un booleano y un origen de no conformidad |
 | 4 | Contexto, requisitos de las partes interesadas y alcance | 4.1, 4.2, 4.3 | Pertinencia del cambio climático en 2026. Mientras tanto lo cubre un documento controlado, por eso queda por debajo de los proveedores |

@@ -30,6 +30,7 @@ Installation and server administration are in the
 - [Nonconformities and corrective actions](#nonconformities-and-corrective-actions)
 - [Document control](#document-control)
 - [Audit programme, audits and findings](#audit-programme-audits-and-findings)
+- [Risks and opportunities](#risks-and-opportunities)
 - [Quality objectives](#quality-objectives)
 - [Management review](#management-review)
 - [Other registers](#other-registers)
@@ -108,7 +109,7 @@ clause it supports. You only see the entries your role can read.
 | Group | Entries |
 |---|---|
 | (top) | **Panel** (dashboard) |
-| **Calidad** (quality) | **Objetivos de calidad** 6.2, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
+| **Calidad** (quality) | **Riesgos** 6.1, **Oportunidades** 6.1, **Objetivos de calidad** 6.2, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
 | **Clientes** (customers) | **Satisfacción** 9.1.2, **Partes interesadas** 4.2 |
 | **Personas y competencia** (people and competence) | **Personas** 7.2, **Competencias requeridas** 7.2, **Matriz de competencias** 7.2, **Capacitaciones** 7.2 |
 | **Documentación** | **Documentos** 7.5 |
@@ -165,10 +166,11 @@ can read, create, edit, delete and approve in each module.
 | Corrective actions | Read, create, edit, delete; verify | Read, create, edit; verify | Read, create, edit |
 | Documents | Read every revision, create, edit, submit, reject, publish, attach files; approve, withdraw | Read every revision, create, edit, submit, reject, publish, attach files | Read the revision in force |
 | Audit programmes, audits and findings | Read, create, edit, delete; approve programmes | Read, create, edit | No access |
+| Risks, opportunities and their actions | Read, create, edit, delete; evaluate the actions' effectiveness | Read, create, edit; evaluate the actions' effectiveness | Read |
 | Quality objectives and measurements | Read, create, edit, change state, delete | Read, create, edit, change state | Read |
 | Management reviews and their actions | Read, create, edit, delete; hold, close | Read, create, edit | No access |
 | Improvements, customer satisfaction, interested parties | Read, create, edit, delete | Read, create, edit | Read, create, edit |
-| Roles, risks and opportunities, training resources, processes, audit indicators (no screens) | Read, create, edit, delete | Read, create, edit | Read |
+| Roles, training resources, processes, audit indicators (no screens) | Read, create, edit, delete | Read, create, edit | Read |
 
 - Nobody deletes users or documents: users are deactivated and documents are
   withdrawn, so the history stays complete.
@@ -235,6 +237,14 @@ and auditors), **+ No conformidad**, **+ Capacitación** (training) and
 - **Objetivos de calidad**: active quality objectives that miss their target
   (**No cumple la meta**) or have an overdue measurement (**Medición
   vencida**). When there are some, a link lists the active objectives.
+- **Riesgos y oportunidades** (risks and opportunities): how many open
+  records need attention, each count linking to the list filtered on them:
+  **Riesgos altos o críticos sin acción abierta** (high or critical risks
+  without a pending or in-progress action), **Riesgos con la revisión
+  vencida**, **Oportunidades con la revisión vencida** (overdue reviews),
+  **Riesgos sin valorar** and **Oportunidades sin valorar** (not assessed).
+  Only non-zero counts appear; without any, the card shows **Ningún riesgo ni
+  oportunidad requiere atención.**
 - **Acciones de la revisión por la dirección** (management review actions),
   for administrators and auditors: the overdue actions with their owner and
   deadline. When there are some, a link opens the action register filtered on
@@ -710,6 +720,147 @@ Afterwards:
 - deleting a finding (administrators) never deletes its nonconformity, and
   deleting the nonconformity clears the finding's link.
 
+## Risks and opportunities
+
+**Riesgos** (risks, `/riesgos/`) and **Oportunidades** (opportunities,
+`/oportunidades/`), in the **Calidad** menu, are the two registers of
+ISO 9001:2026 clause 6.1, which treats risks and opportunities as separate
+concepts. A risk is assessed by its likelihood and impact; an opportunity by
+its benefit and feasibility. Each record has its actions, with an owner, a
+deadline and an effectiveness evaluation, and a risk also has a residual
+assessment. Every role reads both registers and their PDFs. Administrators
+and auditors create and edit records, and add, edit and evaluate actions;
+only administrators delete.
+
+### The record
+
+Press **+ Nuevo riesgo** or **+ Nueva oportunidad** and fill in:
+
+- **Título** and **Descripción**;
+- **Origen**: **Interno** (internal) or **Externo** (external) to the
+  organization;
+- **Parte interesada** (interested party, optional; from **Partes
+  interesadas**) and **Proceso** (optional; see
+  [Other registers](#other-registers));
+- **Responsable** (owner, a person);
+- the assessment, the risk's **Tratamiento** (treatment) or the opportunity's
+  **Decisión** (see [Assessment](#assessment)) and the **Estado** (see
+  [States and review](#states-and-review));
+- **Fecha de identificación** (identification date): the form starts on
+  today; never in the future;
+- **Próxima revisión** (next review, optional): never before the
+  identification date;
+- **Notas** (notes).
+
+A record with actions cannot be deleted: **No se puede eliminar un riesgo que
+tiene acciones; elimina antes sus acciones.** (or the same message for an
+opportunity).
+
+### Assessment
+
+Each value runs from 1 to 5. The product of a pair gives the risk's level or
+the opportunity's priority:
+
+| Register | Values | Result |
+|---|---|---|
+| Risk | **Probabilidad (1-5)** (likelihood) × **Impacto (1-5)** (impact) | **Nivel** (level): **Bajo** (low) 1–4, **Medio** (medium) 5–9, **Alto** (high) 10–16, **Crítico** (critical) 20–25 |
+| Opportunity | **Beneficio (1-5)** (benefit) × **Viabilidad (1-5)** (feasibility) | **Prioridad** (priority): **Baja** (low) 1–6, **Media** (medium) 8–12, **Alta** (high) 15–25 |
+
+- Both values of a pair are given together, or both are left on **Sin
+  valorar** (not assessed). Until then the record shows **Sin valorar**: a
+  to-do the dashboard flags.
+- A risk's **Tratamiento**: **Aceptar** (accept), **Mitigar** (mitigate),
+  **Transferir** (transfer) or **Evitar** (avoid). An opportunity's
+  **Decisión**: **Aprovechar** (pursue), **Posponer** (postpone) or
+  **Descartar** (discard). Both may stay on **— Sin decidir —** (undecided).
+- A risk's **residual assessment**: **Probabilidad residual (tras las
+  acciones)** and **Impacto residual (tras las acciones)** (after the actions)
+  give the **Nivel residual** (residual level) on the same bands. It needs the
+  risk's assessment first: **La valoración residual necesita antes la
+  valoración del riesgo («probabilidad» e «impacto»).**
+
+### States and review
+
+| Register | Open states | Closed states |
+|---|---|---|
+| Risk | **Identificado** (identified), **En tratamiento** (being treated), **Controlado** (under control) | **Cerrado** (closed) |
+| Opportunity | **Identificada** (identified), **En curso** (in progress) | **Aprovechada** (pursued), **Descartada** (discarded) |
+
+- The state is changed on the record's form.
+- A closed record takes no new actions: **El riesgo está cerrado: no admite
+  acciones nuevas.** or **La oportunidad está aprovechada o descartada: no
+  admite acciones nuevas.** Its existing actions can still be edited and
+  evaluated.
+- **Overdue rule.** An open record whose **Próxima revisión** is before today
+  shows **Revisión vencida** (review overdue). A closed record is never
+  overdue.
+
+### Actions
+
+On the record's page, **+ Nueva acción** records:
+
+- **Descripción**;
+- **Responsable** (owner, a person);
+- **Fecha límite** (deadline);
+- **Estado**: **Pendiente** (pending, to start with), **En curso** (in
+  progress), **Completada** (completed) or **Cancelada** (cancelled);
+- **Fecha de finalización (solo si está completada)** (completion date, only
+  when completed): required on a completed action, never in the future and
+  only in that state.
+
+A pending or in-progress action past its deadline shows **Vencida**
+(overdue). An action never moves to another record.
+
+**Effectiveness evaluation (6.1.2 b).** A completed action shows **Evaluar
+eficacia** (evaluate effectiveness, or **Reevaluar** once evaluated), which
+records:
+
+- **Resultado** (result): **Eficaz** (effective) or **No eficaz** (not
+  effective);
+- **Fecha de la evaluación** (evaluation date): the form starts on today;
+  never before the action's completion nor in the future;
+- **Comentario**.
+
+Only a completed action is evaluated: **Solo se evalúa la eficacia de una
+acción completada.**
+
+### Screens
+
+- **The list** filters by **Estado**, **Nivel** (or **Prioridad**),
+  **Responsable**, **Proceso**, **Origen**, **Sin valorar**, **Revisión
+  vencida** and **Abierto** (or **Abierta**, open); risks also by
+  **Probabilidad**, **Impacto** and **Alto o crítico sin acción abierta**
+  (high or critical without an open action). It shows each record's process,
+  owner, level and residual level with the treatment (or priority with the
+  decision), state, **Próxima revisión** (with an overdue badge) and
+  **Acciones abiertas** (pending or in-progress actions).
+- **The heat map** (**Mapa de calor**), above the risk list, is a 5 × 5 grid:
+  likelihood on the rows (5 at the top) and impact on the columns. Each cell
+  counts the open assessed risks with that likelihood and impact, takes the
+  colour of its level and opens the list filtered by it.
+- **A record's page** shows its **Valoración** (assessment, with the level
+  before and after the actions for a risk), its **Identificación**, its
+  **Descripción**, its **Notas** and the **Acciones** table.
+
+### PDF
+
+**PDF** on each list produces the whole register as of today:
+
+- a summary of the open records: how many there are by level (or priority),
+  how many are **Sin valorar** and how many have a **Revisión vencida**, and
+  how many are closed;
+- in the risk PDF, the heat map as a table;
+- the open records and, in a section of their own, the closed ones, each
+  group by level (or priority) from the highest, the unassessed last, then by
+  title. For each record: process, owner, origin, level and residual level
+  with the treatment (or priority and decision), state, next review and
+  description;
+- a table of its actions: description, owner, deadline, state and
+  effectiveness (result, date and comment).
+
+Risks by level and opportunities by priority are also management review
+inputs (see [Inputs (9.3.2)](#inputs-932)).
+
 ## Quality objectives
 
 **Objetivos de calidad** (`/objetivos-calidad/`, ISO 9001:2026 clause 6.2)
@@ -851,15 +1002,17 @@ the period, next to its comment:
 - **a)** the actions of earlier reviews: open at the end of the period, by
   state, completed after it, overdue, and completed in the period;
 - **b)** interested parties, and risks and opportunities: registered, new and
-  changed in the period;
+  changed in the period, the risks by level with the open high or critical
+  ones, and the opportunities by priority;
 - **c)** customer satisfaction (surveys and average score), quality objectives
   (on target, off target, without measurement, with an overdue measurement,
   by state), process performance (audit indicator records), nonconformities
   (detected by severity and origin, closed, and the effectiveness of
   corrective actions) and audits (in the period, completed, findings by type);
 - **d)** training: sessions, hours and topics;
-- **e)** the effectiveness of actions on risks and opportunities: no register
-  holds it, so the comment covers it;
+- **e)** the effectiveness of actions on risks and opportunities: each action
+  records its own (see [Actions](#actions)), but the review does not summarize
+  it yet, so the comment covers it;
 - **f)** improvements implemented in the period.
 
 The figures count the period up to its end, or up to today when the end is
@@ -927,7 +1080,6 @@ Spanish), which reads and writes them with the same role rules.
 | Register | Clause | Where | Fields |
 |---|---|---|---|
 | **Partes interesadas** (interested parties) | 4.2 | Menu **Clientes** | **Nombre** (unique), **Necesidades y Expectativas**, **Requisitos Identificados**, **Objetivo Estratégico** |
-| Risks and opportunities | 6.1 | No screen; MCP module `riesgos_oportunidades` | Type (**Riesgo** or **Oportunidad**), description, quality objective, action plan |
 | Roles and responsibilities | 5.3 | No screen; MCP module `roles_responsabilidades` | Role name (unique), commitment to quality, quality policy description |
 | **Capacitaciones** (training) | 7.2 | Menu **Personas y competencia** | **Tema** (topic), **Fecha**, **Personal** and **Persona**, **Duración en Horas**, **Evaluación Final** |
 | Training resources | 7.1 | No screen; MCP module `recursos_capacitacion` | Resource needed, staff training (yes or no), documentation |
@@ -940,10 +1092,10 @@ Notes:
 
 - The QMS roles are what **Personas** and **Competencias requeridas** pick
   from; a role cited by competence requirements cannot be deleted.
-- The processes are what quality objectives pick from; a process cited by
-  objectives cannot be deleted.
-- Risks and opportunities, interested parties, audit indicators, training and
-  improvements feed the management review inputs.
+- The processes are what quality objectives and risks and opportunities pick
+  from; a process they cite cannot be deleted.
+- Interested parties, audit indicators, training and improvements feed the
+  management review inputs.
 - **Capacitaciones** filters by **Tema**, **Fecha** and **Personal**, and each
   session has a **PDF** (**Registro de capacitación**). Demonstrated competence
   can cite a session as evidence.
@@ -1042,6 +1194,7 @@ for a link or an administrator sends one (see
 | Medición | Measurement |
 | Meta | Target |
 | Mejora | Improvement |
+| Nivel, nivel residual | Level of a risk (likelihood times impact), before and after its actions |
 | No conformidad | Nonconformity |
 | Objetivo de calidad | Quality objective |
 | Obsoleto | Obsolete (revision) |
@@ -1049,11 +1202,15 @@ for a link or an administrator sends one (see
 | Panel | Dashboard |
 | Parte interesada | Interested party |
 | Persona | Person (who works under the QMS; not a user account) |
+| Prioridad | Priority of an opportunity (benefit times feasibility) |
 | Programa de auditoría | Audit programme |
 | Propietario | Owner (document) |
 | Responsable | Responsible person, owner |
 | Revisión (documento) | Revision of a document |
 | Revisión por la dirección | Management review |
+| Revisión vencida | Review overdue (open risk or opportunity past its next review) |
+| Riesgo, Oportunidad | Risk, opportunity |
 | SGC | QMS (quality management system) |
+| Sin valorar | Not assessed yet (risk or opportunity) |
 | Vencida | Overdue |
 | Vigente | In force |
