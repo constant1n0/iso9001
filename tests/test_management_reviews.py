@@ -604,6 +604,22 @@ class InputsTestCase(Helpers, ServiceBase):
         self.assertEqual((0, []), (empty["contexto"]["oportunidades"]["nuevas"],
                                    empty["contexto"]["riesgos"]["lista"]))
 
+    def test_risk_bands_at_their_edges_and_a_closed_critical_risk(self) -> None:
+        """A product of 9 is still medio and 10 already alto (RO1); a closed critical risk
+        counts in its band but not among the open high or critical ones."""
+        base = {"descripcion": "d", "origen": "interno", "fecha_identificacion": date(2026, 1, 1)}
+        for titulo, values in (("Nueve", {"probabilidad": 3, "impacto": 3}),
+                               ("Diez", {"probabilidad": 2, "impacto": 5}),
+                               ("Crítico cerrado", {"probabilidad": 5, "impacto": 5,
+                                                    "estado": "cerrado"})):
+            self.insert(Riesgo, titulo=titulo, **(base | values))
+        found = self.inputs()["contexto"]["riesgos"]
+        self.assertEqual({"bajo": 0, "medio": 1, "alto": 1, "critico": 1, "sin_valorar": 0},
+                         found["por_nivel"])
+        self.assertEqual((1, [{"id": 2, "titulo": "Diez", "nivel": "alto",
+                               "estado": "identificado", "responsable": None}]),
+                         (found["altos_abiertos"], found["altos_abiertos_lista"]))
+
     def test_objectives_are_judged_at_the_period_end_capped_at_today(self) -> None:
         owner = self.person()
 

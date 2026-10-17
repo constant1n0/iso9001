@@ -14,10 +14,14 @@ dashboard flags. The SQLite cases run with the audit flush guard.
 
 from __future__ import annotations
 
+import os
+import unittest
 from datetime import date
 from unittest.mock import patch
 
-from sqlalchemy import text
+import test_auth_bootstrap as bootstrap
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
 
 from mcp_support import McpDbCase, mcp_actor
 from test_nonconformity_service import ServiceBase, actor, errors
@@ -27,6 +31,7 @@ from app.models import AuditLog, ParteInteresada, Person, ProcesoOperacion, Role
 from app.services.actor import Actor
 
 ADMIN, AUDITOR, OPERATIVO = RoleEnum.ADMINISTRADOR, RoleEnum.AUDITOR, RoleEnum.OPERATIVO
+POSTGRES_URI = os.environ.get("TEST_POSTGRES_URI")
 # No user id: attribution and audit rows stay valid without a users row.
 CLI = Actor(user_id=None, label="cli", role=ADMIN, channel="cli")
 TODAY = date(2026, 10, 17)
@@ -484,6 +489,47 @@ class ListTestCase(Helpers, ServiceBase):
         self.refused(errors().ValidationError, actions, CLI, vencida="si", today=TODAY)
 
 
+    def test_the_screen_filters_by_cell_open_and_high_without_action(self) -> None:
+        """The heat map's cell (likelihood and impact), open records and the dashboard's
+        high or critical risks without a pending or in-progress action (RO-3)."""
+        bare = self.risk(titulo="Crítico", probabilidad=4, impacto=5)
+        treated = self.risk(titulo="Tratado", probabilidad=4, impacto=5)
+        self.action(riesgo_id=treated.id)
+        medium = self.risk(titulo="Medio", probabilidad=3, impacto=3)
+        closed = self.risk(titulo="Cerrado", probabilidad=5, impacto=5)
+        self.edit("risks", closed.id, {"estado": "cerrado"})
+        used = self.opportunity(beneficio=5, viabilidad=5)
+        self.edit("opportunities", used.id, {"estado": "aprovechada"})
+        waiting = self.opportunity()
+        pending = self.risk(titulo="Sin valorar")
+        listed = ro().risks.list_
+        for filters, expected in (
+            ({"probabilidad": 4, "impacto": 5}, [bare, treated]), ({"probabilidad": 3}, [medium]),
+            ({"impacto": 5, "abierto": False}, [closed]),
+            ({"abierto": True}, [bare, treated, medium, pending]),
+            ({"alto_sin_accion": True}, [bare]),
+            ({"alto_sin_accion": False}, [treated, medium, closed, pending]),
+        ):
+            with self.subTest(filters=filters):
+                self.assertEqual({r.id for r in expected},
+                                 {r.id for r in listed(db.session, CLI, **filters)})
+        self.assertEqual([waiting.id], [o.id for o in ro().opportunities.list_(
+            db.session, CLI, abierto=True)])
+        for filters in ({"probabilidad": 6}, {"impacto": "4"}, {"probabilidad": True},
+                        {"abierto": "1"}, {"alto_sin_accion": 1}):
+            with self.subTest(refused=filters):
+                self.refused(errors().ValidationError, listed, CLI, **filters)
+
+    def test_the_heat_map_counts_open_assessed_risks_by_cell(self) -> None:
+        for values in ({"probabilidad": 4, "impacto": 5}, {"probabilidad": 4, "impacto": 5},
+                       {"probabilidad": 1, "impacto": 1}, {}):
+            self.risk(**values)
+        closed = self.risk(probabilidad=4, impacto=5)
+        self.edit("risks", closed.id, {"estado": "cerrado"})
+        self.assertEqual({(4, 5): 2, (1, 1): 1}, ro().heat_map(db.session, actor(OPERATIVO)))
+        self.refused(errors().PermissionDenied, ro().heat_map, actor(scopes={"write"}))
+
+
 class ComputedTestCase(Helpers, ServiceBase):
     def test_a_review_is_overdue_only_on_an_open_record_after_its_date(self) -> None:
         m = models()
@@ -643,3 +689,53 @@ class McpTestCase(McpDbCase):
                          {f["name"] for f in described["oportunidades"]["filters"]})
         self.assertEqual({"riesgo_id", "oportunidad_id", "estado", "responsable_id", "vencida"},
                          {f["name"] for f in described["acciones_riesgo"]["filters"]})
+
+
+# In CI a missing database must fail loudly instead of skipping silently.
+@unittest.skipUnless(POSTGRES_URI or os.environ.get("CI"), "TEST_POSTGRES_URI is not set")
+class PostgresDeleteTestCase(Helpers, unittest.TestCase):
+    """PostgreSQL names the foreign key a delete breaks, so a delete racing an action insert
+    (one the explicit check did not see) still gets the register's own message."""
+
+    def setUp(self) -> None:
+        self.assertTrue(POSTGRES_URI, "CI must provide TEST_POSTGRES_URI")
+        self._reset_database()
+        self.app = bootstrap.build_app(SQLALCHEMY_DATABASE_URI=POSTGRES_URI)
+        self.ctx = self.app.app_context()
+        self.ctx.push()
+        db.create_all()
+
+    def tearDown(self) -> None:
+        db.session.remove()
+        db.engine.dispose()
+        self.ctx.pop()
+        self._reset_database()
+
+    @staticmethod
+    def _reset_database() -> None:
+        engine = create_engine(POSTGRES_URI)
+        with engine.begin() as connection:
+            connection.execute(text("DROP SCHEMA public CASCADE"))
+            connection.execute(text("CREATE SCHEMA public"))
+        engine.dispose()
+
+    def test_the_actions_key_maps_to_the_has_actions_message(self) -> None:
+        risk, opportunity = self.risk(), self.opportunity()
+        self.action(riesgo_id=risk.id)
+        self.action(oportunidad_id=opportunity.id)
+        with patch.object(ro(), "_has_actions", return_value=False):
+            for register, record, expected in (
+                    ("risks", risk, ro().RISK_HAS_ACTIONS),
+                    ("opportunities", opportunity, ro().OPPORTUNITY_HAS_ACTIONS)):
+                with self.subTest(register=register):
+                    with self.assertRaises(errors().Conflict) as caught:
+                        getattr(ro(), register).delete(db.session, CLI, record.id)
+                    db.session.rollback()
+                    self.assertIsInstance(caught.exception.__cause__, IntegrityError)
+                    self.assertEqual(expected, caught.exception.message)
+        self.assertIsNotNone(db.session.get(models().Riesgo, risk.id))
+        self.assertIsNotNone(db.session.get(models().Oportunidad, opportunity.id))
+
+
+if __name__ == "__main__":
+    unittest.main()
