@@ -1,20 +1,31 @@
-"""Management review action register and dashboard card (task MR-2 of ``management-review``).
+"""Management review action register and dashboard cards (MR-2 and RO-3).
 
-Kept apart from ``test_management_review_screens`` so the register and the card
-can ship in their own commit. The register (``/revisiones-direccion/acciones``)
-lists every review's actions, filters them by state, owner, type and overdue,
-links each to its review and flags the overdue ones. The dashboard card lists
-the overdue actions to administrators and auditors only, and empties once they
-are followed up. Other roles are refused.
+Kept apart from ``test_management_review_screens`` and ``test_risk_screens`` so
+the register and the cards can ship in their own commits. The register
+(``/revisiones-direccion/acciones``) lists every review's actions, filters them
+by state, owner, type and overdue, links each to its review and flags the
+overdue ones. Its dashboard card lists the overdue actions to administrators and
+auditors only, and empties once they are followed up. Other roles are refused.
+
+The risks and opportunities card (clause 6.1, ``risks-opportunities``) counts
+what ``risks.attention`` flags, each linked to the list filtered to the same
+records, for every role.
 """
 
 from __future__ import annotations
 
 import re
 from datetime import date
+from html import unescape
 
 from test_audit_screens import ADMIN, AUDITOR, OPERATIVO
 from test_management_review_screens import BASE, OVERDUE, ReviewScreensBase
+from test_risk_screens import OPPORTUNITIES, RISKS, RiskScreensBase
+
+from app.models import RoleEnum
+
+CARD_ITEM = re.compile(r'<a href="([^"]+)">([^<]+)</a></span>\s*<span class="list__secondary">'
+                       r'<span class="badge badge--danger">(\d+)</span>')
 
 
 class ActionRegisterTestCase(ReviewScreensBase):
@@ -82,3 +93,43 @@ class DashboardCardTestCase(ReviewScreensBase):
                       self.card())
         self.login(OPERATIVO)
         self.assertIsNone(self.card())
+
+
+class RiskCardTestCase(RiskScreensBase):
+    def card(self) -> str:
+        match = re.search(r'<article class="card" id="riesgos-oportunidades">(.*?)</article>',
+                          self.html("/dashboard/"), re.S)
+        self.assertIsNotNone(match, "the dashboard card is missing")
+        return match.group(1)
+
+    def test_the_card_links_what_needs_attention_to_the_filtered_lists(self) -> None:
+        high = self.risk(titulo="Crítico sin acción", probabilidad=5, impacto=5)
+        late = self.risk(titulo="Revisión pasada", probabilidad=1, impacto=1,
+                         fecha_identificacion=date(2026, 1, 1), fecha_revision=date(2026, 9, 30))
+        pending = self.risk(titulo="Sin valorar")
+        closed = self.risk(titulo="Cerrado sin valorar")
+        self.update("risks", closed, {"estado": "cerrado"})
+        waiting = self.opportunity(titulo="Oportunidad sin valorar")
+        expected = [
+            (f"{RISKS}/?alto_sin_accion=1", "Riesgos altos o críticos sin acción abierta", {high}),
+            (f"{RISKS}/?revision_vencida=1", "Riesgos con la revisión vencida", {late}),
+            (f"{RISKS}/?sin_valorar=1&abierto=1", "Riesgos sin valorar", {pending}),
+            (f"{OPPORTUNITIES}/?sin_valorar=1&abierto=1", "Oportunidades sin valorar", {waiting}),
+        ]
+        for role in RoleEnum:
+            with self.subTest(role=role.name):
+                self.login(role)
+                items = [(unescape(href), label, int(count))
+                         for href, label, count in CARD_ITEM.findall(self.card())]
+                self.assertEqual([(href, label, len(ids)) for href, label, ids in expected],
+                                 items)
+        for href, _, ids in expected:
+            with self.subTest(link=href):
+                self.assertEqual(ids, set(self.rows(href)))
+
+        self.action(riesgo_id=high)
+        self.assertNotIn("sin acción abierta", self.card())
+        for rid in (late, pending):
+            self.update("risks", rid, {"estado": "cerrado"})
+        self.update("opportunities", waiting, {"estado": "descartada"})
+        self.assertIn("Ningún riesgo ni oportunidad requiere atención.", self.card())

@@ -455,6 +455,72 @@ class UiPermissionsTestCase(unittest.TestCase):
             with self.subTest(page="list", role=role.name):
                 self.assertEqual(role in writers, 'href="/revisiones-direccion/nueva"' in html)
 
+    def test_risk_and_opportunity_controls_follow_role_and_state(self) -> None:
+        """Administrators and auditors create and edit records and add, edit and evaluate
+        actions (a completed one only), while the record is open; administrators delete
+        actions and records without actions (RO6)."""
+        from app.services import risks
+        from app.services.actor import Actor
+
+        system = Actor(None, "seed", ADMIN, "system")
+        with self.app.app_context():
+            def record(register, titulo, estado=None, action=None):
+                found = getattr(risks, register).create(db.session, system, {
+                    "titulo": titulo, "descripcion": "d", "origen": "interno",
+                    "responsable_id": self.owner_id}, today=DAY).id
+                parent = "riesgo_id" if register == "risks" else "oportunidad_id"
+                action_id = risks.actions.create(db.session, system, {
+                    parent: found, "descripcion": "Acción", "responsable_id": self.owner_id,
+                    "fecha_limite": DAY, **action}, today=DAY).id if action is not None else None
+                if estado:
+                    getattr(risks, register).update(db.session, system, found,
+                                                    {"estado": estado}, today=DAY)
+                return found, action_id
+
+            done = {"estado": "completada", "fecha_completada": DAY}
+            pages = {
+                ("/riesgos", "empty"): record("risks", "Sin acciones"),
+                ("/riesgos", "pending"): record("risks", "Pendiente", action={}),
+                ("/riesgos", "done"): record("risks", "Completada", action=done),
+                ("/riesgos", "closed"): record("risks", "Cerrado", "cerrado", action=done),
+                ("/oportunidades", "empty"): record("opportunities", "Sin acciones"),
+                ("/oportunidades", "done"): record("opportunities", "Completada", action=done),
+                ("/oportunidades", "closed"): record("opportunities", "Descartada",
+                                                     "descartada", action=done),
+            }
+            db.session.commit()
+        writers, admins, nobody = {ADMIN, AUDITOR}, {ADMIN}, set()
+        expected = {
+            "empty": {"edit": writers, "delete": admins, "add": writers},
+            "pending": {"edit": writers, "add": writers, "edit action": writers,
+                        "delete action": admins},
+            "done": {"edit": writers, "add": writers, "edit action": writers,
+                     "evaluate": writers, "delete action": admins},
+            "closed": {"edit": writers, "edit action": writers, "evaluate": writers,
+                       "delete action": admins},
+        }
+        for (base, state), (record_id, action_id) in pages.items():
+            page = f"{base}/{record_id}"
+            item = f"{page}/acciones/{action_id}"
+            controls = {"edit": f'href="{page}/editar"', "delete": f'action="{page}/eliminar"',
+                        "add": f'href="{page}/acciones/nueva"',
+                        "edit action": f'href="{item}/editar"',
+                        "evaluate": f'href="{item}/eficacia"',
+                        "delete action": f'action="{item}/eliminar"'}
+            for role in RoleEnum:
+                body = self._page(role, page).get_data(as_text=True)
+                for name, marker in controls.items():
+                    with self.subTest(page=page, state=state, role=role.name, control=name):
+                        self.assertEqual(role in expected[state].get(name, nobody),
+                                         marker in body)
+        for base, new in (("/riesgos", "nuevo"), ("/oportunidades", "nueva")):
+            empty = pages[base, "empty"][0]
+            for role in RoleEnum:
+                html = self._page(role, f"{base}/").get_data(as_text=True)
+                with self.subTest(page=f"{base}/", role=role.name):
+                    self.assertEqual(role in writers, f'href="{base}/{new}"' in html)
+                    self.assertEqual(role in writers, f'href="{base}/{empty}/editar"' in html)
+
     def test_navigation_links_follow_the_read_permission(self) -> None:
         expected = {"/auditorias/": {ADMIN, AUDITOR}, "/programas-auditoria/": {ADMIN, AUDITOR},
                     "/documents/": set(RoleEnum), "/no_conformidades/": set(RoleEnum),
@@ -462,6 +528,7 @@ class UiPermissionsTestCase(unittest.TestCase):
                     "/personas/": set(RoleEnum), "/competencias/requisitos/": set(RoleEnum),
                     "/competencias/matriz": set(RoleEnum),
                     "/objetivos-calidad/": set(RoleEnum),
+                    "/riesgos/": set(RoleEnum), "/oportunidades/": set(RoleEnum),
                     "/revisiones-direccion/": {ADMIN, AUDITOR}}
         for role in RoleEnum:
             html = self._page(role, "/dashboard/").get_data(as_text=True)

@@ -15,7 +15,7 @@
 
 from datetime import date, timedelta
 
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, url_for
 from flask_login import login_required
 
 from ..audit_notifications import local_today
@@ -23,7 +23,7 @@ from ..extensions import db
 from ..models import (
     Auditoria, Capacitacion, EstadoNoConformidad, NoConformidad, SatisfaccionCliente,
 )
-from ..services import audits, documents, management_reviews, people, quality_objectives
+from ..services import audits, documents, management_reviews, people, quality_objectives, risks
 from ..services.nonconformities import OPEN_STATES
 from ..utils.permissions import can
 from ..utils.web_actor import current_actor
@@ -34,6 +34,20 @@ bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 REVIEW_WINDOW_DAYS = 30
 # Audits still to be held are "upcoming" when dated within this many days.
 UPCOMING_AUDIT_DAYS = 7
+# What ``risks.attention`` flags (RO-3 of risks-opportunities), in the card's order:
+# its key, label and the list filtered to the same records.
+RISK_ALERTS = (
+    ('riesgos_altos_sin_accion', 'Riesgos altos o críticos sin acción abierta',
+     'riesgo.list_records', {'alto_sin_accion': 1}),
+    ('riesgos_revision_vencida', 'Riesgos con la revisión vencida', 'riesgo.list_records',
+     {'revision_vencida': 1}),
+    ('oportunidades_revision_vencida', 'Oportunidades con la revisión vencida',
+     'oportunidad.list_records', {'revision_vencida': 1}),
+    ('riesgos_sin_valorar', 'Riesgos sin valorar', 'riesgo.list_records',
+     {'sin_valorar': 1, 'abierto': 1}),
+    ('oportunidades_sin_valorar', 'Oportunidades sin valorar', 'oportunidad.list_records',
+     {'sin_valorar': 1, 'abierto': 1}),
+)
 
 
 @bp.route('/', methods=['GET'])
@@ -90,6 +104,15 @@ def dashboard():
         responsables_acciones = people.names(db.session, current_actor(), (
             accion.responsable_id for accion in acciones_revision))
 
+    # Risks and opportunities needing attention, each with its count and filtered
+    # list; every role reads them. None hides the card, and nothing flagged leaves
+    # it empty.
+    avisos_riesgos = None
+    if can('read', 'risks_opportunities'):
+        flagged = risks.attention(db.session, current_actor(), today=hoy)
+        avisos_riesgos = [(label, url_for(endpoint, **query), len(flagged[key]))
+                          for key, label, endpoint, query in RISK_ALERTS if flagged[key]]
+
     # Puntuación media de satisfacción por mes
     # (year, month) grouping, last 12 calendar months including the current one
     indice_actual = hoy.year * 12 + hoy.month - 1
@@ -132,6 +155,7 @@ def dashboard():
         objetivos_desviados=objetivos_desviados,
         acciones_revision=acciones_revision,
         responsables_acciones=responsables_acciones,
+        avisos_riesgos=avisos_riesgos,
         review_window_days=REVIEW_WINDOW_DAYS,
         upcoming_audit_days=UPCOMING_AUDIT_DAYS,
         chart_data=chart_data,
