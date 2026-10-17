@@ -41,6 +41,10 @@ Risks and opportunities:
   unless it is a ``cerrado`` risk or an ``aprovechada`` or ``descartada``
   opportunity; only an open one is overdue for review (``revision_vencida``).
 - A record with actions is never deleted (``Conflict``).
+- The screens (RO-3) also filter by ``abierto``, risks by one cell of the heat map
+  (``probabilidad`` and ``impacto``, each alone too) and by ``alto_sin_accion``,
+  the open high or critical risks ``attention`` flags; ``heat_map`` counts the open
+  assessed risks by cell.
 
 Actions belong to exactly one open risk or opportunity, which is read with a
 shared lock, and never move to another one. A ``completada`` action, and only
@@ -63,7 +67,7 @@ from datetime import date, datetime
 from functools import partial
 from typing import Any
 
-from sqlalchemy import and_, exists, false, not_, select
+from sqlalchemy import and_, exists, false, func, not_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -344,9 +348,12 @@ def revision_vencida(record: Riesgo | Oportunidad, *, today: date) -> bool:
 
 def _record_conditions(model: type, closed: tuple, estado: Any, responsable_id: Any,
                        proceso_id: Any, origen: Any, sin_valorar: Any, revision_vencida: Any,
-                       today: Any) -> list[Any]:
+                       today: Any, abierto: Any = None) -> list[Any]:
     """Filters a risk and an opportunity share (AND); members or their names."""
     where: list[Any] = []
+    if abierto is not None:
+        still_open = model.estado.not_in(closed)
+        where.append(still_open if _flag(abierto, "abierto") else not_(still_open))
     for column, value in ((model.responsable_id, responsable_id),
                           (model.proceso_id, proceso_id)):
         if value is not None:
@@ -377,21 +384,50 @@ def _band(model: type, value: Any, enum_cls: type, ranges: dict, key: str) -> li
 def _risk_conditions(estado: Any = None, nivel: Any = None, responsable_id: int | None = None,
                      proceso_id: int | None = None, origen: Any = None,
                      sin_valorar: bool | None = None, revision_vencida: bool | None = None,
-                     today: date | None = None) -> list[Any]:
+                     today: date | None = None, abierto: bool | None = None,
+                     probabilidad: int | None = None, impacto: int | None = None,
+                     alto_sin_accion: bool | None = None) -> list[Any]:
     """Risk filters (AND); ``revision_vencida`` needs ``today``, the adapter's date."""
-    return [*_record_conditions(Riesgo, CLOSED_RISK_STATES, estado, responsable_id,
-                                proceso_id, origen, sin_valorar, revision_vencida, today),
-            *_band(Riesgo, nivel, NivelRiesgo, LEVEL_RANGES, "nivel")]
+    where = [*_record_conditions(Riesgo, CLOSED_RISK_STATES, estado, responsable_id,
+                                 proceso_id, origen, sin_valorar, revision_vencida, today,
+                                 abierto),
+             *_band(Riesgo, nivel, NivelRiesgo, LEVEL_RANGES, "nivel")]
+    for column, value, key in ((Riesgo.probabilidad, probabilidad, "probabilidad"),
+                               (Riesgo.impacto, impacto, "impacto")):
+        if value is None:
+            continue
+        if (isinstance(value, bool) or not isinstance(value, int)
+                or not ESCALA_MIN <= value <= ESCALA_MAX):
+            raise ValidationError(BAD_FILTER.format(key=key))
+        where.append(column == value)
+    if alto_sin_accion is not None:
+        flagged = _high_without_action()
+        where.append(flagged if _flag(alto_sin_accion, "alto_sin_accion") else not_(flagged))
+    return where
+
+
+def _high_without_action() -> Any:
+    """An open ``alto`` or ``critico`` risk without a pending or in-progress action.
+
+    Never NULL (an unassessed risk is plainly not one), so its negation holds the rest.
+    """
+    acting = exists().where(AccionRiesgo.riesgo_id == Riesgo.id,
+                            AccionRiesgo.estado.in_(OPEN_ACTION_STATES))
+    return and_(Riesgo.estado.not_in(CLOSED_RISK_STATES), Riesgo.probabilidad.is_not(None),
+                Riesgo.impacto.is_not(None),
+                Riesgo.probabilidad * Riesgo.impacto >= LEVEL_RANGES[NivelRiesgo.alto][0],
+                not_(acting))
 
 
 def _opportunity_conditions(estado: Any = None, prioridad: Any = None,
                             responsable_id: int | None = None, proceso_id: int | None = None,
                             origen: Any = None, sin_valorar: bool | None = None,
                             revision_vencida: bool | None = None,
-                            today: date | None = None) -> list[Any]:
+                            today: date | None = None, abierto: bool | None = None) -> list[Any]:
     """Opportunity filters (AND); ``revision_vencida`` needs ``today``."""
     return [*_record_conditions(Oportunidad, CLOSED_OPPORTUNITY_STATES, estado, responsable_id,
-                                proceso_id, origen, sin_valorar, revision_vencida, today),
+                                proceso_id, origen, sin_valorar, revision_vencida, today,
+                                abierto),
             *_band(Oportunidad, prioridad, PrioridadOportunidad, PRIORITY_RANGES, "prioridad")]
 
 
@@ -544,8 +580,6 @@ def attention(session: Session, actor: Actor, *, today: date) -> dict[str, list[
     policy.require(actor, Action.READ, RESOURCE)
     today = _today(today)
     product = Riesgo.probabilidad * Riesgo.impacto
-    acting = exists().where(AccionRiesgo.riesgo_id == Riesgo.id,
-                            AccionRiesgo.estado.in_(OPEN_ACTION_STATES))
     open_risk = Riesgo.estado.not_in(CLOSED_RISK_STATES)
     open_opportunity = Oportunidad.estado.not_in(CLOSED_OPPORTUNITY_STATES)
 
@@ -561,15 +595,27 @@ def attention(session: Session, actor: Actor, *, today: date) -> dict[str, list[
                      order=(model.fecha_identificacion, model.id))
 
     return {
-        "riesgos_altos_sin_accion": found(
-            Riesgo, open_risk, product >= LEVEL_RANGES[NivelRiesgo.alto][0], not_(acting),
-            order=(product.desc(), Riesgo.id)),
+        "riesgos_altos_sin_accion": found(Riesgo, _high_without_action(),
+                                          order=(product.desc(), Riesgo.id)),
         "riesgos_revision_vencida": late(Riesgo, open_risk),
         "oportunidades_revision_vencida": late(Oportunidad, open_opportunity),
         "riesgos_sin_valorar": pending(Riesgo, open_risk, Riesgo.probabilidad),
         "oportunidades_sin_valorar": pending(Oportunidad, open_opportunity,
                                              Oportunidad.beneficio),
     }
+
+
+def heat_map(session: Session, actor: Actor) -> dict[tuple[int, int], int]:
+    """How many open assessed risks fall in each (likelihood, impact) cell (read grant).
+
+    Cells without risks are left out.
+    """
+    policy.require(actor, Action.READ, RESOURCE)
+    rows = session.execute(
+        select(Riesgo.probabilidad, Riesgo.impacto, func.count())
+        .where(Riesgo.estado.not_in(CLOSED_RISK_STATES), Riesgo.probabilidad.is_not(None))
+        .group_by(Riesgo.probabilidad, Riesgo.impacto))
+    return {(likelihood, impact): count for likelihood, impact, count in rows}
 
 
 # -- helpers ---------------------------------------------------------------------------
