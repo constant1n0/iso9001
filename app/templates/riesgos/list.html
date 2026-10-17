@@ -1,0 +1,104 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% from "riesgos/_macros.html" import nivel_badge, banda, dia, etiqueta %}
+{% set riesgos = kind.band == 'nivel' %}
+{% block title %}{{ kind.labels.plural }}{% endblock %}
+{% block crumb %}Calidad · {{ kind.labels.plural }}{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 6.1 · Riesgos y oportunidades', kind.labels.plural) %}
+    {% if can('create', 'risks_opportunities') %}
+    <a class="btn btn--primary" href="{{ url_for(kind.bp.name ~ '.new_record') }}">+ {{ kind.labels.new }}</a>
+    {% endif %}
+{% endcall %}
+
+{% if mapa %}{% include "riesgos/_heat_map.html" %}{% endif %}
+
+<details class="filters"{% if applied %} open{% endif %}>
+    <summary>Filtros{% if applied %} <span class="badge badge--warn">{{ applied }} {{ 'activo' if applied == 1 else 'activos' }}</span>{% endif %}</summary>
+    <form method="get" action="{{ url_for(kind.bp.name ~ '.list_records') }}" class="filters__body">
+        {% for name, label, choices, _ in campos %}
+        <div class="field"><label for="filtro-{{ name }}">{{ label }}</label>
+            <select name="{{ name }}" id="filtro-{{ name }}">
+                <option {% if name not in elegidos %}selected {% endif %}value="">Todos</option>
+                {% for value, text in choices %}
+                <option {% if elegidos.get(name) == value %}selected {% endif %}value="{{ value }}">{{ text }}</option>
+                {% endfor %}
+            </select></div>
+        {% endfor %}
+        <div class="filters__actions">
+            <button type="submit" class="btn btn--primary">Buscar</button>
+            <a class="btn btn--ghost" href="{{ url_for(kind.bp.name ~ '.list_records') }}">Limpiar</a>
+        </div>
+    </form>
+</details>
+
+{% if registros %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Título</th>
+                <th scope="col">Proceso</th>
+                <th scope="col">Responsable</th>
+                {% if riesgos %}
+                <th scope="col">Nivel</th>
+                <th scope="col">Nivel residual</th>
+                <th scope="col">Tratamiento</th>
+                {% else %}
+                <th scope="col">Prioridad</th>
+                <th scope="col">Decisión</th>
+                {% endif %}
+                <th scope="col">Estado</th>
+                <th scope="col">Próxima revisión</th>
+                <th scope="col" class="num">Acciones abiertas</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for registro in registros %}
+            <tr>
+                <td><a href="{{ url_for(kind.bp.name ~ '.show_record', record_id=registro.id) }}">{{ registro.titulo }}</a></td>
+                <td>{{ procesos.get(registro.proceso_id, '—') }}</td>
+                <td>{{ personas.get(registro.responsable_id, '—') }}</td>
+                <td>{{ banda(registro, kind.band) }}</td>
+                {% if riesgos %}
+                <td>{% if registro.nivel_residual %}{{ nivel_badge(registro.nivel_residual) }}{% else %}—{% endif %}</td>
+                <td>{{ etiqueta(registro.tratamiento) }}</td>
+                {% else %}
+                <td>{{ etiqueta(registro.decision) }}</td>
+                {% endif %}
+                <td><span class="badge">{{ registro.estado.value }}</span></td>
+                <td class="date">{{ dia(registro.fecha_revision) }}{% if registro.id in vencidas %} <span class="badge badge--warn">Revisión vencida</span>{% endif %}</td>
+                <td class="num">{{ abiertas[registro.id] }}</td>
+                <td>
+                    <div class="table__actions">
+                        {% if can('update', 'risks_opportunities') %}
+                        <a class="btn btn--sm" href="{{ url_for(kind.bp.name ~ '.edit_record', record_id=registro.id) }}">Editar</a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    {{ empty_state(kind.labels.no_match if applied else kind.labels.empty) }}
+{% endif %}
+{% endblock %}
