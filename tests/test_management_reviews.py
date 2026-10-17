@@ -33,8 +33,8 @@ from app.models import (
     AccionCorrectiva, Auditoria, AuditoriaIndicador, AuditLog, Capacitacion,
     EstadoAuditoriaEnum, EstadoNoConformidad, EstadoObjetivo, FrecuenciaMedicion,
     GravedadNoConformidad, HallazgoAuditoria, MedicionObjetivo, Mejora, NoConformidad,
-    ObjetivoCalidad, OrigenNoConformidad, ParteInteresada, Person, ResultadoVerificacion,
-    RiesgoOportunidad, RoleEnum, SatisfaccionCliente, SentidoObjetivo, TipoEnum, TipoHallazgo,
+    ObjetivoCalidad, Oportunidad, OrigenNoConformidad, ParteInteresada, Person,
+    ResultadoVerificacion, Riesgo, RoleEnum, SatisfaccionCliente, SentidoObjetivo, TipoHallazgo,
 )
 from app.services.actor import Actor
 
@@ -529,13 +529,6 @@ class InputsTestCase(Helpers, ServiceBase):
             ("Banco", at(2026, 7, 1), at(2026, 7, 1)),
         ):
             self.insert(ParteInteresada, nombre=nombre, created_at=created, updated_at=updated)
-        for tipo, descripcion, created, updated in (
-            (TipoEnum.Riesgo, "Fallo de proveedor", at(2026, 4, 1), at(2026, 4, 1)),
-            (TipoEnum.Oportunidad, "Nuevo mercado", at(2026, 1, 1), at(2026, 4, 10)),
-            (TipoEnum.Riesgo, "Rotación", at(2026, 3, 31, 23, 59), at(2026, 3, 31, 23, 59)),
-        ):
-            self.insert(RiesgoOportunidad, tipo=tipo, descripcion=descripcion,
-                        created_at=created, updated_at=updated)
         for fecha, puntuacion in ((date(2026, 4, 1), 8), (date(2026, 6, 30), 9),
                                   (date(2026, 3, 31), 2), (date(2026, 7, 1), 1)):
             self.insert(SatisfaccionCliente, fecha_encuesta=fecha, cliente="ACME",
@@ -548,17 +541,68 @@ class InputsTestCase(Helpers, ServiceBase):
         self.assertEqual((5, 1, 1, ["Clientes", "Nuevo proveedor"]),
                          (parties["total"], parties["nuevas"], parties["modificadas"],
                           parties["lista"]))
-        risks = found["contexto"]["riesgos_oportunidades"]
-        self.assertEqual(({"Riesgo": 2, "Oportunidad": 1}, 1, 1),
-                         (risks["por_tipo"], risks["nuevos"], risks["modificados"]))
-        self.assertEqual([("Riesgo", "Fallo de proveedor"), ("Oportunidad", "Nuevo mercado")],
-                         [(item["tipo"], item["descripcion"]) for item in risks["lista"]])
         self.assertEqual({"encuestas": 2, "media": 8.5}, found["satisfaccion"])
         self.assertEqual({"total": 1, "lista": [{
             "area": "Compras", "fecha": "2026-05-05", "indicador": "Plazo medio 3 días",
             "resultado": "Conforme"}]}, found["indicadores"])
         empty = mr().inputs(db.session, CLI, date(2020, 1, 1), date(2020, 1, 31), today=TODAY)
         self.assertEqual({"encuestas": 0, "media": None}, empty["satisfaccion"])
+
+    def test_risks_by_level_and_opportunities_by_priority(self) -> None:
+        """Every current record by band (RO7), those created or else updated in the
+        period, and the open high or critical risks with their owners."""
+        eva = self.person("Eva Gil")
+        base = {"descripcion": "d", "origen": "interno", "fecha_identificacion": date(2026, 1, 1)}
+        for titulo, values, created, updated in (
+            ("Fallo de proveedor", {"probabilidad": 4, "impacto": 5, "responsable_id": eva},
+             at(2026, 4, 1), at(2026, 4, 1)),
+            ("Rotación", {"probabilidad": 3, "impacto": 4, "estado": "cerrado"},
+             at(2026, 1, 1), at(2026, 4, 10)),
+            ("Sin valorar", {}, at(2025, 12, 1), at(2025, 12, 1)),
+            ("Legado", {"probabilidad": 1, "impacto": 2}, None, None),
+            ("Alto controlado", {"probabilidad": 4, "impacto": 3, "estado": "controlado"},
+             at(2025, 1, 1), at(2025, 1, 1)),
+            ("Después del periodo", {"probabilidad": 2, "impacto": 3}, at(2026, 7, 1),
+             at(2026, 7, 1)),
+        ):
+            self.insert(Riesgo, titulo=titulo, created_at=created, updated_at=updated,
+                        **(base | values))
+        for titulo, values, created, updated in (
+            ("Nuevo mercado", {"beneficio": 5, "viabilidad": 4}, at(2026, 1, 1),
+             at(2026, 4, 10)),
+            ("Certificación", {"beneficio": 2, "viabilidad": 4}, at(2026, 5, 5), at(2026, 5, 5)),
+            ("Pendiente", {}, None, None),
+        ):
+            self.insert(Oportunidad, titulo=titulo, created_at=created, updated_at=updated,
+                        **(base | values))
+        context = self.inputs()["contexto"]
+        self.assertEqual({"partes_interesadas", "riesgos", "oportunidades"}, set(context))
+        self.assertEqual({
+            "total": 6,
+            "por_nivel": {"bajo": 1, "medio": 1, "alto": 2, "critico": 1, "sin_valorar": 1},
+            "nuevos": 1, "modificados": 1,
+            "lista": [{"id": 1, "titulo": "Fallo de proveedor", "nivel": "critico",
+                       "estado": "identificado"},
+                      {"id": 2, "titulo": "Rotación", "nivel": "alto", "estado": "cerrado"}],
+            "altos_abiertos": 2,
+            "altos_abiertos_lista": [
+                {"id": 1, "titulo": "Fallo de proveedor", "nivel": "critico",
+                 "estado": "identificado", "responsable": "Eva Gil"},
+                {"id": 5, "titulo": "Alto controlado", "nivel": "alto", "estado": "controlado",
+                 "responsable": None}],
+        }, context["riesgos"])
+        self.assertEqual({
+            "total": 3,
+            "por_prioridad": {"baja": 0, "media": 1, "alta": 1, "sin_valorar": 1},
+            "nuevas": 1, "modificadas": 1,
+            "lista": [{"id": 1, "titulo": "Nuevo mercado", "prioridad": "alta",
+                       "estado": "identificada"},
+                      {"id": 2, "titulo": "Certificación", "prioridad": "media",
+                       "estado": "identificada"}],
+        }, context["oportunidades"])
+        empty = mr().inputs(db.session, CLI, date(2020, 1, 1), date(2020, 1, 31), today=TODAY)
+        self.assertEqual((0, []), (empty["contexto"]["oportunidades"]["nuevas"],
+                                   empty["contexto"]["riesgos"]["lista"]))
 
     def test_objectives_are_judged_at_the_period_end_capped_at_today(self) -> None:
         owner = self.person()

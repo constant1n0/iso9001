@@ -14,8 +14,8 @@ from app.mcp_server import context
 from app.mcp_server.server import build_server
 from app.mcp_server.registry import MODULES
 from app.models import (
-    EstadoNoConformidad, NoConformidad, ObjetivoCalidad, Person, RevisionDireccion, RoleEnum,
-    User,
+    EstadoNoConformidad, NoConformidad, ObjetivoCalidad, Person, RevisionDireccion, Riesgo,
+    RoleEnum, User,
 )
 from app.services import api_tokens
 from app.services.actor import Actor
@@ -37,7 +37,6 @@ SEEDS = {
     "partes_interesadas": {"nombre": "Clientes"},
     "mejoras": {"no_conformidad": "NC-1"},
     "roles_responsabilidades": {"rol": "Director"},
-    "riesgos_oportunidades": {"tipo": "Riesgo", "descripcion": "Fallo de proveedor"},
     "recursos_capacitacion": {"recurso_necesario": "Formacion"},
     "procesos": {"proceso": "Compras"},
     "indicadores_auditoria": {"area_auditoria": "Calidad"},
@@ -72,6 +71,14 @@ SEEDS = {
     "acciones_revision": {"revision_id": 1, "tipo": "mejora",
                           "descripcion": "Automatizar el seguimiento", "responsable_id": 1,
                           "fecha_limite": "2026-12-31"},
+    # Owned by the person seeded above (id 1); identified today by default.
+    "riesgos": {"titulo": "Fallo de proveedor", "descripcion": "Proveedor único de acero",
+                "origen": "externo", "responsable_id": 1},
+    "oportunidades": {"titulo": "Nuevo mercado", "descripcion": "Sector naval",
+                      "origen": "externo", "responsable_id": 1},
+    # Cites the risk and the person seeded above (both id 1).
+    "acciones_riesgo": {"riesgo_id": 1, "descripcion": "Homologar un segundo proveedor",
+                        "responsable_id": 1, "fecha_limite": "2026-12-31"},
 }
 
 
@@ -109,9 +116,11 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
     def seed(self, slug: str, **overrides) -> int:
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
-        if (slug in ("documentos", "objetivos_calidad", "acciones_revision")
-                and db.session.get(Person, 1) is None):
+        if (slug in ("documentos", "objetivos_calidad", "acciones_revision", "riesgos",
+                     "oportunidades") and db.session.get(Person, 1) is None):
             self.seed("personas")
+        if slug == "acciones_riesgo" and db.session.get(Riesgo, 1) is None:
+            self.seed("riesgos")
         if slug == "mediciones_objetivo" and db.session.get(ObjetivoCalidad, 1) is None:
             self.seed("objetivos_calidad")
         if slug == "acciones_revision" and db.session.get(RevisionDireccion, 1) is None:

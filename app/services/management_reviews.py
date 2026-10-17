@@ -74,11 +74,11 @@ from ..models import (
     AccionCorrectiva, AccionRevision, Auditoria, AuditoriaIndicador, Capacitacion,
     EstadoAccionRevision, EstadoAuditoriaEnum, EstadoNoConformidad, EstadoObjetivo,
     EstadoRevisionDireccion, GravedadNoConformidad, HallazgoAuditoria, MedicionObjetivo, Mejora,
-    NoConformidad, ObjetivoCalidad, OrigenNoConformidad, ParteInteresada, Person,
-    ResultadoVerificacion, RevisionDireccion, RiesgoOportunidad, RoleEnum, SatisfaccionCliente,
-    TipoAccionRevision, TipoEnum, TipoHallazgo,
+    NivelRiesgo, NoConformidad, ObjetivoCalidad, Oportunidad, OrigenNoConformidad,
+    ParteInteresada, Person, ResultadoVerificacion, RevisionDireccion, Riesgo, RoleEnum,
+    SatisfaccionCliente, TipoAccionRevision, TipoHallazgo,
 )
-from . import audit, crud, fields, people, policy, quality_objectives
+from . import audit, crud, fields, people, policy, quality_objectives, risks
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
 from .errors import Conflict, NotFound, PermissionDenied, ValidationError
@@ -610,11 +610,15 @@ def inputs(session: Session, actor: Actor, desde: date, hasta: date, *, today: d
       after it (``completadas_despues``); ``vencidas`` of those were past their
       deadline then; ``completadas_en_periodo`` were completed in the period.
       ``lista`` holds the open ones, soonest deadline first.
-    - ``contexto`` (9.3.2 b): interested parties and risks or opportunities
+    - ``contexto`` (9.3.2 b): interested parties, risks and opportunities
       created (``nuevas``/``nuevos``) or else updated (``modificadas``/
-      ``modificados``) in the period, with their names or descriptions in
-      ``lista``; ``total`` and ``por_tipo`` count every current record (there
-      is no level, so risks are counted by type).
+      ``modificados``) in the period, listed in ``lista``; ``total`` counts
+      every current record, and so do ``por_nivel`` (risks, decision RO7) and
+      ``por_prioridad`` (opportunities), with ``sin_valorar`` for the records
+      not assessed yet. ``altos_abiertos`` counts the open risks of level
+      ``alto`` or ``critico``, listed with their owners in
+      ``altos_abiertos_lista``, the highest first. Reviews held before RO-2
+      froze a single ``riesgos_oportunidades`` count by type instead.
     - ``satisfaccion`` (9.3.2 c 1): surveys in the period and their average
       score (``None`` without surveys).
     - ``objetivos`` (9.3.2 c 2): objectives whose period overlaps the review's,
@@ -671,7 +675,8 @@ def _inputs(session: Session, desde: date, hasta: date, *, today: date,
         "acciones_previas": _earlier_actions(session, desde, hasta, cut_off, review),
         "contexto": {
             "partes_interesadas": _changed_parties(session, desde, hasta),
-            "riesgos_oportunidades": _changed_risks(session, desde, hasta),
+            "riesgos": _risks(session, desde, hasta),
+            "oportunidades": _opportunities(session, desde, hasta),
         },
         "satisfaccion": _satisfaction(session, desde, hasta),
         "objetivos": _objectives(session, desde, hasta, cut_off),
@@ -736,17 +741,46 @@ def _changed_parties(session: Session, desde: date, hasta: date) -> dict[str, An
     }
 
 
-def _changed_risks(session: Session, desde: date, hasta: date) -> dict[str, Any]:
-    created, updated = _changes(RiesgoOportunidad, desde, hasta)
-    listed = session.execute(
-        select(RiesgoOportunidad.tipo, RiesgoOportunidad.descripcion)
-        .where(or_(created, updated)).order_by(RiesgoOportunidad.id_riesgo).limit(LIST_LIMIT))
+def _risks(session: Session, desde: date, hasta: date) -> dict[str, Any]:
+    created, updated = _changes(Riesgo, desde, hasta)
+    product = Riesgo.probabilidad * Riesgo.impacto
+    high = and_(Riesgo.estado.not_in(risks.CLOSED_RISK_STATES),
+                product >= risks.LEVEL_RANGES[NivelRiesgo.alto][0])
+    listed = session.scalars(select(Riesgo).where(or_(created, updated))
+                             .order_by(Riesgo.id).limit(LIST_LIMIT))
+    highest = session.execute(
+        select(Riesgo, Person.nombre).outerjoin(Person, Riesgo.responsable_id == Person.id)
+        .where(high).order_by(product.desc(), Riesgo.id).limit(LIST_LIMIT))
     return {
-        "por_tipo": _count_by(session, RiesgoOportunidad.tipo, TipoEnum),
-        "nuevos": _count(session, RiesgoOportunidad, created),
-        "modificados": _count(session, RiesgoOportunidad, updated),
-        "lista": [{"tipo": tipo.name, "descripcion": _short(descripcion)}
-                  for tipo, descripcion in listed],
+        "total": _count(session, Riesgo),
+        "por_nivel": _count_by_band(session, product, risks.LEVEL_RANGES),
+        "nuevos": _count(session, Riesgo, created),
+        "modificados": _count(session, Riesgo, updated),
+        "lista": [_risk_item(risk) for risk in listed],
+        "altos_abiertos": _count(session, Riesgo, high),
+        "altos_abiertos_lista": [_risk_item(risk) | {"responsable": owner}
+                                 for risk, owner in highest],
+    }
+
+
+def _risk_item(risk: Riesgo) -> dict[str, Any]:
+    return {"id": risk.id, "titulo": _short(risk.titulo),
+            "nivel": risk.nivel.name if risk.nivel else "sin_valorar", "estado": risk.estado.name}
+
+
+def _opportunities(session: Session, desde: date, hasta: date) -> dict[str, Any]:
+    created, updated = _changes(Oportunidad, desde, hasta)
+    listed = session.scalars(select(Oportunidad).where(or_(created, updated))
+                             .order_by(Oportunidad.id).limit(LIST_LIMIT))
+    return {
+        "total": _count(session, Oportunidad),
+        "por_prioridad": _count_by_band(session, Oportunidad.beneficio * Oportunidad.viabilidad,
+                                        risks.PRIORITY_RANGES),
+        "nuevas": _count(session, Oportunidad, created),
+        "modificadas": _count(session, Oportunidad, updated),
+        "lista": [{"id": found.id, "titulo": _short(found.titulo),
+                   "prioridad": found.prioridad.name if found.prioridad else "sin_valorar",
+                   "estado": found.estado.name} for found in listed],
     }
 
 
@@ -888,6 +922,15 @@ def _count_by(session: Session, column: Any, enum_cls: Any, *where: Any,
     if unset:
         counts["sin_indicar"] = found.get(None, 0)
     return counts
+
+
+def _count_by_band(session: Session, product: Any, ranges: dict) -> dict[str, int]:
+    """Every record counted by the band of ``product`` (``ranges``, in band order), plus
+    ``sin_valorar`` for the records whose product is NULL (not assessed, RO4)."""
+    band = case(*((product.between(low, high), member.name)
+                  for member, (low, high) in ranges.items()), else_="sin_valorar")
+    found = dict(session.execute(select(band, func.count()).group_by(band)).all())
+    return {name: found.get(name, 0) for name in (*(m.name for m in ranges), "sin_valorar")}
 
 
 def _moments(desde: date, hasta: date, *, aware: bool) -> tuple[datetime, datetime]:

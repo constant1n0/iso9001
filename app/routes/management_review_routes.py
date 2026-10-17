@@ -51,6 +51,7 @@ is flashed on the review's page.
 from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from enum import Enum
 from typing import Any
 
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
@@ -64,9 +65,10 @@ from ..forms import (
     RevisionDireccionForm, number_text, person_choices,
 )
 from ..models import (
-    AccionRevision, EstadoAccionRevision, EstadoObjetivo, EstadoRevisionDireccion,
-    GravedadNoConformidad, OrigenNoConformidad, RevisionDireccion, TipoAccionRevision,
-    TipoEnum, TipoHallazgo,
+    AccionRevision, EstadoAccionRevision, EstadoObjetivo, EstadoOportunidad,
+    EstadoRevisionDireccion, EstadoRiesgo, GravedadNoConformidad, NivelRiesgo,
+    OrigenNoConformidad, PrioridadOportunidad, RevisionDireccion, TipoAccionRevision,
+    TipoHallazgo,
 )
 from ..services import management_reviews as mr
 from ..services import people
@@ -132,10 +134,20 @@ def _number(value: Any) -> str:
         return str(value)
 
 
+class _TipoAnterior(Enum):
+    """The record types of ``contexto.riesgos_oportunidades``, frozen before RO-2 (RO7)."""
+
+    Riesgo = 'Riesgo'
+    Oportunidad = 'Oportunidad'
+
+
+_UNSET = {'sin_indicar': 'Sin indicar', 'sin_valorar': 'Sin valorar'}
+
+
 def _member(enum_cls: Any, name: Any) -> str:
-    """The Spanish label of a member name of the inputs (``sin_indicar`` when unset)."""
-    if name == 'sin_indicar':
-        return 'Sin indicar'
+    """The Spanish label of a member name of the inputs (or of ``_UNSET``)."""
+    if name in _UNSET:
+        return _UNSET[name]
     return enum_cls[name].value if name in enum_cls.__members__ else str(name or '—')
 
 
@@ -149,7 +161,9 @@ def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
     Each section has its ``titulo`` (``REVIEW_INPUTS``), its ``comentario``
     field and ``bloques`` of figures (label, text) and of optional rows under
     ``columnas``. A missing key shows as a dash, so inputs frozen with an older
-    shape still render.
+    shape still render; reviews held before RO-2 of ``risks-opportunities`` show
+    their single ``riesgos_oportunidades`` count by type instead of the risk and
+    opportunity registers (RO7).
     """
     def n(*path: str) -> str:
         return _number(_at(datos, *path))
@@ -182,13 +196,41 @@ def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
         ('Modificadas en el periodo', n('contexto', 'partes_interesadas', 'modificadas')),
     ], ('Parte interesada',), (
         (name,) for name in rows('contexto', 'partes_interesadas', 'lista')))
-    riesgos = _block('Riesgos y oportunidades', [
-        *by('Registrados', TipoEnum, 'contexto', 'riesgos_oportunidades', 'por_tipo'),
+    riesgos = _block('Riesgos', [
+        ('Riesgos registrados', n('contexto', 'riesgos', 'total')),
+        *by('Nivel', NivelRiesgo, 'contexto', 'riesgos', 'por_nivel'),
+        ('Riesgos nuevos en el periodo', n('contexto', 'riesgos', 'nuevos')),
+        ('Riesgos modificados en el periodo', n('contexto', 'riesgos', 'modificados')),
+    ], ('Riesgo nuevo o modificado', 'Nivel', 'Estado'), (
+        (r.get('titulo'), _member(NivelRiesgo, r.get('nivel')),
+         _member(EstadoRiesgo, r.get('estado')))
+        for r in rows('contexto', 'riesgos', 'lista')))
+    altos = _block('Riesgos altos o críticos abiertos', [
+        ('Abiertos con nivel alto o crítico', n('contexto', 'riesgos', 'altos_abiertos')),
+    ], ('Riesgo', 'Nivel', 'Responsable', 'Estado'), (
+        (r.get('titulo'), _member(NivelRiesgo, r.get('nivel')), r.get('responsable'),
+         _member(EstadoRiesgo, r.get('estado')))
+        for r in rows('contexto', 'riesgos', 'altos_abiertos_lista')))
+    oportunidades = _block('Oportunidades', [
+        ('Oportunidades registradas', n('contexto', 'oportunidades', 'total')),
+        *by('Prioridad', PrioridadOportunidad, 'contexto', 'oportunidades', 'por_prioridad'),
+        ('Oportunidades nuevas en el periodo', n('contexto', 'oportunidades', 'nuevas')),
+        ('Oportunidades modificadas en el periodo',
+         n('contexto', 'oportunidades', 'modificadas')),
+    ], ('Oportunidad nueva o modificada', 'Prioridad', 'Estado'), (
+        (o.get('titulo'), _member(PrioridadOportunidad, o.get('prioridad')),
+         _member(EstadoOportunidad, o.get('estado')))
+        for o in rows('contexto', 'oportunidades', 'lista')))
+    anteriores = _block('Riesgos y oportunidades', [
+        *by('Registrados', _TipoAnterior, 'contexto', 'riesgos_oportunidades', 'por_tipo'),
         ('Nuevos en el periodo', n('contexto', 'riesgos_oportunidades', 'nuevos')),
         ('Modificados en el periodo', n('contexto', 'riesgos_oportunidades', 'modificados')),
     ], ('Tipo', 'Descripción'), (
-        (_member(TipoEnum, r.get('tipo')), r.get('descripcion'))
+        (_member(_TipoAnterior, r.get('tipo')), r.get('descripcion'))
         for r in rows('contexto', 'riesgos_oportunidades', 'lista')))
+    frozen_before_registers = _at(datos, 'contexto', 'riesgos_oportunidades') is not None
+    contexto = ([partes, anteriores] if frozen_before_registers
+                else [partes, riesgos, altos, oportunidades])
     satisfaccion = _block('Satisfacción del cliente', [
         ('Encuestas en el periodo', n('satisfaccion', 'encuestas')),
         ('Puntuación media', n('satisfaccion', 'media')),
@@ -235,7 +277,7 @@ def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
                              for m in rows('mejoras', 'lista')))
     blocks = {
         'comentario_acciones_previas': [previas],
-        'comentario_contexto': [partes, riesgos],
+        'comentario_contexto': contexto,
         'comentario_desempeno': [satisfaccion, objetivos, indicadores, no_conformidades,
                                  auditorias],
         'comentario_recursos': [capacitaciones],

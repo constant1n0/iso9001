@@ -16,8 +16,8 @@ from app.mcp_server.registry import MODULES
 from app.models import AuditLog, EstadoNoConformidad, NoConformidad, User
 from app.services import audit
 
-JSON_REGISTERS = ("roles_responsabilidades", "riesgos_oportunidades", "recursos_capacitacion",
-                  "procesos", "indicadores_auditoria")
+JSON_REGISTERS = ("roles_responsabilidades", "recursos_capacitacion", "procesos",
+                  "indicadores_auditoria", "riesgos", "oportunidades", "acciones_riesgo")
 
 
 def error_text(result) -> str:

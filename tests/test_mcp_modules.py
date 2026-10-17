@@ -13,11 +13,11 @@ ROOT = Path(__file__).resolve().parents[1]
 SLUGS = {
     "no_conformidades", "auditorias", "documentos", "capacitaciones",
     "satisfaccion_clientes", "partes_interesadas", "mejoras",
-    "roles_responsabilidades", "riesgos_oportunidades", "recursos_capacitacion",
+    "roles_responsabilidades", "recursos_capacitacion",
     "procesos", "indicadores_auditoria", "personas",
     "competencias_requeridas", "competencias_acreditadas", "acciones_correctivas",
     "programas_auditoria", "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo",
-    "revisiones_direccion", "acciones_revision",
+    "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades", "acciones_riesgo",
 }
 # The two competence registers share one policy resource (decision Q1 of qms-people),
 # and so do audits, their programmes and their findings (decision AP7 of audit-programme).
@@ -27,6 +27,8 @@ SHARED_AUDITS = ("auditorias", "programas_auditoria", "hallazgos_auditoria")
 SHARED_OBJECTIVES = ("objetivos_calidad", "mediciones_objetivo")
 # Management reviews and their actions (decision MR5 of management-review).
 SHARED_REVIEWS = ("revisiones_direccion", "acciones_revision")
+# Risks, opportunities and their actions (decision RO6 of risks-opportunities).
+SHARED_RISKS = ("riesgos", "oportunidades", "acciones_riesgo")
 # (module, legacy free-text name, person link that can fill it)
 LEGACY_NAMES = (("capacitaciones", "personal", "persona_id"),
                 ("auditorias", "auditor", "auditor_id"),
@@ -50,14 +52,15 @@ class LayoutTestCase(unittest.TestCase):
 
 
 class RegistryTestCase(unittest.TestCase):
-    def test_registry_holds_the_twenty_two_modules(self) -> None:
+    def test_registry_holds_the_twenty_four_modules(self) -> None:
         self.assertEqual(SLUGS, set(registry().MODULES))
 
     def test_each_module_maps_to_its_own_policy_resource(self) -> None:
         from app.services.policy import Resource
 
         modules = registry().MODULES
-        shared = SHARED_RESOURCE + SHARED_AUDITS + SHARED_OBJECTIVES + SHARED_REVIEWS
+        shared = (SHARED_RESOURCE + SHARED_AUDITS + SHARED_OBJECTIVES + SHARED_REVIEWS
+                  + SHARED_RISKS)
         resources = [m.resource for slug, m in modules.items() if slug not in shared]
         self.assertEqual(len(resources), len(set(resources)))
         self.assertEqual({Resource.COMPETENCE}, {modules[s].resource for s in SHARED_RESOURCE})
@@ -66,8 +69,11 @@ class RegistryTestCase(unittest.TestCase):
                          {modules[s].resource for s in SHARED_OBJECTIVES})
         self.assertEqual({Resource.MANAGEMENT_REVIEW},
                          {modules[s].resource for s in SHARED_REVIEWS})
+        self.assertEqual({Resource.RISKS_OPPORTUNITIES},
+                         {modules[s].resource for s in SHARED_RISKS})
         self.assertFalse({Resource.COMPETENCE, Resource.AUDITS, Resource.QUALITY_OBJECTIVES,
-                          Resource.MANAGEMENT_REVIEW} & set(resources))
+                          Resource.MANAGEMENT_REVIEW, Resource.RISKS_OPPORTUNITIES}
+                         & set(resources))
 
     def test_declared_fields_match_what_each_service_requires(self) -> None:
         from app.services import (
@@ -149,13 +155,15 @@ class RegistryTestCase(unittest.TestCase):
 
     def test_enum_fields_list_the_values_the_services_accept(self) -> None:
         from app.models import (
-            CompetenceEvaluation, CompetenceType, EstadoAuditoriaEnum, TipoEnum,
+            CompetenceEvaluation, CompetenceType, EficaciaAccion, EstadoAuditoriaEnum,
+            OrigenRiesgo,
         )
 
         modules = registry().MODULES
         expected = {
             ("auditorias", "estado"): EstadoAuditoriaEnum,
-            ("riesgos_oportunidades", "tipo"): TipoEnum,
+            ("riesgos", "origen"): OrigenRiesgo,
+            ("acciones_riesgo", "eficacia"): EficaciaAccion,
             ("competencias_requeridas", "tipo"): CompetenceType,
             ("competencias_acreditadas", "evaluacion_eficacia"): CompetenceEvaluation,
         }
