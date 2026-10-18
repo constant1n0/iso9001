@@ -42,6 +42,7 @@ EXPECTED = {
     "CORRECTIVE_ACTIONS": (ALL_ROLES, ALL_ROLES, ADMIN_ONLY),
     "QUALITY_OBJECTIVES": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),  # QO4 of quality-objectives
     "MANAGEMENT_REVIEW": (ADMIN_AUDITOR, ADMIN_AUDITOR, ADMIN_ONLY),  # MR5 of management-review
+    "EXTERNAL_PROVIDERS": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),  # EP5 of external-providers
 }
 
 FORBIDDEN_MODULES = ("flask", "flask_login", "werkzeug.local", "app.routes")
