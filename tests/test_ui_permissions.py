@@ -523,6 +523,50 @@ class UiPermissionsTestCase(unittest.TestCase):
                     # Every role reads the register PDF (RO-4).
                     self.assertIn(f'href="{base}/pdf"', html)
 
+    def test_process_and_role_controls_follow_role_and_state(self) -> None:
+        """Every role reads processes and roles; administrators and auditors create and
+        edit them; administrators delete a process nothing relates to or cites and a role
+        without competence requirements or subordinates (PR5 of process-role-registers)."""
+        from app.services import process_operations as po
+        from app.services import risks
+        from app.services import roles_responsibilities as rr
+        from app.services.actor import Actor
+
+        system = Actor(None, "seed", ADMIN, "system")
+        with self.app.app_context():
+            def process(nombre, **values):
+                return po.create(db.session, system, {"proceso": nombre, **values}).id_proceso
+
+            free, first = process("Libre"), process("Compras")
+            related, cited = process("Ventas", relacionados=[first]), process("Almacén")
+            risks.risks.create(db.session, system, {
+                "titulo": "Rotura de stock", "descripcion": "d", "origen": "interno",
+                "responsable_id": self.owner_id, "proceso_id": cited}, today=DAY)
+            top = rr.create(db.session, system, {"rol": "Dirección"}).id_rol
+            below = rr.create(db.session, system, {"rol": "Calidad", "reporta_a_id": top}).id_rol
+            db.session.commit()
+        writers, admins, nobody = {ADMIN, AUDITOR}, {ADMIN}, set()
+        # Role 1 holds the seeded competence requirement.
+        expected = {f"/procesos/{free}": {"edit": writers, "delete": admins},
+                    f"/procesos/{related}": {"edit": writers},
+                    f"/procesos/{cited}": {"edit": writers},
+                    f"/roles/{below}": {"edit": writers, "delete": admins},
+                    f"/roles/{top}": {"edit": writers}, "/roles/1": {"edit": writers}}
+        for page, allowed in expected.items():
+            controls = {"edit": f'href="{page}/editar"', "delete": f'action="{page}/eliminar"'}
+            for role in RoleEnum:
+                body = self._page(role, page).get_data(as_text=True)
+                for name, marker in controls.items():
+                    with self.subTest(page=page, role=role.name, control=name):
+                        self.assertEqual(role in allowed.get(name, nobody), marker in body)
+        for base, record in (("/procesos", free), ("/roles", below)):
+            for role in RoleEnum:
+                html = self._page(role, f"{base}/").get_data(as_text=True)
+                with self.subTest(page=f"{base}/", role=role.name):
+                    self.assertEqual(role in writers, f'href="{base}/nuevo"' in html)
+                    self.assertEqual(role in writers, f'href="{base}/{record}/editar"' in html)
+                    self.assertNotIn("/eliminar", html)
+
     def test_navigation_links_follow_the_read_permission(self) -> None:
         expected = {"/auditorias/": {ADMIN, AUDITOR}, "/programas-auditoria/": {ADMIN, AUDITOR},
                     "/documents/": set(RoleEnum), "/no_conformidades/": set(RoleEnum),
@@ -531,7 +575,8 @@ class UiPermissionsTestCase(unittest.TestCase):
                     "/competencias/matriz": set(RoleEnum),
                     "/objetivos-calidad/": set(RoleEnum),
                     "/riesgos/": set(RoleEnum), "/oportunidades/": set(RoleEnum),
-                    "/revisiones-direccion/": {ADMIN, AUDITOR}}
+                    "/revisiones-direccion/": {ADMIN, AUDITOR},
+                    "/procesos/": set(RoleEnum), "/roles/": set(RoleEnum)}
         for role in RoleEnum:
             html = self._page(role, "/dashboard/").get_data(as_text=True)
             self.assertIn('class="nav__group">Personas y competencia<', html)

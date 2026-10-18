@@ -1,0 +1,90 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form %}
+{% from "people/_macros.html" import state_badge %}
+{% block title %}{{ rol.rol }}{% endblock %}
+{% block crumb %}Personas y competencia · Roles y responsabilidades{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 5.3 · Rol', rol.rol) %}
+    {% if can('update', 'roles_responsibilities') %}
+    <a class="btn" href="{{ url_for('rol.edit_role', rol_id=rol.id_rol) }}">Editar</a>
+    {% endif %}
+    {% if eliminable and can('delete', 'roles_responsibilities') %}
+    {{ delete_form(url_for('rol.delete_role', rol_id=rol.id_rol), '¿Eliminar el rol «' ~ rol.rol ~ '»? Las personas que lo desempeñan lo perderán.') }}
+    {% endif %}
+{% endcall %}
+
+<section class="grid grid--3" aria-label="Responsabilidades, autoridades y política de calidad">
+    {% for titulo, texto in [('Responsabilidades', rol.responsabilidades), ('Autoridades', rol.autoridades),
+                             ('Política de calidad', rol.descripcion_politica_calidad)] %}
+    <article class="card">
+        <header class="card__header">
+            <h2 class="card__title">{{ titulo }}</h2>
+            {% if loop.last %}<span class="badge{{ ' badge--ok' if rol.compromiso_calidad }}">Compromiso con la calidad: {{ 'Sí' if rol.compromiso_calidad else 'No' }}</span>{% endif %}
+        </header>
+        {% if texto %}<div class="card__body"><p class="card__text">{{ texto }}</p></div>{% else %}<p class="empty">Sin indicar.</p>{% endif %}
+    </article>
+    {% endfor %}
+</section>
+
+<section class="grid grid--2" aria-label="Línea de reporte y roles a su cargo">
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="linea">Línea de reporte</h2></header>
+        {% if linea %}
+        <ol class="list">
+            {% for superior in linea %}
+            <li class="list__item"><a class="list__primary" href="{{ url_for('rol.show_role', rol_id=superior.id_rol) }}">{{ superior.rol }}</a><span class="list__secondary">{{ 'Reporta directamente' if loop.first else ('Cúspide' if loop.last else 'Por encima') }}</span></li>
+            {% endfor %}
+        </ol>
+        {% else %}<p class="empty">No reporta a ningún rol.</p>{% endif %}
+    </article>
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="subordinados">Roles que le reportan</h2></header>
+        {% if subordinados %}
+        <ul class="list">
+            {% for subordinado in subordinados %}
+            <li class="list__item"><a class="list__primary" href="{{ url_for('rol.show_role', rol_id=subordinado.id_rol) }}">{{ subordinado.rol }}</a></li>
+            {% endfor %}
+        </ul>
+        {% else %}<p class="empty">Ningún rol le reporta directamente.</p>{% endif %}
+    </article>
+</section>
+
+<section class="grid grid--2" aria-label="Personas y competencia">
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="titulares">Personas que lo desempeñan</h2><span class="badge">{{ personas | length }}</span></header>
+        {% if personas %}
+        <ul class="list">
+            {% for persona in personas %}
+            <li class="list__item"><a class="list__primary" href="{{ url_for('people.show_person', person_id=persona.id) }}">{{ persona.nombre }}</a>{% if not persona.activo %}{{ state_badge(persona) }}{% endif %}</li>
+            {% endfor %}
+        </ul>
+        {% else %}<p class="empty">Nadie desempeña este rol.</p>{% endif %}
+    </article>
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="requisitos">Competencia requerida</h2><a class="btn btn--sm" href="{{ url_for('competence.list_requirements', rol_id=rol.id_rol) }}">Ver en competencias</a></header>
+        {% if requisitos %}
+        <ul class="list">
+            {% for requisito in requisitos %}
+            <li class="list__item"><span class="list__primary">{{ requisito.descripcion }}{% if requisito.criterio %}<br><span class="muted">{{ requisito.criterio }}</span>{% endif %}</span><span class="list__secondary">{{ requisito.tipo.value }}</span></li>
+            {% endfor %}
+        </ul>
+        {% else %}<p class="empty">Este rol no tiene requisitos de competencia.</p>{% endif %}
+    </article>
+</section>
+{% endblock %}

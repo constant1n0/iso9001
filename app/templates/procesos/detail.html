@@ -1,0 +1,83 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form %}
+{% macro item(titulo) %}<li class="list__item"><span class="list__primary">{{ titulo }}</span><span class="list__secondary">{{ caller() }}</span></li>{% endmacro %}
+{# A card listing records; the caller renders each one. #}
+{% macro registros_card(name, titulo, registros, vacio) %}
+<article class="card">
+    <header class="card__header"><h3 class="card__title" id="{{ name }}">{{ titulo }}</h3><span class="badge">{{ registros | length }}</span></header>
+    {% if registros %}
+    <ul class="list">
+        {% for registro in registros %}<li class="list__item">{{ caller(registro) }}</li>{% endfor %}
+    </ul>
+    {% else %}<p class="empty">{{ vacio }}</p>{% endif %}
+</article>
+{% endmacro %}
+{% block title %}{{ proceso.proceso }}{% endblock %}
+{% block crumb %}Calidad · Procesos{% endblock %}
+{% block content %}
+{% call page_header('Cláusulas 4.4 y 8.1 · Proceso', proceso.proceso) %}
+    {% if can('update', 'process_operations') %}
+    <a class="btn" href="{{ url_for('proceso.edit_process', process_id=proceso.id_proceso) }}">Editar</a>
+    {% endif %}
+    {% if eliminable and can('delete', 'process_operations') %}
+    {{ delete_form(url_for('proceso.delete_process', process_id=proceso.id_proceso), '¿Eliminar el proceso «' ~ proceso.proceso ~ '»?') }}
+    {% endif %}
+{% endcall %}
+
+<section class="grid grid--2" aria-label="Identificación y procesos relacionados">
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="identificacion">Identificación</h2></header>
+        <ul class="list">
+            {% call item('Tipo') %}{{ proceso.tipo.value if proceso.tipo else 'Sin indicar' }}{% endcall %}
+            {% call item('Responsable') %}{% if responsable %}<a href="{{ url_for('people.show_person', person_id=proceso.responsable_id) }}">{{ responsable }}</a>{% else %}Sin indicar{% endif %}{% endcall %}
+            {% call item('Control de proveedores externos') %}{{ 'Sí' if proceso.control_proveedor else 'No' }}{% endcall %}
+        </ul>
+    </article>
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="relacionados">Procesos relacionados</h2></header>
+        {% if relacionados %}
+        <ul class="list">
+            {% for otro in relacionados %}
+            <li class="list__item"><a class="list__primary" href="{{ url_for('proceso.show_process', process_id=otro.id_proceso) }}">{{ otro.proceso }}</a><span class="list__secondary">{{ otro.tipo.value if otro.tipo else '' }}</span></li>
+            {% endfor %}
+        </ul>
+        {% else %}<p class="empty">No se relaciona con otros procesos.</p>{% endif %}
+    </article>
+</section>
+
+<section class="grid grid--2" aria-label="Entradas, salidas, recursos y criterios">
+    {% for titulo, texto in [('Entradas', proceso.entradas), ('Salidas', proceso.salidas),
+                             ('Recursos', proceso.recursos), ('Criterios de operación', proceso.criterio_calidad),
+                             ('Criterios de aceptación', proceso.criterios_aceptacion), ('Notas', proceso.no_conformidad)] %}
+    <article class="card">
+        <header class="card__header"><h2 class="card__title">{{ titulo }}</h2></header>
+        {% if texto %}<div class="card__body"><p class="card__text">{{ texto }}</p></div>{% else %}<p class="empty">Sin indicar.</p>{% endif %}
+    </article>
+    {% endfor %}
+</section>
+
+<section aria-labelledby="citas">
+    <div class="section-header"><h2 id="citas">Registros que citan el proceso</h2></div>
+    <div class="grid grid--3">
+        {% call(objetivo) registros_card('objetivos', 'Objetivos de calidad', citas.objetivos, 'Ningún objetivo de calidad cita este proceso.') %}<a class="list__primary" href="{{ url_for('objetivo_calidad.show_objective', objective_id=objetivo.id) }}">{{ objetivo.titulo }}</a><span class="list__secondary">{{ objetivo.anio }} · {{ objetivo.estado.value }}</span>{% endcall %}
+        {% call(riesgo) registros_card('riesgos', 'Riesgos', citas.riesgos, 'Ningún riesgo cita este proceso.') %}<a class="list__primary" href="{{ url_for('riesgo.show_record', record_id=riesgo.id) }}">{{ riesgo.titulo }}</a><span class="list__secondary">{{ riesgo.estado.value }}</span>{% endcall %}
+        {% call(oportunidad) registros_card('oportunidades', 'Oportunidades', citas.oportunidades, 'Ninguna oportunidad cita este proceso.') %}<a class="list__primary" href="{{ url_for('oportunidad.show_record', record_id=oportunidad.id) }}">{{ oportunidad.titulo }}</a><span class="list__secondary">{{ oportunidad.estado.value }}</span>{% endcall %}
+    </div>
+</section>
+{% endblock %}

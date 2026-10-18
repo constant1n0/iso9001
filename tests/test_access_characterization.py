@@ -165,6 +165,12 @@ OPPORTUNITY = REGISTER | dict(titulo="Oportunidad", estado="identificada", benef
 RISK_ACTION = dict(descripcion="Seguir", responsable_id="1", fecha_limite="2026-12-31",
                    estado="completada", fecha_completada="2026-02-28")
 EVALUATION = dict(eficacia="eficaz", fecha_evaluacion="2026-03-01", comentario_eficacia="")
+# Processes and roles (RG-2 of process-role-registers); role 2 is seeded.
+PROCESS = dict(proceso="Proceso nuevo", tipo="operativo", responsable_id="1", entradas="",
+               salidas="", recursos="", criterio_calidad="", criterios_aceptacion="",
+               control_proveedor="y", no_conformidad="")
+ROLE = dict(rol="Rol nuevo", reporta_a_id="2", responsabilidades="", autoridades="",
+            compromiso_calidad="y", descripcion_politica_calidad="")
 
 
 def _register(base, new, action_id):
@@ -312,6 +318,15 @@ ENDPOINTS = [
     # risk 2 and opportunity 2 have none, so deleting them succeeds (RO-3).
     *_register("/riesgos/", "nuevo", 1),
     *_register("/oportunidades/", "nueva", 2),
+    # Process 1 is related to and cited by nothing, and role 1 has neither
+    # competence requirements (role 2 holds the seeded one) nor subordinates,
+    # so deleting them succeeds (RG-2). Their JSON registers stay below.
+    *_html("PROCESS_OPERATIONS", "/procesos/", ("nuevo", PROCESS), ("1/editar", PROCESS),
+           "1/eliminar"),
+    Endpoint("PROCESS_OPERATIONS", "read", "GET", "/procesos/1", 200),
+    *_html("ROLES_RESPONSIBILITIES", "/roles/", ("nuevo", ROLE), ("1/editar", ROLE),
+           "1/eliminar"),
+    Endpoint("ROLES_RESPONSIBILITIES", "read", "GET", "/roles/1", 200),
     *_json("IMPROVEMENTS", "/mejoras/api/", {"no_conformidad": "NC"},
            {"accion_correctiva": "x"}),
     *_json("AUDIT_INDICATORS", "/auditoria_indicador/",
