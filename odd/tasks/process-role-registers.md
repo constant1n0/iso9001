@@ -66,10 +66,27 @@ Baseline at `0cf3e6b`: 1,420 tests. Migrations are tested on PostgreSQL (`TEST_P
 - Still to do (gap analysis Wave 2): the link between nonconformities and processes. The audit-indicator form takes a day while the column stores a date and time (a new record gets midnight; an edit on the same day keeps the stored time). `app/routes/register_routes.py` shares its name with the test helper `tests/register_routes.py`.
 - For RG-3 (done): the JSON auto-schema dump leaves out `responsable_id`, `reporta_a_id` and `relacionados` (`app/schemas.py`).
 
-## Production deployment (pending authorization)
+## Delivery
 
-One migration (`f5a7c9e1b3d6` process and role fields and relations) on top of `e3b5d7f9a1c4`: back up the database and the code, fast-forward, `flask db upgrade`, `flask db check`, then the user restarts the four services. Smoke tests: `/procesos/`, `/roles/`, `/recursos-formacion/` and `/indicadores-auditoria/` redirect to the login, 24 MCP modules.
+| Slice | Pull request | Commits | Merged as |
+|---|---|---|---|
+| 1 | [#139](https://github.com/constant1n0/iso9001/pull/139) | tracker, RG-1 and its review pins | `b3c89ba` |
+| 2 | [#140](https://github.com/constant1n0/iso9001/pull/140) | RG-2 | `e94d9a6` |
+| 3 | [#141](https://github.com/constant1n0/iso9001/pull/141) | RG-3, closing record | `70dfcd0` |
+
+## Production deployment (2026-10-18)
+
+`main@70dfcd0` runs on `vulcano`. The user authorized this deployment over SSH as `dcm`, with no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `bd945c6`, clean, migration `e3b5d7f9a1c4`; 0 processes and 0 roles stored |
+| Backups | `~/work/backups/calidad-*-pre-70dfcd0.dump` (`pg_dump -Fc`, 381 entries listed by `pg_restore -l`) and `iso9001-code-*-pre-70dfcd0.tar.gz` (without `instance/documents`), both mode 600 |
+| Code | Incremental git bundle `bd945c6..main`, fast-forward to `70dfcd0`; no dependency changes; `pip check` clean |
+| Database | `flask db upgrade` `e3b5d7f9a1c4` → `f5a7c9e1b3d6`; `flask db check` clean; still 0 processes and 0 roles, `proceso_relaciones` created |
+| Restart (user, with sudo) | All four services |
+| Smoke tests | Services active, no error entries in the journal; `/login` 200; `/procesos/`, `/roles/`, `/recursos-formacion/` and `/indicadores-auditoria/` redirect to the login; `/mcp` 401 with `WWW-Authenticate: Bearer`; 24 MCP modules |
 
 ## Next step
 
-**Feature complete** once RG-3 merges. Next: the production deployment above, after explicit authorization.
+**Feature complete and deployed.** Wave 2 continues with the gap analysis order: external providers (8.4), context and scope (4.1–4.3), planning of changes (6.3), customers and complaints (8.2, 9.1.2), nonconforming outputs (8.7); and the link between nonconformities and processes.
