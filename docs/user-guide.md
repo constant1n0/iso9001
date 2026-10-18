@@ -30,6 +30,7 @@ Installation and server administration are in the
 - [Nonconformities and corrective actions](#nonconformities-and-corrective-actions)
 - [Document control](#document-control)
 - [Audit programme, audits and findings](#audit-programme-audits-and-findings)
+- [Processes](#processes)
 - [Risks and opportunities](#risks-and-opportunities)
 - [Quality objectives](#quality-objectives)
 - [Management review](#management-review)
@@ -109,9 +110,9 @@ clause it supports. You only see the entries your role can read.
 | Group | Entries |
 |---|---|
 | (top) | **Panel** (dashboard) |
-| **Calidad** (quality) | **Riesgos** 6.1, **Oportunidades** 6.1, **Objetivos de calidad** 6.2, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
+| **Calidad** (quality) | **Procesos** 4.4, **Riesgos** 6.1, **Oportunidades** 6.1, **Objetivos de calidad** 6.2, **Indicadores de auditoría** 9.1, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
 | **Clientes** (customers) | **Satisfacción** 9.1.2, **Partes interesadas** 4.2 |
-| **Personas y competencia** (people and competence) | **Personas** 7.2, **Competencias requeridas** 7.2, **Matriz de competencias** 7.2, **Capacitaciones** 7.2 |
+| **Personas y competencia** (people and competence) | **Roles y responsabilidades** 5.3, **Personas** 7.2, **Competencias requeridas** 7.2, **Matriz de competencias** 7.2, **Capacitaciones** 7.2, **Recursos de capacitación** 7.1 |
 | **Documentación** | **Documentos** 7.5 |
 | **Administración** | **Usuarios** 5.3 |
 | **Cuenta** (account) | **Mi perfil** |
@@ -170,7 +171,7 @@ can read, create, edit, delete and approve in each module.
 | Quality objectives and measurements | Read, create, edit, change state, delete | Read, create, edit, change state | Read |
 | Management reviews and their actions | Read, create, edit, delete; hold, close | Read, create, edit | No access |
 | Improvements, customer satisfaction, interested parties | Read, create, edit, delete | Read, create, edit | Read, create, edit |
-| Roles, training resources, processes, audit indicators (no screens) | Read, create, edit, delete | Read, create, edit | Read |
+| Processes, roles, training resources, audit indicators | Read, create, edit, delete | Read, create, edit | Read |
 
 - Nobody deletes users or documents: users are deactivated and documents are
   withdrawn, so the history stays complete.
@@ -304,8 +305,50 @@ The **Personas y competencia** group records who works under the QMS, which
 roles they hold, the competence each role requires and the competence each
 person has demonstrated (ISO 9001:2026 clauses 5.3 and 7.2). Every role reads
 people and competence; administrators and auditors create and edit; only
-administrators delete. **Capacitaciones** (training), in the same menu group,
-is described under [Other registers](#other-registers).
+administrators delete. **Capacitaciones** (training) and **Recursos de
+capacitación** (training resources), in the same menu group, are described
+under [Other registers](#other-registers).
+
+### Roles and responsibilities
+
+**Roles y responsabilidades** (`/roles/`) are the QMS roles, with their
+responsibilities and authorities (clause 5.3). People pick their roles in
+**Personas**, and every requirement in **Competencias requeridas** cites a
+role. To add a role, click **+ Nuevo rol** and fill in:
+
+- **Nombre** (name; required and unique: **Ya existe un rol con ese
+  nombre.**);
+- **Reporta a** (reports to): the role it reports to, or **— No reporta a
+  ningún rol —** (reports to no role);
+- **Responsabilidades** and **Autoridades** (responsibilities and
+  authorities);
+- **Compromiso con la calidad** (commitment to quality) and **Política de
+  calidad** (quality policy).
+
+**Rules:**
+
+- A role cannot report to itself, and the picker does not offer it. Nor can
+  it report to a role that already reports to it, directly or not: **La línea
+  de reporte no puede formar un ciclo: ese rol ya reporta, directa o
+  indirectamente, a este.**
+- A role cited by competence requirements cannot be deleted: **No se puede
+  eliminar un rol que citan requisitos de competencia; elimínalos o asígnalos
+  a otro rol antes.**
+- A role that other roles report to cannot be deleted: **No se puede eliminar
+  un rol al que reportan otros roles; cambia antes a quién reportan.** The
+  people holding a deleted role simply lose it.
+
+**Screens:**
+
+- **The list**, by name, shows whom each role reports to, how many people
+  hold it (inactive ones included) and its commitment to quality.
+- **A role's page** shows its texts; its **Línea de reporte** (reporting
+  line), from the role it reports to directly up to the top; the **Roles que
+  le reportan** (roles reporting to it) directly; the **Personas que lo
+  desempeñan** (people holding it); and its **Competencia requerida**
+  (required competence), with the **Ver en competencias** link.
+- When a role has competence requirements or roles reporting to it, its page
+  shows no **Eliminar** button.
 
 ### People
 
@@ -321,12 +364,9 @@ are separate from user accounts: a person may have no account.
 - **A person's page** shows the data, the roles and the **Competencias
   acreditadas** (demonstrated competence).
 - **Deleting**: a person that other records cite (a nonconformity, an action,
-  an audit, a document, a review and so on) cannot be deleted: **No se puede
-  eliminar una persona citada en otros registros; desactívala en su lugar.**
-  Untick **Activa** instead.
-
-The QMS roles themselves (**Roles y responsabilidades**) have no screen of
-their own: see [Other registers](#other-registers).
+  an audit, a document, a review, a process they own and so on) cannot be
+  deleted: **No se puede eliminar una persona citada en otros registros;
+  desactívala en su lugar.** Untick **Activa** instead.
 
 ### Required competence
 
@@ -720,6 +760,61 @@ Afterwards:
 - deleting a finding (administrators) never deletes its nonconformity, and
   deleting the nonconformity clears the finding's link.
 
+## Processes
+
+**Procesos** (processes, `/procesos/`), in the **Calidad** menu, is the QMS
+process map (ISO 9001:2026 clauses 4.4 and 8.1): the processes, their owner,
+what they take in and deliver, the resources and criteria they run on and the
+processes they interact with. Quality objectives and risks and opportunities
+pick their process from this register. Every role reads processes;
+administrators and auditors create and edit them; only administrators delete.
+
+### The process
+
+To add a process, click **+ Nuevo proceso** and fill in:
+
+- **Nombre** (name; required and unique: **Ya existe un proceso con ese
+  nombre.**);
+- **Tipo** (type): **Estratégico**, **Operativo** or **Soporte** (strategic,
+  operational or support; optional);
+- **Responsable**: the person who owns the process (optional);
+- **Procesos relacionados** (related processes): the processes it interacts
+  with (to pick several, hold down Ctrl, or ⌘ on a Mac);
+- **Entradas**, **Salidas** and **Recursos** (inputs, outputs and resources);
+- **Criterios de operación** (operating criteria, 8.1) and **Criterios de
+  aceptación** (acceptance criteria) of its outputs;
+- **Requiere control de proveedores externos** (needs external supplier
+  control);
+- **Notas**.
+
+**Rules:**
+
+- The relation works both ways: the page of each related process shows this
+  one too. A process cannot be related to itself, and the picker does not
+  offer it.
+- On an edit, the related processes picked replace the previous ones; picking
+  none leaves the process related to no other.
+
+### Screens
+
+- **The list**, by name, shows each process's type and owner and how many
+  related processes, quality objectives and risks and opportunities it has.
+  **Filters**: **Tipo** and **Responsable** (only the people owning a process
+  are offered).
+- **A process's page** shows every field, its **Procesos relacionados** and
+  the **Registros que citan el proceso** (records citing the process):
+  **Objetivos de calidad**, **Riesgos** and **Oportunidades**, each linked.
+- **Deleting**: only a process without related processes that no objective,
+  risk or opportunity cites can be deleted. Otherwise its page shows no
+  **Eliminar** button and the system refuses the delete with one of these
+  messages:
+  - **No se puede eliminar un proceso relacionado con otros procesos; quita
+    antes esas relaciones.**
+  - **No se puede eliminar un proceso al que se refieren objetivos de calidad;
+    quítalo antes de esos objetivos.**
+  - **No se puede eliminar un proceso al que se refieren riesgos u
+    oportunidades; quítalo antes de esos registros.**
+
 ## Risks and opportunities
 
 **Riesgos** (risks, `/riesgos/`) and **Oportunidades** (opportunities,
@@ -1072,28 +1167,20 @@ decision:
 
 ## Other registers
 
-These registers predate the modules above. Some have screens; others have
-none and are kept through the MCP server (see
-[Agents and API tokens](#agents-and-api-tokens) and [`mcp.md`](mcp.md), in
-Spanish), which reads and writes them with the same role rules.
+These registers predate the modules above. All of them have screens, and the
+MCP server (see [Agents and API tokens](#agents-and-api-tokens) and
+[`mcp.md`](mcp.md), in Spanish) reads and writes them with the same role
+rules.
 
 | Register | Clause | Where | Fields |
 |---|---|---|---|
 | **Partes interesadas** (interested parties) | 4.2 | Menu **Clientes** | **Nombre** (unique), **Necesidades y Expectativas**, **Requisitos Identificados**, **Objetivo Estratégico** |
-| Roles and responsibilities | 5.3 | No screen; MCP module `roles_responsabilidades` | Role name (unique), commitment to quality, quality policy description |
 | **Capacitaciones** (training) | 7.2 | Menu **Personas y competencia** | **Tema** (topic), **Fecha**, **Personal** and **Persona**, **Duración en Horas**, **Evaluación Final** |
-| Training resources | 7.1 | No screen; MCP module `recursos_capacitacion` | Resource needed, staff training (yes or no), documentation |
-| Process operations | 4.4, 8.1 | No screen; MCP module `procesos` | Process name (unique), quality criterion, supplier control (yes or no), nonconformity |
-| Audit indicators | 9.1 | No screen; MCP module `indicadores_auditoria` | Area, date, result, corrective action, performance indicator |
 | **Mejoras** (improvements) | 10.3 | Menu **Calidad** | **No conformidad** (required), **Acción correctiva**, **Acción preventiva**; the **Implantada** date is set when the improvement is recorded |
 | **Satisfacción** (customer satisfaction) | 9.1.2 | Menu **Clientes** | **Cliente**, **Fecha de Encuesta**, **Puntuación (1-10)**, **Comentarios** |
 
 Notes:
 
-- The QMS roles are what **Personas** and **Competencias requeridas** pick
-  from; a role cited by competence requirements cannot be deleted.
-- The processes are what quality objectives and risks and opportunities pick
-  from; a process they cite cannot be deleted.
 - Interested parties, audit indicators, training and improvements feed the
   management review inputs.
 - **Capacitaciones** filters by **Tema**, **Fecha** and **Personal**, and each
@@ -1103,8 +1190,35 @@ Notes:
   score), and each survey has a **PDF** (**Encuesta de satisfacción**).
 - **Mejoras** lists ten improvements per page.
 - Every role records training, improvements, surveys and interested parties;
-  only administrators delete them. The registers without screens are written
-  by administrators and auditors.
+  only administrators delete them.
+
+### Training resources
+
+**Recursos de capacitación** (training resources, `/recursos-formacion/`), in
+the **Personas y competencia** menu, records the resources needed (clause
+7.1). Each resource has **Recurso necesario** (resource needed; required),
+**Requiere capacitación del personal** (needs staff training) and
+**Descripción y documentación** (description and documentation). The list
+sorts them by resource, and each one's page shows its fields. Every role
+reads them; administrators and auditors create and edit them; only
+administrators delete them, from the resource's page.
+
+### Audit indicators
+
+**Indicadores de auditoría** (audit indicators, `/indicadores-auditoria/`),
+in the **Calidad** menu, is a legacy register of audit results and
+performance indicators (clause 9.1). Each indicator has **Área auditada**
+(audited area; required, up to 50 characters), **Fecha de la auditoría**
+(audit date; required, and a new indicator starts at today's date),
+**Resultado** (result), **Acción correctiva** (corrective action) and
+**Indicador de desempeño** (performance indicator).
+
+- The list shows the most recent first and recalls that the register is
+  legacy: new process indicators are recorded as
+  [quality objectives](#quality-objectives), with their target and
+  measurements.
+- Every role reads them; administrators and auditors create and edit them;
+  only administrators delete them, from the indicator's page.
 
 ## Reports and e-mail notifications
 
@@ -1191,6 +1305,7 @@ for a link or an administrator sends one (see
 | Fecha límite | Deadline |
 | Gravedad | Severity |
 | Hallazgo | Audit finding |
+| Línea de reporte | Reporting line (the roles above a role, up to the top) |
 | Medición | Measurement |
 | Meta | Target |
 | Mejora | Improvement |
@@ -1203,6 +1318,7 @@ for a link or an administrator sends one (see
 | Parte interesada | Interested party |
 | Persona | Person (who works under the QMS; not a user account) |
 | Prioridad | Priority of an opportunity (benefit times feasibility) |
+| Proceso relacionado | Related process (the relation works both ways) |
 | Programa de auditoría | Audit programme |
 | Propietario | Owner (document) |
 | Responsable | Responsible person, owner |

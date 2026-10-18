@@ -545,13 +545,14 @@ class UiPermissionsTestCase(unittest.TestCase):
             top = rr.create(db.session, system, {"rol": "Dirección"}).id_rol
             below = rr.create(db.session, system, {"rol": "Calidad", "reporta_a_id": top}).id_rol
             db.session.commit()
+            held = CompetenceRequirement.query.one().rol_id  # the seeded requirement's role
+            self.assertEqual("Rol", db.session.get(RolResponsabilidad, held).rol)
         writers, admins, nobody = {ADMIN, AUDITOR}, {ADMIN}, set()
-        # Role 1 holds the seeded competence requirement.
         expected = {f"/procesos/{free}": {"edit": writers, "delete": admins},
                     f"/procesos/{related}": {"edit": writers},
                     f"/procesos/{cited}": {"edit": writers},
                     f"/roles/{below}": {"edit": writers, "delete": admins},
-                    f"/roles/{top}": {"edit": writers}, "/roles/1": {"edit": writers}}
+                    f"/roles/{top}": {"edit": writers}, f"/roles/{held}": {"edit": writers}}
         for page, allowed in expected.items():
             controls = {"edit": f'href="{page}/editar"', "delete": f'action="{page}/eliminar"'}
             for role in RoleEnum:
@@ -567,6 +568,32 @@ class UiPermissionsTestCase(unittest.TestCase):
                     self.assertEqual(role in writers, f'href="{base}/{record}/editar"' in html)
                     self.assertNotIn("/eliminar", html)
 
+    def test_training_resource_and_audit_indicator_controls_follow_the_role(self) -> None:
+        """Every role reads both legacy registers; administrators and auditors create and
+        edit; administrators delete, from the record's page (RG-3 of process-role-registers)."""
+        from app.services import audit_indicators, training_resources
+        from app.services.actor import Actor
+
+        system = Actor(None, "seed", ADMIN, "system")
+        with self.app.app_context():
+            resource = training_resources.create(
+                db.session, system, {"recurso_necesario": "Sala"}).id_recurso
+            indicator = audit_indicators.create(
+                db.session, system, {"area_auditoria": "Ventas"}).id_auditoria
+            db.session.commit()
+        writers = {ADMIN, AUDITOR}
+        for base, record in (("/recursos-formacion", resource),
+                             ("/indicadores-auditoria", indicator)):
+            for role in RoleEnum:
+                listing = self._page(role, f"{base}/").get_data(as_text=True)
+                page = self._page(role, f"{base}/{record}").get_data(as_text=True)
+                with self.subTest(base=base, role=role.name):
+                    self.assertEqual(role in writers, f'href="{base}/nuevo"' in listing)
+                    self.assertEqual(role in writers, f'href="{base}/{record}/editar"' in listing)
+                    self.assertNotIn("/eliminar", listing)
+                    self.assertEqual(role in writers, f'href="{base}/{record}/editar"' in page)
+                    self.assertEqual(role == ADMIN, f'action="{base}/{record}/eliminar"' in page)
+
     def test_navigation_links_follow_the_read_permission(self) -> None:
         expected = {"/auditorias/": {ADMIN, AUDITOR}, "/programas-auditoria/": {ADMIN, AUDITOR},
                     "/documents/": set(RoleEnum), "/no_conformidades/": set(RoleEnum),
@@ -576,7 +603,9 @@ class UiPermissionsTestCase(unittest.TestCase):
                     "/objetivos-calidad/": set(RoleEnum),
                     "/riesgos/": set(RoleEnum), "/oportunidades/": set(RoleEnum),
                     "/revisiones-direccion/": {ADMIN, AUDITOR},
-                    "/procesos/": set(RoleEnum), "/roles/": set(RoleEnum)}
+                    "/procesos/": set(RoleEnum), "/roles/": set(RoleEnum),
+                    "/recursos-formacion/": set(RoleEnum),
+                    "/indicadores-auditoria/": set(RoleEnum)}
         for role in RoleEnum:
             html = self._page(role, "/dashboard/").get_data(as_text=True)
             self.assertIn('class="nav__group">Personas y competencia<', html)

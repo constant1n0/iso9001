@@ -32,6 +32,7 @@ Documentación técnica:
 - [No conformidades y acciones correctivas](#no-conformidades-y-acciones-correctivas)
 - [Control de documentos](#control-de-documentos)
 - [Programa de auditoría, auditorías y hallazgos](#programa-de-auditoría-auditorías-y-hallazgos)
+- [Procesos](#procesos)
 - [Riesgos y oportunidades](#riesgos-y-oportunidades)
 - [Objetivos de la calidad](#objetivos-de-la-calidad)
 - [Revisión por la dirección](#revisión-por-la-dirección)
@@ -111,9 +112,9 @@ puede consultar.
 | Grupo | Opciones |
 |---|---|
 | (arriba) | **Panel** |
-| **Calidad** | **Riesgos** 6.1, **Oportunidades** 6.1, **Objetivos de calidad** 6.2, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
+| **Calidad** | **Procesos** 4.4, **Riesgos** 6.1, **Oportunidades** 6.1, **Objetivos de calidad** 6.2, **Indicadores de auditoría** 9.1, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
 | **Clientes** | **Satisfacción** 9.1.2, **Partes interesadas** 4.2 |
-| **Personas y competencia** | **Personas** 7.2, **Competencias requeridas** 7.2, **Matriz de competencias** 7.2, **Capacitaciones** 7.2 |
+| **Personas y competencia** | **Roles y responsabilidades** 5.3, **Personas** 7.2, **Competencias requeridas** 7.2, **Matriz de competencias** 7.2, **Capacitaciones** 7.2, **Recursos de capacitación** 7.1 |
 | **Documentación** | **Documentos** 7.5 |
 | **Administración** | **Usuarios** 5.3 |
 | **Cuenta** | **Mi perfil** |
@@ -176,7 +177,7 @@ aprobar en cada módulo.
 | Objetivos de la calidad y mediciones | Consultar, crear, editar, cambiar el estado, eliminar | Consultar, crear, editar, cambiar el estado | Consultar |
 | Revisiones por la dirección y sus acciones | Consultar, crear, editar, eliminar; celebrar, cerrar | Consultar, crear, editar | Sin acceso |
 | Mejoras, satisfacción del cliente, partes interesadas | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar, crear, editar |
-| Roles, recursos de capacitación, procesos, indicadores de auditoría (sin pantallas) | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
+| Procesos, roles, recursos de capacitación, indicadores de auditoría | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
 
 - Nadie elimina usuarios ni documentos: los usuarios se desactivan y los
   documentos se dan de baja, de modo que el historial queda completo.
@@ -317,8 +318,46 @@ El grupo **Personas y competencia** registra quién trabaja bajo el SGC, qué
 roles desempeña, la competencia que exige cada rol y la competencia que cada
 persona ha acreditado (apartados 5.3 y 7.2 de ISO 9001:2026). Todos los roles
 consultan las personas y la competencia; los administradores y los auditores
-crean y editan; solo los administradores eliminan. **Capacitaciones**, en el
-mismo grupo del menú, se describe en [Otros registros](#otros-registros).
+crean y editan; solo los administradores eliminan. **Capacitaciones** y
+**Recursos de capacitación**, en el mismo grupo del menú, se describen en
+[Otros registros](#otros-registros).
+
+### Roles y responsabilidades
+
+**Roles y responsabilidades** (`/roles/`) son los roles del SGC, con sus
+responsabilidades y sus autoridades (apartado 5.3). Las personas eligen sus
+roles en **Personas**, y cada requisito de **Competencias requeridas** cita un
+rol. Para añadir un rol, pulse **+ Nuevo rol** y rellene:
+
+- **Nombre** (obligatorio y único: **Ya existe un rol con ese nombre.**);
+- **Reporta a**: el rol del que depende, o **— No reporta a ningún rol —**;
+- **Responsabilidades** y **Autoridades**;
+- **Compromiso con la calidad** y **Política de calidad**.
+
+**Reglas:**
+
+- Un rol no puede reportar a sí mismo, y el selector no lo ofrece. Tampoco
+  puede reportar a un rol que ya le reporta, directa o indirectamente: **La
+  línea de reporte no puede formar un ciclo: ese rol ya reporta, directa o
+  indirectamente, a este.**
+- No se puede eliminar un rol que citan requisitos de competencia: **No se
+  puede eliminar un rol que citan requisitos de competencia; elimínalos o
+  asígnalos a otro rol antes.**
+- No se puede eliminar un rol al que reportan otros roles: **No se puede
+  eliminar un rol al que reportan otros roles; cambia antes a quién
+  reportan.** Las personas que desempeñan un rol eliminado simplemente lo
+  pierden.
+
+**Pantallas:**
+
+- **La lista**, por nombre, muestra a quién reporta cada rol, cuántas personas
+  lo desempeñan (también las inactivas) y su compromiso con la calidad.
+- **La página de un rol** muestra sus textos; su **Línea de reporte**, desde
+  el rol del que depende directamente hasta la cúspide; los **Roles que le
+  reportan** directamente; las **Personas que lo desempeñan**, y su
+  **Competencia requerida**, con el enlace **Ver en competencias**.
+- Cuando un rol tiene requisitos de competencia o roles que le reportan, su
+  página no muestra **Eliminar**.
 
 ### Personas
 
@@ -336,11 +375,9 @@ cuenta.
   **Competencias acreditadas**.
 - **Eliminación**: no se puede eliminar una persona que citan otros registros
   (una no conformidad, una acción, una auditoría, un documento, una revisión,
-  etc.): **No se puede eliminar una persona citada en otros registros;
-  desactívala en su lugar.** En su lugar, desmarque **Activa**.
-
-Los propios roles del SGC (el registro de roles y responsabilidades) no
-tienen pantalla: véase [Otros registros](#otros-registros).
+  un proceso del que es responsable, etc.): **No se puede eliminar una persona
+  citada en otros registros; desactívala en su lugar.** En su lugar, desmarque
+  **Activa**.
 
 ### Competencias requeridas
 
@@ -747,6 +784,59 @@ A partir de entonces:
 - eliminar un hallazgo (administradores) nunca elimina su no conformidad, y
   eliminar la no conformidad borra el vínculo del hallazgo.
 
+## Procesos
+
+**Procesos** (`/procesos/`), en el menú **Calidad**, es el mapa de procesos del
+SGC (apartados 4.4 y 8.1 de ISO 9001:2026): los procesos, su responsable, lo
+que reciben y lo que entregan, los recursos y los criterios con que funcionan
+y los procesos con los que interactúan. Los objetivos de la calidad y los
+riesgos y oportunidades eligen su proceso en este registro. Todos los roles
+consultan los procesos; los administradores y los auditores los crean y los
+editan; solo los administradores los eliminan.
+
+### El proceso
+
+Para añadir un proceso, pulse **+ Nuevo proceso** y rellene:
+
+- **Nombre** (obligatorio y único: **Ya existe un proceso con ese nombre.**);
+- **Tipo**: **Estratégico**, **Operativo** o **Soporte** (opcional);
+- **Responsable**: la persona responsable del proceso (opcional);
+- **Procesos relacionados**: los procesos con los que interactúa (para elegir
+  varios, mantenga pulsada la tecla Ctrl, o ⌘ en Mac);
+- **Entradas**, **Salidas** y **Recursos**;
+- **Criterios de operación** (8.1) y **Criterios de aceptación** de sus
+  salidas;
+- **Requiere control de proveedores externos**;
+- **Notas**.
+
+**Reglas:**
+
+- La relación vale en ambos sentidos: la página de cada proceso relacionado
+  también muestra este. Un proceso no puede relacionarse consigo mismo, y el
+  selector no lo ofrece.
+- Al editar, los procesos relacionados elegidos sustituyen a los anteriores;
+  si no elige ninguno, el proceso deja de estar relacionado con otros.
+
+### Pantallas
+
+- **La lista**, por nombre, muestra el tipo, el responsable y cuántos procesos
+  relacionados, objetivos de la calidad y riesgos y oportunidades tiene cada
+  proceso. **Filtros**: **Tipo** y **Responsable** (solo se ofrecen las
+  personas responsables de algún proceso).
+- **La página de un proceso** muestra todos sus campos, sus **Procesos
+  relacionados** y los **Registros que citan el proceso**: **Objetivos de
+  calidad**, **Riesgos** y **Oportunidades**, cada uno con su enlace.
+- **Eliminación**: solo se puede eliminar un proceso que no tiene procesos
+  relacionados y al que no cita ningún objetivo, riesgo ni oportunidad. En otro
+  caso, su página no muestra **Eliminar** y el sistema rechaza la eliminación
+  con uno de estos mensajes:
+  - **No se puede eliminar un proceso relacionado con otros procesos; quita
+    antes esas relaciones.**
+  - **No se puede eliminar un proceso al que se refieren objetivos de calidad;
+    quítalo antes de esos objetivos.**
+  - **No se puede eliminar un proceso al que se refieren riesgos u
+    oportunidades; quítalo antes de esos registros.**
+
 ## Riesgos y oportunidades
 
 **Riesgos** (`/riesgos/`) y **Oportunidades** (`/oportunidades/`), en el menú
@@ -1095,30 +1185,20 @@ En **Salidas: acciones**, **+ Nueva acción** registra una decisión:
 
 ## Otros registros
 
-Estos registros son anteriores a los módulos descritos más arriba. Algunos
-tienen pantallas; otros no tienen ninguna y se mantienen a través del
-servidor MCP (véanse [Agentes y tokens de API](#agentes-y-tokens-de-api) y
-[`mcp.md`](mcp.md)), que los consulta y los escribe con las mismas
-reglas de rol.
+Estos registros son anteriores a los módulos descritos más arriba. Todos
+tienen pantallas, y el servidor MCP (véanse
+[Agentes y tokens de API](#agentes-y-tokens-de-api) y [`mcp.md`](mcp.md)) los
+consulta y los escribe con las mismas reglas de rol.
 
 | Registro | Apartado | Dónde | Campos |
 |---|---|---|---|
 | **Partes interesadas** | 4.2 | Menú **Clientes** | **Nombre** (único), **Necesidades y Expectativas**, **Requisitos Identificados**, **Objetivo Estratégico** |
-| Roles y responsabilidades | 5.3 | Sin pantalla; módulo MCP `roles_responsabilidades` | Nombre del rol (único), compromiso con la calidad, descripción de la política de calidad |
 | **Capacitaciones** | 7.2 | Menú **Personas y competencia** | **Tema**, **Fecha**, **Personal** y **Persona**, **Duración en Horas**, **Evaluación Final** |
-| Recursos de capacitación | 7.1 | Sin pantalla; módulo MCP `recursos_capacitacion` | Recurso necesario, capacitación del personal (sí o no), documentación |
-| Operaciones de los procesos | 4.4, 8.1 | Sin pantalla; módulo MCP `procesos` | Nombre del proceso (único), criterio de calidad, control de proveedores (sí o no), no conformidad |
-| Indicadores de auditoría | 9.1 | Sin pantalla; módulo MCP `indicadores_auditoria` | Área, fecha, resultado, acción correctiva, indicador de desempeño |
 | **Mejoras** | 10.3 | Menú **Calidad** | **No conformidad** (obligatoria), **Acción correctiva**, **Acción preventiva**; la fecha **Implantada** se fija al registrar la mejora |
 | **Satisfacción** | 9.1.2 | Menú **Clientes** | **Cliente**, **Fecha de Encuesta**, **Puntuación (1-10)**, **Comentarios** |
 
 Notas:
 
-- Los roles del SGC son los que se eligen en **Personas** y en **Competencias
-  requeridas**; no se puede eliminar un rol que citan requisitos de
-  competencia.
-- Los procesos son los que se eligen en los objetivos de la calidad y en los
-  riesgos y oportunidades; no se puede eliminar un proceso que citan.
 - Las partes interesadas, los indicadores de auditoría, las capacitaciones y
   las mejoras alimentan las entradas de la revisión por la dirección.
 - **Capacitaciones** se filtra por **Tema**, **Fecha** y **Personal**, y cada
@@ -1128,8 +1208,34 @@ Notas:
   encuesta tiene un **PDF** (**Encuesta de satisfacción**).
 - **Mejoras** muestra las mejoras de diez en diez.
 - Todos los roles registran capacitaciones, mejoras, encuestas y partes
-  interesadas; solo los administradores las eliminan. Los registros sin
-  pantallas los escriben los administradores y los auditores.
+  interesadas; solo los administradores las eliminan.
+
+### Recursos de capacitación
+
+**Recursos de capacitación** (`/recursos-formacion/`), en el menú **Personas y
+competencia**, registra los recursos necesarios (apartado 7.1). Cada recurso
+tiene **Recurso necesario** (obligatorio), **Requiere capacitación del
+personal** y **Descripción y documentación**. La lista los ordena por recurso,
+y la página de cada uno muestra sus campos. Todos los roles los consultan; los
+administradores y los auditores los crean y los editan; solo los
+administradores los eliminan, desde la página del recurso.
+
+### Indicadores de auditoría
+
+**Indicadores de auditoría** (`/indicadores-auditoria/`), en el menú
+**Calidad**, es un registro heredado de resultados de auditoría y de
+indicadores de desempeño (apartado 9.1). Cada indicador tiene **Área
+auditada** (obligatoria, hasta 50 caracteres), **Fecha de la auditoría**
+(obligatoria; un indicador nuevo empieza con la fecha de hoy), **Resultado**,
+**Acción correctiva** e **Indicador de desempeño**.
+
+- La lista muestra primero los más recientes y recuerda que es un registro
+  heredado: los indicadores nuevos de los procesos se registran como
+  [objetivos de la calidad](#objetivos-de-la-calidad), con su meta y sus
+  mediciones.
+- Todos los roles los consultan; los administradores y los auditores los crean
+  y los editan; solo los administradores los eliminan, desde la página del
+  indicador.
 
 ## Informes y notificaciones por correo electrónico
 
@@ -1205,11 +1311,13 @@ cuando alguien solicita un enlace o cuando un administrador lo envía (véase
 | Competencia requerida | Lo que exige un rol del SGC: educación, formación, habilidad o experiencia |
 | De baja | Un documento retirado; no se elimina y queda de solo lectura |
 | Fecha de corte | La fecha hasta la que cuentan los datos de una revisión por la dirección |
+| Línea de reporte | Los roles por encima de un rol, desde el que lo dirige directamente hasta la cúspide |
 | Medición vencida | Un objetivo activo cuya siguiente medición debía haberse registrado ya |
 | Nivel, nivel residual | La gravedad de un riesgo según su probabilidad por su impacto, antes y después de sus acciones |
 | Obsoleto | Una revisión de un documento sustituida o retirada; se conserva como evidencia |
 | Persona | Quien trabaja bajo el SGC; no es lo mismo que una cuenta de usuario |
 | Prioridad | La importancia de una oportunidad según su beneficio por su viabilidad |
+| Proceso relacionado | Un proceso con el que interactúa otro; la relación vale en ambos sentidos |
 | Propietario | La persona responsable de un documento y de su revisión periódica |
 | Revisión (de un documento) | Cada versión numerada de su texto; distinta de la revisión periódica y de la revisión por la dirección |
 | Revisión vencida | Un riesgo o una oportunidad abiertos cuya próxima revisión ya ha pasado |

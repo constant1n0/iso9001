@@ -7,8 +7,10 @@ first, never with the process itself. A role gains its responsibilities, its
 authorities and the role it reports to, never itself nor a role below it in the
 line. Related processes, roles others report to and people owning a process are
 not deleted; ``cited_by`` and ``holders`` gather what RG-2's pages show. The
-SQLite cases run with the audit flush guard; the database cases also run on
-PostgreSQL, which names the foreign key a delete breaks.
+JSON registers, kept for compatibility, dump and take the new fields under the
+same rules (RG-3). The SQLite cases run with the audit flush guard; the
+database cases also run on PostgreSQL, which names the foreign key a delete
+breaks.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 
 from mcp_support import ADMIN, AUDITOR, OPERATIVO, McpDbCase, mcp_actor
+from register_routes import RegisterRoutesBase
 from test_nonconformity_service import ServiceBase, errors
 
 from app.extensions import db
@@ -536,6 +539,66 @@ class McpTestCase(McpDbCase):
         self.assertEqual(("integer", "string", "string"),
                          (roles["reporta_a_id"]["type"], roles["responsabilidades"]["type"],
                           roles["autoridades"]["type"]))
+
+
+class JsonRoundTripTestCase(RegisterRoutesBase):
+    """The JSON registers dump the RG-1 fields and write them through the services (RG-3)."""
+
+    PROCESSES, ROLES = "/proceso_operacion/", "/rol_responsabilidad/"
+
+    def _post(self, url: str, payload: dict) -> dict:
+        response = self.client.post(url, json=payload)
+        self.assertEqual(201, response.status_code, response.get_json())
+        return response.get_json()
+
+    def _listed(self, url: str, key: str) -> dict[int, dict]:
+        return {row[key]: row for row in self.client.get(url).get_json()}
+
+    def test_a_process_round_trips_its_type_owner_texts_and_relations(self) -> None:
+        owner = self.seed_with(people(), {"nombre": "Eva Ruiz"})
+        self.login(RoleEnum.ADMINISTRADOR)
+        compras = self._post(self.PROCESSES, {"proceso": "Compras"})
+        self.assertEqual((None, None, None, []), tuple(compras[key] for key in (
+            "tipo", "responsable_id", "entradas", "relacionados")))
+        payload = {"proceso": "Producción", "tipo": "operativo", "responsable_id": owner,
+                   "entradas": "Pedidos", "salidas": "Producto", "recursos": "Línea 2",
+                   "criterios_aceptacion": "Cero defectos críticos",
+                   "relacionados": [compras["id_proceso"]]}
+        created = self._post(self.PROCESSES, payload)
+        self.assertEqual(payload, {key: created[key] for key in payload})
+        listed = self._listed(self.PROCESSES, "id_proceso")
+        self.assertEqual(created, listed[created["id_proceso"]])  # GET shows what POST did
+        self.assertEqual([created["id_proceso"]], listed[compras["id_proceso"]]["relacionados"])
+        url = f"{self.PROCESSES}{created['id_proceso']}"
+        updated = self.client.put(url, json={"tipo": "soporte", "relacionados": []})
+        self.assertEqual((200, "soporte", []), (updated.status_code, updated.get_json()["tipo"],
+                                                updated.get_json()["relacionados"]))
+        for body, message in (({"relacionados": [created["id_proceso"]]}, po().RELATED_ITSELF),
+                              ({"responsable_id": owner + 1}, None),
+                              ({"tipo": "clave"}, None)):
+            with self.subTest(body=body):
+                refused = self.client.put(url, json=body)
+                self.assertEqual(422, refused.status_code)
+                if message:
+                    self.assertEqual(message, refused.get_json()["error"])
+        self.assertEqual(updated.get_json(),
+                         self._listed(self.PROCESSES, "id_proceso")[created["id_proceso"]])
+
+    def test_a_role_round_trips_its_texts_and_reporting_line(self) -> None:
+        self.login(RoleEnum.AUDITOR)
+        top = self._post(self.ROLES, {"rol": "Dirección"})
+        self.assertEqual((None, None, None), tuple(top[key] for key in (
+            "reporta_a_id", "responsabilidades", "autoridades")))
+        payload = {"rol": "Calidad", "reporta_a_id": top["id_rol"],
+                   "responsabilidades": "Mantener el SGC", "autoridades": "Detener envíos"}
+        created = self._post(self.ROLES, payload)
+        self.assertEqual(payload, {key: created[key] for key in payload})
+        self.assertEqual(created, self._listed(self.ROLES, "id_rol")[created["id_rol"]])
+        cycle = self.client.put(f"{self.ROLES}{top['id_rol']}",
+                                json={"reporta_a_id": created["id_rol"]})
+        self.assertEqual((422, rr().REPORTING_CYCLE), (cycle.status_code, cycle.get_json()["error"]))
+        cleared = self.client.put(f"{self.ROLES}{created['id_rol']}", json={"reporta_a_id": None})
+        self.assertEqual((200, None), (cleared.status_code, cleared.get_json()["reporta_a_id"]))
 
 
 if __name__ == "__main__":

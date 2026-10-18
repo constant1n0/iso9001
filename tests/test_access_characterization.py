@@ -171,6 +171,11 @@ PROCESS = dict(proceso="Proceso nuevo", tipo="operativo", responsable_id="1", en
                control_proveedor="y", no_conformidad="")
 ROLE = dict(rol="Rol nuevo", reporta_a_id="2", responsabilidades="", autoridades="",
             compromiso_calidad="y", descripcion_politica_calidad="")
+# Training resources and audit indicators (RG-3); record 1 of each is seeded.
+TRAINING_RESOURCE = dict(recurso_necesario="Sala", capacitacion_personal="y",
+                         descripcion_documentacion="")
+INDICATOR = dict(area_auditoria="Ventas", fecha_auditoria="2026-10-05", resultado="",
+                 accion_correctiva="", indicador_desempeno="")
 
 
 def _register(base, new, action_id):
@@ -319,7 +324,7 @@ ENDPOINTS = [
     *_register("/riesgos/", "nuevo", 1),
     *_register("/oportunidades/", "nueva", 2),
     # Process 1 is related to and cited by nothing, and role 1 has neither
-    # competence requirements (role 2 holds the seeded one) nor subordinates,
+    # competence requirements nor subordinates (test_the_seeded_role_1_is_deletable),
     # so deleting them succeeds (RG-2). Their JSON registers stay below.
     *_html("PROCESS_OPERATIONS", "/procesos/", ("nuevo", PROCESS), ("1/editar", PROCESS),
            "1/eliminar"),
@@ -327,6 +332,14 @@ ENDPOINTS = [
     *_html("ROLES_RESPONSIBILITIES", "/roles/", ("nuevo", ROLE), ("1/editar", ROLE),
            "1/eliminar"),
     Endpoint("ROLES_RESPONSIBILITIES", "read", "GET", "/roles/1", 200),
+    # Nothing cites a training resource or an audit indicator (RG-3); their JSON
+    # registers stay below.
+    *_html("TRAINING_RESOURCES", "/recursos-formacion/", ("nuevo", TRAINING_RESOURCE),
+           ("1/editar", TRAINING_RESOURCE), "1/eliminar"),
+    Endpoint("TRAINING_RESOURCES", "read", "GET", "/recursos-formacion/1", 200),
+    *_html("AUDIT_INDICATORS", "/indicadores-auditoria/", ("nuevo", INDICATOR),
+           ("1/editar", INDICATOR), "1/eliminar"),
+    Endpoint("AUDIT_INDICATORS", "read", "GET", "/indicadores-auditoria/1", 200),
     *_json("IMPROVEMENTS", "/mejoras/api/", {"no_conformidad": "NC"},
            {"accion_correctiva": "x"}),
     *_json("AUDIT_INDICATORS", "/auditoria_indicador/",
@@ -595,6 +608,16 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                             Resource[endpoint.resource],
                         ),
                     )
+
+    def test_the_seeded_role_1_is_deletable(self) -> None:
+        """Role 2 holds the seeded competence requirement and nobody reports to role 1."""
+        self._fresh(None)
+        with self.app.app_context():
+            requirement = CompetenceRequirement.query.one()
+            self.assertEqual((2, "Seed 2"), (requirement.rol_id,
+                                             db.session.get(RolResponsabilidad, 2).rol))
+            self.assertEqual("Seed", db.session.get(RolResponsabilidad, 1).rol)
+            self.assertEqual(0, RolResponsabilidad.query.filter_by(reporta_a_id=1).count())
 
     def test_every_resource_has_a_characterized_endpoint(self) -> None:
         from app.services.policy import Resource

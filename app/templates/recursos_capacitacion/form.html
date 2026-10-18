@@ -1,0 +1,25 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% set titulo = 'Editar el recurso de capacitación' if recurso else 'Nuevo recurso de capacitación' %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block crumb %}Personas y competencia · Recursos de capacitación{% endblock %}
+{% block content %}
+{{ page_header('Cláusula 7.1 · Recursos de capacitación', titulo) }}
+{{ form_card(form, url_for('recurso_formacion.show_resource', resource_id=recurso.id_recurso) if recurso else url_for('recurso_formacion.list_resources'), 'Guardar cambios' if recurso else 'Crear') }}
+{% endblock %}

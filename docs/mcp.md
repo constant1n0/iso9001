@@ -49,8 +49,8 @@ nunca puede eliminar.
   registran en el servidor.
 - Actúa el propietario del token, con los ámbitos del token y el canal `mcp`:
   `read` permite leer y `write` escribir, y el rol del propietario sigue
-  aplicándose (un token de un usuario `OPERATIVO` no puede escribir en los
-  registros JSON). Las filas de auditoría y `created_by` / `updated_by`
+  aplicándose (un token de un usuario `OPERATIVO` no puede escribir en un
+  registro que su rol solo consulta, como los procesos o los roles). Las filas de auditoría y `created_by` / `updated_by`
   registran al propietario.
 - Transportes: Streamable HTTP sin estado en `/mcp` (respuestas JSON) para los
   clientes remotos, y stdio para un proceso local. La aplicación HTTP atiende
@@ -184,6 +184,36 @@ Personas y competencia (cláusulas 5.3 y 7.2 de ISO 9001):
 La matriz de competencias requeridas frente a demostradas es una página web
 (`/competencias/matriz`); los agentes leen los mismos datos desde estos
 módulos.
+
+Procesos y roles (cláusulas 4.4, 5.3 y 8.1 de ISO 9001:2026). Todos los roles
+leen ambos módulos, y solo los tokens de ADMIN o AUDITOR (con el ámbito
+`write`) crean y actualizan. Ningún token elimina.
+
+- `procesos`: `proceso` (único) es obligatorio.
+  - `tipo` es `estrategico`, `operativo` o `soporte`; los registros muestran
+    la etiqueta en español (`"Estratégico"`), y las escrituras y los filtros
+    usan el nombre del miembro.
+  - `responsable_id` cita a la persona responsable del proceso, que después
+    no puede eliminarse.
+  - `entradas`, `salidas`, `recursos`, `criterio_calidad` (los criterios de
+    operación, 8.1), `criterios_aceptacion` (los de sus salidas),
+    `control_proveedor` y `no_conformidad` son opcionales.
+  - `relacionados` es una lista de ids de `procesos` que sustituye a la
+    actual; una lista vacía quita todas las relaciones. La relación es mutua:
+    cada proceso relacionado también lista este. Un proceso nunca se relaciona
+    consigo mismo. Los registros también devuelven `relacionados`.
+  - Filtros: `tipo` y `responsable_id`.
+- `roles_responsabilidades`: `rol` (único) es obligatorio;
+  `responsabilidades`, `autoridades`, `compromiso_calidad` y
+  `descripcion_politica_calidad` son opcionales. `reporta_a_id` es el rol al
+  que reporta: nunca él mismo ni un rol que le reporta, directa o
+  indirectamente (`null` lo deja sin línea de reporte).
+- Solo en la web: las eliminaciones, que rechazan un proceso relacionado con
+  otros o citado por objetivos, riesgos u oportunidades, y un rol con
+  requisitos de competencia o con roles que le reportan. Las páginas
+  `/procesos/` y `/roles/` muestran además los registros que citan un proceso,
+  y la línea de reporte, las personas y los requisitos de competencia de un
+  rol.
 
 Objetivos de la calidad (cláusula 6.2 de ISO 9001:2026). Ambos módulos
 comparten un mismo permiso: todos los roles leen, y solo los tokens de ADMIN o
