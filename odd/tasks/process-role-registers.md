@@ -37,7 +37,7 @@ Route for every task: **delegated direct**.
   - Migration (new columns, the process-relations table, the role reporting line), service rules (no self-relation, no reporting cycle, delete protection for related processes and reporting roles), MCP fields.
 - [x] **RG-2 — Process and role screens.** Forecast 900-1,400.
   - Lists with filters, details with related records (PR2, PR3), forms with pickers.
-- [ ] **RG-3 — Training-resource and audit-indicator screens, and docs.** Forecast 600-1,000.
+- [x] **RG-3 — Training-resource and audit-indicator screens, and docs.** Forecast 600-1,000.
   - PR4 screens and the JSON endpoints' fate (kept for compatibility or retired, decided in the task); guides (Spanish first), `docs/mcp.md`, `docs/architecture/services.md`, gap analysis 4.4, 5.3, 7.1, 8.1 and the "registros sin pantallas web" list.
   - Also (RG-2 review): the role-delete expectations in `tests/test_ui_permissions.py` and `tests/test_access_characterization.py` assert which seeded role holds the competence requirement instead of relying on a comment.
 
@@ -55,7 +55,7 @@ Baseline at `0cf3e6b`: 1,420 tests. Migrations are tested on PostgreSQL (`TEST_P
 |---|---|---|---|---|
 | RG-1 | Done | `16f4715` (migration `f5a7c9e1b3d6`: process `tipo`, `responsable_id`, `entradas`, `salidas`, `recursos`, `criterios_aceptacion`, table `proceso_relaciones` with CHECK `proceso_id < relacionado_id` (no self-relation, canonical order); role `responsabilidades`, `autoridades`, `reporta_a_id` with no self-reference; services: `relacionados` replaced as a set, `related`, `cited_by` (objectives, risks, opportunities), roles' cycle walk, `holders` (people incl. inactive, competence requirements), delete refused while related or reported to; people: a process owner cannot be deleted; MCP fields, `relacionados` extra, `tipo` and `responsable_id` filters, still 24 modules) | RED: 15 failures and 17 errors (`Campos no permitidos: relacionados`, missing `TipoProceso`, `cited_by`, `holders`, `NoSuchTableError: proceso_relaciones`). GREEN: 1,440 tests OK incl. PostgreSQL; adapted `tests/test_mcp_modules.py` (processes in the bespoke writable map) and `tests/test_migrations.py` | Range `0cf3e6b..eb40233`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-cbc338fceeaabbcb` **approved** and acknowledged; both warnings (a rename to a taken name with a relations change, impossible ids on update) were pinned by tests in `d0ba34b`, which passed at once on SQLite and PostgreSQL: the behaviour was already right. The local PostgreSQL test container had stopped; it was restarted and the full suite re-run: 1,444 tests OK |
 | RG-2 | Done | `3f6d742` (`/procesos/` and `/roles/` lists, details and forms in `app/routes/process_role_routes.py`; process page with related processes both ways and its citing objectives, risks and opportunities; role page with the reporting line up to the top, direct subordinates, holders and competence requirements; `process_operations.counts` for the list columns in grouped queries; navigation "Procesos 4.4" and "Roles y responsabilidades 5.3"; the JSON API at `/proceso_operacion/` and `/rol_responsabilidad/` unchanged) | RED: 52 failures (404s) in the screen tests, 24 UI-permission and 70 characterization failures. GREEN: 1,460 tests OK incl. PostgreSQL; adapted `tests/test_access_characterization.py` and `tests/test_ui_permissions.py` | Range `b3c89ba..20f9a99`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-030365ac582a73be` **approved** and acknowledged; its suggestion moved into RG-3 |
-| RG-3 | Pending | — | — | — |
+| RG-3 | Done | `4b9e62c` (`/recursos-formacion/` (7.1) and `/indicadores-auditoria/` (9.1, flagged as a legacy register pointing to quality objectives) in `app/routes/register_routes.py`; the four JSON endpoints kept, their process and role dumps now include the RG-1 fields; guides (Spanish first), `docs/mcp.md`, `docs/architecture/services.md`; gap analysis: 4.4 and 5.3 covered (12 covered, 13 partial), 7.1 and 8.1 partial with new evidence, Wave 2 item 2 done, no register without screens; the RG-2 review's fixture assertions) | RED: 42 failures in 13 screen tests (404s, missing navigation), JSON `KeyError: 'responsable_id'` and `'reporta_a_id'`. GREEN: 1,477 tests OK incl. PostgreSQL; adapted `tests/test_ui_permissions.py`, `tests/test_access_characterization.py`, `tests/test_process_role_registers.py` | Range `e94d9a6..ac904c0`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-6b14e1e93d344488` **approved** and acknowledged; its warning needs no change (`recurso_necesario` is `nullable=False` in the model and the schema, so no row can lack it) and its suggestion (a dump of a detached process) is noted: JSON dumps always run inside a request with the session attached |
 
 ## Findings during implementation
 
@@ -63,8 +63,13 @@ Baseline at `0cf3e6b`: 1,420 tests. Migrations are tested on PostgreSQL (`TEST_P
 - `proceso_relaciones` has no audit model (the `persona_roles` precedent); process create and update rows carry `relacionados`.
 - The reporting-cycle check takes no locks, so two concurrent updates could still form a cycle.
 - Delete buttons are hidden for a related or cited process and for a role with requirements or subordinates; a direct POST still gets the service's refusal. An edit form posting no related process clears the relations (WTForms posts an empty list).
-- For RG-3: the JSON auto-schema dump leaves out `responsable_id`, `reporta_a_id` and `relacionados` (`app/schemas.py`).
+- Still to do (gap analysis Wave 2): the link between nonconformities and processes. The audit-indicator form takes a day while the column stores a date and time (a new record gets midnight; an edit on the same day keeps the stored time). `app/routes/register_routes.py` shares its name with the test helper `tests/register_routes.py`.
+- For RG-3 (done): the JSON auto-schema dump leaves out `responsable_id`, `reporta_a_id` and `relacionados` (`app/schemas.py`).
+
+## Production deployment (pending authorization)
+
+One migration (`f5a7c9e1b3d6` process and role fields and relations) on top of `e3b5d7f9a1c4`: back up the database and the code, fast-forward, `flask db upgrade`, `flask db check`, then the user restarts the four services. Smoke tests: `/procesos/`, `/roles/`, `/recursos-formacion/` and `/indicadores-auditoria/` redirect to the login, 24 MCP modules.
 
 ## Next step
 
-RG-3.
+**Feature complete** once RG-3 merges. Next: the production deployment above, after explicit authorization.

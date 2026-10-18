@@ -13,7 +13,11 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-"""Audit indicators (``AuditoriaIndicador``) on the generic CRUD helper (JSON register).
+"""Audit indicators (``AuditoriaIndicador``) on the generic CRUD helper.
+
+A legacy register: the web screens (``routes/register_routes.py``) list every
+record with ``list_``, the JSON register pages with ``list_page``, and new
+process indicators belong in quality objectives.
 
 ``fecha_auditoria`` accepts a ``datetime`` or an ISO 8601 string (an explicit
 ``null`` is a validation error); when absent the column default sets it on create.
@@ -47,4 +51,5 @@ get = partial(crud.get, SPEC)
 create = partial(crud.create, SPEC)
 update = partial(crud.update, SPEC)
 delete = partial(crud.delete, SPEC)
+list_ = partial(crud.list_, SPEC)
 list_page = partial(crud.list_page, SPEC)

@@ -13,6 +13,19 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
+"""Marshmallow schemas of the JSON registers: each dumps its model's columns.
+
+The auto schemas leave foreign keys and relations out, so the process and role
+schemas declare them (RG-3 of ``process-role-registers``): a process dumps its
+owner (``responsable_id``) and the ids of its related processes
+(``relacionados``, both directions, as the MCP module shows them); a role dumps
+the role it reports to (``reporta_a_id``). The routes never load with them: the
+services validate every write.
+"""
+
+from marshmallow import fields
+from sqlalchemy.orm import object_session
+
 from .extensions import ma
 from .models import (
     ParteInteresada,
@@ -22,6 +35,7 @@ from .models import (
     AuditoriaIndicador,
     Mejora,
 )
+from .services import process_operations
 
 # Esquema para Partes Interesadas
 class ParteInteresadaSchema(ma.SQLAlchemyAutoSchema):
@@ -31,6 +45,8 @@ class ParteInteresadaSchema(ma.SQLAlchemyAutoSchema):
 
 # Esquema para Roles y Responsabilidades
 class RolResponsabilidadSchema(ma.SQLAlchemyAutoSchema):
+    reporta_a_id = ma.auto_field()
+
     class Meta:
         model = RolResponsabilidad
         load_instance = True
@@ -43,9 +59,16 @@ class RecursoCapacitacionSchema(ma.SQLAlchemyAutoSchema):
 
 # Esquema para Procesos de Operación
 class ProcesoOperacionSchema(ma.SQLAlchemyAutoSchema):
+    responsable_id = ma.auto_field()
+    relacionados = fields.Method("_related_ids", dump_only=True)
+
     class Meta:
         model = ProcesoOperacion
         load_instance = True
+
+    def _related_ids(self, process: ProcesoOperacion) -> list[int]:
+        """Ids of the processes related to ``process``, ascending."""
+        return process_operations.related_ids(object_session(process), process.id_proceso)
 
 # Esquema para Auditorías e Indicadores
 class AuditoriaIndicadorSchema(ma.SQLAlchemyAutoSchema):

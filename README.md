@@ -61,7 +61,8 @@ No enlazar imágenes hasta que existan en el repositorio. -->
 |---|---|---|
 | Panel de control | — | Cifras, gráficos y avisos, entre ellos las revisiones de documentos vencidas, los objetivos que no alcanzan la meta y las acciones vencidas de la revisión por la dirección |
 | Usuarios y perfil | 5.3 | Cuentas con los roles Administrador, Auditor y Operativo, desactivación en lugar de eliminación, y el perfil y los tokens de API de cada usuario |
-| Personas y competencia | 5.3, 7.2 | Personas, roles del SGC, competencias requeridas y acreditadas, y la matriz de competencias |
+| Procesos | 4.4, 8.1 | Tipo, responsable, entradas, salidas, recursos, criterios de operación y de aceptación, procesos relacionados y los registros que citan cada proceso |
+| Personas y competencia | 5.3, 7.2 | Personas, roles del SGC con sus responsabilidades, autoridades y línea de reporte, competencias requeridas y acreditadas, y la matriz de competencias |
 | No conformidades y acciones correctivas | 10.2 | Contención, causa raíz, acciones correctivas, verificación de la eficacia, cierre y reapertura |
 | Control de documentos | 7.5 | Revisiones numeradas que se revisan, aprueban y publican, ficheros adjuntos, baja y revisión periódica |
 | Auditorías internas | 9.2 | Programa anual de auditoría, auditorías con alcance, equipo y comprobación de independencia, y hallazgos clasificados que abren no conformidades |
@@ -71,10 +72,9 @@ No enlazar imágenes hasta que existan en el repositorio. -->
 | Informes y notificaciones | 9.1 | PDF de los registros, informe mensual de calidad y avisos programados por correo electrónico |
 
 **Otros registros**, anteriores a los módulos de la tabla: partes interesadas
-(4.2), operaciones de los procesos (4.4, 8.1), roles y responsabilidades
-(5.3), recursos de capacitación (7.1), capacitaciones (7.2), indicadores de
-auditoría (9.1), satisfacción del cliente (9.1.2) y mejoras (10.3). Los que no tienen pantallas se mantienen a través
-del servidor MCP.
+(4.2), recursos de capacitación (7.1), capacitaciones (7.2), indicadores de
+auditoría (9.1), satisfacción del cliente (9.1.2) y mejoras (10.3). Todos
+tienen pantallas.
 
 La [guía de usuario](docs/guia-de-usuario.md) explica cada pantalla, los
 permisos de cada rol y las reglas de cada módulo.

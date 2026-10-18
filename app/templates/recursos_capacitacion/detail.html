@@ -1,0 +1,45 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form %}
+{% block title %}{{ recurso.recurso_necesario | truncate(60) }}{% endblock %}
+{% block crumb %}Personas y competencia · Recursos de capacitación{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 7.1 · Recurso de capacitación', recurso.recurso_necesario | truncate(80)) %}
+    {% if can('update', 'training_resources') %}
+    <a class="btn" href="{{ url_for('recurso_formacion.edit_resource', resource_id=recurso.id_recurso) }}">Editar</a>
+    {% endif %}
+    {% if can('delete', 'training_resources') %}
+    {{ delete_form(url_for('recurso_formacion.delete_resource', resource_id=recurso.id_recurso), '¿Eliminar este recurso de capacitación?') }}
+    {% endif %}
+{% endcall %}
+
+<section class="grid grid--3" aria-label="Recurso, capacitación y documentación">
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="recurso">Recurso necesario</h2></header>
+        <div class="card__body"><p class="card__text">{{ recurso.recurso_necesario }}</p></div>
+    </article>
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="capacitacion">Capacitación del personal</h2></header>
+        <div class="card__body"><p class="card__text">{{ 'Sí, requiere capacitación del personal.' if recurso.capacitacion_personal else 'No requiere capacitación del personal.' }}</p></div>
+    </article>
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="documentacion">Descripción y documentación</h2></header>
+        {% if recurso.descripcion_documentacion %}<div class="card__body"><p class="card__text">{{ recurso.descripcion_documentacion }}</p></div>{% else %}<p class="empty">Sin indicar.</p>{% endif %}
+    </article>
+</section>
+{% endblock %}

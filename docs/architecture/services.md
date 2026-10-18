@@ -63,7 +63,8 @@ bounded: the page is clamped to `1..crud.MAX_PAGE` and the size to
 | `people.py`, `competence.py` | People (each linked to at most one user and holding QMS roles), and competence required per role and demonstrated per person, with the required-versus-demonstrated matrix |
 | `crud.py` | Generic helper driven by a `Spec` (model, resource, fields, ordering) |
 | `training.py`, `satisfaction.py`, `stakeholders.py`, `improvements.py` | Plain HTML registers on `crud` |
-| `roles_responsibilities.py`, `training_resources.py`, `process_operations.py`, `audit_indicators.py` | JSON registers on `crud` |
+| `process_operations.py`, `roles_responsibilities.py` | Processes with their related processes and the records citing them; roles with their reporting line and holders (see below) |
+| `training_resources.py`, `audit_indicators.py` | Legacy registers on `crud`, with web screens and JSON endpoints |
 | `users.py` | User accounts: administration and self-service (see below) |
 | `api_tokens.py` | Bearer tokens for non-browser adapters (see below) |
 | `policy.py`, `actor.py`, `errors.py`, `audit.py`, `attribution.py`, `fields.py` | The shared kernel |
@@ -258,6 +259,54 @@ filter is used.
   management review inputs, which count risks by level and opportunities by
   priority (reviews held before keep their frozen `riesgos_oportunidades`
   keys).
+
+## Processes and roles
+
+Decisions PR1-PR3 and PR5 of `process-role-registers` (ISO 9001:2026 clauses
+4.4, 5.3 and 8.1).
+
+- **Processes** (`process_operations`, `ProcesoOperacion`): a unique name
+  (`Conflict` on a duplicate), a type (`TipoProceso` by member name; blank
+  means none), an owner (`responsable_id`, checked by
+  `people.check_reference`; a person owning a process cannot be deleted),
+  inputs, outputs, resources, operating criteria (`criterio_calidad`),
+  acceptance criteria, and the legacy supplier flag and nonconformity text.
+  - `relacionados` replaces the related processes as a set: every id must
+    exist and none may be the process itself (`RELATED_ITSELF`). The relation
+    is mutual: each pair is stored once in `proceso_relaciones`, lower id
+    first (a CHECK keeps the order), and `related_ids` and `related` read it
+    both ways. The table has no audit model, so the process's create and
+    update rows carry `relacionados`.
+  - `list_` and `list_page` filter by `tipo` and `responsable_id`. `cited_by`
+    gathers the quality objectives, risks and opportunities citing a process,
+    and `counts` counts them and the related processes per process in grouped
+    queries, for the list.
+  - Delete is refused while the process is related (`HAS_RELATIONS`) or cited
+    by objectives (`CITED_BY_OBJECTIVES`) or by risks or opportunities
+    (`CITED_BY_RISKS`); the `ON DELETE RESTRICT` foreign keys refuse a
+    relation or citation added after the check.
+- **Roles** (`roles_responsibilities`, `RolResponsabilidad`): a unique name,
+  responsibilities, authorities, the quality commitment flag and policy text,
+  and the role it reports to (`reporta_a_id`).
+  - A role never reports to itself (`REPORTS_TO_ITSELF`, also a CHECK) nor to
+    a role below it in its line (`REPORTING_CYCLE`): the write walks the line
+    upwards. The walk takes no locks, so two concurrent updates could still
+    close a cycle; the role page stops its walk at a repeated role.
+  - `holders` returns the people holding a role (inactive ones included) and
+    its competence requirements.
+  - Delete is refused while competence requirements cite the role (`IN_USE`)
+    or other roles report to it (`HAS_SUBORDINATES`); the people holding a
+    deleted role simply lose it.
+- Writes flush and never commit, and an update that changes nothing writes
+  nothing.
+- Adapters: the web screens `/procesos/` and `/roles/`
+  (`routes/process_role_routes.py`); the JSON endpoints kept for
+  compatibility, `/proceso_operacion/` and `/rol_responsabilidad/`, whose
+  schemas (`app/schemas.py`) also dump `responsable_id`, `relacionados` and
+  `reporta_a_id` and whose writes go through these services; and the MCP
+  modules `procesos` and `roles_responsabilidades` (no deletes). The legacy
+  training-resource and audit-indicator registers have their screens in
+  `routes/register_routes.py` and keep their JSON endpoints too.
 
 ## Quality objectives
 

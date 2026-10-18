@@ -1,0 +1,48 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form %}
+{% block title %}{{ indicador.area_auditoria }}{% endblock %}
+{% block crumb %}Calidad · Indicadores de auditoría{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 9.1 · Indicador de auditoría', indicador.area_auditoria) %}
+    {% if can('update', 'audit_indicators') %}
+    <a class="btn" href="{{ url_for('indicador_auditoria.edit_indicator', indicator_id=indicador.id_auditoria) }}">Editar</a>
+    {% endif %}
+    {% if can('delete', 'audit_indicators') %}
+    {{ delete_form(url_for('indicador_auditoria.delete_indicator', indicator_id=indicador.id_auditoria), '¿Eliminar el indicador de auditoría de «' ~ indicador.area_auditoria ~ '»?') }}
+    {% endif %}
+{% endcall %}
+
+<section class="grid grid--2" aria-label="Identificación y resultado">
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="identificacion">Identificación</h2></header>
+        <ul class="list">
+            <li class="list__item"><span class="list__primary">Área auditada</span><span class="list__secondary">{{ indicador.area_auditoria }}</span></li>
+            <li class="list__item"><span class="list__primary">Fecha de la auditoría</span><span class="list__secondary">{{ indicador.fecha_auditoria.strftime('%d/%m/%Y') if indicador.fecha_auditoria else 'Sin indicar' }}</span></li>
+        </ul>
+    </article>
+    {% for name, titulo, texto in [('resultado', 'Resultado', indicador.resultado),
+                                   ('accion', 'Acción correctiva', indicador.accion_correctiva),
+                                   ('indicador', 'Indicador de desempeño', indicador.indicador_desempeno)] %}
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="{{ name }}">{{ titulo }}</h2></header>
+        {% if texto %}<div class="card__body"><p class="card__text">{{ texto }}</p></div>{% else %}<p class="empty">Sin indicar.</p>{% endif %}
+    </article>
+    {% endfor %}
+</section>
+{% endblock %}

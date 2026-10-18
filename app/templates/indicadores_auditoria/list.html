@@ -1,0 +1,63 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% block title %}Indicadores de auditoría{% endblock %}
+{% block crumb %}Calidad · Indicadores de auditoría{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 9.1 · Seguimiento y medición', 'Indicadores de auditoría') %}
+    {% if can('create', 'audit_indicators') %}
+    <a class="btn btn--primary" href="{{ url_for('indicador_auditoria.new_indicator') }}">+ Nuevo indicador</a>
+    {% endif %}
+{% endcall %}
+<p class="muted" id="heredado">Registro heredado: los indicadores nuevos de los procesos se registran como <a href="{{ url_for('objetivo_calidad.list_objectives') }}">objetivos de la calidad</a>.</p>
+
+{% if indicadores %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Fecha</th>
+                <th scope="col">Área auditada</th>
+                <th scope="col">Resultado</th>
+                <th scope="col">Indicador de desempeño</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for indicador in indicadores %}
+            <tr id="fila-{{ indicador.id_auditoria }}">
+                <td class="date">{{ indicador.fecha_auditoria.strftime('%d/%m/%Y') if indicador.fecha_auditoria else '—' }}</td>
+                <td><a href="{{ url_for('indicador_auditoria.show_indicator', indicator_id=indicador.id_auditoria) }}">{{ indicador.area_auditoria }}</a></td>
+                <td>{{ indicador.resultado | truncate(80) if indicador.resultado else '—' }}</td>
+                <td>{{ indicador.indicador_desempeno | truncate(80) if indicador.indicador_desempeno else '—' }}</td>
+                <td>
+                    <div class="table__actions">
+                        {% if can('update', 'audit_indicators') %}
+                        <a class="btn btn--sm" href="{{ url_for('indicador_auditoria.edit_indicator', indicator_id=indicador.id_auditoria) }}">Editar</a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    {{ empty_state('Todavía no hay indicadores de auditoría.') }}
+{% endif %}
+{% endblock %}

@@ -13,7 +13,11 @@
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
 
-"""Training resources (``RecursoCapacitacion``) on the generic CRUD helper (JSON register)."""
+"""Training resources (``RecursoCapacitacion``) on the generic CRUD helper.
+
+The web screens (``routes/register_routes.py``) list every record with ``list_``;
+the JSON register pages through them with ``list_page``.
+"""
 
 from __future__ import annotations
 
@@ -39,4 +43,5 @@ get = partial(crud.get, SPEC)
 create = partial(crud.create, SPEC)
 update = partial(crud.update, SPEC)
 delete = partial(crud.delete, SPEC)
+list_ = partial(crud.list_, SPEC)
 list_page = partial(crud.list_page, SPEC)

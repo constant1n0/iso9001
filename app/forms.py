@@ -644,3 +644,24 @@ class RolForm(BaseForm):
     autoridades = TextAreaField('Autoridades')
     compromiso_calidad = BooleanField('Compromiso con la calidad')
     descripcion_politica_calidad = TextAreaField('Política de calidad')
+
+
+class RecursoCapacitacionForm(BaseForm):
+    """A training resource (clause 7.1): its current fields only (decision PR4)."""
+
+    recurso_necesario = TextAreaField('Recurso necesario', validators=[DataRequired()])
+    capacitacion_personal = BooleanField('Requiere capacitación del personal')
+    descripcion_documentacion = TextAreaField('Descripción y documentación')
+
+
+class IndicadorAuditoriaForm(BaseForm):
+    """An audit indicator (clause 9.1, legacy): its current fields only (decision PR4).
+
+    The stored audit date has a time; the form takes the day.
+    """
+
+    area_auditoria = StringField('Área auditada', validators=[DataRequired(), Length(max=50)])
+    fecha_auditoria = DateField('Fecha de la auditoría', validators=[DataRequired()])
+    resultado = TextAreaField('Resultado')
+    accion_correctiva = TextAreaField('Acción correctiva')
+    indicador_desempeno = TextAreaField('Indicador de desempeño')

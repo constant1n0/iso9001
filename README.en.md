@@ -21,8 +21,12 @@ an agent can never delete anything.
 - **Dashboard**: key figures, charts and alerts.
 - **Users and profile** (clause 5.3): the *Administrador*, *Auditor* and
   *Operativo* roles, deactivation instead of deletion, profile and API tokens.
-- **People and competence** (5.3, 7.2): people, QMS roles, required and
-  demonstrated competence, the competence matrix.
+- **Processes** (4.4, 8.1): type, owner, inputs, outputs, resources,
+  operating and acceptance criteria, related processes and the records citing
+  each process.
+- **People and competence** (5.3, 7.2): people, QMS roles with their
+  responsibilities, authorities and reporting line, required and demonstrated
+  competence, the competence matrix.
 - **Nonconformities and corrective actions** (10.2): containment, root cause,
   corrective actions, effectiveness verification, closing and reopening.
 - **Document control** (7.5): numbered revisions reviewed, approved and
@@ -36,9 +40,9 @@ an agent can never delete anything.
   trend.
 - **Management review** (9.3): inputs drawn from the registers, conclusions,
   actions and the minutes PDF.
-- **Earlier registers**: interested parties (4.2), processes (4.4, 8.1), roles
-  (5.3), training resources (7.1), training (7.2), audit indicators (9.1),
-  customer satisfaction (9.1.2) and improvements (10.3).
+- **Earlier registers**: interested parties (4.2), training resources (7.1),
+  training (7.2), audit indicators (9.1), customer satisfaction (9.1.2) and
+  improvements (10.3), all with screens.
 - **Reports and notifications** (9.1): PDFs of the records, a monthly quality
   report and scheduled e-mail alerts.
 

@@ -1,0 +1,60 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% block title %}Recursos de capacitación{% endblock %}
+{% block crumb %}Personas y competencia · Recursos de capacitación{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 7.1 · Recursos', 'Recursos de capacitación') %}
+    {% if can('create', 'training_resources') %}
+    <a class="btn btn--primary" href="{{ url_for('recurso_formacion.new_resource') }}">+ Nuevo recurso</a>
+    {% endif %}
+{% endcall %}
+
+{% if recursos %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Recurso necesario</th>
+                <th scope="col">Capacitación del personal</th>
+                <th scope="col">Descripción y documentación</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for recurso in recursos %}
+            <tr id="fila-{{ recurso.id_recurso }}">
+                <td><a href="{{ url_for('recurso_formacion.show_resource', resource_id=recurso.id_recurso) }}">{{ recurso.recurso_necesario | truncate(80) }}</a></td>
+                <td>{% if recurso.capacitacion_personal %}<span class="badge badge--ok">Sí</span>{% else %}No{% endif %}</td>
+                <td>{{ recurso.descripcion_documentacion | truncate(80) if recurso.descripcion_documentacion else '—' }}</td>
+                <td>
+                    <div class="table__actions">
+                        {% if can('update', 'training_resources') %}
+                        <a class="btn btn--sm" href="{{ url_for('recurso_formacion.edit_resource', resource_id=recurso.id_recurso) }}">Editar</a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    {{ empty_state('Todavía no hay recursos de capacitación.') }}
+{% endif %}
+{% endblock %}
