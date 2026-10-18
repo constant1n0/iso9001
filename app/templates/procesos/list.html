@@ -1,0 +1,85 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% block title %}Procesos{% endblock %}
+{% block crumb %}Calidad · Procesos{% endblock %}
+{% block content %}
+{% call page_header('Cláusulas 4.4 y 8.1 · Mapa de procesos', 'Procesos') %}
+    {% if can('create', 'process_operations') %}
+    <a class="btn btn--primary" href="{{ url_for('proceso.new_process') }}">+ Nuevo proceso</a>
+    {% endif %}
+{% endcall %}
+
+<details class="filters"{% if applied %} open{% endif %}>
+    <summary>Filtros{% if applied %} <span class="badge badge--warn">{{ applied }} {{ 'activo' if applied == 1 else 'activos' }}</span>{% endif %}</summary>
+    <form method="get" action="{{ url_for('proceso.list_processes') }}" class="filters__body">
+        {% for name, label, choices in campos %}
+        <div class="field"><label for="filtro-{{ name }}">{{ label }}</label>
+            <select name="{{ name }}" id="filtro-{{ name }}">
+                <option {% if name not in elegidos %}selected {% endif %}value="">Todos</option>
+                {% for value, text in choices %}
+                <option {% if elegidos.get(name) == value %}selected {% endif %}value="{{ value }}">{{ text }}</option>
+                {% endfor %}
+            </select></div>
+        {% endfor %}
+        <div class="filters__actions">
+            <button type="submit" class="btn btn--primary">Buscar</button>
+            <a class="btn btn--ghost" href="{{ url_for('proceso.list_processes') }}">Limpiar</a>
+        </div>
+    </form>
+</details>
+
+{% if procesos %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Proceso</th>
+                <th scope="col">Tipo</th>
+                <th scope="col">Responsable</th>
+                <th scope="col" class="num">Procesos relacionados</th>
+                <th scope="col" class="num">Objetivos de calidad</th>
+                <th scope="col" class="num">Riesgos y oportunidades</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for proceso in procesos %}
+            <tr id="fila-{{ proceso.id_proceso }}">
+                <td><a href="{{ url_for('proceso.show_process', process_id=proceso.id_proceso) }}">{{ proceso.proceso }}</a></td>
+                <td>{{ proceso.tipo.value if proceso.tipo else '—' }}</td>
+                <td>{{ personas.get(proceso.responsable_id, '—') }}</td>
+                <td class="num">{{ cuentas.relacionados[proceso.id_proceso] }}</td>
+                <td class="num">{{ cuentas.objetivos[proceso.id_proceso] }}</td>
+                <td class="num">{{ cuentas.riesgos[proceso.id_proceso] }}</td>
+                <td>
+                    <div class="table__actions">
+                        {% if can('update', 'process_operations') %}
+                        <a class="btn btn--sm" href="{{ url_for('proceso.edit_process', process_id=proceso.id_proceso) }}">Editar</a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    {{ empty_state('Ningún proceso coincide con los filtros.' if applied else 'Todavía no hay procesos.') }}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,26 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% set titulo = 'Editar el proceso' if proceso else 'Nuevo proceso' %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block crumb %}Calidad · Procesos{% endblock %}
+{% block content %}
+{{ page_header('Cláusulas 4.4 y 8.1 · Procesos', titulo) }}
+<p class="muted">Un proceso relacionado lo está en ambos sentidos: su página también muestra este. Para elegir varios, mantén pulsada la tecla Ctrl (⌘ en Mac).</p>
+{{ form_card(form, url_for('proceso.show_process', process_id=proceso.id_proceso) if proceso else url_for('proceso.list_processes'), 'Guardar cambios' if proceso else 'Crear') }}
+{% endblock %}

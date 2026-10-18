@@ -20,6 +20,7 @@
     ('dashboard', 'dashboard.dashboard', 'Panel', 'P-00', True),
   ]),
   ('Calidad', [
+    ('proceso', 'proceso.list_processes', 'Procesos', '4.4', can('read', 'process_operations')),
     ('riesgo', 'riesgo.list_records', 'Riesgos', '6.1', can('read', 'risks_opportunities')),
     ('oportunidad', 'oportunidad.list_records', 'Oportunidades', '6.1', can('read', 'risks_opportunities')),
     ('objetivo_calidad', 'objetivo_calidad.list_objectives', 'Objetivos de calidad', '6.2', can('read', 'quality_objectives')),
@@ -34,6 +35,7 @@
     ('parte_interesada', 'parte_interesada.listar_partes_interesadas', 'Partes interesadas', '4.2', True),
   ]),
   ('Personas y competencia', [
+    ('rol', 'rol.list_roles', 'Roles y responsabilidades', '5.3', can('read', 'roles_responsibilities')),
     ('people', 'people.list_people', 'Personas', '7.2', can('read', 'people')),
     ('competence', 'competence.list_requirements', 'Competencias requeridas', '7.2', can('read', 'competence')),
     ('competence.matrix', 'competence.matrix', 'Matriz de competencias', '7.2', can('read', 'competence')),

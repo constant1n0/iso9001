@@ -21,7 +21,7 @@ from .models import (
     DocumentCategory, EficaciaAccion, EstadoAccionRevision, EstadoAccionRiesgo,
     EstadoAuditoriaEnum, EstadoOportunidad, EstadoRiesgo, FrecuenciaMedicion,
     GravedadNoConformidad, OrigenNoConformidad, OrigenRiesgo, ResultadoVerificacion, RoleEnum,
-    SentidoObjetivo, TipoAccionRevision, TipoHallazgo, TratamientoRiesgo,
+    SentidoObjetivo, TipoAccionRevision, TipoHallazgo, TipoProceso, TratamientoRiesgo,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -615,3 +615,32 @@ class EficaciaAccionForm(BaseForm):
                                     *((e.name, e.value) for e in EficaciaAccion)])
     fecha_evaluacion = DateField('Fecha de la evaluación', validators=[DataRequired()])
     comentario_eficacia = TextAreaField('Comentario')
+
+
+# Processes and roles (``process-role-registers``, RG-2). The routes fill the
+# owner, related-process and "reports to" pickers, leaving out the record
+# itself; the service has the last word (no self-relation, no reporting cycle).
+NO_MANAGER = ('', '— No reporta a ningún rol —')
+
+
+class ProcesoForm(BaseForm):
+    proceso = StringField('Nombre', validators=[DataRequired(), Length(max=100)])
+    tipo = _choice('Tipo', TipoProceso, '— Sin tipo —')
+    responsable_id = person_field('Responsable')
+    relacionados = SelectMultipleField('Procesos relacionados', coerce=int, choices=[])
+    entradas = TextAreaField('Entradas')
+    salidas = TextAreaField('Salidas')
+    recursos = TextAreaField('Recursos')
+    criterio_calidad = TextAreaField('Criterios de operación')
+    criterios_aceptacion = TextAreaField('Criterios de aceptación')
+    control_proveedor = BooleanField('Requiere control de proveedores externos')
+    no_conformidad = TextAreaField('Notas')
+
+
+class RolForm(BaseForm):
+    rol = StringField('Nombre', validators=[DataRequired(), Length(max=50)])
+    reporta_a_id = SelectField('Reporta a', coerce=optional_id, choices=[NO_MANAGER])
+    responsabilidades = TextAreaField('Responsabilidades')
+    autoridades = TextAreaField('Autoridades')
+    compromiso_calidad = BooleanField('Compromiso con la calidad')
+    descripcion_politica_calidad = TextAreaField('Política de calidad')

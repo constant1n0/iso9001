@@ -29,8 +29,9 @@ pair is stored once in ``proceso_relaciones``, lower id first, and
 of its own, so the create and update rows of a process carry ``relacionados``
 next to the columns. ``list_`` and ``list_page`` filter by ``tipo`` and
 ``responsable_id``; ``cited_by`` gathers the quality objectives, risks and
-opportunities citing a process (PR2). Writes flush and never commit, and an
-update that changes nothing writes nothing.
+opportunities citing a process (PR2), and ``counts`` how many of them and of
+related processes each process has, for the list. Writes flush and never
+commit, and an update that changes nothing writes nothing.
 
 A process that quality objectives cite cannot be deleted (``Conflict`` with
 ``CITED_BY_OBJECTIVES``), nor one that risks or opportunities cite
@@ -42,12 +43,13 @@ check. Any other conflict keeps its own message.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial
 from typing import Any
 
-from sqlalchemy import and_, exists, false, or_, select
+from sqlalchemy import and_, exists, false, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -190,6 +192,36 @@ def cited_by(session: Session, actor: Actor, process_id: int) -> Citations:
         riesgos=crud.list_(risks.RISK_SPEC, session, actor, [Riesgo.proceso_id == own]),
         oportunidades=crud.list_(risks.OPPORTUNITY_SPEC, session, actor,
                                  [Oportunidad.proceso_id == own]),
+    )
+
+
+@dataclass(frozen=True)
+class Counts:
+    """How many related processes and citing records each process has, by process id."""
+
+    relacionados: Counter[int]
+    objetivos: Counter[int]
+    riesgos: Counter[int]  # risks and opportunities together
+
+
+def counts(session: Session, actor: Actor) -> Counts:
+    """The list's counts for every process, in five grouped queries.
+
+    Needs the read grant of processes, quality objectives and risks and
+    opportunities, like ``cited_by``.
+    """
+    for resource in (SPEC.resource, Resource.QUALITY_OBJECTIVES, Resource.RISKS_OPPORTUNITIES):
+        policy.require(actor, Action.READ, resource)
+
+    def by(column: Any) -> Counter[int]:
+        return Counter(dict(session.execute(
+            select(column, func.count()).where(column.is_not(None)).group_by(column)).all()))
+
+    pairs = proceso_relaciones.c
+    return Counts(
+        relacionados=by(pairs.proceso_id) + by(pairs.relacionado_id),
+        objetivos=by(ObjetivoCalidad.proceso_id),
+        riesgos=by(Riesgo.proceso_id) + by(Oportunidad.proceso_id),
     )
 
 

@@ -1,0 +1,62 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% block title %}Roles y responsabilidades{% endblock %}
+{% block crumb %}Personas y competencia · Roles y responsabilidades{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 5.3 · Roles, responsabilidades y autoridades', 'Roles y responsabilidades') %}
+    {% if can('create', 'roles_responsibilities') %}
+    <a class="btn btn--primary" href="{{ url_for('rol.new_role') }}">+ Nuevo rol</a>
+    {% endif %}
+{% endcall %}
+
+{% if roles %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Rol</th>
+                <th scope="col">Reporta a</th>
+                <th scope="col" class="num">Personas</th>
+                <th scope="col">Compromiso con la calidad</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for rol in roles %}
+            <tr id="fila-{{ rol.id_rol }}">
+                <td><a href="{{ url_for('rol.show_role', rol_id=rol.id_rol) }}">{{ rol.rol }}</a></td>
+                <td>{% if rol.reporta_a_id in nombres %}<a href="{{ url_for('rol.show_role', rol_id=rol.reporta_a_id) }}">{{ nombres[rol.reporta_a_id] }}</a>{% else %}—{% endif %}</td>
+                <td class="num">{{ titulares[rol.id_rol] }}</td>
+                <td>{% if rol.compromiso_calidad %}<span class="badge badge--ok">Sí</span>{% else %}No{% endif %}</td>
+                <td>
+                    <div class="table__actions">
+                        {% if can('update', 'roles_responsibilities') %}
+                        <a class="btn btn--sm" href="{{ url_for('rol.edit_role', rol_id=rol.id_rol) }}">Editar</a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    {{ empty_state('Todavía no hay roles.') }}
+{% endif %}
+{% endblock %}
