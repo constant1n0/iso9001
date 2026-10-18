@@ -358,6 +358,25 @@ class DatabaseCases:
     def enforce_foreign_keys(self) -> None:
         """PostgreSQL always enforces them; SQLite overrides this."""
 
+    def test_a_rename_to_a_taken_name_is_the_unique_name_conflict(self) -> None:
+        # With or without a change of relations, the duplicate name is reported
+        # as such, whichever statement makes the database notice it.
+        self.enforce_foreign_keys()
+        compras, ventas, almacen = (self.process(n) for n in ("Compras", "Ventas", "Almacén"))
+        for data in ({"proceso": "Ventas"}, {"proceso": "Ventas", "relacionados": [almacen]}):
+            with self.subTest(data=data):
+                message = self.refused(errors().Conflict, po().update, CLI, compras, data)
+                self.assertEqual(po().SPEC.conflict, message)
+        self.assertEqual([], self.pairs())
+        self.assertNotEqual(compras, ventas)
+
+    def test_an_id_that_cannot_be_a_row_is_not_found(self) -> None:
+        for record_id in (2 ** 40, "7", None, 1.5):
+            with self.subTest(record_id=record_id):
+                message = self.refused(errors().NotFound, po().update, CLI, record_id,
+                                       {"proceso": "Otro"})
+                self.assertEqual(po().SPEC.not_found, message)
+
     def test_the_schema_orders_relations_and_keeps_roles_off_their_own_line(self) -> None:
         self.enforce_foreign_keys()
         a, b = self.process("Compras"), self.process("Ventas")
