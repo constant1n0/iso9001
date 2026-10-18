@@ -33,7 +33,7 @@ Give the four registers that are still reachable only through the MCP server and
 
 Route for every task: **delegated direct**.
 
-- [ ] **RG-1 — Process and role model and services.** Forecast 700-1,100.
+- [x] **RG-1 — Process and role model and services.** Forecast 700-1,100.
   - Migration (new columns, the process-relations table, the role reporting line), service rules (no self-relation, no reporting cycle, delete protection for related processes and reporting roles), MCP fields.
 - [ ] **RG-2 — Process and role screens.** Forecast 900-1,400.
   - Lists with filters, details with related records (PR2, PR3), forms with pickers.
@@ -52,8 +52,16 @@ Baseline at `0cf3e6b`: 1,420 tests. Migrations are tested on PostgreSQL (`TEST_P
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| RG-1..RG-3 | Pending | — | — | — |
+| RG-1 | Done | `16f4715` (migration `f5a7c9e1b3d6`: process `tipo`, `responsable_id`, `entradas`, `salidas`, `recursos`, `criterios_aceptacion`, table `proceso_relaciones` with CHECK `proceso_id < relacionado_id` (no self-relation, canonical order); role `responsabilidades`, `autoridades`, `reporta_a_id` with no self-reference; services: `relacionados` replaced as a set, `related`, `cited_by` (objectives, risks, opportunities), roles' cycle walk, `holders` (people incl. inactive, competence requirements), delete refused while related or reported to; people: a process owner cannot be deleted; MCP fields, `relacionados` extra, `tipo` and `responsable_id` filters, still 24 modules) | RED: 15 failures and 17 errors (`Campos no permitidos: relacionados`, missing `TipoProceso`, `cited_by`, `holders`, `NoSuchTableError: proceso_relaciones`). GREEN: 1,440 tests OK incl. PostgreSQL; adapted `tests/test_mcp_modules.py` (processes in the bespoke writable map) and `tests/test_migrations.py` | Pending |
+| RG-2..RG-3 | Pending | — | — | — |
+
+## Findings during implementation
+
+- The process delete keeps calling `crud.delete`, because existing tests patch `process_operations.crud.delete`.
+- `proceso_relaciones` has no audit model (the `persona_roles` precedent); process create and update rows carry `relacionados`.
+- The reporting-cycle check takes no locks, so two concurrent updates could still form a cycle.
+- For RG-3: the JSON auto-schema dump leaves out `responsable_id`, `reporta_a_id` and `relacionados` (`app/schemas.py`).
 
 ## Next step
 
-RG-1.
+RG-2.
