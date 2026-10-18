@@ -78,7 +78,7 @@ class RegistryTestCase(unittest.TestCase):
     def test_declared_fields_match_what_each_service_requires(self) -> None:
         from app.services import (
             audit_findings, audit_programmes, audits, management_reviews, nonconformities,
-            people,
+            people, process_operations,
         )
 
         bespoke = {
@@ -93,6 +93,9 @@ class RegistryTestCase(unittest.TestCase):
             "documentos": (frozenset(), frozenset()),  # read-only through MCP (DC-1)
             "revisiones_direccion": (management_reviews.REVIEW_WRITABLE,
                                      management_reviews.REVIEW_REQUIRED),
+            # Columns plus ``relacionados``, written to ``proceso_relaciones`` (RG-1).
+            "procesos": (process_operations.WRITABLE_FIELDS,
+                         process_operations.REQUIRED_ON_CREATE),
         }
         for slug, module in registry().MODULES.items():
             with self.subTest(module=slug):

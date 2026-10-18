@@ -1152,6 +1152,86 @@ class MigrationsTestCase(unittest.TestCase):
             self.assertEqual([(1,), (2,), (3,), (4,), (7,)], self._rows(ids.format(risks)))
             self.assertEqual([], self._schema_differences())
 
+    def test_process_and_role_registers_guard_their_links_and_downgrade(self) -> None:
+        """RG-1 (f5a7c9e1b3d6): process owner, type and relations; the roles' reporting line."""
+        processes, roles, relations = "procesos_operacion", "roles_responsabilidades", \
+            "proceso_relaciones"
+        expected = {
+            "fk_procesos_operacion_responsable_id_personas": ("personas", "RESTRICT"),
+            "fk_proceso_relaciones_proceso_id_procesos_operacion": (processes, "RESTRICT"),
+            "fk_proceso_relaciones_relacionado_id_procesos_operacion": (processes, "RESTRICT"),
+            "fk_roles_responsabilidades_reporta_a_id_roles_responsabilidades":
+                (roles, "RESTRICT"),
+        }
+        added = {processes: {"tipo", "responsable_id", "entradas", "salidas", "recursos",
+                             "criterios_aceptacion"},
+                 roles: {"responsabilidades", "autoridades", "reporta_a_id"}}
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision="e3b5d7f9a1c4")
+            with db.engine.begin() as connection:
+                for statement in (
+                    "INSERT INTO procesos_operacion (proceso, criterio_calidad) "
+                    "VALUES ('Compras', 'Homologados'), ('Ventas', NULL)",
+                    "INSERT INTO roles_responsabilidades (rol) VALUES ('Dirección'), ('Calidad')",
+                ):
+                    connection.execute(text(statement))
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            foreign_keys = {fk["name"]: (fk["referred_table"], fk["options"].get("ondelete"))
+                            for table in (processes, roles, relations)
+                            for fk in inspector.get_foreign_keys(table)}
+            self.assertLessEqual(expected.items(), foreign_keys.items())
+            self.assertEqual(["proceso_id", "relacionado_id"],
+                             inspector.get_pk_constraint(relations)["constrained_columns"])
+            self.assertLessEqual(
+                {f"ix_{processes}_responsable_id", f"ix_{roles}_reporta_a_id",
+                 f"ix_{relations}_relacionado_id"},
+                {index["name"] for table in (processes, roles, relations)
+                 for index in inspector.get_indexes(table)})
+            # Rows that predate the columns keep their values and NULL in the new ones.
+            self.assertEqual([("Compras", "Homologados", None, None, None),
+                              ("Ventas", None, None, None, None)], self._rows(
+                "SELECT proceso, criterio_calidad, tipo, responsable_id, criterios_aceptacion "
+                "FROM procesos_operacion ORDER BY id_proceso"))
+            self.assertEqual([("Dirección", None, None)], self._rows(
+                "SELECT rol, responsabilidades, reporta_a_id FROM roles_responsabilidades "
+                "WHERE id_rol = 1"))
+            with db.engine.begin() as connection:
+                for statement in (
+                    "INSERT INTO personas (nombre) VALUES ('Ana')",
+                    "UPDATE procesos_operacion SET tipo = 'operativo', responsable_id = "
+                    "(SELECT id FROM personas)",
+                    "INSERT INTO proceso_relaciones (proceso_id, relacionado_id) VALUES (1, 2)",
+                    "UPDATE roles_responsabilidades SET reporta_a_id = 1 WHERE id_rol = 2",
+                ):
+                    connection.execute(text(statement))
+            for statement in (
+                "INSERT INTO proceso_relaciones (proceso_id, relacionado_id) VALUES (1, 1)",
+                "INSERT INTO proceso_relaciones (proceso_id, relacionado_id) VALUES (2, 1)",
+                "INSERT INTO proceso_relaciones (proceso_id, relacionado_id) VALUES (1, 2)",
+                "INSERT INTO proceso_relaciones (proceso_id, relacionado_id) VALUES (1, 99)",
+                "UPDATE procesos_operacion SET tipo = 'Operativo'",
+                "UPDATE procesos_operacion SET responsable_id = 99",
+                "UPDATE roles_responsabilidades SET reporta_a_id = id_rol WHERE id_rol = 1",
+                "DELETE FROM procesos_operacion WHERE id_proceso = 2",
+                "DELETE FROM roles_responsabilidades WHERE id_rol = 1",
+                "DELETE FROM personas",
+            ):
+                with self.subTest(refused=statement):
+                    with self.assertRaises(IntegrityError):
+                        with db.engine.begin() as connection:
+                            connection.execute(text(statement))
+            downgrade(directory=MIGRATIONS_DIR, revision="e3b5d7f9a1c4")
+            inspector = inspect(db.engine)
+            self.assertNotIn(relations, inspector.get_table_names())
+            for table, columns in added.items():
+                with self.subTest(downgraded=table):
+                    self.assertFalse(columns & {c["name"] for c in inspector.get_columns(table)})
+            self.assertEqual([("Compras", "Homologados"), ("Ventas", None)], self._rows(
+                "SELECT proceso, criterio_calidad FROM procesos_operacion ORDER BY id_proceso"))
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
 
 if __name__ == "__main__":
     unittest.main()

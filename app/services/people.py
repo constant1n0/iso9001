@@ -30,9 +30,9 @@ Trainings, nonconformities, audits (lead auditor, audited-area owner and
 team), audit programmes (approver), competence records, corrective actions,
 documents, document revisions, quality objectives (owner) and their
 measurements (recorded by), management reviews (attendees and the person who
-held them) and their actions (owner), and risks, opportunities and their
-actions (owner) cite a person through the columns in ``REFERENCES`` (decision
-Q4); their
+held them) and their actions (owner), risks, opportunities and their actions
+(owner), and processes (owner) cite a person through the columns in
+``REFERENCES`` (decision Q4); their
 services validate such a link with ``reference`` or ``check_reference``, and a
 person they still cite cannot be deleted. Trainings, nonconformities and audits also keep a
 legacy free-text name, which ``fill_name`` takes from the linked person when a
@@ -64,8 +64,8 @@ from sqlalchemy.orm import Session
 from ..models import (
     AccionCorrectiva, AccionRevision, AccionRiesgo, Auditoria, Capacitacion, CompetenceRecord,
     Document, DocumentRevision, MedicionObjetivo, NoConformidad, ObjetivoCalidad, Oportunidad,
-    Person, ProgramaAuditoria, RevisionDireccion, Riesgo, RolResponsabilidad, User,
-    auditoria_equipo, revision_asistentes,
+    Person, ProcesoOperacion, ProgramaAuditoria, RevisionDireccion, Riesgo, RolResponsabilidad,
+    User, auditoria_equipo, revision_asistentes,
 )
 from . import audit, crud, fields, policy
 from .actor import Actor
@@ -104,6 +104,7 @@ REFERENCES = (
     revision_asistentes.c.persona_id, RevisionDireccion.celebrada_por_id,
     AccionRevision.responsable_id,
     Riesgo.responsable_id, Oportunidad.responsable_id, AccionRiesgo.responsable_id,
+    ProcesoOperacion.responsable_id,
 )
 
 _READS = crud.Spec(
