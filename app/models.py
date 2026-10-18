@@ -85,6 +85,13 @@ class RecordMetadataMixin:
         )
 
 
+def text_enum(enum_cls: type[enum.Enum], constraint: str) -> db.Enum:
+    """An enum stored as its member names in a text column, checked by ``constraint``."""
+    return db.Enum(
+        enum_cls, native_enum=False, length=20, create_constraint=True, name=constraint
+    )
+
+
 # Modelo para almacenar Partes Interesadas
 class ParteInteresada(RecordMetadataMixin, db.Model):
     __tablename__ = 'partes_interesadas'
@@ -94,13 +101,33 @@ class ParteInteresada(RecordMetadataMixin, db.Model):
     requisitos_identificados = db.Column(db.Text)
     objetivo_estrategico = db.Column(db.Text)
 
-# Modelo para Roles y Responsabilidades dentro del SGC
 class RolResponsabilidad(RecordMetadataMixin, db.Model):
+    """A QMS role, its responsibilities and its authorities (ISO 9001 clause 5.3).
+
+    ``reporta_a_id`` is the role it reports to (decision PR3 of
+    ``process-role-registers``): never itself (CHECK) nor, as
+    ``services.roles_responsibilities`` checks, a role below it in the line.
+    A role that others report to cannot be deleted (``ON DELETE RESTRICT``).
+    """
+
     __tablename__ = 'roles_responsabilidades'
+    __table_args__ = (
+        db.CheckConstraint('reporta_a_id <> id_rol', name='ck_roles_responsabilidades_reporta_a'),
+        db.ForeignKeyConstraint(
+            ['reporta_a_id'], ['roles_responsabilidades.id_rol'],
+            name='fk_roles_responsabilidades_reporta_a_id_roles_responsabilidades',
+            ondelete='RESTRICT',
+        ),
+        db.Index('ix_roles_responsabilidades_reporta_a_id', 'reporta_a_id'),
+    )
+
     id_rol = db.Column(db.Integer, primary_key=True)
     rol = db.Column(db.String(50), nullable=False, unique=True, index=True)
     compromiso_calidad = db.Column(db.Boolean, default=False)
     descripcion_politica_calidad = db.Column(db.Text)
+    responsabilidades = db.Column(db.Text)
+    autoridades = db.Column(db.Text)
+    reporta_a_id = db.Column(db.Integer, nullable=True)
 
 # Modelo para Recursos y Capacitación del personal
 class RecursoCapacitacion(RecordMetadataMixin, db.Model):
@@ -110,12 +137,63 @@ class RecursoCapacitacion(RecordMetadataMixin, db.Model):
     capacitacion_personal = db.Column(db.Boolean, default=False)
     descripcion_documentacion = db.Column(db.Text)
 
-# Modelo para la gestión de Procesos de Operación
+class TipoProceso(enum.Enum):
+    """Kind of process in the process map (ISO 9001 clause 4.4): stored by name, shown by value."""
+
+    estrategico = 'Estratégico'
+    operativo = 'Operativo'
+    soporte = 'Soporte'
+
+
+# How processes interact (4.4.1 b, decision PR1 of ``process-role-registers``).
+# The relation is mutual: each pair is stored once, lower id first (CHECK), and
+# ``services.process_operations`` reads it both ways. A plain table, not audited
+# itself: changes are recorded on the process's own rows (``relacionados``). A
+# process with relations cannot be deleted (``ON DELETE RESTRICT``).
+proceso_relaciones = db.Table(
+    'proceso_relaciones',
+    db.Column('proceso_id', db.Integer, nullable=False),
+    db.Column('relacionado_id', db.Integer, nullable=False),
+    db.PrimaryKeyConstraint('proceso_id', 'relacionado_id', name='pk_proceso_relaciones'),
+    db.CheckConstraint('proceso_id < relacionado_id', name='ck_proceso_relaciones_orden'),
+    db.ForeignKeyConstraint(
+        ['proceso_id'], ['procesos_operacion.id_proceso'],
+        name='fk_proceso_relaciones_proceso_id_procesos_operacion', ondelete='RESTRICT',
+    ),
+    db.ForeignKeyConstraint(
+        ['relacionado_id'], ['procesos_operacion.id_proceso'],
+        name='fk_proceso_relaciones_relacionado_id_procesos_operacion', ondelete='RESTRICT',
+    ),
+    db.Index('ix_proceso_relaciones_relacionado_id', 'relacionado_id'),
+)
+
+
 class ProcesoOperacion(RecordMetadataMixin, db.Model):
+    """A QMS process (ISO 9001 clauses 4.4 and 8.1, decision PR1 of ``process-role-registers``).
+
+    ``criterio_calidad`` holds the operating criteria; ``control_proveedor``
+    and ``no_conformidad`` are legacy. The new columns are nullable, so rows
+    that predate them stay valid. A person owning a process cannot be deleted.
+    """
+
     __tablename__ = 'procesos_operacion'
+    __table_args__ = (
+        db.ForeignKeyConstraint(
+            ['responsable_id'], ['personas.id'],
+            name='fk_procesos_operacion_responsable_id_personas', ondelete='RESTRICT',
+        ),
+        db.Index('ix_procesos_operacion_responsable_id', 'responsable_id'),
+    )
+
     id_proceso = db.Column(db.Integer, primary_key=True)
     proceso = db.Column(db.String(100), nullable=False, unique=True, index=True)
+    tipo = db.Column(text_enum(TipoProceso, 'ck_procesos_operacion_tipo'))
+    responsable_id = db.Column(db.Integer, nullable=True)
+    entradas = db.Column(db.Text)
+    salidas = db.Column(db.Text)
+    recursos = db.Column(db.Text)
     criterio_calidad = db.Column(db.Text)
+    criterios_aceptacion = db.Column(db.Text)
     control_proveedor = db.Column(db.Boolean, default=False)
     no_conformidad = db.Column(db.Text)
 
@@ -383,13 +461,6 @@ class CompetenceEvaluation(enum.Enum):
     pendiente = 'Pendiente'
     eficaz = 'Eficaz'
     no_eficaz = 'No eficaz'
-
-
-def text_enum(enum_cls: type[enum.Enum], constraint: str) -> db.Enum:
-    """An enum stored as its member names in a text column, checked by ``constraint``."""
-    return db.Enum(
-        enum_cls, native_enum=False, length=20, create_constraint=True, name=constraint
-    )
 
 
 class CompetenceRequirement(RecordMetadataMixin, db.Model):

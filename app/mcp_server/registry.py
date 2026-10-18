@@ -21,7 +21,7 @@ from ..models import (
     EstadoNoConformidad, EstadoObjetivo, EstadoOportunidad, EstadoProgramaAuditoria,
     EstadoRevisionDireccion, EstadoRiesgo, FrecuenciaMedicion, GravedadNoConformidad,
     NivelRiesgo, OrigenNoConformidad, OrigenRiesgo, PrioridadOportunidad, SentidoObjetivo,
-    TipoAccionRevision, TipoHallazgo, TratamientoRiesgo,
+    TipoAccionRevision, TipoHallazgo, TipoProceso, TratamientoRiesgo,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, competence, corrective_actions,
@@ -74,6 +74,11 @@ class Module:
 
 def _person_extras(person: Any) -> dict[str, Any]:
     return {"rol_ids": person.rol_ids}
+
+
+def _process_extras(process: Any) -> dict[str, Any]:
+    return {"relacionados": process_operations.related_ids(object_session(process),
+                                                           process.id_proceso)}
 
 
 def _audit_extras(found: Any) -> dict[str, Any]:
@@ -361,18 +366,31 @@ _MODULES = (
     Module("roles_responsabilidades", "Roles and responsibilities",
            Resource.ROLES_RESPONSIBILITIES, roles_responsibilities, (
         _f("rol", required=True), _f("compromiso_calidad", "boolean"),
-        _f("descripcion_politica_calidad"),
+        _f("descripcion_politica_calidad"), _f("responsabilidades"), _f("autoridades"),
+        _f("reporta_a_id", "integer", note=(
+            "Role (roles_responsabilidades) it reports to; never itself nor a role that "
+            "reports to it, directly or not. A role others report to cannot be deleted.")),
     )),
     Module("recursos_capacitacion", "Training resources", Resource.TRAINING_RESOURCES,
            training_resources, (
         _f("recurso_necesario", required=True), _f("capacitacion_personal", "boolean"),
         _f("descripcion_documentacion"),
     )),
+    # Records add ``relacionados``; ``tipo`` shows the Spanish label, the filter takes the
+    # member name.
     Module("procesos", "Process operations", Resource.PROCESS_OPERATIONS,
            process_operations, (
-        _f("proceso", required=True), _f("criterio_calidad"),
+        _f("proceso", required=True), _f("tipo", "enum", members=TipoProceso),
+        _f("responsable_id", "integer", note="Person (personas) who owns the process."),
+        _f("entradas"), _f("salidas"), _f("recursos"),
+        _f("criterio_calidad", note="Operating criteria (8.1)."),
+        _f("criterios_aceptacion", note="Acceptance criteria of its outputs."),
         _f("control_proveedor", "boolean"), _f("no_conformidad"),
-    )),
+        _f("relacionados", "integer_list", note=(
+            "Processes (procesos) it interacts with; replaces them. The relation is mutual: "
+            "each related process lists this one too.")),
+    ), (_f("tipo", "enum", members=TipoProceso), _f("responsable_id", "integer")),
+        extras=_process_extras),
     Module("indicadores_auditoria", "Audit indicators", Resource.AUDIT_INDICATORS,
            audit_indicators, (
         _f("area_auditoria", required=True), _f("fecha_auditoria", "datetime"),
