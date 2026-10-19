@@ -454,6 +454,60 @@ class EvaluationTestCase(Helpers, ServiceBase):
         self.assertIs(same_day, pv().latest_evaluation(db.session, provider.id))
         self.assertIsNone(pv().latest_evaluation(db.session, self.provider(nombre="Otro").id))
 
+    def dated_pair(self) -> tuple[Proveedor, EvaluacionProveedor, EvaluacionProveedor]:
+        """A provider with an older and a latest evaluation, each with its next date."""
+        ana, provider = self.person(), self.provider()
+        older = self.evaluate(provider.id, ana, fecha=date(2026, 9, 1),
+                              fecha_proxima=date(2027, 3, 1))
+        latest = self.evaluate(provider.id, ana, fecha=date(2026, 10, 1),
+                               fecha_proxima=date(2027, 4, 1))
+        self.assertEqual(date(2027, 4, 1), provider.fecha_proxima_evaluacion)
+        return provider, older, latest
+
+    def test_deleting_the_latest_evaluation_falls_back_to_the_previous_next_date(self) -> None:
+        provider, older, latest = self.dated_pair()
+        pv().evaluations.delete(db.session, CLI, latest.id)
+        db.session.commit()
+        self.assertEqual(date(2027, 3, 1), provider.fecha_proxima_evaluacion)
+        self.assertEqual(({"fecha_proxima_evaluacion": "2027-04-01"},
+                          {"fecha_proxima_evaluacion": "2027-03-01"}),
+                         self.change(self.rows("proveedores")[-1]))
+        pv().evaluations.delete(db.session, CLI, older.id)  # none left: the date stays
+        db.session.commit()
+        self.assertEqual((date(2027, 3, 1), 4),
+                         (provider.fecha_proxima_evaluacion, len(self.rows("proveedores"))))
+
+    def test_clearing_the_latest_next_date_falls_back_to_the_previous_one(self) -> None:
+        provider, older, latest = self.dated_pair()
+        pv().evaluations.update(db.session, CLI, latest.id, {"fecha_proxima": None},
+                                today=TODAY)
+        db.session.commit()
+        self.assertEqual(date(2027, 3, 1), provider.fecha_proxima_evaluacion)
+        pv().evaluations.update(db.session, CLI, older.id, {"fecha_proxima": None},
+                                today=TODAY)  # none has one now: the date stays
+        db.session.commit()
+        self.assertEqual(date(2027, 3, 1), provider.fecha_proxima_evaluacion)
+
+    def test_moving_the_latest_evaluation_back_makes_the_other_one_rule(self) -> None:
+        provider, older, latest = self.dated_pair()
+        pv().evaluations.update(db.session, CLI, latest.id, {"fecha": date(2026, 8, 1)},
+                                today=TODAY)
+        db.session.commit()
+        self.assertIs(older, pv().latest_evaluation(db.session, provider.id))
+        self.assertEqual(date(2027, 3, 1), provider.fecha_proxima_evaluacion)
+
+    def test_writes_that_leave_the_ruling_next_date_alone_keep_an_edited_one(self) -> None:
+        provider, older, latest = self.dated_pair()
+        pv().providers.update(db.session, CLI, provider.id,
+                              {"fecha_proxima_evaluacion": date(2027, 2, 1)})
+        db.session.commit()
+        pv().evaluations.update(db.session, CLI, latest.id, {
+            "comentario": "Revisado", "fecha": latest.fecha,
+            "fecha_proxima": latest.fecha_proxima}, today=TODAY)
+        pv().evaluations.delete(db.session, CLI, older.id)
+        db.session.commit()
+        self.assertEqual(date(2027, 2, 1), provider.fecha_proxima_evaluacion)
+
     def test_scores_are_whole_numbers_from_one_to_five(self) -> None:
         ana, provider = self.person(), self.provider()
         for value in (0, 6, -1, True, "4", 4.0, None):
@@ -573,12 +627,16 @@ class FiltersTestCase(Helpers, ServiceBase):
             ({"proceso_id": 999}, []),
             ({"proceso_id": "1"}, []),
             ({"estado": "pendiente", "proceso_id": compras}, [aceros]),
+            ({"con_procesos": True}, [aceros]),
+            ({"con_procesos": False}, [transportes]),
         ):
             with self.subTest(filters=filters):
                 self.assertEqual(self.ids(expected),
                                  self.ids(pv().providers.list_(db.session, who, **filters)))
         page, total = pv().providers.list_page(db.session, who, page=2, per_page=1)
         self.assertEqual(([transportes.id], 2), (self.ids(page), total))
+        with self.assertRaises(errors().ValidationError):
+            pv().providers.list_(db.session, who, con_procesos="1")
 
     def test_evaluacion_vencida_needs_today_and_skips_blocked_providers(self) -> None:
         admin, _ = self.admin()

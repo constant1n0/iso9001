@@ -46,9 +46,10 @@ Providers:
   (``HAS_NONCONFORMITIES``) is never deleted; deleting one removes its process
   links, which its delete audit row keeps.
 - Filters: ``nombre`` (substring, any case), ``estado``, ``tipo_suministro``,
-  ``proceso_id``, ``evaluacion_vencida`` (``fecha_proxima_evaluacion`` before
-  ``today`` while not ``bloqueado``) and ``ultimo_resultado``, the result of the
-  latest evaluation (``fecha``, then id), computed in SQL from its scores.
+  ``proceso_id``, ``con_procesos`` (linked to any process or to none),
+  ``evaluacion_vencida`` (``fecha_proxima_evaluacion`` before ``today`` while
+  not ``bloqueado``) and ``ultimo_resultado``, the result of the latest
+  evaluation (``fecha``, then id), computed in SQL from its scores.
 
 Evaluations score ``calidad``, ``plazo``, ``servicio`` and ``documentacion`` from
 1 to 5 (EP3). ``puntuacion`` is their mean with two decimals and ``resultado``
@@ -57,28 +58,33 @@ are computed, never stored. The date is never after ``today``, ``fecha_proxima``
 comes after it, and the evaluator is a person, active when newly chosen. An
 evaluation never moves to another provider, and any provider takes them, a
 blocked one too. An evaluation never changes the provider's state; when the
-provider's latest evaluation is written with ``fecha_proxima``, that date
+provider's latest evaluation is recorded with ``fecha_proxima``, that date
 becomes the provider's ``fecha_proxima_evaluacion`` (an older evaluation
-recorded later never reschedules it). Filters: ``proveedor_id``,
-``evaluador_id``; the latest first.
+recorded later never reschedules it). Afterwards the provider follows the
+latest evaluation that has a ``fecha_proxima``: when an update or a delete
+changes that date (the latest one cleared, moved back or deleted, or its date
+changed), the provider takes the new one, and keeps its own when none remains.
+A write that leaves that date alone keeps one edited on the provider. Filters:
+``proveedor_id``, ``evaluador_id``; the latest first.
 
-``latest_evaluation``, ``average_score``, ``performance`` and ``attention`` read
-what EP-2's pages and dashboard show. Like every service this module flushes
-and never commits, writes an audit row next to each change, and an update that
-changes nothing writes nothing. Rows that change are locked (``FOR UPDATE``).
+``latest_evaluation``, ``average_score``, ``performance``, ``performances`` and
+``attention`` read what EP-2's pages and dashboard show. Like every service this
+module flushes and never commits, writes an audit row next to each change, and an
+update that changes nothing writes nothing. Rows that change are locked
+(``FOR UPDATE``).
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from functools import partial
 from typing import Any
 
-from sqlalchemy import and_, exists, false, func, not_, select
+from sqlalchemy import and_, case, exists, false, func, not_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -230,8 +236,17 @@ _FIELDS = {spec.model: {f.name: f for f in spec.fields}
 
 def puntuacion(evaluation: Any) -> Decimal:
     """The mean of an evaluation's four scores, rounded half up to two decimals."""
-    total = sum(getattr(evaluation, score) for score in EVALUATION_SCORES)
-    return (Decimal(total) / len(EVALUATION_SCORES)).quantize(TWO_PLACES, ROUND_HALF_UP)
+    return _mean(_score_total(evaluation), 1)
+
+
+def _score_total(evaluation: Any) -> int:
+    return sum(getattr(evaluation, score) for score in EVALUATION_SCORES)
+
+
+def _mean(total: int, evaluations: int) -> Decimal:
+    """The mean score of ``evaluations`` whose scores add up to ``total``, two decimals."""
+    return (Decimal(total) / (evaluations * len(EVALUATION_SCORES))).quantize(
+        TWO_PLACES, ROUND_HALF_UP)
 
 
 def resultado(score: Decimal | int | float) -> ResultadoEvaluacion:
@@ -403,7 +418,8 @@ def evaluacion_vencida(provider: Proveedor, *, today: date) -> bool:
 def _provider_conditions(nombre: str | None = None, estado: Any = None,
                          tipo_suministro: Any = None, proceso_id: int | None = None,
                          evaluacion_vencida: bool | None = None, ultimo_resultado: Any = None,
-                         today: date | None = None) -> list[Any]:
+                         today: date | None = None,
+                         con_procesos: bool | None = None) -> list[Any]:
     """Provider filters (AND); ``evaluacion_vencida`` needs ``today``, the adapter's date."""
     where: list[Any] = []
     if nombre:
@@ -416,6 +432,9 @@ def _provider_conditions(nombre: str | None = None, estado: Any = None,
     if proceso_id is not None:
         where.append(Proveedor.procesos.any(ProcesoOperacion.id_proceso == proceso_id)
                      if people.is_db_id(proceso_id) else false())
+    if con_procesos is not None:
+        linked = Proveedor.procesos.any()
+        where.append(linked if _flag(con_procesos, "con_procesos") else not_(linked))
     if evaluacion_vencida is not None:
         late = _overdue(_today(today))
         where.append(late if _flag(evaluacion_vencida, "evaluacion_vencida") else not_(late))
@@ -514,24 +533,29 @@ def _update_evaluation(session: Session, actor: Actor, evaluation_id: int,
     today = _today(today)
     _reject_unknown(EVALUATION_SPEC.writable, data)
     found = _locked(session, EvaluacionProveedor, evaluation_id, EVALUATION_NOT_FOUND)
-    provider = None
+    provider = ruling = None
     if _well_formed(data):
         if "proveedor_id" in data and _final(data, found, "proveedor_id") != found.proveedor_id:
             raise ValidationError(PROVIDER_FIXED)
         if _changed(found, data):  # a no-op is left to ``crud``, which writes nothing
             _check_evaluation(data, found, today)
-            if "fecha_proxima" in data:
+            if any(key in data and _final(data, None, key) != getattr(found, key)
+                   for key in ("fecha", "fecha_proxima")):
                 provider = _locked(session, Proveedor, found.proveedor_id, PROVIDER_NOT_FOUND)
+                ruling = _ruling_date(session, provider.id)
     updated = crud.update(EVALUATION_SPEC, session, actor, found.id, data)
-    _reschedule(session, actor, provider, updated)
+    _follow(session, actor, provider, ruling)
     return updated
 
 
 def _delete_evaluation(session: Session, actor: Actor, evaluation_id: int) -> None:
-    """Hard-delete an evaluation, keeping its snapshot in the audit log."""
+    """Hard-delete an evaluation, keeping its snapshot in the audit log; see ``_follow``."""
     policy.require(actor, Action.DELETE, RESOURCE)
     found = _locked(session, EvaluacionProveedor, evaluation_id, EVALUATION_NOT_FOUND)
+    provider = _locked(session, Proveedor, found.proveedor_id, PROVIDER_NOT_FOUND)
+    ruling = _ruling_date(session, provider.id)
     crud.delete(EVALUATION_SPEC, session, actor, found.id)
+    _follow(session, actor, provider, ruling)
 
 
 def _provider_of(session: Session, data: Mapping[str, Any]) -> Proveedor:
@@ -558,8 +582,36 @@ def _reschedule(session: Session, actor: Actor, provider: Proveedor | None,
     """Copy ``fecha_proxima`` to the provider when ``evaluation`` is its latest one."""
     following = evaluation.fecha_proxima
     if (provider is None or following is None
-            or provider.fecha_proxima_evaluacion == following
             or latest_evaluation(session, provider.id) is not evaluation):
+        return
+    _set_next(session, actor, provider, following)
+
+
+def _ruling_date(session: Session, provider_id: int) -> date | None:
+    """``fecha_proxima`` of the provider's latest evaluation that has one, or ``None``."""
+    return session.scalar(
+        select(EvaluacionProveedor.fecha_proxima)
+        .where(EvaluacionProveedor.proveedor_id == provider_id,
+               EvaluacionProveedor.fecha_proxima.is_not(None))
+        .order_by(EvaluacionProveedor.fecha.desc(), EvaluacionProveedor.id.desc()).limit(1))
+
+
+def _follow(session: Session, actor: Actor, provider: Proveedor | None,
+            ruling: date | None) -> None:
+    """After an update or a delete: a changed ruling date (``_ruling_date``) reschedules.
+
+    ``ruling`` is the date before the write; none remaining keeps the provider's.
+    """
+    if provider is None:
+        return
+    following = _ruling_date(session, provider.id)
+    if following is not None and following != ruling:
+        _set_next(session, actor, provider, following)
+
+
+def _set_next(session: Session, actor: Actor, provider: Proveedor, following: date) -> None:
+    """Set the provider's next evaluation date, with its audit row."""
+    if provider.fecha_proxima_evaluacion == following:
         return
     before = _snapshot(provider)
     provider.fecha_proxima_evaluacion = following
@@ -620,10 +672,7 @@ def average_score(session: Session, provider_id: int) -> Decimal | None:
     count, total = session.execute(
         select(func.count(), func.sum(_total()))
         .where(EvaluacionProveedor.proveedor_id == provider_id)).one()
-    if not count:
-        return None
-    return (Decimal(total) / (count * len(EVALUATION_SCORES))).quantize(TWO_PLACES,
-                                                                        ROUND_HALF_UP)
+    return _mean(total, count) if count else None
 
 
 @dataclass(frozen=True)
@@ -641,20 +690,42 @@ class Performance:
 def performance(session: Session, actor: Actor, provider_id: int) -> Performance:
     """The provider's evaluations and nonconformities in numbers (read grants of both)."""
     found = providers.get(session, actor, provider_id)
+    return performances(session, actor, [found.id])[found.id]
+
+
+def performances(session: Session, actor: Actor,
+                 provider_ids: Iterable[int]) -> dict[int, Performance]:
+    """``Performance`` of each of ``provider_ids`` in two queries, for a list page.
+
+    Every id given that can be stored is a key, with zeros and ``None`` when
+    nothing evaluates or cites it. Read grants of providers and nonconformities.
+    """
+    policy.require(actor, Action.READ, RESOURCE)
     policy.require(actor, Action.READ, Resource.NONCONFORMITIES)
-    count = session.scalar(select(func.count()).where(
-        EvaluacionProveedor.proveedor_id == found.id))
-    latest = latest_evaluation(session, found.id)
-    score = None if latest is None else puntuacion(latest)
-    cited = NoConformidad.proveedor_id == found.id
-    total = session.scalar(select(func.count()).where(cited))
-    still_open = session.scalar(select(func.count()).where(
-        cited, NoConformidad.estado.in_(nonconformities.OPEN_STATES)))
-    return Performance(
-        evaluaciones=count, puntuacion_media=average_score(session, found.id),
-        ultima_puntuacion=score, ultimo_resultado=None if score is None else resultado(score),
-        no_conformidades=total, no_conformidades_abiertas=still_open,
-    )
+    wanted = {value for value in provider_ids if people.is_db_id(value)}
+    if not wanted:
+        return {}
+    evaluated: dict[int, list[EvaluacionProveedor]] = {value: [] for value in wanted}
+    for evaluation in session.scalars(
+            select(EvaluacionProveedor).where(EvaluacionProveedor.proveedor_id.in_(wanted))
+            .order_by(*EVALUATION_SPEC.order_by)):
+        evaluated[evaluation.proveedor_id].append(evaluation)  # the latest first
+    still_open = case((NoConformidad.estado.in_(nonconformities.OPEN_STATES), 1), else_=0)
+    cited = {provider_id: (total, opened or 0) for provider_id, total, opened in session.execute(
+        select(NoConformidad.proveedor_id, func.count(), func.sum(still_open))
+        .where(NoConformidad.proveedor_id.in_(wanted)).group_by(NoConformidad.proveedor_id))}
+    found = {}
+    for provider_id, evaluations in evaluated.items():
+        score = puntuacion(evaluations[0]) if evaluations else None
+        total, opened = cited.get(provider_id, (0, 0))
+        found[provider_id] = Performance(
+            evaluaciones=len(evaluations),
+            puntuacion_media=_mean(sum(map(_score_total, evaluations)), len(evaluations))
+            if evaluations else None,
+            ultima_puntuacion=score, ultimo_resultado=None if score is None else resultado(score),
+            no_conformidades=total, no_conformidades_abiertas=int(opened),
+        )
+    return found
 
 
 def attention(session: Session, actor: Actor, *, today: date) -> dict[str, list[Proveedor]]:
