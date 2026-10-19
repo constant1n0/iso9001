@@ -62,6 +62,9 @@
         <li class="list__item"><span class="list__primary">Descripción</span><span class="list__secondary">{{ nc.descripcion }}</span></li>
         <li class="list__item"><span class="list__primary">Detectada</span><span class="list__secondary">{{ nc.fecha_detectada.strftime('%d/%m/%Y') }}</span></li>
         <li class="list__item"><span class="list__primary">Origen</span><span class="list__secondary">{{ nc.origen.value if nc.origen else '—' }}</span></li>
+        {% if proveedor %}
+        <li class="list__item"><span class="list__primary">Proveedor</span><span class="list__secondary"><a href="{{ url_for('proveedor.show_provider', provider_id=proveedor.id) }}">{{ proveedor.nombre }}</a></span></li>
+        {% endif %}
         <li class="list__item"><span class="list__primary">Gravedad</span><span class="list__secondary">{{ nc.gravedad.value if nc.gravedad else '—' }}</span></li>
         {% set persona = personas.get(nc.responsable_id) %}
         <li class="list__item"><span class="list__primary">Responsable</span><span class="list__secondary">{{ nc.responsable or '—' }}{% if persona %} · Persona: {{ persona }}{% endif %}</span></li>

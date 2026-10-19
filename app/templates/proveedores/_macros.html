@@ -1,0 +1,15 @@
+{# Shared by the external provider pages (clause 8.4). #}
+
+{% macro estado_badge(estado) -%}
+<span class="badge{{ {'aprobado': ' badge--ok', 'condicionado': ' badge--warn', 'bloqueado': ' badge--danger'}.get(estado.name, '') }}">{{ estado.value }}</span>
+{%- endmacro %}
+
+{# The result an average score gives (EP3). #}
+{% macro resultado_badge(resultado) -%}
+<span class="badge {{ {'apto': 'badge--ok', 'condicionado': 'badge--warn', 'no_apto': 'badge--danger'}[resultado.name] }}">{{ resultado.value }}</span>
+{%- endmacro %}
+
+{# A score with two decimals and a decimal comma (4,00), or a dash. #}
+{% macro nota(value) %}{{ ('%.2f' | format(value)) | replace('.', ',') if value is not none else '—' }}{% endmacro %}
+
+{% macro dia(value) %}{{ value.strftime('%d/%m/%Y') if value else '—' }}{% endmacro %}

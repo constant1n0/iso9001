@@ -21,7 +21,8 @@ from .models import (
     DocumentCategory, EficaciaAccion, EstadoAccionRevision, EstadoAccionRiesgo,
     EstadoAuditoriaEnum, EstadoOportunidad, EstadoRiesgo, FrecuenciaMedicion,
     GravedadNoConformidad, OrigenNoConformidad, OrigenRiesgo, ResultadoVerificacion, RoleEnum,
-    SentidoObjetivo, TipoAccionRevision, TipoHallazgo, TipoProceso, TratamientoRiesgo,
+    SentidoObjetivo, TipoAccionRevision, TipoHallazgo, TipoProceso, TipoSuministro,
+    TratamientoRiesgo,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -50,6 +51,15 @@ def person_choices(people, empty=NO_PERSON):
 
 def person_field(label):
     return SelectField(label, coerce=optional_id, choices=[NO_PERSON])
+
+
+# The external provider a nonconformity names (EP4 of ``external-providers``).
+NO_PROVIDER = ('', '— Sin proveedor —')
+
+
+def provider_choices(providers):
+    """The empty choice, then each provider (``Proveedor``) in the given order."""
+    return [NO_PROVIDER, *((p.id, p.nombre) for p in providers)]
 
 
 class BaseForm(FlaskForm):
@@ -137,6 +147,9 @@ class NoConformidadForm(BaseForm):
     descripcion = TextAreaField('Descripción', validators=[DataRequired()])
     fecha_detectada = DateField('Fecha Detectada', validators=[DataRequired()])
     origen = optional_enum_field('Origen', OrigenNoConformidad, '— Sin indicar —')
+    # Filled by the routes; the service refuses it with any other origin (EP4).
+    proveedor_id = SelectField('Proveedor (solo con el origen «Proveedor»)', coerce=optional_id,
+                               choices=[NO_PROVIDER])
     gravedad = optional_enum_field('Gravedad', GravedadNoConformidad, '— Sin indicar —')
     responsable = StringField('Responsable', validators=[Length(max=50)])
     responsable_id = person_field('Responsable (persona)')
@@ -665,3 +678,43 @@ class IndicadorAuditoriaForm(BaseForm):
     resultado = TextAreaField('Resultado')
     accion_correctiva = TextAreaField('Acción correctiva')
     indicador_desempeno = TextAreaField('Indicador de desempeño')
+
+
+# External providers and their evaluations (``external-providers``, EP-2). The
+# routes fill the process and evaluator pickers; the service has the last word
+# (unique name and tax id, the tax id's shape, the dates, an active evaluator).
+EVALUATION_SCALE = range(1, 6)  # mirrors SCORE_MIN and SCORE_MAX of ``services.providers``
+
+
+def _evaluation_score(label):
+    return SelectField(label, coerce=optional_id, validators=[DataRequired()],
+                       choices=[('', '— Elige —'), *((n, str(n)) for n in EVALUATION_SCALE)])
+
+
+class ProveedorForm(BaseForm):
+    """An external provider (clause 8.4.1); its state is decided apart (EP2)."""
+
+    nombre = StringField('Nombre', validators=[DataRequired(), Length(max=200)])
+    nif = StringField('NIF')
+    contacto = StringField('Persona de contacto', validators=[Length(max=150)])
+    email = StringField('Correo electrónico')
+    telefono = StringField('Teléfono', validators=[Length(max=30)])
+    tipo_suministro = _choice('Tipo de suministro', TipoSuministro)
+    descripcion_suministro = TextAreaField('Qué suministra')
+    procesos = SelectMultipleField('Procesos afectados', coerce=int, choices=[])
+    criterios_seleccion = TextAreaField('Criterios de selección')
+    fecha_proxima_evaluacion = DateField('Próxima evaluación', validators=[Optional()])
+    notas = TextAreaField('Notas')
+
+
+class EvaluacionProveedorForm(BaseForm):
+    """A scored evaluation (EP3): the four scores from 1 to 5 and the next date."""
+
+    fecha = DateField('Fecha de la evaluación', validators=[DataRequired()])
+    evaluador_id = required_person_field('Evaluador')
+    calidad = _evaluation_score('Calidad (1-5)')
+    plazo = _evaluation_score('Plazo de entrega (1-5)')
+    servicio = _evaluation_score('Servicio (1-5)')
+    documentacion = _evaluation_score('Documentación (1-5)')
+    comentario = TextAreaField('Comentario')
+    fecha_proxima = DateField('Próxima evaluación', validators=[Optional()])

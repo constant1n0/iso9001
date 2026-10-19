@@ -9,7 +9,8 @@ auditors only, and empties once they are followed up. Other roles are refused.
 
 The risks and opportunities card (clause 6.1, ``risks-opportunities``) counts
 what ``risks.attention`` flags, each linked to the list filtered to the same
-records, for every role.
+records, for every role; the external providers card (clause 8.4,
+``external-providers``) does the same with ``providers.attention``.
 """
 
 from __future__ import annotations
@@ -18,11 +19,15 @@ import re
 from datetime import date
 from html import unescape
 
-from test_audit_screens import ADMIN, AUDITOR, OPERATIVO
+from test_audit_screens import ADMIN, AUDITOR, OPERATIVO, SYSTEM
 from test_management_review_screens import BASE, OVERDUE, ReviewScreensBase
+from test_provider_screens import BAD, ProviderScreensBase
+from test_provider_screens import BASE as PROVIDERS
 from test_risk_screens import OPPORTUNITIES, RISKS, RiskScreensBase
 
+from app.extensions import db
 from app.models import RoleEnum
+from app.services import providers
 
 CARD_ITEM = re.compile(r'<a href="([^"]+)">([^<]+)</a></span>\s*<span class="list__secondary">'
                        r'<span class="badge badge--danger">(\d+)</span>')
@@ -139,3 +144,49 @@ class RiskCardTestCase(RiskScreensBase):
         for oid in (waiting, overdue):
             self.update("opportunities", oid, {"estado": "descartada"})
         self.assertIn("Ningún riesgo ni oportunidad requiere atención.", self.card())
+
+
+class ProviderCardTestCase(ProviderScreensBase):
+    """The external providers card (EP6 of external-providers)."""
+
+    def card(self) -> str:
+        match = re.search(r'<article class="card" id="proveedores">(.*?)</article>',
+                          self.html("/dashboard/"), re.S)
+        self.assertIsNotNone(match, "the dashboard card is missing")
+        return match.group(1)
+
+    def test_the_card_links_what_needs_attention_to_the_filtered_lists(self) -> None:
+        compras = self.process("Compras")
+        late = self.provider("Calibraciones Sur", fecha_proxima_evaluacion=date(2026, 10, 1))
+        blocked = self.provider("Transportes Rápidos", procesos=[compras])
+        self.login(ADMIN)  # blocked through its page, like an administrator does
+        self.post(f"{PROVIDERS}/{blocked}/bloquear", {"motivo": "Lote rechazado"},
+                  expect=f"{PROVIDERS}/{blocked}")
+        self.decide(self.provider("Bloqueado sin procesos"), "block")
+        unsuitable = self.provider("Aceros del Norte")
+        self.decide(unsuitable, "approve")
+        self.evaluate(unsuitable, BAD)
+        expected = [
+            (f"{PROVIDERS}/?evaluacion_vencida=1", "Proveedores con la evaluación vencida", {late}),
+            (f"{PROVIDERS}/?estado=bloqueado&con_procesos=1", "Proveedores bloqueados con procesos",
+             {blocked}),
+            (f"{PROVIDERS}/?estado=aprobado&ultimo_resultado=no_apto",
+             "Proveedores aprobados con resultado «No apto»", {unsuitable}),
+        ]
+        for role in RoleEnum:
+            with self.subTest(role=role.name):
+                self.login(role)
+                items = [(unescape(href), label, int(count))
+                         for href, label, count in CARD_ITEM.findall(self.card())]
+                self.assertEqual([(href, label, len(ids)) for href, label, ids in expected],
+                                 items)
+        for href, _, ids in expected:
+            with self.subTest(link=href):
+                self.assertEqual(ids, set(self.rows(href)))
+
+        self.evaluate(late, fecha_proxima=date(2027, 4, 1))
+        self.evaluate(unsuitable, fecha=date(2026, 10, 15))
+        with self.app.app_context():
+            providers.providers.update(db.session, SYSTEM, blocked, {"procesos": []})
+            db.session.commit()
+        self.assertIn("Ningún proveedor requiere atención.", self.card())

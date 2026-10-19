@@ -17,10 +17,10 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required
 from ..audit_notifications import local_today
-from ..forms import NoConformidadForm, person_choices
+from ..forms import NoConformidadForm, person_choices, provider_choices
 from ..extensions import db
 from ..models import EstadoNoConformidad, GravedadNoConformidad, OrigenNoConformidad
-from ..services import corrective_actions, nonconformities, people
+from ..services import corrective_actions, nonconformities, people, providers
 from ..services.errors import ValidationError
 from ..utils.permissions import require_permission
 from ..utils.pdf import pdf_response, render_pdf
@@ -32,8 +32,10 @@ from .corrective_action_routes import may_verify
 bp = Blueprint('no_conformidad', __name__, url_prefix='/no_conformidades')
 
 # The state is never posted: the service sets it, and cancel/reopen change it.
+# ``proveedor_id`` is kept only with the ``proveedor`` origin (EP4 of external-providers).
 FORM_FIELDS = ('descripcion', 'fecha_detectada', 'origen', 'gravedad', 'responsable',
-               'responsable_id', 'contencion', 'causa_raiz', 'accion_correctiva')
+               'responsable_id', 'contencion', 'causa_raiz', 'accion_correctiva',
+               'proveedor_id')
 
 
 def _form_data(form):
@@ -71,6 +73,17 @@ def _people_of(actor, no_conformidad, acciones):
     return people.names(db.session, actor, person_ids)
 
 
+def _providers(actor):
+    """Every external provider, by name, for the picker and the list filter."""
+    return providers.providers.list_(db.session, actor)
+
+
+def _provider_arg(known):
+    """The ``proveedor_id`` query argument when it names one of ``known``, else ``None``."""
+    text = request.args.get('proveedor_id', '')
+    return int(text) if text.isdigit() and int(text) in known else None
+
+
 def _enum_arg(name, enum_cls):
     """The enum member named by query argument ``name``, or ``None``.
 
@@ -84,9 +97,11 @@ def _enum_arg(name, enum_cls):
 @login_required
 def listar_no_conformidades():
     actor = current_actor()
+    proveedores = _providers(actor)
     no_conformidades = nonconformities.list_(
         db.session,
         actor,
+        proveedor_id=_provider_arg({p.id for p in proveedores}),
         descripcion=request.args.get('descripcion'),
         estado=_enum_arg('estado', EstadoNoConformidad),
         origen=_enum_arg('origen', OrigenNoConformidad),
@@ -97,7 +112,8 @@ def listar_no_conformidades():
     return render_template('no_conformidades/listar.html', no_conformidades=no_conformidades,
                            estados=list(EstadoNoConformidad),
                            origenes=list(OrigenNoConformidad),
-                           gravedades=list(GravedadNoConformidad), personas=personas)
+                           gravedades=list(GravedadNoConformidad), personas=personas,
+                           proveedores=proveedores)
 
 # Ruta para registrar una nueva no conformidad
 @bp.route('/nueva', methods=['GET', 'POST'])
@@ -107,6 +123,7 @@ def nueva_no_conformidad():
     actor = current_actor()
     form = NoConformidadForm()
     form.responsable_id.choices = person_choices(people.choices(db.session, actor))
+    form.proveedor_id.choices = provider_choices(_providers(actor))
     created = form.validate_on_submit() and _saved(
         lambda: nonconformities.create(db.session, actor, _form_data(form))
     )
@@ -128,6 +145,8 @@ def ver_no_conformidad(id):
     return render_template(
         'no_conformidades/detalle.html', no_conformidad=no_conformidad, acciones=acciones,
         personas=_people_of(actor, no_conformidad, acciones),
+        proveedor=None if no_conformidad.proveedor_id is None else providers.providers.get(
+            db.session, actor, no_conformidad.proveedor_id),
         abierta=no_conformidad.estado not in nonconformities.TERMINAL_STATES,
         puede_verificar=may_verify(),
         puede_cerrar=nonconformities.may_close(actor, no_conformidad),
@@ -146,6 +165,7 @@ def editar_no_conformidad(id):
     form = NoConformidadForm(obj=no_conformidad)
     form.responsable_id.choices = person_choices(
         people.choices(db.session, actor, include=no_conformidad.responsable_id))
+    form.proveedor_id.choices = provider_choices(_providers(actor))
     if form.validate_on_submit() and _saved(
         lambda: nonconformities.update(db.session, actor, id, _form_data(form))
     ):

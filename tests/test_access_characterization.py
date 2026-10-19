@@ -33,6 +33,7 @@ from app.models import (
     EstadoAccionRiesgo,
     EstadoRevision,
     EstadoRevisionDireccion,
+    EvaluacionProveedor,
     FrecuenciaMedicion,
     HallazgoAuditoria,
     MedicionObjetivo,
@@ -45,6 +46,7 @@ from app.models import (
     Person,
     ProcesoOperacion,
     ProgramaAuditoria,
+    Proveedor,
     RecursoCapacitacion,
     RevisionDireccion,
     Riesgo,
@@ -54,6 +56,7 @@ from app.models import (
     SentidoObjetivo,
     TipoAccionRevision,
     TipoHallazgo,
+    TipoSuministro,
     User,
 )
 
@@ -176,6 +179,13 @@ TRAINING_RESOURCE = dict(recurso_necesario="Sala", capacitacion_personal="y",
                          descripcion_documentacion="")
 INDICATOR = dict(area_auditoria="Ventas", fecha_auditoria="2026-10-05", resultado="",
                  accion_correctiva="", indicador_desempeno="")
+# External providers (EP-2 of external-providers); the evaluation is dated well
+# before any day the suite runs on.
+PROVIDER = dict(nombre="Proveedor nuevo", nif="", contacto="", email="", telefono="",
+                tipo_suministro="servicio", descripcion_suministro="", criterios_seleccion="",
+                fecha_proxima_evaluacion="", notas="")
+PROVIDER_EVALUATION = dict(fecha="2026-02-28", evaluador_id="1", calidad="4", plazo="4",
+                           servicio="3", documentacion="5", comentario="", fecha_proxima="")
 
 
 def _register(base, new, action_id):
@@ -340,6 +350,18 @@ ENDPOINTS = [
     *_html("AUDIT_INDICATORS", "/indicadores-auditoria/", ("nuevo", INDICATOR),
            ("1/editar", INDICATOR), "1/eliminar"),
     Endpoint("AUDIT_INDICATORS", "read", "GET", "/indicadores-auditoria/1", 200),
+    # Provider 1 holds evaluation 1; provider 2 has none, so deleting it succeeds.
+    # Approving, conditioning and blocking narrow the role to administrators, so
+    # tests/test_provider_screens.py characterizes them (EP-2).
+    *_html("EXTERNAL_PROVIDERS", "/proveedores/", ("nuevo", PROVIDER), ("1/editar", PROVIDER),
+           "2/eliminar"),
+    Endpoint("EXTERNAL_PROVIDERS", "read", "GET", "/proveedores/1", 200),
+    Endpoint("EXTERNAL_PROVIDERS", "create", "POST", "/proveedores/1/evaluaciones/nueva", 302,
+             PROVIDER_EVALUATION),
+    Endpoint("EXTERNAL_PROVIDERS", "update", "POST", "/proveedores/1/evaluaciones/1/editar", 302,
+             PROVIDER_EVALUATION),
+    Endpoint("EXTERNAL_PROVIDERS", "delete", "POST", "/proveedores/1/evaluaciones/1/eliminar",
+             302),
     *_json("IMPROVEMENTS", "/mejoras/api/", {"no_conformidad": "NC"},
            {"accion_correctiva": "x"}),
     *_json("AUDIT_INDICATORS", "/auditoria_indicador/",
@@ -382,12 +404,12 @@ ALLOWED = {
     "CORRECTIVE_ACTIONS": (ALL, ALL, {ADMIN}),
     "QUALITY_OBJECTIVES": JSON_REGISTER,  # decision QO4 of quality-objectives
     "MANAGEMENT_REVIEW": (ADMIN_AUDITOR, ADMIN_AUDITOR, {ADMIN}),  # MR5 of management-review
+    "EXTERNAL_PROVIDERS": JSON_REGISTER,  # EP5 of external-providers
 }
 # Policy entries without routes. AUDIT_LOG has no adapter yet. The API_TOKENS
 # matrix (issue, list, revoke any token) stays CLI-only; "Mi perfil" bypasses it
 # with an ownership check, so tests/test_profile_routes.py characterizes it.
-# EXTERNAL_PROVIDERS gets its screens in EP-2 of external-providers.
-NO_ROUTES = {"AUDIT_LOG", "API_TOKENS", "EXTERNAL_PROVIDERS"}
+NO_ROUTES = {"AUDIT_LOG", "API_TOKENS"}
 
 
 def allowed_roles(endpoint: Endpoint) -> set:
@@ -449,6 +471,8 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                     RolResponsabilidad(rol="Seed 2"),  # role 1 stays deletable
                     Person(nombre="Seed"),
                     Person(nombre="Unreferenced"),
+                    *(Proveedor(nombre=nombre, tipo_suministro=TipoSuministro.producto)
+                      for nombre in ("Seed", "Sin evaluaciones")),
                 ]
             )
             db.session.flush()  # the competence rows cite role 2 and person 1
@@ -456,6 +480,10 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                 [
                     HallazgoAuditoria(
                         auditoria_id=2, tipo=TipoHallazgo.observacion, descripcion="Seed"
+                    ),
+                    EvaluacionProveedor(
+                        proveedor_id=1, fecha=date(2026, 2, 1), evaluador_id=1, calidad=4,
+                        plazo=4, servicio=4, documentacion=4,
                     ),
                     CompetenceRequirement(
                         rol_id=2, tipo=CompetenceType.formacion, descripcion="Seed"
