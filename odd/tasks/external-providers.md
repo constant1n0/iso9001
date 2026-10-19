@@ -37,6 +37,7 @@ Route for every task: **delegated direct**.
   - Models, migration, policy resource, services with EP1–EP5 rules (state decisions, evaluation scores and result, nonconformity link), people and process delete protection, MCP modules.
 - [ ] **EP-2 — Screens and dashboard.** Forecast 1,000-1,400.
   - Provider list with filters, detail with evaluations and nonconformities, forms, state decisions for ADMIN, evaluation form, the supplier picker on the nonconformity form, dashboard card.
+  - Also (EP-1 review): after an evaluation is deleted, has its `fecha_proxima` cleared, or changes date so another evaluation becomes the latest, the provider's next evaluation date follows the latest remaining evaluation that has one (unchanged if none has); tests pin each case.
 - [ ] **EP-3 — PDF, review inputs and docs.** Forecast 500-900.
   - Approved-providers PDF, the management-review providers section (EP6), guides (Spanish first), `docs/mcp.md`, `docs/architecture/services.md`, gap analysis 8.4 and 9.1.3.
 
@@ -52,7 +53,7 @@ Baseline at `5739c42`: 1,477 tests. Migrations are tested on PostgreSQL (`TEST_P
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| EP-1 | Done | `2e0a844` (models `proveedores`, `proveedor_procesos`, `evaluaciones_proveedor`, `NoConformidad.proveedor_id` with a CHECK tying it to the `proveedor` origin, migration `d2f4a6c8e1b3`, policy `EXTERNAL_PROVIDERS`, delete protection for deciders, evaluators and linked processes; `text_enum` gained a `length` parameter), `5bdd5a3` (`app/services/providers.py`: registers, ADMIN-only web decisions `approve`, `condition`, `block`, `may_decide`, evaluations with `puntuacion` and `resultado`, `latest_evaluation`, `average_score`, `performance`, `attention`, filters incl. `ultimo_resultado` in SQL; nonconformity service rule for `proveedor_id`; MCP modules `proveedores` and `evaluaciones_proveedor`, 26 modules) | RED: `cannot import name 'EstadoProveedor'`, `27 != 25`, `KeyError: 'EXTERNAL_PROVIDERS'`, `NoSuchTableError: proveedores`, no `proveedor_id`. GREEN: `2e0a844` alone 1,478 tests OK; both 1,528 tests OK incl. PostgreSQL | Pending |
+| EP-1 | Done | `2e0a844` (models `proveedores`, `proveedor_procesos`, `evaluaciones_proveedor`, `NoConformidad.proveedor_id` with a CHECK tying it to the `proveedor` origin, migration `d2f4a6c8e1b3`, policy `EXTERNAL_PROVIDERS`, delete protection for deciders, evaluators and linked processes; `text_enum` gained a `length` parameter), `5bdd5a3` (`app/services/providers.py`: registers, ADMIN-only web decisions `approve`, `condition`, `block`, `may_decide`, evaluations with `puntuacion` and `resultado`, `latest_evaluation`, `average_score`, `performance`, `attention`, filters incl. `ultimo_resultado` in SQL; nonconformity service rule for `proveedor_id`; MCP modules `proveedores` and `evaluaciones_proveedor`, 26 modules) | RED: `cannot import name 'EstadoProveedor'`, `27 != 25`, `KeyError: 'EXTERNAL_PROVIDERS'`, `NoSuchTableError: proveedores`, no `proveedor_id`. GREEN: `2e0a844` alone 1,478 tests OK; both 1,528 tests OK incl. PostgreSQL | Range `5739c42..ca2d2f0`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-299a9014b3e244ef` **approved** and acknowledged; its suggestion moved into EP-2 |
 | EP-2..EP-3 | Pending | — | — | — |
 
 ## Findings during implementation
