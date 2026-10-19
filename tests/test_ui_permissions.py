@@ -594,6 +594,55 @@ class UiPermissionsTestCase(unittest.TestCase):
                     self.assertEqual(role in writers, f'href="{base}/{record}/editar"' in page)
                     self.assertEqual(role == ADMIN, f'action="{base}/{record}/eliminar"' in page)
 
+    def test_provider_controls_follow_role_and_state(self) -> None:
+        """Every role reads providers; administrators and auditors create and edit them and
+        record and edit evaluations; only administrators delete a provider without
+        evaluations or nonconformities, delete evaluations and decide the state, never
+        offering the current one (EP2 and EP5 of external-providers)."""
+        from app.services import providers
+        from app.services.actor import Actor
+
+        system = Actor(None, "seed", ADMIN, "system")
+        with self.app.app_context():
+            def provider(nombre):
+                return providers.providers.create(db.session, system, {
+                    "nombre": nombre, "tipo_suministro": "producto"}).id
+
+            free, evaluated = provider("Pendiente"), provider("Aprobado")
+            evaluation = providers.evaluations.create(db.session, system, {
+                "proveedor_id": evaluated, "fecha": DAY, "evaluador_id": self.owner_id,
+                "calidad": 4, "plazo": 4, "servicio": 4, "documentacion": 4}, today=DAY).id
+            providers.approve(db.session, system, evaluated, today=DAY)
+            db.session.commit()
+        writers, admins, nobody = {ADMIN, AUDITOR}, {ADMIN}, set()
+        base = "/proveedores"
+        item = f"{base}/{evaluated}/evaluaciones/{evaluation}"
+        expected = {
+            f"{base}/{free}": {"edit": writers, "delete": admins, "evaluate": writers,
+                               "aprobar": admins, "condicionar": admins, "bloquear": admins},
+            f"{base}/{evaluated}": {"edit": writers, "evaluate": writers, "condicionar": admins,
+                                    "bloquear": admins, "edit evaluation": writers,
+                                    "delete evaluation": admins},
+        }
+        for page, allowed in expected.items():
+            controls = {"edit": f'href="{page}/editar"', "delete": f'action="{page}/eliminar"',
+                        "evaluate": f'href="{page}/evaluaciones/nueva"',
+                        **{name: f'action="{page}/{name}"'
+                           for name in ("aprobar", "condicionar", "bloquear")},
+                        "edit evaluation": f'href="{item}/editar"',
+                        "delete evaluation": f'action="{item}/eliminar"'}
+            for role in RoleEnum:
+                body = self._page(role, page).get_data(as_text=True)
+                for name, marker in controls.items():
+                    with self.subTest(page=page, role=role.name, control=name):
+                        self.assertEqual(role in allowed.get(name, nobody), marker in body)
+        for role in RoleEnum:
+            html = self._page(role, f"{base}/").get_data(as_text=True)
+            with self.subTest(page=f"{base}/", role=role.name):
+                self.assertEqual(role in writers, f'href="{base}/nuevo"' in html)
+                self.assertEqual(role in writers, f'href="{base}/{free}/editar"' in html)
+                self.assertNotIn("/eliminar", html)
+
     def test_navigation_links_follow_the_read_permission(self) -> None:
         expected = {"/auditorias/": {ADMIN, AUDITOR}, "/programas-auditoria/": {ADMIN, AUDITOR},
                     "/documents/": set(RoleEnum), "/no_conformidades/": set(RoleEnum),
@@ -605,7 +654,8 @@ class UiPermissionsTestCase(unittest.TestCase):
                     "/revisiones-direccion/": {ADMIN, AUDITOR},
                     "/procesos/": set(RoleEnum), "/roles/": set(RoleEnum),
                     "/recursos-formacion/": set(RoleEnum),
-                    "/indicadores-auditoria/": set(RoleEnum)}
+                    "/indicadores-auditoria/": set(RoleEnum),
+                    "/proveedores/": set(RoleEnum)}
         for role in RoleEnum:
             html = self._page(role, "/dashboard/").get_data(as_text=True)
             self.assertIn('class="nav__group">Personas y competencia<', html)

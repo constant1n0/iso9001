@@ -23,7 +23,9 @@ from ..extensions import db
 from ..models import (
     Auditoria, Capacitacion, EstadoNoConformidad, NoConformidad, SatisfaccionCliente,
 )
-from ..services import audits, documents, management_reviews, people, quality_objectives, risks
+from ..services import (
+    audits, documents, management_reviews, people, providers, quality_objectives, risks,
+)
 from ..services.nonconformities import OPEN_STATES
 from ..utils.permissions import can
 from ..utils.web_actor import current_actor
@@ -47,6 +49,16 @@ RISK_ALERTS = (
      {'sin_valorar': 1, 'abierto': 1}),
     ('oportunidades_sin_valorar', 'Oportunidades sin valorar', 'oportunidad.list_records',
      {'sin_valorar': 1, 'abierto': 1}),
+)
+# What ``providers.attention`` flags (EP6 of external-providers), in the card's order:
+# its key, label and the provider list filtered to the same providers.
+PROVIDER_ALERTS = (
+    ('evaluaciones_vencidas', 'Proveedores con la evaluación vencida',
+     {'evaluacion_vencida': 1}),
+    ('bloqueados_con_procesos', 'Proveedores bloqueados con procesos',
+     {'estado': 'bloqueado', 'con_procesos': 1}),
+    ('aprobados_no_aptos', 'Proveedores aprobados con resultado «No apto»',
+     {'estado': 'aprobado', 'ultimo_resultado': 'no_apto'}),
 )
 
 
@@ -113,6 +125,15 @@ def dashboard():
         avisos_riesgos = [(label, url_for(endpoint, **query), len(flagged[key]))
                           for key, label, endpoint, query in RISK_ALERTS if flagged[key]]
 
+    # External providers needing attention, each with its count and filtered list;
+    # every role reads them. None hides the card, and nothing flagged leaves it empty.
+    avisos_proveedores = None
+    if can('read', 'external_providers'):
+        flagged = providers.attention(db.session, current_actor(), today=hoy)
+        avisos_proveedores = [(label, url_for('proveedor.list_providers', **query),
+                               len(flagged[key]))
+                              for key, label, query in PROVIDER_ALERTS if flagged[key]]
+
     # Puntuación media de satisfacción por mes
     # (year, month) grouping, last 12 calendar months including the current one
     indice_actual = hoy.year * 12 + hoy.month - 1
@@ -156,6 +177,7 @@ def dashboard():
         acciones_revision=acciones_revision,
         responsables_acciones=responsables_acciones,
         avisos_riesgos=avisos_riesgos,
+        avisos_proveedores=avisos_proveedores,
         review_window_days=REVIEW_WINDOW_DAYS,
         upcoming_audit_days=UPCOMING_AUDIT_DAYS,
         chart_data=chart_data,

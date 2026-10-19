@@ -1,0 +1,89 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% from "proveedores/_macros.html" import estado_badge, resultado_badge, nota, dia %}
+{% block title %}Proveedores{% endblock %}
+{% block crumb %}Calidad · Proveedores{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 8.4 · Procesos, productos y servicios externos', 'Proveedores') %}
+    {% if can('create', 'external_providers') %}
+    <a class="btn btn--primary" href="{{ url_for('proveedor.new_provider') }}">+ Nuevo proveedor</a>
+    {% endif %}
+{% endcall %}
+
+<details class="filters"{% if applied %} open{% endif %}>
+    <summary>Filtros{% if applied %} <span class="badge badge--warn">{{ applied }} {{ 'activo' if applied == 1 else 'activos' }}</span>{% endif %}</summary>
+    <form method="get" action="{{ url_for('proveedor.list_providers') }}" class="filters__body">
+        <div class="field"><label for="filtro-nombre">Nombre</label>
+            <input type="text" name="nombre" id="filtro-nombre" value="{{ nombre }}"></div>
+        {% for name, label, choices, _ in campos %}
+        <div class="field"><label for="filtro-{{ name }}">{{ label }}</label>
+            <select name="{{ name }}" id="filtro-{{ name }}">
+                <option {% if name not in elegidos %}selected {% endif %}value="">Todos</option>
+                {% for value, text in choices %}
+                <option {% if elegidos.get(name) == value %}selected {% endif %}value="{{ value }}">{{ text }}</option>
+                {% endfor %}
+            </select></div>
+        {% endfor %}
+        <div class="filters__actions">
+            <button type="submit" class="btn btn--primary">Buscar</button>
+            <a class="btn btn--ghost" href="{{ url_for('proveedor.list_providers') }}">Limpiar</a>
+        </div>
+    </form>
+</details>
+
+{% if proveedores %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Proveedor</th>
+                <th scope="col">Suministra</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Último resultado</th>
+                <th scope="col">Próxima evaluación</th>
+                <th scope="col" class="num">No conformidades (abiertas / total)</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for proveedor in proveedores %}
+            {% set cifras = desempeno[proveedor.id] %}
+            <tr id="fila-{{ proveedor.id }}">
+                <td><a href="{{ url_for('proveedor.show_provider', provider_id=proveedor.id) }}">{{ proveedor.nombre }}</a></td>
+                <td>{{ proveedor.tipo_suministro.value }}{% if proveedor.descripcion_suministro %}<br><span class="muted">{{ proveedor.descripcion_suministro | truncate(60) }}</span>{% endif %}</td>
+                <td>{{ estado_badge(proveedor.estado) }}</td>
+                <td>{% if cifras.ultimo_resultado %}{{ resultado_badge(cifras.ultimo_resultado) }} {{ nota(cifras.ultima_puntuacion) }}{% if cifras.evaluaciones > 1 %}<br><span class="muted">Media de {{ cifras.evaluaciones }}: {{ nota(cifras.puntuacion_media) }}</span>{% endif %}{% else %}<span class="muted">Sin evaluar</span>{% endif %}</td>
+                <td class="date">{{ dia(proveedor.fecha_proxima_evaluacion) }}{% if proveedor.id in vencidas %} <span class="badge badge--warn">Evaluación vencida</span>{% endif %}</td>
+                <td class="num">{{ cifras.no_conformidades_abiertas }} / {{ cifras.no_conformidades }}</td>
+                <td>
+                    <div class="table__actions">
+                        {% if can('update', 'external_providers') %}
+                        <a class="btn btn--sm" href="{{ url_for('proveedor.edit_provider', provider_id=proveedor.id) }}">Editar</a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    {{ empty_state('Ningún proveedor coincide con los filtros.' if applied else 'Todavía no hay proveedores registrados.') }}
+{% endif %}
+{% endblock %}

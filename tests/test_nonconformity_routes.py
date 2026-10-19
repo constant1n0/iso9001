@@ -2,15 +2,22 @@
 
 Every test runs with the audit flush guard installed on the session factory,
 so a web write that skips its audit row fails with ``AuditGuardViolation``.
+
+A nonconformity with the ``proveedor`` origin names the external provider from a
+picker; another origin is refused, the list filters by provider and both pages
+link each other (EP-2 of ``external-providers``).
 """
 
 from __future__ import annotations
 
+import re
 import unittest
 from datetime import date
 from unittest.mock import patch
 
 import test_auth_bootstrap as bootstrap
+from test_provider_screens import BASE as PROVIDERS
+from test_provider_screens import ProviderScreensBase
 from werkzeug.security import generate_password_hash
 
 from app import session_lifetime
@@ -19,7 +26,7 @@ from app.models import (
     AuditLog, EstadoNoConformidad, GravedadNoConformidad, NoConformidad, OrigenNoConformidad,
     RoleEnum, User,
 )
-from app.services import audit, errors
+from app.services import audit, errors, nonconformities
 
 PASSWORD_HASH = generate_password_hash("StrongPassword123!")
 BASE = "/no_conformidades"
@@ -33,6 +40,10 @@ FORM = {
     "causa_raiz": "",
     "accion_correctiva": "",
 }
+# A supplier nonconformity posted through the form (EP-2 of external-providers).
+SUPPLIER_FORM = {"descripcion": "Lote con rebabas", "fecha_detectada": "2026-10-12",
+                 "origen": "proveedor", "gravedad": "", "responsable": "", "responsable_id": "",
+                 "contencion": "", "causa_raiz": "", "accion_correctiva": ""}
 
 
 class NonconformityRoutesTestCase(unittest.TestCase):
@@ -604,6 +615,49 @@ class NonconformityRoutesTestCase(unittest.TestCase):
         for url in ("/no_conformidades/", "/no_conformidades/nueva"):
             with self.subTest(url=url):
                 self.assertEqual(200, self.client.get(url).status_code)
+
+
+class SupplierNonconformityTestCase(ProviderScreensBase):
+    """The provider picker (EP4 of external-providers), through the provider screens' base."""
+
+    def test_a_supplier_nonconformity_names_the_provider_and_the_pages_link(self) -> None:
+        pid = self.provider()
+        unrelated = self.nonconformity(None, origen="cliente")
+        self.login(RoleEnum.OPERATIVO)
+        form = self.html(f"{BASE}/nueva")
+        self.assertIn(f'value="{pid}">Aceros del Norte</option>', self.select(form, "proveedor_id"))
+        self.assertIn("solo con el origen «Proveedor»", form)
+        response = self.post(f"{BASE}/nueva", SUPPLIER_FORM | {"proveedor_id": str(pid)})
+        nc_id = int(re.fullmatch(rf"{BASE}/(\d+)", response.headers["Location"]).group(1))
+        self.assertEqual(pid, self.load(NoConformidad, nc_id).proveedor_id)
+        self.assertIn(f'href="{PROVIDERS}/{pid}">Aceros del Norte</a>',
+                      self.html(f"{BASE}/{nc_id}"))
+        cited = self.block(self.html(f"{PROVIDERS}/{pid}"), "no-conformidades")
+        self.assertIn(f'href="{BASE}/{nc_id}"', cited)
+        self.assertIn(f'href="{BASE}/?proveedor_id={pid}"', cited)
+        self.assertIn("1 / 1", self.row(f"{PROVIDERS}/", pid))
+        filtered = self.html(f"{BASE}/?proveedor_id={pid}")
+        self.assertIn(f'href="{BASE}/{nc_id}"', filtered)
+        self.assertNotIn(f'href="{BASE}/{unrelated}"', filtered)
+        self.assertIn(f'<option value="{pid}" selected>Aceros del Norte</option>', filtered)
+        self.assertIn(f'href="{BASE}/{unrelated}"', self.html(f"{BASE}/?proveedor_id=99999"))
+
+    def test_another_origin_is_refused_with_the_input_kept(self) -> None:
+        pid = self.provider()
+        self.login(RoleEnum.OPERATIVO)
+        html = self.rerendered(f"{BASE}/nueva", SUPPLIER_FORM | {"origen": "cliente",
+                                                                 "proveedor_id": str(pid)})
+        self.assertIn(nonconformities.PROVIDER_NEEDS_ORIGIN, html)
+        self.assertIn("Lote con rebabas", html)
+        self.assertIn(f'<option selected value="{pid}">Aceros del Norte</option>', html)
+        self.assertEqual(0, self.count(NoConformidad))
+        nc_id = self.nonconformity(pid)
+        html = self.rerendered(f"{BASE}/editar/{nc_id}", SUPPLIER_FORM | {
+            "origen": "cliente", "proveedor_id": str(pid)})
+        self.assertIn(nonconformities.CLEAR_PROVIDER_FIRST, html)
+        self.post(f"{BASE}/editar/{nc_id}", SUPPLIER_FORM | {"origen": "cliente",
+                                                             "proveedor_id": ""})
+        self.assertIsNone(self.load(NoConformidad, nc_id).proveedor_id)
 
 
 if __name__ == "__main__":

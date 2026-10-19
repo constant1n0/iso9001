@@ -15,6 +15,27 @@
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
  -->
 {% extends "base.html" %}
+{# A card of alerts (label, filtered list, count); the clause shows when nothing is flagged. #}
+{% macro avisos_card(id, titulo, clausula, avisos, vacio) %}
+    <article class="card" id="{{ id }}">
+        <header class="card__header">
+            <h2 class="card__title">{{ titulo }}</h2>
+            {% if avisos %}<span class="badge badge--danger">{{ avisos | sum(attribute=2) }}</span>{% else %}<span class="card__meta">{{ clausula }}</span>{% endif %}
+        </header>
+        {% if avisos %}
+            <ul class="list">
+                {% for etiqueta, url, cuantos in avisos %}
+                    <li class="list__item">
+                        <span class="list__primary"><a href="{{ url }}">{{ etiqueta }}</a></span>
+                        <span class="list__secondary"><span class="badge badge--danger">{{ cuantos }}</span></span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="empty">{{ vacio }}</p>
+        {% endif %}
+    </article>
+{% endmacro %}
 {% block title %}Panel{% endblock %}
 {% block crumb %}Panel · {{ hoy.strftime('%d/%m/%Y') }}{% endblock %}
 {% block content %}
@@ -159,24 +180,10 @@
     </article>
     {% endif %}
     {% if avisos_riesgos is not none %}
-    <article class="card" id="riesgos-oportunidades">
-        <header class="card__header">
-            <h2 class="card__title">Riesgos y oportunidades</h2>
-            {% if avisos_riesgos %}<span class="badge badge--danger">{{ avisos_riesgos | sum(attribute=2) }}</span>{% else %}<span class="card__meta">6.1</span>{% endif %}
-        </header>
-        {% if avisos_riesgos %}
-            <ul class="list">
-                {% for etiqueta, url, cuantos in avisos_riesgos %}
-                    <li class="list__item">
-                        <span class="list__primary"><a href="{{ url }}">{{ etiqueta }}</a></span>
-                        <span class="list__secondary"><span class="badge badge--danger">{{ cuantos }}</span></span>
-                    </li>
-                {% endfor %}
-            </ul>
-        {% else %}
-            <p class="empty">Ningún riesgo ni oportunidad requiere atención.</p>
-        {% endif %}
-    </article>
+    {{ avisos_card('riesgos-oportunidades', 'Riesgos y oportunidades', '6.1', avisos_riesgos, 'Ningún riesgo ni oportunidad requiere atención.') }}
+    {% endif %}
+    {% if avisos_proveedores is not none %}
+    {{ avisos_card('proveedores', 'Proveedores', '8.4', avisos_proveedores, 'Ningún proveedor requiere atención.') }}
     {% endif %}
     {% if acciones_revision is not none %}
     <article class="card" id="acciones-revision">
