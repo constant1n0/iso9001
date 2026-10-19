@@ -35,7 +35,7 @@ Route for every task: **delegated direct**.
 
 - [x] **EP-1 — Providers, evaluations and the nonconformity link (model and service).** Forecast 1,000-1,400.
   - Models, migration, policy resource, services with EP1–EP5 rules (state decisions, evaluation scores and result, nonconformity link), people and process delete protection, MCP modules.
-- [ ] **EP-2 — Screens and dashboard.** Forecast 1,000-1,400.
+- [x] **EP-2 — Screens and dashboard.** Forecast 1,000-1,400.
   - Provider list with filters, detail with evaluations and nonconformities, forms, state decisions for ADMIN, evaluation form, the supplier picker on the nonconformity form, dashboard card.
   - Also (EP-1 review): after an evaluation is deleted, has its `fecha_proxima` cleared, or changes date so another evaluation becomes the latest, the provider's next evaluation date follows the latest remaining evaluation that has one (unchanged if none has); tests pin each case.
 - [ ] **EP-3 — PDF, review inputs and docs.** Forecast 500-900.
@@ -54,15 +54,17 @@ Baseline at `5739c42`: 1,477 tests. Migrations are tested on PostgreSQL (`TEST_P
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
 | EP-1 | Done | `2e0a844` (models `proveedores`, `proveedor_procesos`, `evaluaciones_proveedor`, `NoConformidad.proveedor_id` with a CHECK tying it to the `proveedor` origin, migration `d2f4a6c8e1b3`, policy `EXTERNAL_PROVIDERS`, delete protection for deciders, evaluators and linked processes; `text_enum` gained a `length` parameter), `5bdd5a3` (`app/services/providers.py`: registers, ADMIN-only web decisions `approve`, `condition`, `block`, `may_decide`, evaluations with `puntuacion` and `resultado`, `latest_evaluation`, `average_score`, `performance`, `attention`, filters incl. `ultimo_resultado` in SQL; nonconformity service rule for `proveedor_id`; MCP modules `proveedores` and `evaluaciones_proveedor`, 26 modules) | RED: `cannot import name 'EstadoProveedor'`, `27 != 25`, `KeyError: 'EXTERNAL_PROVIDERS'`, `NoSuchTableError: proveedores`, no `proveedor_id`. GREEN: `2e0a844` alone 1,478 tests OK; both 1,528 tests OK incl. PostgreSQL | Range `5739c42..ca2d2f0`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-299a9014b3e244ef` **approved** and acknowledged; its suggestion moved into EP-2 |
-| EP-2..EP-3 | Pending | — | — | — |
+| EP-2 | Done | `cb61c3d` (the follow rule: after an update or delete changes the date of the latest evaluation that has a `fecha_proxima`, the provider follows the latest remaining one, unchanged if none; `performances` for the list in two queries; `con_procesos` filter), `8d44c96` (`/proveedores/` list, detail, forms, ADMIN-only POST decisions `aprobar`, `condicionar`, `bloquear` with reasons, evaluation forms with active evaluators; provider picker, filter and link on nonconformities; dashboard card "Proveedores" from `attention()` through a shared `avisos_card` macro; navigation "Proveedores 8.4") | RED: 11 `no attribute 'provider_routes'`; the follow rule 4 failures (`2027-03-01 != 2027-04-01`). GREEN: `cb61c3d` alone 1,532 tests OK; both 1,544 tests OK incl. PostgreSQL; adapted `tests/test_access_characterization.py`, `tests/test_ui_permissions.py`, `tests/test_dashboard.py`, `tests/test_nonconformity_routes.py`, `tests/test_providers.py` | Pending |
+| EP-3 | Pending | — | — | — |
 
 ## Findings during implementation
 
 - Choices: deleting a provider removes its process links (its delete audit row keeps `procesos`); no `reset_pending`, a wrong decision is corrected by another decision; `approve` takes an optional reason; an evaluation's `fecha_proxima` reschedules the provider only when it is the latest evaluation; an evaluation never moves to another provider.
+- Behaviour change (EP-2): editing a field of the latest evaluation no longer resets a next-evaluation date edited by hand on the provider; a test pins it. For EP-3: the MCP field note for `fecha_proxima` in `app/mcp_server/registry.py` still describes only the EP-1 rule.
 - `text_enum` used a fixed length of 20, too short for `proceso_externalizado`; it now takes `length`.
 - Looking up the decider after changing an audited row flushes it early and trips the audit guard, so the decider is looked up first.
 - Test adaptations (standing approval): `tests/test_attribution.py` (25 → 27), `tests/test_policy.py`, `tests/test_access_characterization.py` (`NO_ROUTES`), `tests/test_mcp_modules.py`, `tests/test_mcp_http.py` (24 → 26), `tests/test_mcp_write_tools.py`, `tests/mcp_support.py`, `tests/test_migrations.py`.
 
 ## Next step
 
-EP-2.
+EP-3.
