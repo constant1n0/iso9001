@@ -47,6 +47,13 @@ the first one's outcome.
 An audit finding may cite the nonconformity it created (``audit_findings``);
 ``delete`` clears that link with an audit row on the finding before the row goes
 (the foreign key would set it NULL anyway, unaudited).
+
+A nonconformity whose origin is ``proveedor`` may name the external provider
+(``proveedor_id``, decision EP4 of ``external-providers``); naming one with any
+other origin is refused (``PROVIDER_NEEDS_ORIGIN``), and so is moving the
+origin away while a provider is named (``CLEAR_PROVIDER_FIRST``): the same
+write, or an earlier one, must clear it. Records without a provider stay
+valid. ``list_`` and ``list_page`` filter by it.
 """
 
 from __future__ import annotations
@@ -55,13 +62,13 @@ from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import false, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
     AccionCorrectiva, EstadoNoConformidad, GravedadNoConformidad, HallazgoAuditoria,
-    NoConformidad, OrigenNoConformidad, ResultadoVerificacion, RoleEnum,
+    NoConformidad, OrigenNoConformidad, Proveedor, ResultadoVerificacion, RoleEnum,
 )
 from . import audit, crud, fields, people, policy
 from .actor import Actor
@@ -89,6 +96,13 @@ READ_ONLY_MESSAGE = (
     "Esta no conformidad está cerrada o cancelada y no se puede modificar; "
     "un administrador puede reabrirla."
 )
+PROVIDER_NEEDS_ORIGIN = (
+    "Solo una no conformidad de origen «Proveedor» puede indicar el proveedor."
+)
+CLEAR_PROVIDER_FIRST = (
+    "La no conformidad indica un proveedor: quita antes el proveedor para cambiar el origen."
+)
+UNKNOWN_PROVIDER = "El campo «proveedor_id» no corresponde a ningún proveedor."
 
 
 def get(session: Session, actor: Actor, nc_id: int) -> NoConformidad:
@@ -147,9 +161,16 @@ def _conditions(
     fecha_detectada: date | None,
     origen: OrigenNoConformidad | str | None,
     gravedad: GravedadNoConformidad | str | None,
+    proveedor_id: int | None = None,
 ) -> list[Any]:
-    """The filters shared by ``list_`` and ``list_page``; they combine with AND."""
+    """The filters shared by ``list_`` and ``list_page``; they combine with AND.
+
+    A ``proveedor_id`` that cannot be a stored id matches nothing.
+    """
     where: list[Any] = []
+    if proveedor_id is not None:
+        where.append(NoConformidad.proveedor_id == proveedor_id
+                     if people.is_db_id(proveedor_id) else false())
     if descripcion:
         where.append(NoConformidad.descripcion.ilike(f"%{descripcion}%"))
     for key, value in (("estado", estado), ("origen", origen), ("gravedad", gravedad)):
@@ -169,16 +190,18 @@ def list_(
     fecha_detectada: date | None = None,
     origen: OrigenNoConformidad | str | None = None,
     gravedad: GravedadNoConformidad | str | None = None,
+    proveedor_id: int | None = None,
 ) -> list[NoConformidad]:
     """List nonconformities, newest first; filters combine with AND.
 
-    ``estado``, ``origen`` and ``gravedad`` take the enum member or its name.
+    ``estado``, ``origen`` and ``gravedad`` take the enum member or its name;
+    ``proveedor_id`` keeps those naming that provider.
 
     Raises:
         ValidationError: An enum filter holds anything else.
     """
     policy.require(actor, Action.READ, Resource.NONCONFORMITIES)
-    where = _conditions(descripcion, estado, fecha_detectada, origen, gravedad)
+    where = _conditions(descripcion, estado, fecha_detectada, origen, gravedad, proveedor_id)
     return list(session.scalars(select(NoConformidad).where(*where).order_by(*_ORDER)))
 
 
@@ -191,13 +214,14 @@ def list_page(
     fecha_detectada: date | None = None,
     origen: OrigenNoConformidad | str | None = None,
     gravedad: GravedadNoConformidad | str | None = None,
+    proveedor_id: int | None = None,
     page: int = 1,
     per_page: int = crud.DEFAULT_PER_PAGE,
 ) -> tuple[list[NoConformidad], int]:
     """One page in the ``list_`` order plus the total matching the same filters."""
     policy.require(actor, Action.READ, Resource.NONCONFORMITIES)
     page, per_page = crud.page_bounds(page, per_page)
-    where = _conditions(descripcion, estado, fecha_detectada, origen, gravedad)
+    where = _conditions(descripcion, estado, fecha_detectada, origen, gravedad, proveedor_id)
     total = session.scalar(select(func.count()).select_from(NoConformidad).where(*where))
     query = (
         select(NoConformidad).where(*where).order_by(*_ORDER)
@@ -208,7 +232,7 @@ def list_page(
 
 WRITABLE_FIELDS = frozenset({
     "descripcion", "fecha_detectada", "responsable", "responsable_id", "origen", "gravedad",
-    "contencion", "causa_raiz", "accion_correctiva",
+    "contencion", "causa_raiz", "accion_correctiva", "proveedor_id",
 })
 RESPONSABLE_MAX = 50  # mirrors NoConformidad.responsable and the web form
 _OPTIONAL_ENUMS = {"origen": OrigenNoConformidad, "gravedad": GravedadNoConformidad}
@@ -244,12 +268,41 @@ def _clean(
     for key in ("contencion", "causa_raiz", "accion_correctiva"):
         if key in data:
             clean[key] = fields.text(data, key, strip=key != "accion_correctiva")
-    if "responsable_id" in data:  # last: it queries the database
+    if "responsable_id" in data:  # last: these query the database
         clean["responsable_id"] = people.reference(
             session, data, "responsable_id",
             current.responsable_id if current is not None else None,
         )
+    if "proveedor_id" in data:
+        clean["proveedor_id"] = _provider_reference(
+            session, data, current.proveedor_id if current is not None else None)
     return clean
+
+
+def _provider_reference(
+    session: Session, data: Mapping[str, Any], current: int | None
+) -> int | None:
+    """``data["proveedor_id"]`` as an optional provider id that exists (or is kept)."""
+    value = fields.integer(data, "proveedor_id")
+    if value is not None and value != current and (
+            not people.is_db_id(value) or session.get(Proveedor, value) is None):
+        raise ValidationError(UNKNOWN_PROVIDER)
+    return value
+
+
+def _check_provider(values: Mapping[str, Any], current: NoConformidad | None = None) -> None:
+    """A provider is named only with the ``proveedor`` origin (decision EP4).
+
+    Judged on the values the write leaves: a provider newly named with another
+    origin is ``PROVIDER_NEEDS_ORIGIN``; an origin moved away from a named
+    provider is ``CLEAR_PROVIDER_FIRST``.
+    """
+    kept = None if current is None else current.proveedor_id
+    provider = values.get("proveedor_id", kept)
+    origen = values["origen"] if "origen" in values else getattr(current, "origen", None)
+    if provider is None or origen is OrigenNoConformidad.proveedor:
+        return
+    raise ValidationError(PROVIDER_NEEDS_ORIGIN if provider != kept else CLEAR_PROVIDER_FIRST)
 
 
 def _fill_responsable(
@@ -274,7 +327,9 @@ def create(session: Session, actor: Actor, data: Mapping[str, Any]) -> NoConform
     missing = {"descripcion", "fecha_detectada"} - set(data)
     if missing:
         raise ValidationError(f"Faltan campos obligatorios: {', '.join(sorted(missing))}.")
-    nc = NoConformidad(estado=EstadoNoConformidad.abierta, **_clean(session, data))
+    values = _clean(session, data)
+    _check_provider(values)
+    nc = NoConformidad(estado=EstadoNoConformidad.abierta, **values)
     stamp_created(nc, actor)
     session.add(nc)
     try:
@@ -299,6 +354,7 @@ def update(
     before = audit.snapshot(nc)
     if all(getattr(nc, key) == value for key, value in values.items()):
         return nc
+    _check_provider(values, nc)
     if "fecha_detectada" in values:
         _check_detection_date(session, nc.id, values["fecha_detectada"])
     for key, value in values.items():

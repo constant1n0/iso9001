@@ -14,8 +14,8 @@ from app.mcp_server import context
 from app.mcp_server.server import build_server
 from app.mcp_server.registry import MODULES
 from app.models import (
-    EstadoNoConformidad, NoConformidad, ObjetivoCalidad, Person, RevisionDireccion, Riesgo,
-    RoleEnum, User,
+    EstadoNoConformidad, NoConformidad, ObjetivoCalidad, Person, Proveedor, RevisionDireccion,
+    Riesgo, RoleEnum, User,
 )
 from app.services import api_tokens
 from app.services.actor import Actor
@@ -79,6 +79,10 @@ SEEDS = {
     # Cites the risk and the person seeded above (both id 1).
     "acciones_riesgo": {"riesgo_id": 1, "descripcion": "Homologar un segundo proveedor",
                         "responsable_id": 1, "fecha_limite": "2026-12-31"},
+    "proveedores": {"nombre": "Aceros del Norte", "tipo_suministro": "producto"},
+    # Cites the provider and the person seeded above (both id 1), on a past date.
+    "evaluaciones_proveedor": {"proveedor_id": 1, "fecha": "2026-10-01", "evaluador_id": 1,
+                               "calidad": 4, "plazo": 4, "servicio": 3, "documentacion": 5},
 }
 
 
@@ -125,6 +129,11 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
             self.seed("objetivos_calidad")
         if slug == "acciones_revision" and db.session.get(RevisionDireccion, 1) is None:
             self.seed("revisiones_direccion")
+        if slug == "evaluaciones_proveedor":
+            if db.session.get(Person, 1) is None:
+                self.seed("personas")
+            if db.session.get(Proveedor, 1) is None:
+                self.seed("proveedores")
         data = SEEDS[slug] | overrides
         for field in module.fields:
             if field.type == "date" and field.name in data:

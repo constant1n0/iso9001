@@ -313,5 +313,95 @@ class DeleteTestCase(WriteBase):
                 service().delete(db.session, actor(ADMIN), nc.id)
 
 
+
+class ProviderLinkTestCase(WriteBase):
+    """A nonconformity whose origin is ``proveedor`` may name the provider (EP4)."""
+
+    def provider(self, nombre: str = "Aceros del Norte") -> int:
+        from app.models import EstadoProveedor, Proveedor, TipoSuministro
+
+        result = db.session.execute(Proveedor.__table__.insert().values(
+            nombre=nombre, tipo_suministro=TipoSuministro.producto,
+            estado=EstadoProveedor.pendiente))
+        db.session.commit()
+        return result.inserted_primary_key[0]
+
+    def refused(self, call, *args) -> str:
+        with self.assertRaises(errors().ValidationError) as caught:
+            call(db.session, actor(), *args)
+        db.session.rollback()
+        return caught.exception.message
+
+    def test_a_supplier_nonconformity_names_its_provider_and_lists_by_it(self) -> None:
+        aceros, otro = self.provider(), self.provider("Otro")
+        nc = self.create(origen="proveedor", proveedor_id=aceros)
+        db.session.commit()
+        self.assertEqual((OrigenNoConformidad.proveedor, aceros), (nc.origen, nc.proveedor_id))
+        self.assertEqual(aceros, self.audit_rows()[-1].after["proveedor_id"])
+        self.create(origen="proveedor", proveedor_id=otro, descripcion="Otra")
+        self.create(origen="proveedor", descripcion="Sin proveedor")
+        db.session.commit()
+        who = actor()
+        self.assertEqual([nc.id], [row.id for row in service().list_(db.session, who,
+                                                                     proveedor_id=aceros)])
+        rows, total = service().list_page(db.session, who, proveedor_id=otro)
+        self.assertEqual((1, "Otra"), (total, rows[0].descripcion))
+        for value in (999, "1", None):
+            with self.subTest(filter=value):
+                expected = 3 if value is None else 0
+                self.assertEqual(expected, len(service().list_(db.session, who,
+                                                               proveedor_id=value)))
+        moved = service().update(db.session, actor(), nc.id, {"proveedor_id": otro})
+        self.assertEqual(otro, moved.proveedor_id)
+
+    def test_only_a_supplier_origin_may_name_a_provider(self) -> None:
+        aceros = self.provider()
+        for origen in ("cliente", None, ""):
+            with self.subTest(origen=origen):
+                message = self.refused(service().create, VALID | {"origen": origen,
+                                                                  "proveedor_id": aceros})
+                self.assertEqual(service().PROVIDER_NEEDS_ORIGIN, message)
+        message = self.refused(service().create, VALID | {"proveedor_id": aceros})
+        self.assertEqual(service().PROVIDER_NEEDS_ORIGIN, message)
+        nc = self.seed(origen=OrigenNoConformidad.proceso)
+        self.assertEqual(service().PROVIDER_NEEDS_ORIGIN,
+                         self.refused(service().update, nc.id, {"proveedor_id": aceros}))
+        self.assertEqual(0, db.session.query(NoConformidad).filter(
+            NoConformidad.proveedor_id.is_not(None)).count())
+
+    def test_changing_the_origin_away_needs_the_provider_cleared_first(self) -> None:
+        aceros = self.provider()
+        nc = self.create(origen="proveedor", proveedor_id=aceros)
+        db.session.commit()
+        for origen in ("cliente", None):
+            with self.subTest(origen=origen):
+                message = self.refused(service().update, nc.id, {"origen": origen})
+                self.assertEqual(service().CLEAR_PROVIDER_FIRST, message)
+                self.assertIn("proveedor", message)
+        cleared = service().update(db.session, actor(), nc.id,
+                                   {"origen": "cliente", "proveedor_id": None})
+        self.assertEqual((OrigenNoConformidad.cliente, None),
+                         (cleared.origen, cleared.proveedor_id))
+
+    def test_an_unknown_provider_is_refused(self) -> None:
+        self.provider()
+        for value, words in ((999, "ningún proveedor"), (2 ** 40, "ningún proveedor"),
+                             ("1", "número entero"), (True, "número entero")):
+            with self.subTest(proveedor_id=value):
+                message = self.refused(service().create, VALID | {"origen": "proveedor",
+                                                                  "proveedor_id": value})
+                self.assertIn(words, message)
+        self.assertEqual(0, db.session.query(NoConformidad).count())
+
+    def test_records_without_a_provider_stay_valid(self) -> None:
+        nc = self.seed(origen=OrigenNoConformidad.proveedor)
+        self.assertIsNone(nc.proveedor_id)
+        changed = service().update(db.session, actor(), nc.id, {"descripcion": "Revisada"})
+        self.assertEqual(("Revisada", None), (changed.descripcion, changed.proveedor_id))
+        cleared = service().update(db.session, actor(), nc.id, {"proveedor_id": None,
+                                                                "origen": "otro"})
+        self.assertEqual(OrigenNoConformidad.otro, cleared.origen)
+
+
 if __name__ == "__main__":
     unittest.main()
