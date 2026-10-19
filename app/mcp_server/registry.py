@@ -19,14 +19,15 @@ from ..models import (
     CompetenceEvaluation, CompetenceType, DecisionOportunidad, DocumentCategory, EficaciaAccion,
     EstadoAccionCorrectiva, EstadoAccionRevision, EstadoAccionRiesgo, EstadoAuditoriaEnum,
     EstadoNoConformidad, EstadoObjetivo, EstadoOportunidad, EstadoProgramaAuditoria,
-    EstadoRevisionDireccion, EstadoRiesgo, FrecuenciaMedicion, GravedadNoConformidad,
-    NivelRiesgo, OrigenNoConformidad, OrigenRiesgo, PrioridadOportunidad, SentidoObjetivo,
-    TipoAccionRevision, TipoHallazgo, TipoProceso, TratamientoRiesgo,
+    EstadoProveedor, EstadoRevisionDireccion, EstadoRiesgo, FrecuenciaMedicion,
+    GravedadNoConformidad, NivelRiesgo, OrigenNoConformidad, OrigenRiesgo, PrioridadOportunidad,
+    ResultadoEvaluacion, SentidoObjetivo, TipoAccionRevision, TipoHallazgo, TipoProceso,
+    TipoSuministro, TratamientoRiesgo,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, competence, corrective_actions,
     document_revisions, documents, improvements, management_reviews,
-    nonconformities, people, process_operations, quality_objectives, risks,
+    nonconformities, people, process_operations, providers, quality_objectives, risks,
     roles_responsibilities, satisfaction, stakeholders, training, training_resources,
 )
 from ..services.policy import Resource
@@ -136,6 +137,22 @@ def _risk_action_extras(action: Any) -> dict[str, Any]:
     return {"vencida": risks.is_overdue(action, today=local_today())}
 
 
+def _provider_extras(provider: Any) -> dict[str, Any]:
+    """The linked processes, the average score, the latest result and whether it is due."""
+    session = object_session(provider)
+    latest = providers.latest_evaluation(session, provider.id)
+    return {"procesos": provider.proceso_ids,
+            "puntuacion_media": providers.average_score(session, provider.id),
+            "ultimo_resultado": None if latest is None else providers.resultado(
+                providers.puntuacion(latest)),
+            "evaluacion_vencida": providers.evaluacion_vencida(provider, today=local_today())}
+
+
+def _evaluation_extras(evaluation: Any) -> dict[str, Any]:
+    score = providers.puntuacion(evaluation)
+    return {"puntuacion": score, "resultado": providers.resultado(score)}
+
+
 @dataclass(frozen=True)
 class _DatedWrites:
     """A register whose writes take the adapter's date (``local_today``), used like a service."""
@@ -170,6 +187,16 @@ class _DatedRegister(_DatedWrites):
 
     def list_page(self, session: Any, actor: Any, **kwargs: Any) -> tuple[list[Any], int]:
         return self.register.list_page(session, actor, **kwargs, today=local_today())
+
+
+class _DatedLists(_DatedRegister):
+    """Passes the adapter's date to the lists only; the writes take none."""
+
+    def create(self, session: Any, actor: Any, data: Any) -> Any:
+        return self.register.create(session, actor, data)
+
+    def update(self, session: Any, actor: Any, record_id: int, data: Any) -> Any:
+        return self.register.update(session, actor, record_id, data)
 
 
 def _f(name: str, type: str = "string", required: bool = False, allowed=(), members=None,
@@ -273,6 +300,58 @@ def _risk_modules() -> tuple[Module, ...]:
     )
 
 
+def _provider_modules() -> tuple[Module, ...]:
+    """External providers and their evaluations (8.4), sharing ``EXTERNAL_PROVIDERS`` (EP5).
+
+    Enums show the Spanish label; the filters take the member name. Provider records show
+    ``estado`` and its decision columns, which no tool writes: approving, conditioning
+    and blocking are web-only, for administrators (EP2). They add ``procesos``,
+    ``puntuacion_media`` (over every evaluation), ``ultimo_resultado`` (of the latest
+    evaluation) and ``evaluacion_vencida``; evaluation records add ``puntuacion`` (the
+    mean of the four scores, two decimals) and ``resultado`` (apto from 3.5,
+    condicionado from 2.5, no_apto below).
+    """
+    return (
+        Module("proveedores", "External providers", Resource.EXTERNAL_PROVIDERS,
+               _DatedLists(providers.providers), (
+            _f("nombre", required=True, note="Unique."),
+            _f("nif", note=(
+                "Tax id, unique when given; stored upper case without spaces or hyphens, "
+                "8 to 10 letters or digits.")),
+            _f("contacto", note="Contact person."), _f("email"), _f("telefono"),
+            _f("tipo_suministro", "enum", True, members=TipoSuministro),
+            _f("descripcion_suministro", note="What it supplies."),
+            _f("criterios_seleccion", note="Selection criteria."),
+            _f("fecha_proxima_evaluacion", "date", note=(
+                "Next evaluation; an evaluation with fecha_proxima moves it.")),
+            _f("notas"),
+            _f("procesos", "integer_list", note=(
+                "Processes (procesos) it affects; replaces them.")),
+        ), (_f("nombre"), _f("estado", "enum", members=EstadoProveedor),
+            _f("tipo_suministro", "enum", members=TipoSuministro),
+            _f("proceso_id", "integer"),
+            _f("evaluacion_vencida", "boolean", note=(
+                "Not bloqueado, with fecha_proxima_evaluacion before today.")),
+            _f("ultimo_resultado", "enum", members=ResultadoEvaluacion, note=(
+                "Result of the latest evaluation."))),
+            extras=_provider_extras),
+        Module("evaluaciones_proveedor", "External provider evaluations",
+               Resource.EXTERNAL_PROVIDERS, _DatedWrites(providers.evaluations), (
+            _f("proveedor_id", "integer", True, note=(
+                "Provider (proveedores) evaluated; it cannot change later.")),
+            _f("fecha", "date", True, note="Not in the future."),
+            _f("evaluador_id", "integer", True, note="Person (personas) who evaluates."),
+            *(_f(score, "integer", True, note="1 to 5.")
+              for score in ("calidad", "plazo", "servicio", "documentacion")),
+            _f("comentario"),
+            _f("fecha_proxima", "date", note=(
+                "Next evaluation, after fecha; on the provider's latest evaluation it "
+                "becomes the provider's fecha_proxima_evaluacion.")),
+        ), (_f("proveedor_id", "integer"), _f("evaluador_id", "integer")),
+            extras=_evaluation_extras),
+    )
+
+
 # ``responsable_id``, ``auditor_id`` and ``persona_id`` are ids of ``personas``
 # records (an existing person, active when newly chosen; ``null`` clears the
 # link). The free-text ``responsable``, ``auditor`` and ``personal`` stay as
@@ -291,9 +370,13 @@ _MODULES = (
         _legacy_name("responsable", "responsable_id"), _f("responsable_id", "integer"),
         _f("contencion"), _f("causa_raiz"),
         _f("accion_correctiva", note="Legacy free-text corrective action."),
+        _f("proveedor_id", "integer", note=(
+            "External provider (proveedores) that caused it; only with origen proveedor. "
+            "Clear it before changing the origin.")),
     ), (_f("descripcion"), _f("estado", "enum", members=EstadoNoConformidad),
         _f("fecha_detectada", "date"), _f("origen", "enum", members=OrigenNoConformidad),
-        _f("gravedad", "enum", members=GravedadNoConformidad))),
+        _f("gravedad", "enum", members=GravedadNoConformidad),
+        _f("proveedor_id", "integer"))),
     # ``auditor_id`` is the lead auditor. No auditor (lead or team) may be the
     # audited-area owner, and the date must fall in the programme's year.
     Module("auditorias", "Audits", Resource.AUDITS, audits, (
@@ -524,6 +607,7 @@ _MODULES = (
         _f("vencida", "boolean", note="Pendiente or en_curso past fecha_limite.")),
         extras=_review_action_extras),
     *_risk_modules(),
+    *_provider_modules(),
 )
 
 MODULES: dict[str, Module] = {module.slug: module for module in _MODULES}

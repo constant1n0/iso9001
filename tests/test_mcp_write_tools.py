@@ -17,7 +17,8 @@ from app.models import AuditLog, EstadoNoConformidad, NoConformidad, User
 from app.services import audit
 
 JSON_REGISTERS = ("roles_responsabilidades", "recursos_capacitacion", "procesos",
-                  "indicadores_auditoria", "riesgos", "oportunidades", "acciones_riesgo")
+                  "indicadores_auditoria", "riesgos", "oportunidades", "acciones_riesgo",
+                  "proveedores", "evaluaciones_proveedor")
 
 
 def error_text(result) -> str:

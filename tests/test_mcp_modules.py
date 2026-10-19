@@ -18,6 +18,7 @@ SLUGS = {
     "competencias_requeridas", "competencias_acreditadas", "acciones_correctivas",
     "programas_auditoria", "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo",
     "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades", "acciones_riesgo",
+    "proveedores", "evaluaciones_proveedor",
 }
 # The two competence registers share one policy resource (decision Q1 of qms-people),
 # and so do audits, their programmes and their findings (decision AP7 of audit-programme).
@@ -29,6 +30,8 @@ SHARED_OBJECTIVES = ("objetivos_calidad", "mediciones_objetivo")
 SHARED_REVIEWS = ("revisiones_direccion", "acciones_revision")
 # Risks, opportunities and their actions (decision RO6 of risks-opportunities).
 SHARED_RISKS = ("riesgos", "oportunidades", "acciones_riesgo")
+# External providers and their evaluations (decision EP5 of external-providers).
+SHARED_PROVIDERS = ("proveedores", "evaluaciones_proveedor")
 # (module, legacy free-text name, person link that can fill it)
 LEGACY_NAMES = (("capacitaciones", "personal", "persona_id"),
                 ("auditorias", "auditor", "auditor_id"),
@@ -52,7 +55,7 @@ class LayoutTestCase(unittest.TestCase):
 
 
 class RegistryTestCase(unittest.TestCase):
-    def test_registry_holds_the_twenty_four_modules(self) -> None:
+    def test_registry_holds_the_twenty_six_modules(self) -> None:
         self.assertEqual(SLUGS, set(registry().MODULES))
 
     def test_each_module_maps_to_its_own_policy_resource(self) -> None:
@@ -60,7 +63,7 @@ class RegistryTestCase(unittest.TestCase):
 
         modules = registry().MODULES
         shared = (SHARED_RESOURCE + SHARED_AUDITS + SHARED_OBJECTIVES + SHARED_REVIEWS
-                  + SHARED_RISKS)
+                  + SHARED_RISKS + SHARED_PROVIDERS)
         resources = [m.resource for slug, m in modules.items() if slug not in shared]
         self.assertEqual(len(resources), len(set(resources)))
         self.assertEqual({Resource.COMPETENCE}, {modules[s].resource for s in SHARED_RESOURCE})
@@ -71,14 +74,17 @@ class RegistryTestCase(unittest.TestCase):
                          {modules[s].resource for s in SHARED_REVIEWS})
         self.assertEqual({Resource.RISKS_OPPORTUNITIES},
                          {modules[s].resource for s in SHARED_RISKS})
+        self.assertEqual({Resource.EXTERNAL_PROVIDERS},
+                         {modules[s].resource for s in SHARED_PROVIDERS})
         self.assertFalse({Resource.COMPETENCE, Resource.AUDITS, Resource.QUALITY_OBJECTIVES,
-                          Resource.MANAGEMENT_REVIEW, Resource.RISKS_OPPORTUNITIES}
+                          Resource.MANAGEMENT_REVIEW, Resource.RISKS_OPPORTUNITIES,
+                          Resource.EXTERNAL_PROVIDERS}
                          & set(resources))
 
     def test_declared_fields_match_what_each_service_requires(self) -> None:
         from app.services import (
             audit_findings, audit_programmes, audits, management_reviews, nonconformities,
-            people, process_operations,
+            people, process_operations, providers,
         )
 
         bespoke = {
@@ -96,6 +102,8 @@ class RegistryTestCase(unittest.TestCase):
             # Columns plus ``relacionados``, written to ``proceso_relaciones`` (RG-1).
             "procesos": (process_operations.WRITABLE_FIELDS,
                          process_operations.REQUIRED_ON_CREATE),
+            # Columns plus ``procesos``, written to ``proveedor_procesos`` (EP-1).
+            "proveedores": (providers.PROVIDER_WRITABLE, providers.PROVIDER_REQUIRED),
         }
         for slug, module in registry().MODULES.items():
             with self.subTest(module=slug):
@@ -224,7 +232,8 @@ class ModulesToolTestCase(McpDbCase):
         self.assertEqual("date", fields["fecha_detectada"]["type"])
         self.assertEqual(["mayor", "menor", "observacion"], fields["gravedad"]["allowed"])
         self.assertNotIn("estado", fields)
-        self.assertEqual({"descripcion", "estado", "fecha_detectada", "origen", "gravedad"},
+        self.assertEqual({"descripcion", "estado", "fecha_detectada", "origen", "gravedad",
+                          "proveedor_id"},
                          {f["name"] for f in nc["filters"]})
         filters = {f["name"]: f for f in nc["filters"]}
         self.assertEqual(["auditoria", "cliente", "proceso", "proveedor", "otro"],
