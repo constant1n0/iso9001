@@ -45,6 +45,12 @@ The approved role-by-action matrix (decision D1). Roles may read, write
   write; administrators delete; other roles have no access (decision MR5 of
   ``management-review``). Holding and closing a review are further limited to
   administrators outside the ``mcp`` channel by its service (MR4).
+- External providers and their evaluations: every role reads (purchasing is
+  often done by operative staff); administrators and auditors write and
+  record evaluations; administrators delete (decision EP5 of
+  ``external-providers``). Approving, conditioning and blocking a provider are
+  further limited to administrators outside the ``mcp`` channel by its
+  service (EP2).
 
 Seams: the ``mcp`` channel never deletes and never writes documents (they are
 written in the web only), and token scopes intersect the role.
@@ -92,6 +98,7 @@ class Resource(StrEnum):
     CORRECTIVE_ACTIONS = "corrective_actions"
     QUALITY_OBJECTIVES = "quality_objectives"
     MANAGEMENT_REVIEW = "management_review"
+    EXTERNAL_PROVIDERS = "external_providers"
 
 
 _ALL = frozenset(RoleEnum)
@@ -138,6 +145,7 @@ _MATRIX: dict[Resource, Grant] = {
     Resource.CORRECTIVE_ACTIONS: _OPEN_REGISTER,
     Resource.QUALITY_OBJECTIVES: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
     Resource.MANAGEMENT_REVIEW: Grant(_ADMIN_AUDITOR, _ADMIN_AUDITOR, _ADMIN),
+    Resource.EXTERNAL_PROVIDERS: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
 }
 
 

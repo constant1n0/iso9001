@@ -31,7 +31,8 @@ team), audit programmes (approver), competence records, corrective actions,
 documents, document revisions, quality objectives (owner) and their
 measurements (recorded by), management reviews (attendees and the person who
 held them) and their actions (owner), risks, opportunities and their actions
-(owner), and processes (owner) cite a person through the columns in
+(owner), processes (owner), external providers (who decided their state) and
+their evaluations (evaluator) cite a person through the columns in
 ``REFERENCES`` (decision Q4); their
 services validate such a link with ``reference`` or ``check_reference``, and a
 person they still cite cannot be deleted. Trainings, nonconformities and audits also keep a
@@ -63,9 +64,9 @@ from sqlalchemy.orm import Session
 
 from ..models import (
     AccionCorrectiva, AccionRevision, AccionRiesgo, Auditoria, Capacitacion, CompetenceRecord,
-    Document, DocumentRevision, MedicionObjetivo, NoConformidad, ObjetivoCalidad, Oportunidad,
-    Person, ProcesoOperacion, ProgramaAuditoria, RevisionDireccion, Riesgo, RolResponsabilidad,
-    User, auditoria_equipo, revision_asistentes,
+    Document, DocumentRevision, EvaluacionProveedor, MedicionObjetivo, NoConformidad,
+    ObjetivoCalidad, Oportunidad, Person, ProcesoOperacion, ProgramaAuditoria, Proveedor,
+    RevisionDireccion, Riesgo, RolResponsabilidad, User, auditoria_equipo, revision_asistentes,
 )
 from . import audit, crud, fields, policy
 from .actor import Actor
@@ -105,6 +106,7 @@ REFERENCES = (
     AccionRevision.responsable_id,
     Riesgo.responsable_id, Oportunidad.responsable_id, AccionRiesgo.responsable_id,
     ProcesoOperacion.responsable_id,
+    Proveedor.decidido_por_id, EvaluacionProveedor.evaluador_id,
 )
 
 _READS = crud.Spec(

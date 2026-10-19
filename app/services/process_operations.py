@@ -35,9 +35,10 @@ commit, and an update that changes nothing writes nothing.
 
 A process that quality objectives cite cannot be deleted (``Conflict`` with
 ``CITED_BY_OBJECTIVES``), nor one that risks or opportunities cite
-(``CITED_BY_RISKS``), nor one related to other processes (``HAS_RELATIONS``):
-``delete`` checks all three, and the ``ON DELETE RESTRICT`` foreign keys, which
-SQLite only enforces on request, refuse a citation or relation added after the
+(``CITED_BY_RISKS``), nor one related to other processes (``HAS_RELATIONS``),
+nor one linked to external providers (``LINKED_TO_PROVIDERS``): ``delete``
+checks all four, and the ``ON DELETE RESTRICT`` foreign keys, which SQLite only
+enforces on request, refuse a citation, relation or link added after the
 check. Any other conflict keeps its own message.
 """
 
@@ -55,6 +56,7 @@ from sqlalchemy.orm import Session
 
 from ..models import (
     ObjetivoCalidad, Oportunidad, ProcesoOperacion, Riesgo, TipoProceso, proceso_relaciones,
+    proveedor_procesos,
 )
 from . import audit, crud, fields, people, policy, quality_objectives, risks
 from .actor import Actor
@@ -113,6 +115,10 @@ CITED_BY_RISKS = (
 HAS_RELATIONS = (
     "No se puede eliminar un proceso relacionado con otros procesos; "
     "quita antes esas relaciones."
+)
+LINKED_TO_PROVIDERS = (
+    "No se puede eliminar un proceso vinculado a proveedores externos; "
+    "quítalo antes de esos proveedores."
 )
 
 get = partial(crud.get, SPEC)
@@ -276,8 +282,9 @@ def delete(session: Session, actor: Actor, record_id: int) -> None:
 
     A process cited by quality objectives raises ``Conflict``
     (``CITED_BY_OBJECTIVES``), one cited by risks or opportunities
-    ``CITED_BY_RISKS`` and one with relations ``HAS_RELATIONS``; so does one
-    cited or related after the check, when the flush breaks one of those
+    ``CITED_BY_RISKS``, one with relations ``HAS_RELATIONS`` and one linked to
+    external providers ``LINKED_TO_PROVIDERS``; so does one cited, related or
+    linked after the check, when the flush breaks one of those
     foreign keys and the database names it (PostgreSQL). A failed flush leaves
     the session unusable until rolled back, so nothing can be checked again:
     any other ``Conflict``, or one SQLite does not name, is raised as it came.
@@ -291,6 +298,8 @@ def delete(session: Session, actor: Actor, record_id: int) -> None:
         raise Conflict(CITED_BY_RISKS)
     if _has_relations(session, found.id_proceso):
         raise Conflict(HAS_RELATIONS)
+    if _linked_to_providers(session, found.id_proceso):
+        raise Conflict(LINKED_TO_PROVIDERS)
     try:
         crud.delete(SPEC, session, actor, found.id_proceso)
     except Conflict as exc:
@@ -388,6 +397,11 @@ def _has_relations(session: Session, process_id: int) -> bool:
         or_(pairs.proceso_id == process_id, pairs.relacionado_id == process_id)))))
 
 
+def _linked_to_providers(session: Session, process_id: int) -> bool:
+    return bool(session.scalar(select(exists().where(
+        proveedor_procesos.c.proceso_id == process_id))))
+
+
 def _foreign_key(model: type) -> str:
     """Name of ``model``'s foreign key to processes, as the model declares it."""
     (name,) = {fk.constraint.name for fk in model.__table__.foreign_keys
@@ -398,9 +412,12 @@ def _foreign_key(model: type) -> str:
 OBJECTIVES_FK = _foreign_key(ObjetivoCalidad)
 RISKS_FKS = frozenset({_foreign_key(Riesgo), _foreign_key(Oportunidad)})
 RELATIONS_FKS = frozenset(fk.constraint.name for fk in proceso_relaciones.foreign_keys)
-# The message for each foreign key whose violation means "still cited" or "still related".
+(PROVIDERS_FK,) = {fk.constraint.name for fk in proveedor_procesos.foreign_keys
+                   if fk.column.table is ProcesoOperacion.__table__}
+# The message for each foreign key whose violation means "still cited", "still
+# related" or "still linked".
 _CITED_BY = {OBJECTIVES_FK: CITED_BY_OBJECTIVES, **dict.fromkeys(RISKS_FKS, CITED_BY_RISKS),
-             **dict.fromkeys(RELATIONS_FKS, HAS_RELATIONS)}
+             **dict.fromkeys(RELATIONS_FKS, HAS_RELATIONS), PROVIDERS_FK: LINKED_TO_PROVIDERS}
 
 
 def _violated_constraint(exc: BaseException | None) -> str | None:

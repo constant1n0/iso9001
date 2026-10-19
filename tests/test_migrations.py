@@ -31,7 +31,7 @@ LATER_AUDITED_TABLES = frozenset(
      "acciones_correctivas", "document_revisions", "programas_auditoria",
      "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo",
      "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades",
-     "acciones_riesgo"}
+     "acciones_riesgo", "proveedores", "evaluaciones_proveedor"}
 )
 
 
@@ -1229,6 +1229,104 @@ class MigrationsTestCase(unittest.TestCase):
                     self.assertFalse(columns & {c["name"] for c in inspector.get_columns(table)})
             self.assertEqual([("Compras", "Homologados"), ("Ventas", None)], self._rows(
                 "SELECT proceso, criterio_calidad FROM procesos_operacion ORDER BY id_proceso"))
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+
+    def test_external_providers_guard_their_links_and_downgrade(self) -> None:
+        """EP-1 (d2f4a6c8e1b3): providers, their processes and evaluations; the NC link."""
+        providers, links, evaluations, ncs = ("proveedores", "proveedor_procesos",
+                                              "evaluaciones_proveedor", "no_conformidades")
+        expected = {
+            "fk_proveedores_decidido_por_id_personas": ("personas", "RESTRICT"),
+            "fk_proveedor_procesos_proveedor_id_proveedores": (providers, "RESTRICT"),
+            "fk_proveedor_procesos_proceso_id_procesos_operacion":
+                ("procesos_operacion", "RESTRICT"),
+            "fk_evaluaciones_proveedor_proveedor_id_proveedores": (providers, "RESTRICT"),
+            "fk_evaluaciones_proveedor_evaluador_id_personas": ("personas", "RESTRICT"),
+            "fk_no_conformidades_proveedor_id_proveedores": (providers, "RESTRICT"),
+        }
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision="f5a7c9e1b3d6")
+            with db.engine.begin() as connection:
+                for statement in (
+                    "INSERT INTO personas (nombre) VALUES ('Ana')",
+                    "INSERT INTO procesos_operacion (proceso) VALUES ('Compras')",
+                    "INSERT INTO no_conformidades (descripcion, fecha_detectada, estado, origen) "
+                    "VALUES ('Lote defectuoso', '2026-09-01', 'abierta', 'proveedor')",
+                ):
+                    connection.execute(text(statement))
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            foreign_keys = {fk["name"]: (fk["referred_table"], fk["options"].get("ondelete"))
+                            for table in (providers, links, evaluations, ncs)
+                            for fk in inspector.get_foreign_keys(table)}
+            self.assertLessEqual(expected.items(), foreign_keys.items())
+            self.assertEqual(["proveedor_id", "proceso_id"],
+                             inspector.get_pk_constraint(links)["constrained_columns"])
+            self.assertLessEqual(
+                {f"ix_{providers}_decidido_por_id", f"ix_{links}_proceso_id",
+                 f"ix_{evaluations}_proveedor_id", f"ix_{evaluations}_evaluador_id",
+                 f"ix_{ncs}_proveedor_id"},
+                {index["name"] for table in (providers, links, evaluations, ncs)
+                 for index in inspector.get_indexes(table)})
+            self.assertEqual({f"uq_{providers}_nombre", f"uq_{providers}_nif"},
+                             {c["name"] for c in inspector.get_unique_constraints(providers)})
+            # The nonconformity that predates the link keeps its values and no provider.
+            self.assertEqual([("Lote defectuoso", "proveedor", None)], self._rows(
+                "SELECT descripcion, origen, proveedor_id FROM no_conformidades"))
+            with db.engine.begin() as connection:
+                for statement in (
+                    "INSERT INTO proveedores (nombre, nif, tipo_suministro) "
+                    "VALUES ('Aceros', 'B12345678', 'proceso_externalizado')",
+                    "INSERT INTO proveedores (nombre, tipo_suministro, estado, fecha_estado, "
+                    "decidido_por_id, motivo_estado) VALUES ('Pinturas', 'producto', "
+                    "'bloqueado', '2026-10-01', 1, 'Calidad')",
+                    "INSERT INTO proveedores (nombre, tipo_suministro, estado, fecha_estado) "
+                    "VALUES ('Cartón', 'servicio', 'aprobado', '2026-10-01')",
+                    "INSERT INTO proveedor_procesos (proveedor_id, proceso_id) VALUES (1, 1)",
+                    "INSERT INTO evaluaciones_proveedor (proveedor_id, fecha, evaluador_id, "
+                    "calidad, plazo, servicio, documentacion, fecha_proxima) "
+                    "VALUES (1, '2026-10-01', 1, 1, 5, 3, 4, '2027-04-01')",
+                    "UPDATE no_conformidades SET proveedor_id = 2",
+                ):
+                    connection.execute(text(statement))
+            self.assertEqual([("Aceros", "pendiente", None)], self._rows(
+                "SELECT nombre, estado, fecha_estado FROM proveedores WHERE id = 1"))
+            for statement in (
+                "INSERT INTO proveedores (nombre, tipo_suministro) VALUES ('Aceros', 'producto')",
+                "INSERT INTO proveedores (nombre, nif, tipo_suministro) "
+                "VALUES ('Otro', 'B12345678', 'producto')",
+                "INSERT INTO proveedores (nombre, tipo_suministro) VALUES ('Otro', 'material')",
+                "UPDATE proveedores SET fecha_estado = '2026-10-01' WHERE id = 1",
+                "UPDATE proveedores SET estado = 'aprobado' WHERE id = 1",
+                "UPDATE proveedores SET estado = 'condicionado', fecha_estado = '2026-10-01' "
+                "WHERE id = 1",
+                "UPDATE proveedores SET motivo_estado = NULL WHERE id = 2",
+                "UPDATE proveedores SET decidido_por_id = 99 WHERE id = 2",
+                "INSERT INTO proveedor_procesos (proveedor_id, proceso_id) VALUES (1, 1)",
+                "INSERT INTO proveedor_procesos (proveedor_id, proceso_id) VALUES (1, 99)",
+                "UPDATE evaluaciones_proveedor SET calidad = 0",
+                "UPDATE evaluaciones_proveedor SET plazo = 6",
+                "UPDATE evaluaciones_proveedor SET fecha_proxima = fecha",
+                "UPDATE evaluaciones_proveedor SET evaluador_id = 99",
+                "UPDATE no_conformidades SET origen = 'cliente'",
+                "UPDATE no_conformidades SET proveedor_id = 99",
+                "DELETE FROM proveedores WHERE id = 1",  # evaluated and linked to a process
+                "DELETE FROM proveedores WHERE id = 2",  # named by a nonconformity
+                "DELETE FROM procesos_operacion",
+                "DELETE FROM personas",
+            ):
+                with self.subTest(refused=statement):
+                    with self.assertRaises(IntegrityError):
+                        with db.engine.begin() as connection:
+                            connection.execute(text(statement))
+            downgrade(directory=MIGRATIONS_DIR, revision="f5a7c9e1b3d6")
+            inspector = inspect(db.engine)
+            self.assertFalse({providers, links, evaluations} & set(inspector.get_table_names()))
+            self.assertNotIn("proveedor_id", {c["name"] for c in inspector.get_columns(ncs)})
+            self.assertEqual([("Lote defectuoso", "proveedor")], self._rows(
+                "SELECT descripcion, origen FROM no_conformidades"))
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 

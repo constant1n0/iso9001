@@ -85,10 +85,13 @@ class RecordMetadataMixin:
         )
 
 
-def text_enum(enum_cls: type[enum.Enum], constraint: str) -> db.Enum:
-    """An enum stored as its member names in a text column, checked by ``constraint``."""
+def text_enum(enum_cls: type[enum.Enum], constraint: str, length: int = 20) -> db.Enum:
+    """An enum stored as its member names in a text column, checked by ``constraint``.
+
+    ``length`` is the column's size; it must fit the longest member name.
+    """
     return db.Enum(
-        enum_cls, native_enum=False, length=20, create_constraint=True, name=constraint
+        enum_cls, native_enum=False, length=length, create_constraint=True, name=constraint
     )
 
 
@@ -578,7 +581,19 @@ class GravedadNoConformidad(enum.Enum):
 
 # Modelo para registrar No Conformidades dentro del SGC
 class NoConformidad(RecordMetadataMixin, db.Model):
+    """A nonconformity (ISO 9001 clause 10.2).
+
+    One whose origin is ``proveedor`` may name the external provider that caused
+    it (``proveedor_id``, decision EP4 of ``external-providers``); the CHECK refuses
+    a provider with any other origin, and a provider named here cannot be deleted.
+    """
+
     __tablename__ = 'no_conformidades'
+    __table_args__ = (
+        db.CheckConstraint("proveedor_id IS NULL OR origen = 'proveedor'",
+                           name='ck_no_conformidades_proveedor'),
+    )
+
     id = db.Column(db.Integer, primary_key=True)
     descripcion = db.Column(db.Text, nullable=False)
     fecha_detectada = db.Column(db.Date, nullable=False, default=datetime.utcnow)
@@ -597,6 +612,13 @@ class NoConformidad(RecordMetadataMixin, db.Model):
     accion_correctiva = db.Column(db.Text)  # legacy free text (decision N6)
     fecha_cierre = db.Column(db.Date)  # set on closing or cancelling, cleared on reopening
     motivo_cancelacion = db.Column(db.Text)
+    proveedor_id = db.Column(
+        db.Integer,
+        db.ForeignKey('proveedores.id', name='fk_no_conformidades_proveedor_id_proveedores',
+                      ondelete='RESTRICT'),
+        nullable=True,
+        index=True,
+    )
 
 
 class ResultadoVerificacion(enum.Enum):
@@ -1467,6 +1489,180 @@ class AccionRiesgo(RecordMetadataMixin, db.Model):
 
     def __repr__(self):
         return f'<AccionRiesgo {self.id} {self.estado.name if self.estado else None}>'
+
+class TipoSuministro(enum.Enum):
+    """What an external provider supplies (ISO 9001 clause 8.4.1).
+
+    Decision EP1 of ``external-providers``; stored by name, shown by value.
+    """
+
+    producto = 'Producto'
+    servicio = 'Servicio'
+    proceso_externalizado = 'Proceso externalizado'
+
+
+class EstadoProveedor(enum.Enum):
+    """Whether an external provider may supply (decisions EP1 and EP2).
+
+    A new provider starts ``pendiente``; only the administrators' decisions in
+    ``services.providers`` (``approve``, ``condition``, ``block``) move it.
+    """
+
+    pendiente = 'Pendiente'
+    aprobado = 'Aprobado'
+    condicionado = 'Condicionado'
+    bloqueado = 'Bloqueado'
+
+
+class ResultadoEvaluacion(enum.Enum):
+    """The result an evaluation's average score gives (decision EP3); computed, never stored."""
+
+    apto = 'Apto'
+    condicionado = 'Condicionado'
+    no_apto = 'No apto'
+
+
+# A pending provider holds no decision; any other state has its date, and a
+# conditioned or blocked one its reason. The deciding person may be missing
+# when the administrator has no person record.
+_PROVIDER_DECISION = (
+    "(estado = 'pendiente' AND fecha_estado IS NULL AND decidido_por_id IS NULL "
+    "AND motivo_estado IS NULL) OR "
+    "(estado = 'aprobado' AND fecha_estado IS NOT NULL) OR "
+    "(estado IN ('condicionado', 'bloqueado') AND fecha_estado IS NOT NULL "
+    "AND motivo_estado IS NOT NULL)"
+)
+
+# The processes an external provider affects (decision EP1); a plain table, not
+# audited itself: changes are recorded on the provider's own rows (``procesos``).
+# Deleting a provider removes its links (``services.providers``); a process with
+# providers cannot be deleted (``ON DELETE RESTRICT``).
+proveedor_procesos = db.Table(
+    'proveedor_procesos',
+    db.Column('proveedor_id', db.Integer, nullable=False),
+    db.Column('proceso_id', db.Integer, nullable=False),
+    db.PrimaryKeyConstraint('proveedor_id', 'proceso_id', name='pk_proveedor_procesos'),
+    db.ForeignKeyConstraint(
+        ['proveedor_id'], ['proveedores.id'],
+        name='fk_proveedor_procesos_proveedor_id_proveedores', ondelete='RESTRICT',
+    ),
+    db.ForeignKeyConstraint(
+        ['proceso_id'], ['procesos_operacion.id_proceso'],
+        name='fk_proveedor_procesos_proceso_id_procesos_operacion', ondelete='RESTRICT',
+    ),
+    db.Index('ix_proveedor_procesos_proceso_id', 'proceso_id'),
+)
+
+
+class Proveedor(RecordMetadataMixin, db.Model):
+    """An external provider of products, services or processes (ISO 9001 clause 8.4).
+
+    Decision EP1 of ``external-providers``: a unique name, a tax id (``nif``,
+    unique when given), contact details, what it supplies, the processes it
+    affects, the selection criteria, the next evaluation date and notes. Its
+    state, with the date, the deciding person and the reason, changes only by
+    an administrator's decision (EP2, CHECK ``ck_proveedores_decision``). A
+    provider with evaluations or nonconformities cannot be deleted, nor can the
+    person who decided its state.
+    """
+
+    __tablename__ = 'proveedores'
+    __table_args__ = (
+        db.UniqueConstraint('nombre', name='uq_proveedores_nombre'),
+        db.UniqueConstraint('nif', name='uq_proveedores_nif'),
+        db.CheckConstraint(_PROVIDER_DECISION, name='ck_proveedores_decision'),
+        db.ForeignKeyConstraint(
+            ['decidido_por_id'], ['personas.id'],
+            name='fk_proveedores_decidido_por_id_personas', ondelete='RESTRICT',
+        ),
+        db.Index('ix_proveedores_decidido_por_id', 'decidido_por_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(200), nullable=False)
+    nif = db.Column(db.String(20))  # upper case, without spaces or hyphens
+    contacto = db.Column(db.String(150))
+    email = db.Column(db.String(255))  # stored lower-cased
+    telefono = db.Column(db.String(30))
+    tipo_suministro = db.Column(
+        text_enum(TipoSuministro, 'ck_proveedores_tipo_suministro', length=30), nullable=False
+    )
+    descripcion_suministro = db.Column(db.Text)
+    criterios_seleccion = db.Column(db.Text)
+    estado = db.Column(
+        text_enum(EstadoProveedor, 'ck_proveedores_estado'),
+        nullable=False,
+        default=EstadoProveedor.pendiente,
+        server_default=EstadoProveedor.pendiente.name,
+    )
+    fecha_estado = db.Column(db.Date)
+    decidido_por_id = db.Column(db.Integer, nullable=True)
+    motivo_estado = db.Column(db.Text)
+    fecha_proxima_evaluacion = db.Column(db.Date)
+    notas = db.Column(db.Text)
+
+    # One-way on purpose, like ``Person.roles``: a back-reference would mark
+    # processes as changed (and unaudited) whenever a provider's links change.
+    procesos = db.relationship(
+        'ProcesoOperacion',
+        secondary=proveedor_procesos,
+        order_by='ProcesoOperacion.proceso',
+        lazy='selectin',
+    )
+
+    @property
+    def proceso_ids(self) -> list[int]:
+        """Ids of the linked processes, ascending."""
+        return sorted(process.id_proceso for process in self.procesos)
+
+    def __repr__(self):
+        return f'<Proveedor {self.id} {self.nombre}>'
+
+
+EVALUATION_SCORES = ('calidad', 'plazo', 'servicio', 'documentacion')
+
+
+class EvaluacionProveedor(RecordMetadataMixin, db.Model):
+    """A scored evaluation of an external provider (ISO 9001 clause 8.4.1, decision EP3).
+
+    Quality, delivery time, service and documentation are scored from 1 to 5;
+    the average and its result are computed (``services.providers``), never
+    stored. ``fecha_proxima``, the next evaluation, comes after ``fecha``.
+    """
+
+    __tablename__ = 'evaluaciones_proveedor'
+    __table_args__ = (
+        *(db.CheckConstraint(f'{score} BETWEEN 1 AND 5',
+                             name=f'ck_evaluaciones_proveedor_{score}')
+          for score in EVALUATION_SCORES),
+        db.CheckConstraint('fecha_proxima IS NULL OR fecha_proxima > fecha',
+                           name='ck_evaluaciones_proveedor_fecha_proxima'),
+        db.ForeignKeyConstraint(
+            ['proveedor_id'], ['proveedores.id'],
+            name='fk_evaluaciones_proveedor_proveedor_id_proveedores', ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['evaluador_id'], ['personas.id'],
+            name='fk_evaluaciones_proveedor_evaluador_id_personas', ondelete='RESTRICT',
+        ),
+        db.Index('ix_evaluaciones_proveedor_proveedor_id', 'proveedor_id'),
+        db.Index('ix_evaluaciones_proveedor_evaluador_id', 'evaluador_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    proveedor_id = db.Column(db.Integer, nullable=False)
+    fecha = db.Column(db.Date, nullable=False)
+    evaluador_id = db.Column(db.Integer, nullable=False)
+    calidad = db.Column(db.Integer, nullable=False)
+    plazo = db.Column(db.Integer, nullable=False)
+    servicio = db.Column(db.Integer, nullable=False)
+    documentacion = db.Column(db.Integer, nullable=False)
+    comentario = db.Column(db.Text)
+    fecha_proxima = db.Column(db.Date)
+
+    def __repr__(self):
+        return f'<EvaluacionProveedor {self.proveedor_id} {self.fecha}>'
+
 
 # Modelo para Control Documental
 class DocumentCategory(enum.Enum):
