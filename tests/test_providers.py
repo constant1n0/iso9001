@@ -721,13 +721,14 @@ class PerformanceAttentionTestCase(Helpers, ServiceBase):
         self.assertEqual(pv().Performance(evaluaciones=2, puntuacion_media=Decimal("3.63"),
                                           ultima_puntuacion=Decimal("2.25"),
                                           ultimo_resultado=ResultadoEvaluacion.no_apto,
+                                          ultima_fecha=date(2026, 9, 1),
                                           no_conformidades=4, no_conformidades_abiertas=2),
                          found)
         self.assertEqual(Decimal("3.63"), pv().average_score(db.session, provider.id))
         empty = pv().performance(db.session, actor(OPERATIVO), self.provider(nombre="Nuevo").id)
-        self.assertEqual((0, None, None, None, 0, 0),
+        self.assertEqual((0, None, None, None, None, 0, 0),
                          (empty.evaluaciones, empty.puntuacion_media, empty.ultima_puntuacion,
-                          empty.ultimo_resultado, empty.no_conformidades,
+                          empty.ultimo_resultado, empty.ultima_fecha, empty.no_conformidades,
                           empty.no_conformidades_abiertas))
         self.refused(errors().NotFound, pv().performance, actor(OPERATIVO), 999)
         self.refused(errors().PermissionDenied, pv().performance,

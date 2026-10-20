@@ -31,10 +31,11 @@ from test_nonconformity_service import ServiceBase, actor, errors
 from app.extensions import db
 from app.models import (
     AccionCorrectiva, Auditoria, AuditoriaIndicador, AuditLog, Capacitacion,
-    EstadoAuditoriaEnum, EstadoNoConformidad, EstadoObjetivo, FrecuenciaMedicion,
-    GravedadNoConformidad, HallazgoAuditoria, MedicionObjetivo, Mejora, NoConformidad,
-    ObjetivoCalidad, Oportunidad, OrigenNoConformidad, ParteInteresada, Person,
-    ResultadoVerificacion, Riesgo, RoleEnum, SatisfaccionCliente, SentidoObjetivo, TipoHallazgo,
+    EstadoAuditoriaEnum, EstadoNoConformidad, EstadoObjetivo, EstadoProveedor,
+    EvaluacionProveedor, FrecuenciaMedicion, GravedadNoConformidad, HallazgoAuditoria,
+    MedicionObjetivo, Mejora, NoConformidad, ObjetivoCalidad, Oportunidad, OrigenNoConformidad,
+    ParteInteresada, Person, Proveedor, ResultadoVerificacion, Riesgo, RoleEnum,
+    SatisfaccionCliente, SentidoObjetivo, TipoHallazgo,
 )
 from app.services.actor import Actor
 
@@ -714,6 +715,99 @@ class InputsTestCase(Helpers, ServiceBase):
                           found["mejoras"]["lista"][0]["fecha"]))
         self.assertEqual({"total": 2, "horas": 4, "temas": ["Calidad", "Seguridad"]},
                          found["capacitaciones"])
+
+    def test_providers_by_state_evaluations_unsuitable_nonconformities_and_overdue(
+            self) -> None:
+        """9.3.2 c and 9.1.3 f: the providers' performance in the period (EP-3)."""
+        decided = {"fecha_estado": date(2026, 1, 10)}
+        ids = {}
+        for nombre, estado, values in (
+            ("Aceros", EstadoProveedor.aprobado,
+             decided | {"fecha_proxima_evaluacion": date(2026, 6, 15)}),
+            ("Bombas", EstadoProveedor.condicionado,
+             decided | {"motivo_estado": "Plazos", "fecha_proxima_evaluacion": date(2026, 7, 15)}),
+            ("Calibraciones", EstadoProveedor.bloqueado,
+             decided | {"motivo_estado": "Lote", "fecha_proxima_evaluacion": date(2026, 5, 1)}),
+            ("Docks", EstadoProveedor.pendiente, {}),
+            ("Envases", EstadoProveedor.aprobado,
+             decided | {"fecha_proxima_evaluacion": date(2026, 6, 30)}),
+        ):
+            ids[nombre] = self.insert(Proveedor, nombre=nombre, tipo_suministro="producto",
+                                      estado=estado, **values)
+        evaluator = self.person()
+        for nombre, fecha, scores in (
+            ("Aceros", date(2026, 4, 10), (4, 4, 4, 4)),  # 4.00 apto
+            ("Aceros", date(2026, 6, 30), (2, 2, 2, 3)),  # 2.25 no apto, last day
+            ("Bombas", date(2026, 5, 5), (3, 3, 3, 2)),  # 2.75 condicionado
+            ("Calibraciones", date(2026, 5, 20), (2, 2, 2, 2)),  # 2.00 no apto
+            ("Calibraciones", date(2026, 6, 1), (2, 2, 2, 3)),  # 2.25 no apto, the latest
+            ("Envases", date(2026, 3, 31), (1, 1, 1, 1)),  # outside the period
+            ("Envases", date(2026, 7, 1), (1, 1, 1, 1)),
+        ):
+            self.insert(EvaluacionProveedor, proveedor_id=ids[nombre], fecha=fecha,
+                        evaluador_id=evaluator, **dict(zip(
+                            ("calidad", "plazo", "servicio", "documentacion"), scores)))
+        for nombre, fecha, origen in (
+            ("Aceros", date(2026, 4, 15), OrigenNoConformidad.proveedor),
+            ("Aceros", date(2026, 6, 30), OrigenNoConformidad.proveedor),
+            ("Calibraciones", date(2026, 5, 1), OrigenNoConformidad.proveedor),
+            (None, date(2026, 5, 2), OrigenNoConformidad.proveedor),
+            (None, date(2026, 5, 3), OrigenNoConformidad.cliente),
+            ("Aceros", date(2026, 3, 31), OrigenNoConformidad.proveedor),
+            ("Bombas", date(2026, 7, 1), OrigenNoConformidad.proveedor),
+        ):
+            self.insert(NoConformidad, descripcion="Lote defectuoso", fecha_detectada=fecha,
+                        origen=origen, proveedor_id=ids.get(nombre))
+        found = self.inputs()["proveedores"]
+        json.dumps(found)  # JSON-safe, as frozen into ``datos_entrada``
+        self.assertEqual({
+            "por_estado": {"pendiente": 1, "aprobado": 2, "condicionado": 1, "bloqueado": 1},
+            # Not blocked and due before the cut-off (30 June): Aceros only.
+            "evaluaciones_vencidas": 1,
+            # (16 + 9 + 11 + 8 + 9) / 20 = 2.65
+            "evaluaciones": {"total": 5, "media": "2.65",
+                             "por_resultado": {"apto": 1, "condicionado": 1, "no_apto": 3}},
+            "no_aptos": 2,
+            "no_aptos_lista": [
+                {"id": ids["Aceros"], "nombre": "Aceros", "fecha": "2026-06-30",
+                 "puntuacion": "2.25", "estado": "aprobado"},
+                {"id": ids["Calibraciones"], "nombre": "Calibraciones", "fecha": "2026-06-01",
+                 "puntuacion": "2.25", "estado": "bloqueado"},
+            ],
+            "no_conformidades": {
+                "total": 4, "sin_proveedor": 1,
+                "por_proveedor": [{"id": ids["Aceros"], "nombre": "Aceros", "total": 2},
+                                  {"id": ids["Calibraciones"], "nombre": "Calibraciones",
+                                   "total": 1}],
+            },
+        }, found)
+        # Cut off at today (12 October) when the period ends later: Bombas and Envases too.
+        later = mr().inputs(db.session, CLI, date(2026, 4, 1), date(2026, 12, 31),
+                            today=TODAY)["proveedores"]
+        self.assertEqual((3, 6), (later["evaluaciones_vencidas"],
+                                  later["evaluaciones"]["total"]))
+        empty = mr().inputs(db.session, CLI, date(2020, 1, 1), date(2020, 1, 31),
+                            today=TODAY)["proveedores"]
+        self.assertEqual(({"total": 0, "media": None,
+                           "por_resultado": {"apto": 0, "condicionado": 0, "no_apto": 0}},
+                          0, [], {"total": 0, "sin_proveedor": 0, "por_proveedor": []}),
+                         (empty["evaluaciones"], empty["no_aptos"], empty["no_aptos_lista"],
+                          empty["no_conformidades"]))
+
+    def test_the_providers_nonconformities_list_the_ten_most_cited(self) -> None:
+        for number in range(mr().LIST_LIMIT + 1):
+            provider = self.insert(Proveedor, nombre=f"Proveedor {number:02d}",
+                                   tipo_suministro="producto")
+            for _ in range(1 + (number == 3)):
+                self.insert(NoConformidad, descripcion="Lote", fecha_detectada=date(2026, 5, 1),
+                            origen=OrigenNoConformidad.proveedor, proveedor_id=provider)
+        cited = self.inputs()["proveedores"]["no_conformidades"]
+        self.assertEqual(mr().LIST_LIMIT + 2, cited["total"])
+        self.assertEqual(mr().LIST_LIMIT, len(cited["por_proveedor"]))
+        self.assertEqual(("Proveedor 03", 2), (cited["por_proveedor"][0]["nombre"],
+                                              cited["por_proveedor"][0]["total"]))
+        self.assertEqual(["Proveedor 00", "Proveedor 01", "Proveedor 02", "Proveedor 04"],
+                         [row["nombre"] for row in cited["por_proveedor"][1:5]])
 
     def test_the_period_and_the_caller_are_checked_and_long_texts_are_cut(self) -> None:
         self.insert(Mejora, no_conformidad="x" * 300, fecha_implementacion=datetime(2026, 5, 1))

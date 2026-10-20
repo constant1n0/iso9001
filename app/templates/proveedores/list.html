@@ -21,6 +21,7 @@
 {% block crumb %}Calidad · Proveedores{% endblock %}
 {% block content %}
 {% call page_header('Cláusula 8.4 · Procesos, productos y servicios externos', 'Proveedores') %}
+    <a class="btn" href="{{ url_for('proveedor.export_pdf') }}" target="_blank" rel="noopener">PDF</a>
     {% if can('create', 'external_providers') %}
     <a class="btn btn--primary" href="{{ url_for('proveedor.new_provider') }}">+ Nuevo proveedor</a>
     {% endif %}

@@ -36,6 +36,13 @@ evaluations; administrators delete and decide the state (policy
   is a 404. The evaluator picker offers active people, plus the stored one.
 - A provider with evaluations or nonconformities offers no delete; the service
   refuses it anyway and the reason is flashed on its page.
+- The approved-providers PDF (``/pdf``, task EP-3), which every role reads from
+  the list, counts the providers by state, the overdue evaluations and the
+  average score of every evaluation of the approved providers; it lists the
+  approved and conditioned providers, then the pending and blocked ones, each by
+  name with its supply, processes, decision, latest evaluation, average, next
+  evaluation and open nonconformities. One that cannot be rendered is logged and
+  flashed on the list.
 
 A service ``ValidationError`` or ``Conflict`` is rolled back and flashed on the
 re-rendered form, which keeps what was typed; a refused decision or delete is
@@ -43,9 +50,10 @@ flashed on the provider's page.
 """
 
 from collections.abc import Callable
+from datetime import date
 from typing import Any
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from flask_login import login_required
 
@@ -60,6 +68,7 @@ from ..services import nonconformities, people, process_operations
 from ..services import providers as pv
 from ..services.actor import Actor
 from ..services.errors import NotFound, PermissionDenied
+from ..utils.pdf import pdf_response, render_pdf
 from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
 from .auditoria_routes import committed
@@ -75,6 +84,11 @@ EVALUATION_FIELDS = ('fecha', 'evaluador_id', 'calidad', 'plazo', 'servicio', 'd
                      'comentario', 'fecha_proxima')
 FLAGS = {'1': True, '0': False}
 YES_NO = [('1', 'Sí'), ('0', 'No')]
+# The PDF's two tables (EP-3): the list an auditor asks for, then the rest.
+LISTED = (EstadoProveedor.aprobado, EstadoProveedor.condicionado)
+COUNTED = {EstadoProveedor.aprobado: 'Aprobados', EstadoProveedor.condicionado: 'Condicionados',
+           EstadoProveedor.pendiente: 'Pendientes', EstadoProveedor.bloqueado: 'Bloqueados'}
+PDF_ERROR = 'Error al generar el PDF de los proveedores.'
 # The administrators' decisions (EP2): path, the state it leads to, button and flash.
 DECISIONS = (
     ('aprobar', EstadoProveedor.aprobado, 'Aprobar', 'Proveedor aprobado.'),
@@ -129,6 +143,48 @@ def list_providers() -> ResponseReturnValue:
         desempeno=pv.performances(db.session, actor, [p.id for p in found]),
         vencidas={p.id for p in found if pv.evaluacion_vencida(p, today=today)},
         campos=fields, elegidos=selected, nombre=nombre, applied=len(chosen))
+
+
+# -- the approved providers as a PDF ---------------------------------------------------
+
+
+def _report(actor: Actor, today: date) -> dict[str, Any]:
+    """The PDF's context on ``today``: every provider by name, split by ``LISTED``.
+
+    ``recuentos`` counts the providers by state (``COUNTED``), ``vencidas``
+    holds the overdue ones and ``media_aprobados`` is the mean of every
+    evaluation of the approved providers (``None`` without any).
+    """
+    found = pv.providers.list_(db.session, actor)
+    approved = {p.id for p in found if p.estado is EstadoProveedor.aprobado}
+    return dict(
+        hoy=today,
+        listados=[p for p in found if p.estado in LISTED],
+        otros=[p for p in found if p.estado not in LISTED],
+        recuentos=[(label, sum(p.estado is estado for p in found))
+                   for estado, label in COUNTED.items()],
+        total=len(found),
+        vencidas={p.id for p in found if pv.evaluacion_vencida(p, today=today)},
+        media_aprobados=pv.average_of(
+            e for e in pv.evaluations.list_(db.session, actor) if e.proveedor_id in approved),
+        desempeno=pv.performances(db.session, actor, [p.id for p in found]),
+    )
+
+
+@bp.route('/pdf', methods=['GET'])
+@login_required
+@require_permission('read', RESOURCE)
+def export_pdf() -> ResponseReturnValue:
+    """The approved providers as a PDF; one that cannot be rendered returns to the list."""
+    today = local_today()
+    context = _report(current_actor(), today)
+    try:
+        pdf = render_pdf('proveedores/pdf_template.html', **context)
+    except Exception:
+        current_app.logger.exception('Error generating the providers PDF')
+        flash(PDF_ERROR, 'danger')
+        return redirect(url_for('proveedor.list_providers'))
+    return pdf_response(pdf, f'proveedores_{today:%Y-%m-%d}.pdf')
 
 
 # -- a provider ------------------------------------------------------------------------

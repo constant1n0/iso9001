@@ -233,6 +233,28 @@ class ListTestCase(ProviderScreensBase):
         self.assertNotIn("Evaluación vencida", self.row(f"{BASE}/", good))
 
 
+    def test_the_latest_result_agrees_with_latest_evaluation_when_dates_are_shared(
+            self) -> None:
+        """Two evaluations on the same date: the higher id is the latest everywhere."""
+        first, second = self.provider("Aceros del Norte"), self.provider("Bombas Iberia")
+        self.evaluate(first, GOOD)
+        self.evaluate(first, BAD)
+        self.evaluate(second, BAD)
+        self.evaluate(second, GOOD)
+        with self.app.app_context():
+            latest = {pid: providers.resultado(providers.puntuacion(
+                providers.latest_evaluation(db.session, pid))) for pid in (first, second)}
+        self.assertEqual({first: "no_apto", second: "apto"},
+                         {pid: found.name for pid, found in latest.items()})
+        self.login(OPERATIVO)
+        self.assertIn("No apto 2,25", self.row(f"{BASE}/", first))
+        self.assertIn("Apto 4,00", self.row(f"{BASE}/", second))
+        self.assertEqual({first}, set(self.rows(f"{BASE}/?ultimo_resultado=no_apto")))
+        self.assertEqual({second}, set(self.rows(f"{BASE}/?ultimo_resultado=apto")))
+        page = self.text(self.block(self.html(f"{BASE}/{first}"), "desempeno"))
+        self.assertIn("No apto", page)
+
+
 class AccessTestCase(ProviderScreensBase):
     def test_every_role_reads_auditors_write_and_only_administrators_decide(self) -> None:
         pid = self.provider()
@@ -281,6 +303,32 @@ class AccessTestCase(ProviderScreensBase):
         self.assertEqual(404, self.client.post(
             f"{BASE}/{cited}/evaluaciones/{eid}/eliminar").status_code)
         self.assertEqual(1, self.count(EvaluacionProveedor))
+
+    def test_a_decision_on_an_unknown_provider_is_404_and_one_keeping_the_state_is_refused(
+            self) -> None:
+        """The service refuses a decision that keeps the state (``ALREADY_IN_STATE``):
+        nothing is written, so the date, decider and reason of the decision stay."""
+        pid = self.provider()
+        self.login(ADMIN)
+        for decision in sorted(DECISIONS):
+            with self.subTest(decision=decision):
+                self.assertEqual(404, self.client.post(f"{BASE}/999/{decision}",
+                                                       data={"motivo": "Motivo"}).status_code)
+        for decision, path, estado, motivo in (
+                ("approve", "aprobar", EstadoProveedor.aprobado, "Homologado"),
+                ("condition", "condicionar", EstadoProveedor.condicionado, "Plazos"),
+                ("block", "bloquear", EstadoProveedor.bloqueado, "Lote rechazado")):
+            with self.subTest(repeated=path):
+                self.decide(pid, decision, motivo)
+                before = self.audit_rows()
+                self.post(f"{BASE}/{pid}/{path}", {"motivo": "Otra vez"},
+                          expect=f"{BASE}/{pid}")
+                self.assertIn(("danger", providers.ALREADY_IN_STATE.format(
+                    estado=estado.value.lower())), self.flashes())
+                found = self.load(Proveedor, pid)
+                self.assertEqual((estado, motivo, TODAY, before),
+                                 (found.estado, found.motivo_estado, found.fecha_estado,
+                                  self.audit_rows()))
 
     def test_the_navigation_links_the_register_with_its_clause(self) -> None:
         for role in RoleEnum:

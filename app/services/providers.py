@@ -67,8 +67,10 @@ changed), the provider takes the new one, and keeps its own when none remains.
 A write that leaves that date alone keeps one edited on the provider. Filters:
 ``proveedor_id``, ``evaluador_id``; the latest first.
 
-``latest_evaluation``, ``average_score``, ``performance``, ``performances`` and
-``attention`` read what EP-2's pages and dashboard show. Like every service this
+``latest_evaluation``, ``average_score``, ``average_of``, ``performance``,
+``performances`` and ``attention`` read what EP-2's pages and dashboard and EP-3's
+PDF show; ``overdue`` is the overdue condition the management review applies on
+its cut-off. Like every service this
 module flushes and never commits, writes an audit row next to each change, and an
 update that changes nothing writes nothing. Rows that change are locked
 (``FOR UPDATE``).
@@ -249,6 +251,15 @@ def _mean(total: int, evaluations: int) -> Decimal:
         TWO_PLACES, ROUND_HALF_UP)
 
 
+def average_of(evaluations: Iterable[Any]) -> Decimal | None:
+    """The mean score of every one of ``evaluations`` (two decimals), or ``None`` without any.
+
+    Pooled: each evaluation weighs the same, whichever provider it rates.
+    """
+    found = list(evaluations)
+    return _mean(sum(map(_score_total, found)), len(found)) if found else None
+
+
 def resultado(score: Decimal | int | float) -> ResultadoEvaluacion:
     """The band of a score: ``apto`` from 3.5, ``condicionado`` from 2.5, else ``no_apto``."""
     if score >= APTO_MIN:
@@ -401,8 +412,11 @@ def _snapshot(found: Proveedor) -> dict[str, Any]:
     return audit.snapshot(found) | {PROCESSES: found.proceso_ids}
 
 
-def _overdue(today: date) -> Any:
-    """Due for evaluation before ``today`` and not blocked; never NULL."""
+def overdue(today: date) -> Any:
+    """SQL: due for evaluation before ``today`` and not blocked; never NULL.
+
+    ``evaluacion_vencida`` in Python; the management review judges it on its cut-off.
+    """
     return and_(Proveedor.estado != EstadoProveedor.bloqueado,
                 Proveedor.fecha_proxima_evaluacion.is_not(None),
                 Proveedor.fecha_proxima_evaluacion < today)
@@ -436,7 +450,7 @@ def _provider_conditions(nombre: str | None = None, estado: Any = None,
         linked = Proveedor.procesos.any()
         where.append(linked if _flag(con_procesos, "con_procesos") else not_(linked))
     if evaluacion_vencida is not None:
-        late = _overdue(_today(today))
+        late = overdue(_today(today))
         where.append(late if _flag(evaluacion_vencida, "evaluacion_vencida") else not_(late))
     if ultimo_resultado:
         where.append(_result_condition(_member(ultimo_resultado, ResultadoEvaluacion,
@@ -683,6 +697,7 @@ class Performance:
     puntuacion_media: Decimal | None  # over every evaluation
     ultima_puntuacion: Decimal | None
     ultimo_resultado: ResultadoEvaluacion | None
+    ultima_fecha: date | None  # of the latest evaluation
     no_conformidades: int
     no_conformidades_abiertas: int
 
@@ -720,9 +735,9 @@ def performances(session: Session, actor: Actor,
         total, opened = cited.get(provider_id, (0, 0))
         found[provider_id] = Performance(
             evaluaciones=len(evaluations),
-            puntuacion_media=_mean(sum(map(_score_total, evaluations)), len(evaluations))
-            if evaluations else None,
+            puntuacion_media=average_of(evaluations),
             ultima_puntuacion=score, ultimo_resultado=None if score is None else resultado(score),
+            ultima_fecha=evaluations[0].fecha if evaluations else None,
             no_conformidades=total, no_conformidades_abiertas=int(opened),
         )
     return found
@@ -746,7 +761,7 @@ def attention(session: Session, actor: Actor, *, today: date) -> dict[str, list[
         return list(session.scalars(select(Proveedor).where(*where).order_by(*order)))
 
     return {
-        "evaluaciones_vencidas": found(_overdue(today), order=(
+        "evaluaciones_vencidas": found(overdue(today), order=(
             Proveedor.fecha_proxima_evaluacion, Proveedor.id)),
         "bloqueados_con_procesos": found(Proveedor.estado == EstadoProveedor.bloqueado,
                                          Proveedor.procesos.any()),

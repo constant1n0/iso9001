@@ -60,6 +60,7 @@ bounded: the page is clamped to `1..crud.MAX_PAGE` and the size to
 | `risks.py` | Risks, opportunities and their actions: assessment bands, residual assessment, overdue reviews and actions, effectiveness, the heat map and the dashboard's flags (see below) |
 | `quality_objectives.py` | Quality objectives and their measurements, target checks and overdue measurements (see below) |
 | `management_reviews.py` | Management reviews, their inputs drawn from the registers, holding and closing, and their actions (see below) |
+| `providers.py` | External providers and their evaluations: state decisions, scores and results, the next-evaluation rule, performance and the dashboard's flags (see below) |
 | `people.py`, `competence.py` | People (each linked to at most one user and holding QMS roles), and competence required per role and demonstrated per person, with the required-versus-demonstrated matrix |
 | `crud.py` | Generic helper driven by a `Spec` (model, resource, fields, ordering) |
 | `training.py`, `satisfaction.py`, `stakeholders.py`, `improvements.py` | Plain HTML registers on `crud` |
@@ -97,6 +98,7 @@ then the scopes, then the role.
 | People; competence requirements and records | all roles | ADMIN, AUDITOR | ADMIN |
 | Quality objectives and their measurements | all roles | ADMIN, AUDITOR | ADMIN |
 | Management reviews and their actions | ADMIN, AUDITOR | ADMIN, AUDITOR (hold and close: ADMIN, never `mcp`) | ADMIN |
+| External providers and their evaluations (`EXTERNAL_PROVIDERS`) | all roles | ADMIN, AUDITOR (approve, condition and block: ADMIN, never `mcp`) | ADMIN |
 | Users (web screens; no MCP module); audit log (policy only, no screen or tool) | ADMIN, AUDITOR | ADMIN | nobody |
 | API tokens (list, issue, revoke) | ADMIN | ADMIN | nobody |
 
@@ -383,6 +385,14 @@ Decisions MR1-MR6 of `management-review` (ISO 9001 clause 9.3).
   - Earlier reviews' actions come from every review dated before this one,
     drafts included. Objectives overlapping the period, except cancelled
     ones, are judged with `quality_objectives.summary` on the cut-off.
+  - The `proveedores` section (9.1.3 f, EP-3 of `external-providers`) counts
+    the providers by their current state (no history is kept), those overdue
+    for evaluation on the cut-off (`providers.overdue`), the evaluations dated
+    in the period with their pooled mean (`providers.average_of`) and results,
+    the providers rated `no_apto` in the period, and the nonconformities with
+    the `proveedor` origin detected in the period, the most cited providers
+    first. Reviews held before EP-3 froze no such section, and the screens
+    (`input_sections`) show it only when it is there.
   - `preview` (read grant) and `preview_of` (no check, for adapters that
     already read the review) give the frozen inputs of a held review and the
     live ones of a draft. "No data" is SQL NULL, so the CHECK that a draft
@@ -424,6 +434,72 @@ Decisions MR1-MR6 of `management-review` (ISO 9001 clause 9.3).
   minutes PDF (`/revisiones-direccion/<id>/pdf`); the MCP modules
   `revisiones_direccion` and `acciones_revision` (no deletes, holds or
   closes).
+
+## External providers
+
+Decisions EP1-EP6 of `external-providers` (ISO 9001 clause 8.4).
+`providers` offers two registers, `providers` (`Proveedor`) and `evaluations`
+(`EvaluacionProveedor`), which share the `EXTERNAL_PROVIDERS` resource.
+Services never read the clock: adapters pass `today`.
+
+- **EP1, the provider**: `nombre` is unique (`NAME_TAKEN`) and `nif` unique
+  when given (`NIF_TAKEN`), stored upper case without spaces or hyphens, 8 to
+  10 letters or digits (`BAD_NIF`). `tipo_suministro` is `producto`,
+  `servicio` or `proceso_externalizado`. `procesos` is a list of process ids
+  that replaces the links (`proveedor_procesos`); that table has no audit row
+  of its own, so every audit row of a provider carries `procesos`.
+- **EP2, the state**: a new provider is `pendiente`. `create` and `update`
+  never write `estado`, `fecha_estado`, `decidido_por_id` or
+  `motivo_estado`. `approve` (optional reason), `condition` and `block`
+  (reason required, `REASON_REQUIRED`) record `today`, the acting user's
+  person (`people.of_user`, `None` without one) and the reason. They need an
+  administrator (`may_decide`) and are refused on the `mcp` channel. A
+  decision that keeps the state is refused (`ALREADY_IN_STATE`) and writes
+  nothing. There is no way back to `pendiente`: a decision is corrected by
+  another. A CHECK constraint (`ck_proveedores_decision`) ties the decision
+  columns to the state.
+- **EP3, evaluations**: `calidad`, `plazo`, `servicio` and `documentacion`
+  score 1 to 5. `puntuacion` is their mean (two decimals, half up) and
+  `resultado` its band: `apto` from 3.5, `condicionado` from 2.5, `no_apto`
+  below; both are computed, never stored. `fecha` is never after `today`
+  (`EVALUATED_IN_FUTURE`), `fecha_proxima` comes after it (`NEXT_NOT_AFTER`),
+  and the evaluator is a person, active when newly chosen. An evaluation never
+  moves to another provider (`PROVIDER_FIXED`) and never changes its state.
+  - The latest evaluation is the one with the latest `fecha`, then the highest
+    id; `latest_evaluation`, `performances` and the `ultimo_resultado` filter
+    (in SQL) agree on it.
+  - The next evaluation: recording the provider's latest evaluation with
+    `fecha_proxima` sets the provider's `fecha_proxima_evaluacion` (an older
+    one recorded later does not). Afterwards the provider follows the latest
+    evaluation that has a `fecha_proxima`: when an update or a delete changes
+    that date, the provider takes the new one, and keeps its own when none
+    remains. A write that leaves that date alone keeps a date edited on the
+    provider.
+  - `evaluacion_vencida` (and the SQL `overdue`): not `bloqueado`, with
+    `fecha_proxima_evaluacion` before `today`.
+- **EP4, nonconformities**: a nonconformity whose origin is `proveedor` may
+  name the provider (`proveedor_id`, nullable); naming one with another origin
+  is refused, and a CHECK constraint repeats it.
+- **EP5, access**: every role reads; ADMIN and AUDITOR create and update
+  providers and record and edit evaluations; ADMIN deletes and decides; `mcp`
+  never deletes or decides. A provider with evaluations (`HAS_EVALUATIONS`) or
+  nonconformities (`HAS_NONCONFORMITIES`) is never deleted; deleting one
+  removes its process links, which its delete audit row keeps. People who
+  decided a state or evaluated, and processes linked to a provider, are not
+  deleted.
+- **EP6, performance and attention**: `performance` and `performances` (two
+  queries for a list) give the number of evaluations, the mean of all of them
+  (`average_of`, pooled), the latest score, result and date, and the open and
+  total nonconformities. `attention` flags, for the dashboard, the overdue
+  evaluations, the blocked providers still linked to processes and the
+  approved providers whose latest result is `no_apto`. The management review
+  inputs gain the `proveedores` section (see "Management reviews").
+- **Locks**: a provider row is locked (`FOR UPDATE`) before a decision, an
+  update, a delete and any evaluation write that may reschedule it.
+- Adapters: the web screens (`/proveedores/`), the decisions, the evaluation
+  forms, the provider picker on nonconformities, the dashboard card, the
+  approved-providers PDF (`/proveedores/pdf`); the MCP modules `proveedores`
+  and `evaluaciones_proveedor` (no deletes and no decisions).
 
 ## Document control
 
