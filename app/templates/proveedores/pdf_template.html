@@ -1,0 +1,56 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "_partials/pdf_base.html" %}
+{% from "_partials/pdf.html" import fields %}
+{% from "proveedores/_macros.html" import nota, dia %}
+{# One provider per row; every cell is plain text (EP-3). #}
+{% macro tabla(proveedores) %}
+<table class="tabla">
+    <thead>
+        <tr><th>Proveedor</th><th>Suministra</th><th>Procesos</th><th>Estado</th><th>Última evaluación</th><th>Media (evaluaciones)</th><th>Próxima evaluación</th><th>No conformidades abiertas</th></tr>
+    </thead>
+    <tbody>
+        {% for proveedor in proveedores %}
+        {% set cifras = desempeno[proveedor.id] %}
+        <tr id="proveedor-{{ proveedor.id }}"><td>{{ proveedor.nombre }}</td><td>{{ proveedor.tipo_suministro.value }}{% if proveedor.descripcion_suministro %} · {{ proveedor.descripcion_suministro }}{% endif %}</td><td>{{ proveedor.procesos | map(attribute='proceso') | join(', ') or '—' }}</td><td>{{ proveedor.estado.value }}{% if proveedor.fecha_estado %} · {{ dia(proveedor.fecha_estado) }}{% endif %}{% if proveedor.motivo_estado %} · {{ proveedor.motivo_estado }}{% endif %}</td><td>{% if cifras.ultimo_resultado %}{{ dia(cifras.ultima_fecha) }} · {{ nota(cifras.ultima_puntuacion) }} · {{ cifras.ultimo_resultado.value }}{% else %}Sin evaluar{% endif %}</td><td>{% if cifras.evaluaciones %}{{ nota(cifras.puntuacion_media) }} ({{ cifras.evaluaciones }}){% else %}—{% endif %}</td><td>{{ dia(proveedor.fecha_proxima_evaluacion) }}{% if proveedor.id in vencidas %} · vencida{% endif %}</td><td>{{ cifras.no_conformidades_abiertas }}</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endmacro %}
+{% block title %}Proveedores aprobados{% endblock %}
+{% block clause %}Cláusula 8.4 · Procesos, productos y servicios externos{% endblock %}
+{% block subtitle %}Proveedores aprobados a {{ hoy.strftime('%d/%m/%Y') }}{% endblock %}
+{% block content %}
+{# PDF-only template (never served to a browser, so the CSP does not apply):
+   the providers' tables have more columns than the print theme's key/value tables. #}
+<style>
+.grupo { margin: 8mm 0 4mm; font: 700 16pt/1.2 "Barlow Condensed"; }
+.tabla { width: 100%; border-collapse: collapse; margin-bottom: 4mm; font-size: 7.5pt; line-height: 1.35; }
+.tabla th, .tabla td { padding: 1.5mm 1.5mm; border-bottom: 0.3mm solid #d9d4c8; text-align: left; vertical-align: top; }
+.tabla thead th { border-top: 0.6mm solid #0a0a0a; color: #6b675f; font: 500 6pt "IBM Plex Mono"; letter-spacing: 0.06em; text-transform: uppercase; }
+.tabla tr { page-break-inside: avoid; }
+</style>
+{{ fields([('Proveedores registrados', total)] + recuentos + [
+    ('Evaluaciones vencidas', vencidas | length),
+    ('Puntuación media de los aprobados', nota(media_aprobados)),
+]) }}
+<p class="muted">Las evaluaciones vencidas son las de los proveedores no bloqueados cuya próxima evaluación es anterior a hoy. La puntuación media de los aprobados es la media de todas sus evaluaciones; cada evaluación puntúa calidad, plazo, servicio y documentación de 1 a 5 y resulta apta desde 3,5, condicionada desde 2,5 y no apta por debajo.</p>
+<h2 class="grupo" id="aprobados">Proveedores aprobados y condicionados</h2>
+{% if listados %}{{ tabla(listados) }}{% else %}<p class="muted">No hay proveedores aprobados ni condicionados.</p>{% endif %}
+<h2 class="grupo" id="otros">Proveedores pendientes y bloqueados</h2>
+{% if otros %}{{ tabla(otros) }}{% else %}<p class="muted">No hay proveedores pendientes ni bloqueados.</p>{% endif %}
+{% endblock %}

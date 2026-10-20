@@ -356,6 +356,8 @@ ENDPOINTS = [
     *_html("EXTERNAL_PROVIDERS", "/proveedores/", ("nuevo", PROVIDER), ("1/editar", PROVIDER),
            "2/eliminar"),
     Endpoint("EXTERNAL_PROVIDERS", "read", "GET", "/proveedores/1", 200),
+    # The approved-providers PDF (EP-3) is rendered for real, so its template is exercised.
+    Endpoint("EXTERNAL_PROVIDERS", "read", "GET", "/proveedores/pdf", 200),
     Endpoint("EXTERNAL_PROVIDERS", "create", "POST", "/proveedores/1/evaluaciones/nueva", 302,
              PROVIDER_EVALUATION),
     Endpoint("EXTERNAL_PROVIDERS", "update", "POST", "/proveedores/1/evaluaciones/1/editar", 302,

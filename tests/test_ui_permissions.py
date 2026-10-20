@@ -642,6 +642,8 @@ class UiPermissionsTestCase(unittest.TestCase):
                 self.assertEqual(role in writers, f'href="{base}/nuevo"' in html)
                 self.assertEqual(role in writers, f'href="{base}/{free}/editar"' in html)
                 self.assertNotIn("/eliminar", html)
+                # Every role reads the approved-providers PDF (EP-3).
+                self.assertIn(f'href="{base}/pdf"', html)
 
     def test_navigation_links_follow_the_read_permission(self) -> None:
         expected = {"/auditorias/": {ADMIN, AUDITOR}, "/programas-auditoria/": {ADMIN, AUDITOR},

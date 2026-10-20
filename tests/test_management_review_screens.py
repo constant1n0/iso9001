@@ -30,6 +30,7 @@ from app.models import (
 )
 from app.routes.management_review_routes import input_sections
 from app.services import management_reviews as mr
+from app.services import nonconformities, providers
 
 BASE = "/revisiones-direccion"
 TODAY = date(2026, 10, 12)
@@ -126,6 +127,34 @@ class ReviewScreensBase(ScreensBase):
                 descripcion="Retraso", fecha_detectada=fecha,
                 gravedad=GravedadNoConformidad.mayor))
             db.session.commit()
+
+    def suppliers(self) -> None:
+        """An approved provider rated apto and a pending one rated no apto in the second
+        quarter, and two nonconformities with the provider origin, one naming the first."""
+        with self.app.app_context():
+            aceros, transportes = (providers.providers.create(db.session, SYSTEM, {
+                "nombre": nombre, "tipo_suministro": "producto"}).id
+                for nombre in ("Aceros del Norte", "Transportes Rápidos"))
+            providers.approve(db.session, SYSTEM, aceros, today=TODAY)
+            for provider, fecha, scores in ((aceros, date(2026, 5, 10), (4, 4, 4, 4)),
+                                            (transportes, date(2026, 6, 20), (2, 2, 2, 3))):
+                providers.evaluations.create(db.session, SYSTEM, {
+                    "proveedor_id": provider, "fecha": fecha, "evaluador_id": self.eva,
+                    **dict(zip(("calidad", "plazo", "servicio", "documentacion"), scores))},
+                    today=TODAY)
+            for provider, fecha in ((aceros, date(2026, 5, 12)), (None, date(2026, 5, 13))):
+                nonconformities.create(db.session, SYSTEM, {
+                    "descripcion": "Lote con rebabas", "fecha_detectada": fecha,
+                    "origen": "proveedor", "proveedor_id": provider})
+            db.session.commit()
+
+    def before_providers(self) -> dict:
+        """The second quarter's live inputs without ``proveedores``: the shape frozen
+        before EP-3 of ``external-providers``."""
+        with self.app.app_context():
+            live = mr.inputs(db.session, SYSTEM, date(2026, 4, 1), date(2026, 6, 30),
+                             today=TODAY)
+        return {key: value for key, value in live.items() if key != "proveedores"}
 
     def action_id(self, descripcion: str) -> int:
         with self.app.app_context():
@@ -295,6 +324,35 @@ class WebFlowTestCase(ReviewScreensBase):
         titles = [b["titulo"] for s in input_sections(OLD_FROZEN) for b in s["bloques"]]
         self.assertIn("Riesgos y oportunidades", titles)
         self.assertNotIn("Oportunidades", titles)
+
+    def test_the_inputs_show_the_providers_and_reviews_held_before_them_still_render(
+            self) -> None:
+        self.suppliers()
+        rid = self.review([self.ana])
+        self.login(AUDITOR)
+        inputs = self.inputs(rid)
+        for label, value in (("Estado actual: Aprobado", "1"), ("Estado actual: Pendiente", "1"),
+                             ("Evaluaciones vencidas al cierre", "0"),
+                             ("Evaluaciones en el periodo", "2"),
+                             ("Puntuación media de las evaluaciones", "3,13"),
+                             ("Resultado: Apto", "1"), ("Resultado: No apto", "1"),
+                             ("Proveedores no aptos en el periodo", "1"),
+                             ("Detectadas en el periodo con origen proveedor", "2"),
+                             ("Sin proveedor indicado", "1")):
+            with self.subTest(label=label):
+                self.assertEqual(value, self.figure(inputs, label))
+        for text in ("Proveedores externos", "No conformidades de proveedores",
+                     "Transportes Rápidos", "20/06/2026", "2,25", "Aprobado"):
+            self.assertIn(text, inputs)
+        # Inputs frozen before the providers section (EP-3) show none of it.
+        old = self.html(f"{BASE}/{self.held_with(self.before_providers())}")
+        self.assertEqual("2", self.figure(old, "Detectadas en el periodo"))
+        for text in ("Proveedores externos", "No conformidades de proveedores",
+                     "Estado actual:"):
+            self.assertNotIn(text, old)
+        for frozen in (OLD_FROZEN, {}):
+            titles = [b["titulo"] for s in input_sections(frozen) for b in s["bloques"]]
+            self.assertNotIn("Proveedores externos", titles)
 
     def test_the_list_counts_attendees_and_actions_and_filters_by_year_and_state(self) -> None:
         current = self.review([self.ana, self.luis])

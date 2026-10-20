@@ -73,12 +73,13 @@ from sqlalchemy.orm import Session
 from ..models import (
     AccionCorrectiva, AccionRevision, Auditoria, AuditoriaIndicador, Capacitacion,
     EstadoAccionRevision, EstadoAuditoriaEnum, EstadoNoConformidad, EstadoObjetivo,
-    EstadoRevisionDireccion, GravedadNoConformidad, HallazgoAuditoria, MedicionObjetivo, Mejora,
-    NivelRiesgo, NoConformidad, ObjetivoCalidad, Oportunidad, OrigenNoConformidad,
-    ParteInteresada, Person, ResultadoVerificacion, RevisionDireccion, Riesgo, RoleEnum,
-    SatisfaccionCliente, TipoAccionRevision, TipoHallazgo,
+    EstadoProveedor, EstadoRevisionDireccion, EvaluacionProveedor, GravedadNoConformidad,
+    HallazgoAuditoria, MedicionObjetivo, Mejora, NivelRiesgo, NoConformidad, ObjetivoCalidad,
+    Oportunidad, OrigenNoConformidad, ParteInteresada, Person, Proveedor, ResultadoEvaluacion,
+    ResultadoVerificacion, RevisionDireccion, Riesgo, RoleEnum, SatisfaccionCliente,
+    TipoAccionRevision, TipoHallazgo,
 )
-from . import audit, crud, fields, people, policy, quality_objectives, risks
+from . import audit, crud, fields, people, policy, providers, quality_objectives, risks
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
 from .errors import Conflict, NotFound, PermissionDenied, ValidationError
@@ -636,6 +637,18 @@ def inputs(session: Session, actor: Actor, desde: date, hasta: date, *, today: d
     - ``mejoras`` (9.3.2 f): improvements implemented in the period.
     - ``capacitaciones`` (9.3.2 d): training sessions in the period, their
       hours and topics.
+    - ``proveedores`` (9.3.2 c, 9.1.3 f, task EP-3 of ``external-providers``):
+      ``por_estado`` counts every provider by its current state (no history is
+      kept); ``evaluaciones_vencidas`` the providers not blocked whose current
+      next evaluation date is before the cut-off. ``evaluaciones`` counts the
+      evaluations dated in the period, their mean score (``providers.average_of``,
+      decimal text, ``None`` without any) and their results. ``no_aptos``
+      counts the providers with a ``no_apto`` evaluation in the period, listed
+      by name in ``no_aptos_lista`` with the latest such evaluation and their
+      current state. ``no_conformidades`` counts the nonconformities with the
+      ``proveedor`` origin detected in the period, those naming no provider
+      (``sin_proveedor``) and, in ``por_proveedor``, the most cited providers
+      first, then by name. Reviews held before EP-3 froze no such section.
 
     Read grant of ``MANAGEMENT_REVIEW``; ``today`` is the adapter's date.
     """
@@ -685,6 +698,7 @@ def _inputs(session: Session, desde: date, hasta: date, *, today: date,
         "auditorias": _audits(session, desde, hasta),
         "mejoras": _improvements(session, desde, hasta),
         "capacitaciones": _training(session, desde, hasta),
+        "proveedores": _providers(session, desde, hasta, cut_off),
     })
 
 
@@ -896,6 +910,51 @@ def _training(session: Session, desde: date, hasta: date) -> dict[str, Any]:
         "horas": int(hours),
         "temas": list(session.scalars(select(Capacitacion.tema).where(dated).distinct()
                                       .order_by(Capacitacion.tema).limit(LIST_LIMIT))),
+    }
+
+
+def _providers(session: Session, desde: date, hasta: date, cut_off: date) -> dict[str, Any]:
+    rated = session.execute(
+        select(EvaluacionProveedor, Proveedor)
+        .join(Proveedor, EvaluacionProveedor.proveedor_id == Proveedor.id)
+        .where(EvaluacionProveedor.fecha.between(desde, hasta))
+        .order_by(EvaluacionProveedor.fecha, EvaluacionProveedor.id)).all()
+    results = {member: 0 for member in ResultadoEvaluacion}
+    unsuitable: dict[int, tuple[Proveedor, EvaluacionProveedor, Any]] = {}
+    for evaluation, provider in rated:  # the earliest first: the latest no_apto stays
+        score = providers.puntuacion(evaluation)
+        results[providers.resultado(score)] += 1
+        if providers.resultado(score) is ResultadoEvaluacion.no_apto:
+            unsuitable[provider.id] = (provider, evaluation, score)
+    listed = sorted(unsuitable.values(), key=lambda found: (found[0].nombre, found[0].id))
+    detected = and_(NoConformidad.origen == OrigenNoConformidad.proveedor,
+                    NoConformidad.fecha_detectada.between(desde, hasta))
+    cited = func.count(NoConformidad.id).label("total")
+    most_cited = session.execute(
+        select(Proveedor.id, Proveedor.nombre, cited)
+        .join(NoConformidad, NoConformidad.proveedor_id == Proveedor.id).where(detected)
+        .group_by(Proveedor.id, Proveedor.nombre)
+        .order_by(cited.desc(), Proveedor.nombre, Proveedor.id).limit(LIST_LIMIT)).all()
+    return {
+        "por_estado": _count_by(session, Proveedor.estado, EstadoProveedor),
+        "evaluaciones_vencidas": _count(session, Proveedor, providers.overdue(cut_off)),
+        "evaluaciones": {
+            "total": len(rated),
+            "media": providers.average_of(evaluation for evaluation, _ in rated),
+            "por_resultado": {member.name: count for member, count in results.items()},
+        },
+        "no_aptos": len(listed),
+        "no_aptos_lista": [{
+            "id": provider.id, "nombre": _short(provider.nombre), "fecha": evaluation.fecha,
+            "puntuacion": score, "estado": provider.estado.name,
+        } for provider, evaluation, score in listed[:LIST_LIMIT]],
+        "no_conformidades": {
+            "total": _count(session, NoConformidad, detected),
+            "sin_proveedor": _count(session, NoConformidad, detected,
+                                    NoConformidad.proveedor_id.is_(None)),
+            "por_proveedor": [{"id": provider_id, "nombre": _short(nombre), "total": total}
+                              for provider_id, nombre, total in most_cited],
+        },
     }
 
 

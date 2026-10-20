@@ -35,6 +35,7 @@ Documentación técnica:
 - [Procesos](#procesos)
 - [Riesgos y oportunidades](#riesgos-y-oportunidades)
 - [Objetivos de la calidad](#objetivos-de-la-calidad)
+- [Proveedores externos](#proveedores-externos)
 - [Revisión por la dirección](#revisión-por-la-dirección)
 - [Otros registros](#otros-registros)
 - [Informes y notificaciones por correo electrónico](#informes-y-notificaciones-por-correo-electrónico)
@@ -175,6 +176,7 @@ aprobar en cada módulo.
 | Programas de auditoría, auditorías y hallazgos | Consultar, crear, editar, eliminar; aprobar programas | Consultar, crear, editar | Sin acceso |
 | Riesgos, oportunidades y sus acciones | Consultar, crear, editar, eliminar; evaluar la eficacia de las acciones | Consultar, crear, editar; evaluar la eficacia de las acciones | Consultar |
 | Objetivos de la calidad y mediciones | Consultar, crear, editar, cambiar el estado, eliminar | Consultar, crear, editar, cambiar el estado | Consultar |
+| Proveedores externos y sus evaluaciones | Consultar, crear, editar, eliminar; aprobar, condicionar, bloquear | Consultar, crear, editar | Consultar |
 | Revisiones por la dirección y sus acciones | Consultar, crear, editar, eliminar; celebrar, cerrar | Consultar, crear, editar | Sin acceso |
 | Mejoras, satisfacción del cliente, partes interesadas | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar, crear, editar |
 | Procesos, roles, recursos de capacitación, indicadores de auditoría | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
@@ -200,7 +202,8 @@ API desde la línea de órdenes del servidor (véase
 - Un agente nunca elimina, nunca escribe documentos y nunca gestiona tokens.
   Verificar acciones correctivas; cerrar, cancelar y reabrir no
   conformidades; aprobar programas de auditoría; celebrar y cerrar revisiones
-  por la dirección, y los PDF, solo se hacen desde la interfaz web.
+  por la dirección; aprobar, condicionar y bloquear proveedores, y los PDF,
+  solo se hacen desde la interfaz web.
 - Lo que guarda un agente lleva el nombre de su usuario en el registro de
   auditoría, igual que un cambio hecho desde la web.
 - Cada usuario ve y revoca sus propios tokens en **Mi perfil**; desactivar un
@@ -260,6 +263,12 @@ ninguna cifra, área ni fecha de auditoría.
 - **Acciones de la revisión por la dirección**, para administradores y
   auditores: las acciones vencidas, con su responsable y su fecha límite.
   Cuando las hay, un enlace abre el registro de acciones filtrado por ellas.
+- **Proveedores**: cuántos proveedores requieren atención, cada cifra con un
+  enlace a la lista filtrada por ellos: **Proveedores con la evaluación
+  vencida**, **Proveedores bloqueados con procesos** (bloqueados pero todavía
+  vinculados a algún proceso) y **Proveedores aprobados con resultado «No
+  apto»** (en su última evaluación). Solo aparecen las cifras que no son cero;
+  sin ninguna, la tarjeta muestra **Ningún proveedor requiere atención.**
 
 **Gráficos:**
 
@@ -452,6 +461,8 @@ conformidades y acciones correctivas.
 - **Descripción** y **Fecha Detectada**, ambas obligatorias;
 - **Origen**: **Auditoría**, **Cliente**, **Proceso**, **Proveedor** u
   **Otro**;
+- **Proveedor (solo con el origen «Proveedor»)**: el proveedor externo que la
+  causó (véase [Proveedores externos](#proveedores-externos));
 - **Gravedad**: **Mayor**, **Menor** u **Observación**;
 - **Responsable** (texto libre heredado) y **Responsable (persona)**;
 - **Contención** y **Causa raíz**;
@@ -836,6 +847,8 @@ Para añadir un proceso, pulse **+ Nuevo proceso** y rellene:
     quítalo antes de esos objetivos.**
   - **No se puede eliminar un proceso al que se refieren riesgos u
     oportunidades; quítalo antes de esos registros.**
+  - **No se puede eliminar un proceso vinculado a proveedores externos;
+    quítalo antes de esos proveedores.**
 
 ## Riesgos y oportunidades
 
@@ -1064,6 +1077,159 @@ o del año en curso:
   evaluación;
 - una tabla de sus mediciones: fecha, valor, si cumple o no y comentario.
 
+## Proveedores externos
+
+**Proveedores** (`/proveedores/`), en el menú **Calidad**, es el registro de
+los proveedores externos de procesos, productos y servicios (apartado 8.4 de
+ISO 9001:2026): quiénes son, qué suministran, a qué procesos afectan, con qué
+criterios se seleccionaron, si pueden suministrar y cómo los evalúa la
+organización. Todos los roles consultan los proveedores, sus evaluaciones y el
+PDF. Los administradores y los auditores crean y editan proveedores, y
+registran y editan evaluaciones; solo los administradores deciden el estado y
+eliminan.
+
+### El proveedor
+
+Pulse **+ Nuevo proveedor** y rellene:
+
+- **Nombre** (obligatorio y único: **Ya existe un proveedor con ese
+  nombre.**);
+- **NIF** (opcional y único cuando se indica): se guarda en mayúsculas, sin
+  espacios ni guiones, y debe tener de 8 a 10 letras o cifras;
+- **Persona de contacto**, **Correo electrónico** y **Teléfono**;
+- **Tipo de suministro** (obligatorio): **Producto**, **Servicio** o
+  **Proceso externalizado**, y **Qué suministra**;
+- **Procesos afectados**: los procesos del SGC a los que afecta (para elegir
+  varios, mantenga pulsada la tecla Ctrl, o ⌘ en Mac); al editar, los elegidos
+  sustituyen a los anteriores;
+- **Criterios de selección** (8.4.1);
+- **Próxima evaluación** (véase
+  [La próxima evaluación](#la-próxima-evaluación));
+- **Notas**.
+
+Un proveedor nuevo empieza **Pendiente**; el formulario nunca cambia el
+estado.
+
+### Estados y decisiones
+
+| Estado | Significado |
+|---|---|
+| **Pendiente** | Registrado, todavía sin decisión |
+| **Aprobado** | Puede suministrar |
+| **Condicionado** | Puede suministrar con las condiciones que indica el motivo |
+| **Bloqueado** | No debe suministrar |
+
+- Solo los administradores deciden, en **Decidir sobre el proveedor**, en la
+  página del proveedor: **Aprobar**, con un **Motivo (opcional)**, y
+  **Condicionar** o **Bloquear**, con un **Motivo** obligatorio (**Indica el
+  motivo de la decisión.**).
+- La página no ofrece la decisión del estado actual, y el sistema la rechaza
+  sin cambiar nada (por ejemplo, **El proveedor ya está aprobado.**).
+- Cada decisión registra la fecha de hoy, la persona del administrador y el
+  motivo, que la tarjeta **Estado** muestra como **Decidido el**, **Decidido
+  por** y **Motivo**. El registro de auditoría guarda las decisiones
+  anteriores.
+- No se vuelve a **Pendiente**: una decisión se corrige con otra.
+- Una evaluación nunca cambia el estado por sí sola: el administrador decide a
+  la vista de los resultados. Los agentes de IA nunca deciden el estado.
+
+### Evaluaciones
+
+En **Evaluaciones**, en la página del proveedor, **+ Nueva evaluación**
+registra una evaluación:
+
+- **Fecha de la evaluación**: hoy por defecto y nunca futura (**La fecha de la
+  evaluación no puede ser futura.**);
+- **Evaluador**: una persona activa;
+- **Calidad**, **Plazo de entrega**, **Servicio** y **Documentación**, cada
+  una de 1 a 5;
+- **Comentario**;
+- **Próxima evaluación**: posterior a la fecha de la evaluación (**La próxima
+  evaluación debe ser posterior a la fecha de la evaluación.**).
+
+La puntuación de una evaluación es la media de sus cuatro notas, con dos
+decimales, y su resultado sale de ella:
+
+| Puntuación | Resultado |
+|---|---|
+| 3,50 o más | **Apto** |
+| De 2,50 a 3,49 | **Condicionado** |
+| Menos de 2,50 | **No apto** |
+
+- La puntuación y el resultado se calculan; nadie los escribe.
+- La última evaluación de un proveedor es la de fecha más reciente; entre dos
+  de la misma fecha, la registrada después.
+- La **Puntuación media** del proveedor es la media de todas sus
+  evaluaciones.
+- Cualquier proveedor admite evaluaciones, también uno bloqueado, y una
+  evaluación nunca pasa a otro proveedor.
+- Los administradores y los auditores editan las evaluaciones; solo los
+  administradores las eliminan.
+
+### La próxima evaluación
+
+La **Próxima evaluación** del proveedor sigue a sus evaluaciones:
+
+- al registrar la última evaluación del proveedor con una **Próxima
+  evaluación**, esa fecha pasa al proveedor; una evaluación anterior registrada
+  más tarde no la cambia;
+- después, el proveedor sigue a la última evaluación que tiene próxima
+  evaluación: si una edición o una eliminación cambia esa fecha (porque se
+  borra o se cambia, la evaluación cambia de fecha o se elimina), el proveedor
+  toma la nueva; si no queda ninguna, conserva la suya;
+- una fecha escrita en el formulario del proveedor se mantiene mientras
+  ninguna evaluación cambie esa fecha.
+
+La evaluación está **vencida** cuando un proveedor que no está bloqueado tiene
+la próxima evaluación antes de hoy.
+
+### No conformidades del proveedor
+
+- Una no conformidad con el origen **Proveedor** puede indicar el proveedor
+  que la causó en **Proveedor (solo con el origen «Proveedor»)**. Con otro
+  origen, el sistema rechaza el proveedor
+  (**Solo una no conformidad de origen «Proveedor» puede indicar el
+  proveedor.**).
+- La página del proveedor enumera sus no conformidades, cada una con su
+  enlace, y la de la no conformidad enlaza al proveedor.
+- La lista de no conformidades se filtra por **Proveedor**.
+
+### Pantallas
+
+- **La lista**, por nombre, muestra lo que suministra cada proveedor, su
+  estado, el último resultado con su puntuación (y la media cuando hay más de
+  una evaluación), la próxima evaluación con la etiqueta **Evaluación
+  vencida** y sus no conformidades abiertas sobre el total. **Filtros**:
+  **Nombre**, **Estado**, **Tipo de suministro**, **Proceso**, **Con
+  procesos**, **Último resultado** y **Evaluación vencida**.
+- **La página de un proveedor** muestra su **Identificación**, su **Estado**,
+  su **Desempeño** (9.1.3 f: evaluaciones, último resultado, puntuación media
+  y no conformidades abiertas sobre el total), lo que suministra, sus
+  criterios de selección y sus notas, sus **Procesos afectados**, sus **No
+  conformidades** y sus **Evaluaciones**.
+- **Eliminación** (administradores): un proveedor con evaluaciones o no
+  conformidades no se elimina. Su página no muestra **Eliminar** y el sistema
+  lo rechaza (**No se puede eliminar un proveedor que tiene evaluaciones;
+  bloquéalo en su lugar.**). Tampoco se elimina un proceso vinculado a
+  proveedores.
+- La tarjeta **Proveedores** del [panel de control](#panel-de-control) cuenta
+  los proveedores que requieren atención.
+
+### Lista de proveedores aprobados en PDF
+
+**PDF**, en la lista, genera para todos los roles la lista de proveedores
+aprobados que suele pedir una auditoría (`proveedores_AAAA-MM-DD.pdf`):
+
+- la cabecera cuenta los proveedores registrados y por estado, las
+  evaluaciones vencidas y la **Puntuación media de los aprobados**, que es la
+  media de todas las evaluaciones de los proveedores aprobados;
+- **Proveedores aprobados y condicionados**, por nombre: lo que suministra
+  cada uno, sus procesos, su estado con la fecha y el motivo, la fecha, la
+  puntuación y el resultado de su última evaluación, su puntuación media con
+  el número de evaluaciones, su próxima evaluación (y si está vencida) y sus
+  no conformidades abiertas;
+- **Proveedores pendientes y bloqueados**, por nombre y con los mismos datos.
+
 ## Revisión por la dirección
 
 **Revisión por la dirección** (`/revisiones-direccion/`, apartado 9.3 de ISO
@@ -1121,8 +1287,13 @@ registros del periodo, junto a su comentario:
   medición, con una medición vencida, por estado), el desempeño de los
   procesos (registros de indicadores de auditoría), las no conformidades
   (detectadas, por gravedad y origen; cerradas; y eficacia de las acciones
-  correctivas) y las auditorías (en el periodo, completadas, hallazgos por
-  tipo);
+  correctivas), las auditorías (en el periodo, completadas, hallazgos por
+  tipo) y los proveedores externos (9.1.3 f): los proveedores por su estado
+  actual (el sistema no guarda el historial de los estados), los que tienen la
+  evaluación vencida en la fecha de corte, las evaluaciones del periodo con su
+  puntuación media y sus resultados, los proveedores con una evaluación **No
+  apto** en el periodo, y las no conformidades de origen **Proveedor**
+  detectadas en el periodo, con los diez proveedores más citados;
 - **d)** la capacitación: sesiones, horas y temas;
 - **e)** la eficacia de las acciones tomadas para abordar los riesgos y las
   oportunidades: cada acción registra la suya (véase
@@ -1131,7 +1302,8 @@ registros del periodo, junto a su comentario:
 - **f)** las mejoras implantadas en el periodo.
 
 Las cifras cuentan el periodo hasta su final, o hasta hoy si el final es
-posterior (la **Fecha de corte**). En un borrador se calculan en el momento y
+posterior (la **Fecha de corte**). Las revisiones celebradas antes de que
+existiera el registro de proveedores no muestran la parte de los proveedores. En un borrador se calculan en el momento y
 se marcan como **Datos provisionales**. Celebrar la revisión las congela, de
 modo que la revisión y su acta siguen mostrando lo que se presentó aunque los
 registros cambien después.

@@ -34,7 +34,7 @@ nunca puede eliminar.
 
   | Herramienta | Finalidad |
   |---|---|
-  | `qms_modules` | Los 24 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
+  | `qms_modules` | Los 26 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
   | `qms_list` | Una página acotada de un módulo, con los filtros que enumera `qms_modules` |
   | `qms_get` | Un registro por su `id` |
   | `qms_create` | Crea un registro |
@@ -59,14 +59,15 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 24 módulos: `no_conformidades`, `auditorias`,
+`qms_modules` enumera 26 módulos: `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
 `indicadores_auditoria`, `personas`, `competencias_requeridas`,
 `competencias_acreditadas`, `acciones_correctivas`, `objetivos_calidad`,
 `mediciones_objetivo`, `revisiones_direccion`, `acciones_revision`,
-`riesgos`, `oportunidades` y `acciones_riesgo`. Cada
+`riesgos`, `oportunidades`, `acciones_riesgo`, `proveedores` y
+`evaluaciones_proveedor`. Cada
 campo tiene un `type`, un indicador `required`, los valores `allowed` de los
 enumerados y, cuando los indicadores no bastan, una breve `note`.
 
@@ -76,12 +77,16 @@ No conformidades y acciones correctivas (cláusula 10.2 de ISO 9001):
   `origen` es `auditoria`, `cliente`, `proceso`, `proveedor` u `otro`;
   `gravedad` es `mayor`, `menor` u `observacion`; `contencion` y
   `causa_raiz` son texto; `responsable_id` cita a una persona, y `responsable`
-  y `accion_correctiva` son texto libre heredado. `estado` nunca se escribe:
+  y `accion_correctiva` son texto libre heredado. `proveedor_id` cita al
+  proveedor externo (`proveedores`) que la causó, solo con el origen
+  `proveedor`: con otro origen se rechaza, y hay que quitarlo antes de cambiar
+  el origen. `estado` nunca se escribe:
   un registro empieza en `abierta` y después sigue a sus acciones correctivas.
   Los registros muestran las etiquetas en español (`"Acción planificada"`,
   `"Cliente"`) además de `fecha_cierre` y `motivo_cancelacion`. Filtros:
   `descripcion` (contiene), `estado`, `origen`, `gravedad` (nombres de miembro
-  como `accion_planificada`, `cliente`, `mayor`) y `fecha_detectada`;
+  como `accion_planificada`, `cliente`, `mayor`), `fecha_detectada` y
+  `proveedor_id`;
   cualquier otro valor de enumerado se rechaza con la lista de valores
   admitidos. Un registro `cerrada` o `cancelada` rechaza las actualizaciones.
 - `acciones_correctivas`: `no_conformidad_id` (una no conformidad abierta;
@@ -209,7 +214,8 @@ leen ambos módulos, y solo los tokens de ADMIN o AUDITOR (con el ámbito
   que reporta: nunca él mismo ni un rol que le reporta, directa o
   indirectamente (`null` lo deja sin línea de reporte).
 - Solo en la web: las eliminaciones, que rechazan un proceso relacionado con
-  otros o citado por objetivos, riesgos u oportunidades, y un rol con
+  otros, citado por objetivos, riesgos u oportunidades o vinculado a
+  proveedores, y un rol con
   requisitos de competencia o con roles que le reportan. Las páginas
   `/procesos/` y `/roles/` muestran además los registros que citan un proceso,
   y la línea de reporte, las personas y los requisitos de competencia de un
@@ -279,9 +285,14 @@ elimina, celebra ni cierra una revisión.
     un borrador. `fecha_corte` es `periodo_hasta`, o la fecha local del
     servidor cuando es anterior; cada sección (`acciones_previas`,
     `contexto`, `satisfaccion`, `objetivos`, `indicadores`,
-    `no_conformidades`, `auditorias`, `mejoras`, `capacitaciones`) recuenta el
-    periodo hasta esa fecha, y sus listas contienen como máximo diez
-    elementos.
+    `no_conformidades`, `auditorias`, `mejoras`, `capacitaciones`,
+    `proveedores`) recuenta el periodo hasta esa fecha, y sus listas contienen
+    como máximo diez elementos. `proveedores` (9.1.3 f) cuenta los proveedores
+    por su estado actual, los que tienen la evaluación vencida en la fecha de
+    corte, las evaluaciones del periodo con su media (texto decimal) y sus
+    resultados, los proveedores con una evaluación `no_apto` en el periodo y
+    las no conformidades de origen `proveedor` del periodo por proveedor; las
+    revisiones celebradas antes de que existiera no la tienen.
   - Filtros: `estado` y `anio` (el año de la reunión).
 - `acciones_revision`: `revision_id`, `tipo` (`mejora`, `cambio_sgc`,
   `recursos`), `descripcion`, `responsable_id` (una persona) y `fecha_limite`
@@ -354,6 +365,54 @@ todos los roles leen, y solo los tokens de ADMIN o AUDITOR (con el ámbito
 - Solo en la web: todas las eliminaciones, el mapa de calor y los PDF de los
   registros; los filtros `abierto`, `probabilidad`, `impacto` y
   `alto_sin_accion` son de la lista web.
+
+Proveedores externos (cláusula 8.4 de ISO 9001:2026). Ambos módulos
+comparten un mismo permiso: todos los roles leen, y solo los tokens de ADMIN o
+AUDITOR (con el ámbito `write`) crean y actualizan. Ningún token elimina ni
+decide el estado de un proveedor.
+
+- Los enumerados se devuelven con su etiqueta en español; las escrituras y
+  los filtros usan el nombre del miembro.
+- `proveedores`: `nombre` (único) y `tipo_suministro` (`producto`,
+  `servicio`, `proceso_externalizado`) son obligatorios.
+  - Opcionales: `nif` (único cuando se indica; se guarda en mayúsculas, sin
+    espacios ni guiones, con 8 a 10 letras o cifras), `contacto`, `email`,
+    `telefono`, `descripcion_suministro`, `criterios_seleccion`,
+    `fecha_proxima_evaluacion` y `notas`.
+  - `procesos` es una lista de ids de `procesos` que sustituye a los
+    vinculados.
+  - Un proveedor nuevo empieza `pendiente`. `estado` (`pendiente`,
+    `aprobado`, `condicionado`, `bloqueado`), `fecha_estado`,
+    `decidido_por_id` y `motivo_estado` nunca se escriben: aprobar,
+    condicionar y bloquear son decisiones de los administradores en la web.
+  - Los registros añaden `procesos`, `puntuacion_media` (de todas sus
+    evaluaciones), `ultimo_resultado` (de la última evaluación, por `fecha` y
+    después por id) y `evaluacion_vencida` (no `bloqueado`, con
+    `fecha_proxima_evaluacion` anterior a hoy).
+  - Filtros: `nombre` (contiene), `estado`, `tipo_suministro`, `proceso_id`,
+    `evaluacion_vencida` y `ultimo_resultado` (`apto`, `condicionado`,
+    `no_apto`).
+- `evaluaciones_proveedor`: `proveedor_id` (nunca cambia), `fecha` (nunca
+  futura), `evaluador_id` (una persona, activa cuando se elige) y las cuatro
+  notas de 1 a 5, `calidad`, `plazo`, `servicio` y `documentacion`, son
+  obligatorios; `comentario` y `fecha_proxima` (posterior a `fecha`) son
+  opcionales.
+  - Los registros añaden `puntuacion` (la media de las cuatro notas, con dos
+    decimales) y `resultado` (`"Apto"` desde 3,5, `"Condicionado"` desde 2,5,
+    `"No apto"` por debajo). Una evaluación nunca cambia el estado del
+    proveedor.
+  - Registrar la última evaluación del proveedor con `fecha_proxima` lleva
+    esa fecha a su `fecha_proxima_evaluacion`; una evaluación anterior
+    registrada más tarde no la cambia. Después, el proveedor sigue a la última
+    evaluación que tiene `fecha_proxima`: si una actualización cambia esa
+    fecha, la toma; si no queda ninguna, conserva la suya. Una escritura que
+    no cambia esa fecha mantiene la que se editó en el proveedor.
+  - Filtros: `proveedor_id` y `evaluador_id`; las más recientes primero.
+- «Hoy» es la fecha local del servidor (`APP_TIMEZONE`).
+- Solo en la web: aprobar, condicionar y bloquear (administradores), todas
+  las eliminaciones, el filtro `con_procesos` y el PDF de proveedores
+  aprobados. Un proveedor con evaluaciones o no conformidades nunca se
+  elimina.
 
 ## Emisión de un token
 

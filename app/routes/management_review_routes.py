@@ -65,10 +65,10 @@ from ..forms import (
     RevisionDireccionForm, number_text, person_choices,
 )
 from ..models import (
-    AccionRevision, EstadoAccionRevision, EstadoObjetivo, EstadoOportunidad,
+    AccionRevision, EstadoAccionRevision, EstadoObjetivo, EstadoOportunidad, EstadoProveedor,
     EstadoRevisionDireccion, EstadoRiesgo, GravedadNoConformidad, NivelRiesgo,
-    OrigenNoConformidad, PrioridadOportunidad, RevisionDireccion, TipoAccionRevision,
-    TipoHallazgo,
+    OrigenNoConformidad, PrioridadOportunidad, ResultadoEvaluacion, RevisionDireccion,
+    TipoAccionRevision, TipoHallazgo,
 )
 from ..services import management_reviews as mr
 from ..services import people
@@ -163,7 +163,9 @@ def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
     ``columnas``. A missing key shows as a dash, so inputs frozen with an older
     shape still render; reviews held before RO-2 of ``risks-opportunities`` show
     their single ``riesgos_oportunidades`` count by type instead of the risk and
-    opportunity registers (RO7).
+    opportunity registers (RO7). The external providers (input c, EP-3 of
+    ``external-providers``) show only when the inputs hold ``proveedores``: reviews
+    held before it froze none.
     """
     def n(*path: str) -> str:
         return _number(_at(datos, *path))
@@ -271,6 +273,25 @@ def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
         ('Capacitaciones en el periodo', n('capacitaciones', 'total')),
         ('Horas de formación', n('capacitaciones', 'horas')),
     ], ('Tema',), ((tema,) for tema in rows('capacitaciones', 'temas')))
+    proveedores = [_block('Proveedores externos', [
+        *by('Estado actual', EstadoProveedor, 'proveedores', 'por_estado'),
+        ('Evaluaciones vencidas al cierre', n('proveedores', 'evaluaciones_vencidas')),
+        ('Evaluaciones en el periodo', n('proveedores', 'evaluaciones', 'total')),
+        ('Puntuación media de las evaluaciones', n('proveedores', 'evaluaciones', 'media')),
+        *by('Resultado', ResultadoEvaluacion, 'proveedores', 'evaluaciones', 'por_resultado'),
+        ('Proveedores no aptos en el periodo', n('proveedores', 'no_aptos')),
+    ], ('Proveedor no apto', 'Fecha', 'Puntuación', 'Estado actual'), (
+        (p.get('nombre'), _day(p.get('fecha')), _number(p.get('puntuacion')),
+         _member(EstadoProveedor, p.get('estado')))
+        for p in rows('proveedores', 'no_aptos_lista'))), _block(
+        'No conformidades de proveedores', [
+            ('Detectadas en el periodo con origen proveedor',
+             n('proveedores', 'no_conformidades', 'total')),
+            ('Sin proveedor indicado', n('proveedores', 'no_conformidades', 'sin_proveedor')),
+        ], ('Proveedor', 'No conformidades'), (
+            (p.get('nombre'), _number(p.get('total')))
+            for p in rows('proveedores', 'no_conformidades', 'por_proveedor')))
+    ] if isinstance(_at(datos, 'proveedores'), Mapping) else []
     mejoras = _block('Mejoras', [
         ('Mejoras implantadas en el periodo', n('mejoras', 'total')),
     ], ('Mejora', 'Fecha'), ((m.get('descripcion'), _day(m.get('fecha')))
@@ -279,7 +300,7 @@ def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
         'comentario_acciones_previas': [previas],
         'comentario_contexto': contexto,
         'comentario_desempeno': [satisfaccion, objetivos, indicadores, no_conformidades,
-                                 auditorias],
+                                 auditorias, *proveedores],
         'comentario_recursos': [capacitaciones],
         'comentario_riesgos': [],  # no register: the comment covers it
         'comentario_mejora': [mejoras],

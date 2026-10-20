@@ -323,7 +323,8 @@ def _provider_modules() -> tuple[Module, ...]:
             _f("descripcion_suministro", note="What it supplies."),
             _f("criterios_seleccion", note="Selection criteria."),
             _f("fecha_proxima_evaluacion", "date", note=(
-                "Next evaluation; an evaluation with fecha_proxima moves it.")),
+                "Next evaluation; the evaluations' fecha_proxima moves it (see "
+                "evaluaciones_proveedor), and a date edited here stays until one does.")),
             _f("notas"),
             _f("procesos", "integer_list", note=(
                 "Processes (procesos) it affects; replaces them.")),
@@ -345,8 +346,12 @@ def _provider_modules() -> tuple[Module, ...]:
               for score in ("calidad", "plazo", "servicio", "documentacion")),
             _f("comentario"),
             _f("fecha_proxima", "date", note=(
-                "Next evaluation, after fecha; on the provider's latest evaluation it "
-                "becomes the provider's fecha_proxima_evaluacion.")),
+                "Next evaluation, after fecha. Recording the provider's latest evaluation "
+                "(by fecha, then id) with it sets the provider's fecha_proxima_evaluacion; "
+                "an older one recorded later does not. Afterwards the provider follows the "
+                "latest evaluation that has one: an update or delete that changes that date "
+                "moves it there, and it keeps its own date when none remains; a write that "
+                "leaves that date alone keeps a date edited on the provider.")),
         ), (_f("proveedor_id", "integer"), _f("evaluador_id", "integer")),
             extras=_evaluation_extras),
     )

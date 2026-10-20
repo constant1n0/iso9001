@@ -38,6 +38,9 @@ an agent can never delete anything.
   evaluation, overdue reviews and PDFs.
 - **Quality objectives** (6.2): indicator, target, owner, measurements and
   trend.
+- **External providers** (8.4, 9.1.3): selection criteria, affected processes,
+  approval by an administrator, scored evaluations with the next evaluation,
+  linked nonconformities and the approved-providers PDF.
 - **Management review** (9.3): inputs drawn from the registers, conclusions,
   actions and the minutes PDF.
 - **Earlier registers**: interested parties (4.2), training resources (7.1),

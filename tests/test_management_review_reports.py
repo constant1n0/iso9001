@@ -134,6 +134,25 @@ class MinutesPdfTestCase(ReviewScreensBase):
         self.assertEqual("30/06/2026", header["Fecha de corte de los datos"])
         self.assertIn(FROZEN_NOTE, html)
 
+    def test_the_minutes_carry_the_providers_unless_held_before_them(self) -> None:
+        self.suppliers()
+        draft = self.review([self.ana])
+        old = self.held_with(self.before_providers())
+        self.login(AUDITOR)
+        _, sections, _ = self.minutes(draft)
+        figures = self.pdf_fields(sections[PERFORMANCE])
+        self.assertEqual(("1", "2", "3,13", "1", "2", "1"), tuple(figures[label] for label in (
+            "Estado actual: Aprobado", "Evaluaciones en el periodo",
+            "Puntuación media de las evaluaciones", "Proveedores no aptos en el periodo",
+            "Detectadas en el periodo con origen proveedor", "Sin proveedor indicado")))
+        self.assertIn("<td>Transportes Rápidos</td><td>20/06/2026</td><td>2,25</td>"
+                      "<td>Pendiente</td>", sections[PERFORMANCE])
+        self.assertIn("<td>Aceros del Norte</td><td>1</td>", sections[PERFORMANCE])
+        _, sections, html = self.minutes(old)
+        self.assertEqual("2", self.pdf_fields(sections[PERFORMANCE])["Detectadas en el periodo"])
+        for text in ("Proveedores externos", "Estado actual:", "Sin proveedor indicado"):
+            self.assertNotIn(text, html)
+
     def test_a_minutes_pdf_that_cannot_be_rendered_returns_to_the_review(self) -> None:
         rid = self.review([self.ana])
         self.login(AUDITOR)

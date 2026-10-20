@@ -33,6 +33,7 @@ Installation and server administration are in the
 - [Processes](#processes)
 - [Risks and opportunities](#risks-and-opportunities)
 - [Quality objectives](#quality-objectives)
+- [External providers](#external-providers)
 - [Management review](#management-review)
 - [Other registers](#other-registers)
 - [Reports and e-mail notifications](#reports-and-e-mail-notifications)
@@ -169,6 +170,7 @@ can read, create, edit, delete and approve in each module.
 | Audit programmes, audits and findings | Read, create, edit, delete; approve programmes | Read, create, edit | No access |
 | Risks, opportunities and their actions | Read, create, edit, delete; evaluate the actions' effectiveness | Read, create, edit; evaluate the actions' effectiveness | Read |
 | Quality objectives and measurements | Read, create, edit, change state, delete | Read, create, edit, change state | Read |
+| External providers and their evaluations | Read, create, edit, delete; approve, condition, block | Read, create, edit | Read |
 | Management reviews and their actions | Read, create, edit, delete; hold, close | Read, create, edit | No access |
 | Improvements, customer satisfaction, interested parties | Read, create, edit, delete | Read, create, edit | Read, create, edit |
 | Processes, roles, training resources, audit indicators | Read, create, edit, delete | Read, create, edit | Read |
@@ -192,7 +194,8 @@ guide, in Spanish).
 - An agent never deletes, never writes documents and never manages tokens.
   Verifying corrective actions, closing, cancelling and reopening
   nonconformities, approving audit programmes, holding and closing management
-  reviews, and the PDFs are done in the web interface only.
+  reviews, approving, conditioning and blocking providers, and the PDFs are
+  done in the web interface only.
 - What an agent saves carries its user's name in the audit log, like a change
   made on the web.
 - You see and revoke your own tokens on **Mi perfil**; deactivating a user
@@ -250,6 +253,13 @@ and auditors), **+ No conformidad**, **+ Capacitación** (training) and
   for administrators and auditors: the overdue actions with their owner and
   deadline. When there are some, a link opens the action register filtered on
   them.
+- **Proveedores** (providers): how many providers need attention, each count
+  linking to the list filtered on them: **Proveedores con la evaluación
+  vencida** (evaluation overdue), **Proveedores bloqueados con procesos**
+  (blocked but still linked to a process) and **Proveedores aprobados con
+  resultado «No apto»** (approved, with a not suitable latest evaluation). Only
+  non-zero counts appear; without any, the card shows **Ningún proveedor
+  requiere atención.**
 
 **Charts:**
 
@@ -443,6 +453,9 @@ corrective actions.
 - **Descripción** and **Fecha Detectada** (detection date), both required;
 - **Origen** (origin): **Auditoría**, **Cliente**, **Proceso**, **Proveedor**
   (supplier) or **Otro**;
+- **Proveedor (solo con el origen «Proveedor»)**: the external provider that
+  caused it, only with the **Proveedor** origin (see
+  [External providers](#external-providers));
 - **Gravedad** (severity): **Mayor** (major), **Menor** (minor) or
   **Observación**;
 - **Responsable** (legacy free text) and **Responsable (persona)**;
@@ -814,6 +827,8 @@ To add a process, click **+ Nuevo proceso** and fill in:
     quítalo antes de esos objetivos.**
   - **No se puede eliminar un proceso al que se refieren riesgos u
     oportunidades; quítalo antes de esos registros.**
+  - **No se puede eliminar un proceso vinculado a proveedores externos;
+    quítalo antes de esos proveedores.** (linked to external providers)
 
 ## Risks and opportunities
 
@@ -1049,6 +1064,160 @@ On the objective's page, **+ Nueva medición** records:
   not, trend, next measurement, resources and evaluation;
 - a table of its measurements: date, value, met or not, and comment.
 
+## External providers
+
+**Proveedores** (`/proveedores/`, menu **Calidad**) is the register of external
+providers of processes, products and services (ISO 9001:2026 clause 8.4): who
+they are, what they supply, which processes they affect, the criteria they
+were selected on, whether they may supply and how the organization evaluates
+them. Every role reads the providers, their evaluations and the PDF.
+Administrators and auditors create and edit providers, and record and edit
+evaluations; only administrators decide the state and delete.
+
+### The provider
+
+Press **+ Nuevo proveedor** and fill in:
+
+- **Nombre** (name; required and unique: **Ya existe un proveedor con ese
+  nombre.**);
+- **NIF** (tax id; optional, unique when given): stored upper case without
+  spaces or hyphens, with 8 to 10 letters or digits;
+- **Persona de contacto**, **Correo electrónico** and **Teléfono** (contact
+  person, e-mail and phone);
+- **Tipo de suministro** (supply type, required): **Producto**, **Servicio** or
+  **Proceso externalizado** (outsourced process), and **Qué suministra** (what
+  it supplies);
+- **Procesos afectados**: the QMS processes it affects (hold Ctrl, or ⌘ on a
+  Mac, to pick several); on edit, the ones picked replace the earlier ones;
+- **Criterios de selección** (selection criteria, 8.4.1);
+- **Próxima evaluación** (next evaluation; see
+  [The next evaluation](#the-next-evaluation));
+- **Notas**.
+
+A new provider starts **Pendiente** (pending); the form never changes the
+state.
+
+### States and decisions
+
+| State | Meaning |
+|---|---|
+| **Pendiente** (pending) | Registered, no decision yet |
+| **Aprobado** (approved) | May supply |
+| **Condicionado** (conditioned) | May supply under the conditions the reason states |
+| **Bloqueado** (blocked) | Must not supply |
+
+- Only administrators decide, under **Decidir sobre el proveedor** on the
+  provider's page: **Aprobar** (approve) with a **Motivo (opcional)**
+  (optional reason), and **Condicionar** (condition) or **Bloquear** (block)
+  with a required **Motivo** (**Indica el motivo de la decisión.**).
+- The page does not offer the current state's decision, and the system
+  refuses it without changing anything (for example, **El proveedor ya está
+  aprobado.**).
+- Each decision records today's date, the administrator's person and the
+  reason, which the **Estado** card shows as **Decidido el**, **Decidido por**
+  and **Motivo**. The audit log keeps the earlier decisions.
+- There is no way back to **Pendiente**: a decision is corrected by another.
+- An evaluation never changes the state by itself: the administrator decides
+  in the light of the results. AI agents never decide the state.
+
+### Evaluations
+
+Under **Evaluaciones** on the provider's page, **+ Nueva evaluación** records
+an evaluation:
+
+- **Fecha de la evaluación** (evaluation date): today by default and never in
+  the future (**La fecha de la evaluación no puede ser futura.**);
+- **Evaluador** (evaluator): an active person;
+- **Calidad**, **Plazo de entrega**, **Servicio** and **Documentación**
+  (quality, delivery time, service and documentation), each from 1 to 5;
+- **Comentario** (comment);
+- **Próxima evaluación** (next evaluation): after the evaluation date (**La
+  próxima evaluación debe ser posterior a la fecha de la evaluación.**).
+
+An evaluation's score is the mean of its four scores, with two decimals, and
+its result follows from it:
+
+| Score | Result |
+|---|---|
+| 3.50 or more | **Apto** (suitable) |
+| 2.50 to 3.49 | **Condicionado** (conditioned) |
+| Below 2.50 | **No apto** (not suitable) |
+
+- The score and the result are computed; nobody writes them.
+- A provider's latest evaluation is the one with the latest date; of two on
+  the same date, the one recorded later.
+- The provider's **Puntuación media** (average score) is the mean of all its
+  evaluations.
+- Any provider takes evaluations, a blocked one too, and an evaluation never
+  moves to another provider.
+- Administrators and auditors edit evaluations; only administrators delete
+  them.
+
+### The next evaluation
+
+The provider's **Próxima evaluación** follows its evaluations:
+
+- recording the provider's latest evaluation with a **Próxima evaluación**
+  gives the provider that date; an older evaluation recorded later does not
+  change it;
+- afterwards, the provider follows the latest evaluation that has a next
+  evaluation: when an edit or a delete changes that date (it is cleared or
+  changed, the evaluation's date changes, or the evaluation is deleted), the
+  provider takes the new one; when none remains, it keeps its own;
+- a date typed on the provider's form stays until an evaluation changes that
+  date.
+
+An evaluation is **vencida** (overdue) when a provider that is not blocked has
+its next evaluation before today.
+
+### The provider's nonconformities
+
+- A nonconformity with the **Proveedor** origin may name the provider that
+  caused it in **Proveedor (solo con el origen «Proveedor»)**. With another
+  origin, the system refuses the provider (**Solo una no conformidad de origen
+  «Proveedor» puede indicar el proveedor.**).
+- The provider's page lists its nonconformities, each with its link, and the
+  nonconformity's page links to the provider.
+- The nonconformity list filters by **Proveedor**.
+
+### Screens
+
+- **The list**, by name, shows what each provider supplies, its state, the
+  latest result with its score (and the average when there is more than one
+  evaluation), the next evaluation with the **Evaluación vencida** badge and
+  its open nonconformities out of the total. **Filtros** (filters):
+  **Nombre**, **Estado**, **Tipo de suministro**, **Proceso**, **Con
+  procesos** (linked to processes), **Último resultado** (latest result) and
+  **Evaluación vencida**.
+- **A provider's page** shows its **Identificación**, its **Estado**, its
+  **Desempeño** (performance, 9.1.3 f: evaluations, latest result, average
+  score and open nonconformities out of the total), what it supplies, its
+  selection criteria and notes, its **Procesos afectados**, its **No
+  conformidades** and its **Evaluaciones**.
+- **Deleting** (administrators): a provider with evaluations or
+  nonconformities is not deleted. Its page shows no **Eliminar** and the
+  system refuses it (**No se puede eliminar un proveedor que tiene
+  evaluaciones; bloquéalo en su lugar.**). Nor is a process linked to
+  providers deleted.
+- The **Proveedores** card on the [dashboard](#dashboard) counts the providers
+  that need attention.
+
+### Approved providers PDF
+
+**PDF**, on the list, produces for every role the list of approved providers
+an audit usually asks for (`proveedores_YYYY-MM-DD.pdf`):
+
+- the header counts the providers registered and by state, the overdue
+  evaluations and the **Puntuación media de los aprobados**, the mean of every
+  evaluation of the approved providers;
+- **Proveedores aprobados y condicionados** (approved and conditioned), by
+  name: what each supplies, its processes, its state with the date and the
+  reason, the date, score and result of its latest evaluation, its average
+  score with the number of evaluations, its next evaluation (and whether it is
+  overdue) and its open nonconformities;
+- **Proveedores pendientes y bloqueados** (pending and blocked), by name and
+  with the same data.
+
 ## Management review
 
 **Revisión por la dirección** (`/revisiones-direccion/`, ISO 9001:2026 clause
@@ -1103,7 +1272,13 @@ the period, next to its comment:
   (on target, off target, without measurement, with an overdue measurement,
   by state), process performance (audit indicator records), nonconformities
   (detected by severity and origin, closed, and the effectiveness of
-  corrective actions) and audits (in the period, completed, findings by type);
+  corrective actions), audits (in the period, completed, findings by type) and
+  external providers (9.1.3 f): the providers by their current state (the
+  system keeps no history of states), those overdue for evaluation on the
+  cut-off date, the evaluations in the period with their average score and
+  results, the providers with a **No apto** evaluation in the period, and the
+  nonconformities with the **Proveedor** origin detected in the period, with
+  the ten most cited providers;
 - **d)** training: sessions, hours and topics;
 - **e)** the effectiveness of actions on risks and opportunities: each action
   records its own (see [Actions](#actions)), but the review does not summarize
@@ -1111,7 +1286,8 @@ the period, next to its comment:
 - **f)** improvements implemented in the period.
 
 The figures count the period up to its end, or up to today when the end is
-later (the **Fecha de corte**, cut-off date). In a draft they are computed
+later (the **Fecha de corte**, cut-off date). Reviews held before the provider
+register existed show no provider figures. In a draft they are computed
 live and marked **Datos provisionales**. Holding the review freezes them, so
 the review and its minutes keep showing what was presented even if the
 registers change later.
