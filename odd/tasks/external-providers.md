@@ -66,10 +66,29 @@ Baseline at `5739c42`: 1,477 tests. Migrations are tested on PostgreSQL (`TEST_P
 - Looking up the decider after changing an audited row flushes it early and trips the audit guard, so the decider is looked up first.
 - Test adaptations (standing approval): `tests/test_attribution.py` (25 → 27), `tests/test_policy.py`, `tests/test_access_characterization.py` (`NO_ROUTES`), `tests/test_mcp_modules.py`, `tests/test_mcp_http.py` (24 → 26), `tests/test_mcp_write_tools.py`, `tests/mcp_support.py`, `tests/test_migrations.py`.
 
-## Production deployment (pending authorization)
+## Delivery
 
-One migration (`d2f4a6c8e1b3` providers, evaluations, process links and the nonconformity link) on top of `f5a7c9e1b3d6`: back up the database and the code, fast-forward, `flask db upgrade`, `flask db check`, then the user restarts the four services. Smoke tests: `/proveedores/` and its PDF redirect to the login, 26 MCP modules.
+| Slice | Pull request | Commits | Merged as |
+|---|---|---|---|
+| 1 | [#143](https://github.com/constant1n0/iso9001/pull/143) | tracker, EP-1 models | merged |
+| 2 | [#144](https://github.com/constant1n0/iso9001/pull/144) | EP-1 services and MCP (one-off `size:exception`, about 2,120 lines) | `45be6c7` |
+| 3 | [#145](https://github.com/constant1n0/iso9001/pull/145) | EP-2 service follow rule | merged |
+| 4 | [#146](https://github.com/constant1n0/iso9001/pull/146) | EP-2 screens, picker, card | `8fb09d3` |
+| 5 | [#147](https://github.com/constant1n0/iso9001/pull/147) | EP-3, closing record | `e256b0c` |
+
+## Production deployment (2026-10-20)
+
+`main@e256b0c` runs on `vulcano`. The user authorized this deployment over SSH as `dcm`, with no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `70dfcd0`, clean, migration `f5a7c9e1b3d6`; 0 nonconformities and 0 processes stored |
+| Backups | `~/work/backups/calidad-*-pre-e256b0c.dump` (`pg_dump -Fc`, 391 entries listed by `pg_restore -l`) and `iso9001-code-*-pre-e256b0c.tar.gz` (without `instance/documents`), both mode 600 |
+| Code | Incremental git bundle `70dfcd0..main`, fast-forward to `e256b0c`; no dependency changes; `pip check` clean |
+| Database | `flask db upgrade` `f5a7c9e1b3d6` → `d2f4a6c8e1b3`; `flask db check` clean; still 0 nonconformities, 0 providers, 0 evaluations |
+| Restart (user, with sudo) | All four services |
+| Smoke tests | Services active, no error entries in the journal; `/login` 200; `/proveedores/`, `/proveedores/pdf` and `/no_conformidades/` redirect to the login; `/mcp` 401 with `WWW-Authenticate: Bearer`; 26 MCP modules including `proveedores` and `evaluaciones_proveedor` |
 
 ## Next step
 
-**Feature complete** once EP-3 merges. Next: the production deployment above, after explicit authorization. A gap-analysis line reference in row 9.3 (`management_reviews.py`) shifted by one line; its symbol names still identify the code.
+**Feature complete and deployed.** Wave 2 continues with the gap analysis order: context and scope (4.1–4.3), planning of changes (6.3), customers and complaints (8.2, 9.1.2), nonconforming outputs (8.7), and the link between nonconformities and processes.
