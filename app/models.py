@@ -95,14 +95,47 @@ def text_enum(enum_cls: type[enum.Enum], constraint: str, length: int = 20) -> d
     )
 
 
+class TipoContexto(enum.Enum):
+    """Whether a context issue or an interested party is internal or external.
+
+    Decisions OC1 and OC2 of ``organization-context`` (ISO 9001 clauses 4.1 and 4.2).
+    """
+
+    interna = 'Interna'
+    externa = 'Externa'
+
+
 # Modelo para almacenar Partes Interesadas
 class ParteInteresada(RecordMetadataMixin, db.Model):
+    """An interested party and its needs and expectations (ISO 9001 clause 4.2).
+
+    Decision OC2 of ``organization-context`` adds its type, whether it is
+    relevant (``pertinente``; NULL is "sin evaluar", as on the rows that
+    predate it), an owner, the next review and whether it has climate-related
+    requirements. A person who owns a party cannot be deleted.
+    """
+
     __tablename__ = 'partes_interesadas'
+    __table_args__ = (
+        db.ForeignKeyConstraint(
+            ['responsable_id'], ['personas.id'],
+            name='fk_partes_interesadas_responsable_id_personas', ondelete='RESTRICT',
+        ),
+        db.Index('ix_partes_interesadas_responsable_id', 'responsable_id'),
+    )
+
     id_interesado = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(50), nullable=False, unique=True, index=True)
     necesidades_expectativas = db.Column(db.Text)
     requisitos_identificados = db.Column(db.Text)
     objetivo_estrategico = db.Column(db.Text)
+    tipo = db.Column(text_enum(TipoContexto, 'ck_partes_interesadas_tipo'))
+    pertinente = db.Column(db.Boolean)
+    responsable_id = db.Column(db.Integer, nullable=True)
+    fecha_revision = db.Column(db.Date)  # the next review
+    requisitos_climaticos = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=db.false()
+    )
 
 class RolResponsabilidad(RecordMetadataMixin, db.Model):
     """A QMS role, its responsibilities and its authorities (ISO 9001 clause 5.3).
@@ -1165,6 +1198,119 @@ class AccionRevision(RecordMetadataMixin, db.Model):
         return f'<AccionRevision {self.id} {self.estado.name if self.estado else None}>'
 
 
+class CategoriaCuestion(enum.Enum):
+    """The category of a context issue (decision OC1 of ``organization-context``).
+
+    The external ones first (PESTEL), then the internal ones; ``CATEGORIAS_POR_TIPO``
+    says which type each belongs to.
+    """
+
+    politica = 'Política'
+    economica = 'Económica'
+    social = 'Social'
+    tecnologica = 'Tecnológica'
+    legal = 'Legal'
+    ambiental = 'Ambiental'
+    cultura = 'Cultura'
+    recursos = 'Recursos'
+    conocimiento = 'Conocimiento'
+    desempeno = 'Desempeño'
+    estructura = 'Estructura'
+
+
+CATEGORIAS_POR_TIPO: dict[TipoContexto, tuple[CategoriaCuestion, ...]] = {
+    TipoContexto.externa: (
+        CategoriaCuestion.politica, CategoriaCuestion.economica, CategoriaCuestion.social,
+        CategoriaCuestion.tecnologica, CategoriaCuestion.legal, CategoriaCuestion.ambiental,
+    ),
+    TipoContexto.interna: (
+        CategoriaCuestion.cultura, CategoriaCuestion.recursos, CategoriaCuestion.conocimiento,
+        CategoriaCuestion.desempeno, CategoriaCuestion.estructura,
+    ),
+}
+
+
+class EfectoCuestion(enum.Enum):
+    """How a context issue may affect the QMS's intended results (OC1)."""
+
+    positivo = 'Positivo'
+    negativo = 'Negativo'
+    neutro = 'Neutro'
+
+
+class EstadoCuestion(enum.Enum):
+    """Whether a context issue still applies (OC1)."""
+
+    vigente = 'Vigente'
+    superada = 'Superada'
+
+
+def _names_in(column: str, members) -> str:
+    return f"{column} IN ({', '.join(repr(member.name) for member in members)})"
+
+
+# OC1: the category matches the type; an issue that is not relevant says why; the next
+# review is never before the identification.
+_ISSUE_CATEGORY = ' OR '.join(
+    f"(tipo = '{tipo.name}' AND {_names_in('categoria', categories)})"
+    for tipo, categories in CATEGORIAS_POR_TIPO.items()
+)
+_ISSUE_RELEVANCE = 'pertinente OR justificacion_pertinencia IS NOT NULL'
+_ISSUE_REVIEW = 'fecha_revision IS NULL OR fecha_revision >= fecha_identificacion'
+
+
+class CuestionContexto(RecordMetadataMixin, db.Model):
+    """An internal or external issue of the organization's context (ISO 9001 clause 4.1).
+
+    Decision OC1 of ``organization-context``: a type and a matching category, an
+    effect, whether it is relevant (with the reason when it is not), whether it
+    concerns climate change, an owner, the identification date, the next review
+    and whether it still applies. Risks and opportunities may name the issue
+    that gives rise to them (``cuestion_id``), which then cannot be deleted;
+    neither can its owner.
+    """
+
+    __tablename__ = 'cuestiones_contexto'
+    __table_args__ = (
+        db.CheckConstraint(_ISSUE_CATEGORY, name='ck_cuestiones_contexto_categoria_tipo'),
+        db.CheckConstraint(_ISSUE_RELEVANCE, name='ck_cuestiones_contexto_justificacion'),
+        db.CheckConstraint(_ISSUE_REVIEW, name='ck_cuestiones_contexto_fecha_revision'),
+        db.ForeignKeyConstraint(
+            ['responsable_id'], ['personas.id'],
+            name='fk_cuestiones_contexto_responsable_id_personas', ondelete='RESTRICT',
+        ),
+        db.Index('ix_cuestiones_contexto_responsable_id', 'responsable_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(text_enum(TipoContexto, 'ck_cuestiones_contexto_tipo'), nullable=False)
+    categoria = db.Column(
+        text_enum(CategoriaCuestion, 'ck_cuestiones_contexto_categoria'), nullable=False
+    )
+    titulo = db.Column(db.String(200), nullable=False)
+    descripcion = db.Column(db.Text, nullable=False)
+    efecto = db.Column(text_enum(EfectoCuestion, 'ck_cuestiones_contexto_efecto'),
+                       nullable=False)
+    pertinente = db.Column(db.Boolean, nullable=False)
+    justificacion_pertinencia = db.Column(db.Text)
+    cambio_climatico = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=db.false()
+    )
+    responsable_id = db.Column(db.Integer, nullable=True)
+    fecha_identificacion = db.Column(db.Date, nullable=False)
+    fecha_revision = db.Column(db.Date)  # the next review
+    estado = db.Column(
+        text_enum(EstadoCuestion, 'ck_cuestiones_contexto_estado'),
+        nullable=False,
+        default=EstadoCuestion.vigente,
+        server_default=EstadoCuestion.vigente.name,
+    )
+    notas = db.Column(db.Text)
+
+    def __repr__(self):
+        return f'<CuestionContexto {self.id} {self.titulo}>'
+
+
 class OrigenRiesgo(enum.Enum):
     """Whether a risk or an opportunity arises inside or outside the organization (RO1)."""
 
@@ -1318,11 +1464,12 @@ _EVALUATION = ("(eficacia IS NULL AND fecha_evaluacion IS NULL) OR "
 
 
 def _register_links(table: str) -> tuple:
-    """Interested party, process and owner of a risk or an opportunity, all optional.
+    """Interested party, process, owner and context issue of a risk or an opportunity.
 
-    ``ON DELETE RESTRICT`` keeps a cited party, process or person; the owner is
-    NULL only on rows migrated from ``riesgos_oportunidades`` (the services
-    require it for new records).
+    All optional. ``ON DELETE RESTRICT`` keeps a cited party, process, person or
+    context issue (OC1 of ``organization-context``); the owner is NULL only on
+    rows migrated from ``riesgos_oportunidades`` (the services require it for
+    new records).
     """
     return (
         db.ForeignKeyConstraint(
@@ -1337,9 +1484,14 @@ def _register_links(table: str) -> tuple:
             ['responsable_id'], ['personas.id'],
             name=f'fk_{table}_responsable_id_personas', ondelete='RESTRICT',
         ),
+        db.ForeignKeyConstraint(
+            ['cuestion_id'], ['cuestiones_contexto.id'],
+            name=f'fk_{table}_cuestion_id_cuestiones_contexto', ondelete='RESTRICT',
+        ),
         db.Index(f'ix_{table}_parte_interesada_id', 'parte_interesada_id'),
         db.Index(f'ix_{table}_proceso_id', 'proceso_id'),
         db.Index(f'ix_{table}_responsable_id', 'responsable_id'),
+        db.Index(f'ix_{table}_cuestion_id', 'cuestion_id'),
     )
 
 
@@ -1368,6 +1520,7 @@ class Riesgo(RecordMetadataMixin, db.Model):
     parte_interesada_id = db.Column(db.Integer, nullable=True)
     proceso_id = db.Column(db.Integer, nullable=True)
     responsable_id = db.Column(db.Integer, nullable=True)
+    cuestion_id = db.Column(db.Integer, nullable=True)  # the context issue behind it
     probabilidad = db.Column(db.Integer)
     impacto = db.Column(db.Integer)
     tratamiento = db.Column(text_enum(TratamientoRiesgo, 'ck_riesgos_tratamiento'))
@@ -1419,6 +1572,7 @@ class Oportunidad(RecordMetadataMixin, db.Model):
     parte_interesada_id = db.Column(db.Integer, nullable=True)
     proceso_id = db.Column(db.Integer, nullable=True)
     responsable_id = db.Column(db.Integer, nullable=True)
+    cuestion_id = db.Column(db.Integer, nullable=True)  # the context issue behind it
     beneficio = db.Column(db.Integer)
     viabilidad = db.Column(db.Integer)
     decision = db.Column(text_enum(DecisionOportunidad, 'ck_oportunidades_decision'))

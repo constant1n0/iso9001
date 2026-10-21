@@ -31,7 +31,7 @@ LATER_AUDITED_TABLES = frozenset(
      "acciones_correctivas", "document_revisions", "programas_auditoria",
      "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo",
      "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades",
-     "acciones_riesgo", "proveedores", "evaluaciones_proveedor"}
+     "acciones_riesgo", "proveedores", "evaluaciones_proveedor", "cuestiones_contexto"}
 )
 
 
@@ -1327,6 +1327,113 @@ class MigrationsTestCase(unittest.TestCase):
             self.assertNotIn("proveedor_id", {c["name"] for c in inspector.get_columns(ncs)})
             self.assertEqual([("Lote defectuoso", "proveedor")], self._rows(
                 "SELECT descripcion, origen FROM no_conformidades"))
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+    def test_organization_context_guards_its_links_and_downgrade(self) -> None:
+        """OC-1 (c8f2a4e6b0d3): context issues, the parties' context fields, the risk link."""
+        issues, parties, risks, opportunities = ("cuestiones_contexto", "partes_interesadas",
+                                                 "riesgos", "oportunidades")
+        expected = {
+            "fk_cuestiones_contexto_responsable_id_personas": ("personas", "RESTRICT"),
+            "fk_partes_interesadas_responsable_id_personas": ("personas", "RESTRICT"),
+            "fk_riesgos_cuestion_id_cuestiones_contexto": (issues, "RESTRICT"),
+            "fk_oportunidades_cuestion_id_cuestiones_contexto": (issues, "RESTRICT"),
+        }
+        party_columns = {"tipo", "pertinente", "responsable_id", "fecha_revision",
+                         "requisitos_climaticos"}
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision="d2f4a6c8e1b3")
+            with db.engine.begin() as connection:
+                for statement in (
+                    "INSERT INTO personas (nombre) VALUES ('Ana')",
+                    "INSERT INTO partes_interesadas (nombre, necesidades_expectativas) "
+                    "VALUES ('Clientes', 'Plazos')",
+                    "INSERT INTO riesgos (titulo, descripcion, origen, estado, "
+                    "fecha_identificacion) VALUES ('Fallo', 'Proveedor único', 'externo', "
+                    "'identificado', '2026-09-01')",
+                    "INSERT INTO oportunidades (titulo, descripcion, origen, estado, "
+                    "fecha_identificacion) VALUES ('Mercado', 'Naval', 'externo', "
+                    "'identificada', '2026-09-01')",
+                ):
+                    connection.execute(text(statement))
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            foreign_keys = {fk["name"]: (fk["referred_table"], fk["options"].get("ondelete"))
+                            for table in (issues, parties, risks, opportunities)
+                            for fk in inspector.get_foreign_keys(table)}
+            self.assertLessEqual(expected.items(), foreign_keys.items())
+            self.assertLessEqual(
+                {f"ix_{issues}_responsable_id", f"ix_{parties}_responsable_id",
+                 f"ix_{risks}_cuestion_id", f"ix_{opportunities}_cuestion_id"},
+                {index["name"] for table in (issues, parties, risks, opportunities)
+                 for index in inspector.get_indexes(table)})
+            self.assertLessEqual(
+                {f"ck_{issues}_{name}" for name in ("tipo", "categoria", "categoria_tipo",
+                                                     "efecto", "estado", "justificacion",
+                                                     "fecha_revision")} | {f"ck_{parties}_tipo"},
+                {check["name"] for table in (issues, parties)
+                 for check in inspector.get_check_constraints(table)})
+            # Rows that predate the columns keep their values: "sin evaluar", no owner,
+            # no review, no climate-related requirements and no issue.
+            self.assertEqual([("Clientes", "Plazos", None, None, None, None, False)], self._rows(
+                "SELECT nombre, necesidades_expectativas, tipo, pertinente, responsable_id, "
+                "fecha_revision, requisitos_climaticos FROM partes_interesadas"))
+            self.assertEqual([(None,)], self._rows("SELECT cuestion_id FROM riesgos"))
+            with db.engine.begin() as connection:
+                for statement in (
+                    "INSERT INTO cuestiones_contexto (tipo, categoria, titulo, descripcion, "
+                    "efecto, pertinente, responsable_id, fecha_identificacion, fecha_revision) "
+                    "VALUES ('externa', 'legal', 'Envases', 'Reglamento', 'negativo', true, 1, "
+                    "'2026-09-01', '2027-03-01')",
+                    "INSERT INTO cuestiones_contexto (tipo, categoria, titulo, descripcion, "
+                    "efecto, pertinente, justificacion_pertinencia, fecha_identificacion) "
+                    "VALUES ('interna', 'cultura', 'Cultura', 'Consolidada', 'positivo', false, "
+                    "'Sin efecto', '2026-09-01')",
+                    "UPDATE partes_interesadas SET tipo = 'externa', pertinente = true, "
+                    "responsable_id = 1, fecha_revision = '2027-01-01', "
+                    "requisitos_climaticos = true",
+                    "UPDATE riesgos SET cuestion_id = 1",
+                    "UPDATE oportunidades SET cuestion_id = 2",
+                ):
+                    connection.execute(text(statement))
+            self.assertEqual([("vigente", False)], self._rows(
+                "SELECT estado, cambio_climatico FROM cuestiones_contexto WHERE id = 1"))
+            for statement in (
+                "UPDATE cuestiones_contexto SET categoria = 'cultura' WHERE id = 1",
+                "UPDATE cuestiones_contexto SET tipo = 'externa' WHERE id = 2",
+                "UPDATE cuestiones_contexto SET categoria = 'Legal' WHERE id = 1",
+                "UPDATE cuestiones_contexto SET efecto = 'malo'",
+                "UPDATE cuestiones_contexto SET estado = 'cerrada'",
+                "UPDATE cuestiones_contexto SET justificacion_pertinencia = NULL WHERE id = 2",
+                "UPDATE cuestiones_contexto SET pertinente = NULL",
+                "UPDATE cuestiones_contexto SET cambio_climatico = NULL",
+                "UPDATE cuestiones_contexto SET fecha_revision = '2026-08-31' WHERE id = 1",
+                "UPDATE cuestiones_contexto SET responsable_id = 99",
+                "UPDATE partes_interesadas SET tipo = 'Externa'",
+                "UPDATE partes_interesadas SET requisitos_climaticos = NULL",
+                "UPDATE partes_interesadas SET responsable_id = 99",
+                "UPDATE riesgos SET cuestion_id = 99",
+                "UPDATE oportunidades SET cuestion_id = 99",
+                "DELETE FROM cuestiones_contexto WHERE id = 1",  # cited by the risk
+                "DELETE FROM cuestiones_contexto WHERE id = 2",  # cited by the opportunity
+                "DELETE FROM personas",  # owns the issue and the party
+            ):
+                with self.subTest(refused=statement):
+                    with self.assertRaises(IntegrityError):
+                        with db.engine.begin() as connection:
+                            connection.execute(text(statement))
+            downgrade(directory=MIGRATIONS_DIR, revision="d2f4a6c8e1b3")
+            inspector = inspect(db.engine)
+            self.assertNotIn(issues, inspector.get_table_names())
+            self.assertFalse(party_columns & {c["name"] for c in inspector.get_columns(parties)})
+            for table in (risks, opportunities):
+                with self.subTest(downgraded=table):
+                    self.assertNotIn("cuestion_id",
+                                     {c["name"] for c in inspector.get_columns(table)})
+            self.assertEqual([("Clientes", "Plazos")], self._rows(
+                "SELECT nombre, necesidades_expectativas FROM partes_interesadas"))
+            self.assertEqual([("Fallo",)], self._rows("SELECT titulo FROM riesgos"))
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 

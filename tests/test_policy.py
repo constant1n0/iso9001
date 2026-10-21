@@ -43,6 +43,8 @@ EXPECTED = {
     "QUALITY_OBJECTIVES": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),  # QO4 of quality-objectives
     "MANAGEMENT_REVIEW": (ADMIN_AUDITOR, ADMIN_AUDITOR, ADMIN_ONLY),  # MR5 of management-review
     "EXTERNAL_PROVIDERS": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),  # EP5 of external-providers
+    # OC4 of organization-context: context issues and the QMS scope.
+    "ORGANIZATION_CONTEXT": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),
 }
 
 FORBIDDEN_MODULES = ("flask", "flask_login", "werkzeug.local", "app.routes")
