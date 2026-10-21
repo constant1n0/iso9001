@@ -16,6 +16,20 @@
 """Interested parties (``ParteInteresada``) on the generic CRUD helper.
 
 Validation mirrors ``ParteInteresadaForm``; every role may use the register.
+Decision OC2 of ``organization-context`` (ISO 9001 clause 4.2) adds the context
+fields: ``tipo`` (``interna`` or ``externa``, a member name), ``pertinente``
+(``None`` means "sin evaluar", as on the rows that predate it), the owner
+``responsable_id`` (a person, active when newly chosen), ``fecha_revision``,
+the next review, and ``requisitos_climaticos`` (false unless set). The texts
+stay as they were and ``nombre`` stays unique.
+
+``create`` and ``update`` take ``today``, the adapter's local date: a write
+that sets ``fecha_revision`` to a new date needs it, and that date is never
+before it (``REVIEW_IN_PAST``). A date already stored is kept as it is, so a
+party whose review is overdue stays editable, and a write that leaves the date
+alone may omit ``today``. ``revision_vencida`` and ``overdue`` tell a review
+date before ``today``.
+
 An interested party that risks or opportunities cite cannot be deleted
 (``Conflict`` with ``CITED_BY_RISKS``): ``delete`` checks it, and the
 ``ON DELETE RESTRICT`` foreign keys, which SQLite only enforces on request,
@@ -25,19 +39,46 @@ message.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from datetime import date, datetime
 from functools import partial
+from typing import Any
 
-from sqlalchemy import exists, select
+from sqlalchemy import and_, exists, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..models import Oportunidad, ParteInteresada, Riesgo
-from . import crud, fields, policy
+from ..models import Oportunidad, ParteInteresada, Riesgo, TipoContexto
+from . import crud, fields, people, policy
 from .actor import Actor
-from .errors import Conflict
+from .errors import Conflict, ValidationError
 from .policy import Action, Resource
 
 NOMBRE_MAX = 50  # mirrors ParteInteresada.nombre and the web form
+REVIEW_IN_PAST = (
+    "La fecha de la próxima revisión («fecha_revision») no puede ser anterior a hoy.")
+
+
+def _optional_member(data: Mapping[str, Any], key: str, enum_cls: type) -> Any:
+    """A member given by name, or ``None``."""
+    return None if data[key] is None else fields.enum_member(data, key, enum_cls)
+
+
+def _optional_date(data: Mapping[str, Any], key: str) -> date | None:
+    """A ``date`` (not a ``datetime`` or text), or ``None``."""
+    value = data[key]
+    if value is None or (isinstance(value, date) and not isinstance(value, datetime)):
+        return value
+    raise ValidationError(f"El campo «{key}» debe ser una fecha.")
+
+
+def _flag(data: Mapping[str, Any], key: str) -> bool:
+    """A real boolean for a column that is never NULL."""
+    value = data[key]
+    if not isinstance(value, bool):
+        raise ValidationError(f"El campo «{key}» debe ser verdadero o falso.")
+    return value
+
 
 SPEC = crud.Spec(
     model=ParteInteresada,
@@ -48,6 +89,11 @@ SPEC = crud.Spec(
         crud.Field("necesidades_expectativas", partial(fields.text, strip=False)),
         crud.Field("requisitos_identificados", partial(fields.text, strip=False)),
         crud.Field("objetivo_estrategico", partial(fields.text, strip=False)),
+        crud.Field("tipo", partial(_optional_member, enum_cls=TipoContexto)),
+        crud.Field("pertinente", fields.boolean),
+        crud.Field("responsable_id", fields.integer, check=people.check_reference),
+        crud.Field("fecha_revision", _optional_date),
+        crud.Field("requisitos_climaticos", _flag),
     ),
     order_by=(ParteInteresada.nombre, ParteInteresada.id_interesado),
     conflict="Ya existe una parte interesada con ese nombre.",
@@ -59,8 +105,30 @@ CITED_BY_RISKS = (
 )
 
 get = partial(crud.get, SPEC)
-create = partial(crud.create, SPEC)
-update = partial(crud.update, SPEC)
+
+
+def create(session: Session, actor: Actor, data: Mapping[str, Any], *,
+           today: date | None = None) -> ParteInteresada:
+    """Create an interested party; only ``nombre`` is required.
+
+    ``today`` is needed when ``fecha_revision`` is given (see the module docstring).
+    """
+    policy.require(actor, Action.CREATE, SPEC.resource)
+    _check_review(data, None, today)
+    return crud.create(SPEC, session, actor, data)
+
+
+def update(session: Session, actor: Actor, record_id: int, data: Mapping[str, Any], *,
+           today: date | None = None) -> ParteInteresada:
+    """Apply the given fields; an update that changes nothing writes nothing.
+
+    ``today`` is needed when ``fecha_revision`` changes (see the module docstring).
+    """
+    policy.require(actor, Action.UPDATE, SPEC.resource)
+    found = session.get(ParteInteresada, record_id) if people.is_db_id(record_id) else None
+    if found is not None:  # an unknown id is ``crud``'s ``NotFound``
+        _check_review(data, found, today)
+    return crud.update(SPEC, session, actor, record_id, data)
 
 
 def delete(session: Session, actor: Actor, record_id: int) -> None:
@@ -89,6 +157,35 @@ def list_(session: Session, actor: Actor) -> list[ParteInteresada]:
 
 
 list_page = partial(crud.list_page, SPEC)  # one page in the ``list_`` order plus the total
+
+
+def overdue(today: date) -> Any:
+    """SQL: the next review is before ``today``; never NULL."""
+    return and_(ParteInteresada.fecha_revision.is_not(None),
+                ParteInteresada.fecha_revision < _today(today))
+
+
+def revision_vencida(party: ParteInteresada, *, today: date) -> bool:
+    """Whether the party's next review (``fecha_revision``) is before ``today``."""
+    return party.fecha_revision is not None and party.fecha_revision < _today(today)
+
+
+def _check_review(data: Any, found: ParteInteresada | None, today: Any) -> None:
+    """A new ``fecha_revision`` is never before ``today``; data ``crud`` refuses is left to it."""
+    if (not isinstance(data, Mapping) or "fecha_revision" not in data
+            or not set(data) <= SPEC.writable):
+        return
+    review = _optional_date(data, "fecha_revision")
+    if review is None or (found is not None and review == found.fecha_revision):
+        return
+    if review < _today(today):
+        raise ValidationError(REVIEW_IN_PAST)
+
+
+def _today(today: Any) -> date:
+    if not isinstance(today, date) or isinstance(today, datetime):
+        raise ValueError("today must be a date")  # a programming error, not user input
+    return today
 
 
 def _cited_by_risks(session: Session, party_id: int) -> bool:

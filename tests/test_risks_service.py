@@ -9,7 +9,9 @@ never in the future. Actions belong to exactly one open risk or opportunity
 and never move; a completed one records when, and only then is its
 effectiveness evaluated, on or after the completion and never in the future.
 A record with actions is never deleted. ``attention`` gathers what the RO-3
-dashboard flags. The SQLite cases run with the audit flush guard.
+dashboard flags. A risk or an opportunity may name the context issue that gives
+rise to it (``cuestion_id``, OC-1 of ``organization-context``), a current one
+when newly linked. The SQLite cases run with the audit flush guard.
 """
 
 from __future__ import annotations
@@ -27,7 +29,10 @@ from mcp_support import McpDbCase, mcp_actor
 from test_nonconformity_service import ServiceBase, actor, errors
 
 from app.extensions import db
-from app.models import AuditLog, ParteInteresada, Person, ProcesoOperacion, RoleEnum
+from app.models import (
+    AuditLog, CategoriaCuestion, CuestionContexto, EfectoCuestion, EstadoCuestion,
+    ParteInteresada, Person, ProcesoOperacion, RoleEnum, TipoContexto,
+)
 from app.services.actor import Actor
 
 ADMIN, AUDITOR, OPERATIVO = RoleEnum.ADMINISTRADOR, RoleEnum.AUDITOR, RoleEnum.OPERATIVO
@@ -617,6 +622,62 @@ class PolicyTestCase(Helpers, ServiceBase):
                          [r.action for r in self.rows("oportunidades")])
 
 
+class IssueLinkTestCase(Helpers, ServiceBase):
+    def issue(self, titulo: str = "Normativa de envases",
+              estado: EstadoCuestion = EstadoCuestion.vigente) -> int:
+        return self.insert(CuestionContexto.__table__, tipo=TipoContexto.externa,
+                           categoria=CategoriaCuestion.legal, titulo=titulo,
+                           descripcion="Reglamento europeo", efecto=EfectoCuestion.negativo,
+                           pertinente=True, cambio_climatico=False,
+                           fecha_identificacion=date(2026, 9, 1), estado=estado)
+
+    def test_records_name_a_current_issue_when_newly_linked(self) -> None:
+        current, gone = self.issue(), self.issue("Arancel retirado", EstadoCuestion.superada)
+        risk = self.risk(cuestion_id=current)
+        opportunity = self.opportunity(cuestion_id=current)
+        self.assertEqual((current, current), (risk.cuestion_id, opportunity.cuestion_id))
+        self.assertEqual(current, self.rows("riesgos")[-1].after["cuestion_id"])
+        for register, base in (("risks", RISK), ("opportunities", OPPORTUNITY)):
+            for value, expected in ((999, ro().UNKNOWN_ISSUE), (2 ** 40, ro().UNKNOWN_ISSUE),
+                                    (gone, ro().ISSUE_SUPERSEDED)):
+                with self.subTest(register=register, cuestion_id=value):
+                    self.assertEqual(expected, self.refused(
+                        errors().ValidationError, getattr(ro(), register).create, CLI,
+                        base | {"responsable_id": self.person(), "cuestion_id": value},
+                        today=TODAY))
+            with self.subTest(register=register, cuestion_id="text"):
+                self.refused(errors().ValidationError, getattr(ro(), register).create, CLI,
+                             base | {"responsable_id": self.person(), "cuestion_id": "1"},
+                             today=TODAY)
+        # Superseding the issue later keeps the link, and the record stays editable.
+        db.session.execute(CuestionContexto.__table__.update().values(
+            estado=EstadoCuestion.superada))
+        db.session.commit()
+        self.assertEqual("Sigue", self.edit("risks", risk.id, {
+            "notas": "Sigue", "cuestion_id": current}).notas)
+        self.assertIsNone(self.edit("opportunities", opportunity.id,
+                                    {"cuestion_id": None}).cuestion_id)
+        self.assertEqual(ro().ISSUE_SUPERSEDED, self.refused(
+            errors().ValidationError, ro().opportunities.update, CLI, opportunity.id,
+            {"cuestion_id": current}, today=TODAY))
+
+    def test_risks_and_opportunities_filter_by_issue(self) -> None:
+        first, second = self.issue(), self.issue("Inflación")
+        linked = self.risk(cuestion_id=first).id
+        self.risk(cuestion_id=second)
+        self.risk()
+        chance = self.opportunity(cuestion_id=first).id
+        self.opportunity()
+        who = actor(OPERATIVO)
+        self.assertEqual([linked], [r.id for r in ro().risks.list_(db.session, who,
+                                                                   cuestion_id=first)])
+        self.assertEqual([chance], [o.id for o in ro().opportunities.list_(
+            db.session, who, cuestion_id=first)])
+        for value in (999, 2 ** 40):
+            with self.subTest(cuestion_id=value):
+                self.assertEqual([], ro().risks.list_(db.session, who, cuestion_id=value))
+
+
 class McpTestCase(McpDbCase):
     async def test_risks_opportunities_and_actions_round_trip(self) -> None:
         ana = self.seed("personas")
@@ -682,10 +743,10 @@ class McpTestCase(McpDbCase):
         self.assertEqual((True, ["interno", "externo"]),
                          (fields["responsable_id"]["required"], fields["origen"]["allowed"]))
         self.assertEqual({"estado", "nivel", "responsable_id", "proceso_id", "origen",
-                          "sin_valorar", "revision_vencida"},
+                          "sin_valorar", "revision_vencida", "cuestion_id"},
                          {f["name"] for f in described["riesgos"]["filters"]})
         self.assertEqual({"estado", "prioridad", "responsable_id", "proceso_id", "origen",
-                          "sin_valorar", "revision_vencida"},
+                          "sin_valorar", "revision_vencida", "cuestion_id"},
                          {f["name"] for f in described["oportunidades"]["filters"]})
         self.assertEqual({"riesgo_id", "oportunidad_id", "estado", "responsable_id", "vencida"},
                          {f["name"] for f in described["acciones_riesgo"]["filters"]})
