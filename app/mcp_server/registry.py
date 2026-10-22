@@ -16,8 +16,9 @@ from sqlalchemy.orm import object_session
 
 from ..audit_notifications import local_today
 from ..models import (
-    CompetenceEvaluation, CompetenceType, DecisionOportunidad, DocumentCategory, EficaciaAccion,
-    EstadoAccionCorrectiva, EstadoAccionRevision, EstadoAccionRiesgo, EstadoAuditoriaEnum,
+    CATEGORIAS_POR_TIPO, CategoriaCuestion, CompetenceEvaluation, CompetenceType,
+    DecisionOportunidad, DocumentCategory, EfectoCuestion, EficaciaAccion, EstadoAccionCorrectiva,
+    EstadoAccionRevision, EstadoAccionRiesgo, EstadoAuditoriaEnum, EstadoCuestion,
     EstadoNoConformidad, EstadoObjetivo, EstadoOportunidad, EstadoProgramaAuditoria,
     EstadoProveedor, EstadoRevisionDireccion, EstadoRiesgo, FrecuenciaMedicion,
     GravedadNoConformidad, NivelRiesgo, OrigenNoConformidad, OrigenRiesgo, PrioridadOportunidad,
@@ -25,8 +26,8 @@ from ..models import (
     TipoProceso, TipoSuministro, TratamientoRiesgo,
 )
 from ..services import (
-    audit_findings, audit_indicators, audit_programmes, audits, competence, corrective_actions,
-    document_revisions, documents, improvements, management_reviews,
+    audit_findings, audit_indicators, audit_programmes, audits, competence, context_issues,
+    corrective_actions, document_revisions, documents, improvements, management_reviews,
     nonconformities, people, process_operations, providers, quality_objectives, risks,
     roles_responsibilities, satisfaction, stakeholders, training, training_resources,
 )
@@ -151,6 +152,12 @@ def _provider_extras(provider: Any) -> dict[str, Any]:
 def _evaluation_extras(evaluation: Any) -> dict[str, Any]:
     score = providers.puntuacion(evaluation)
     return {"puntuacion": score, "resultado": providers.resultado(score)}
+
+
+def _issue_extras(issue: Any) -> dict[str, Any]:
+    """Whether the review is overdue and the ids of the risks and opportunities citing it."""
+    return {"revision_vencida": context_issues.revision_vencida(issue, today=local_today()),
+            **context_issues.linked_ids(object_session(issue), issue.id)}
 
 
 @dataclass(frozen=True)
@@ -357,6 +364,42 @@ def _provider_modules() -> tuple[Module, ...]:
                 "leaves that date alone keeps a date edited on the provider.")),
         ), (_f("proveedor_id", "integer"), _f("evaluador_id", "integer")),
             extras=_evaluation_extras),
+    )
+
+
+def _context_modules() -> tuple[Module, ...]:
+    """Context issues (4.1) under ``ORGANIZATION_CONTEXT`` (OC4).
+
+    Enums show the Spanish label; the filters take the member name. Records add
+    ``revision_vencida`` and ``riesgos`` and ``oportunidades``, the ids of the risks
+    and opportunities that cite the issue (riesgos and oportunidades, cuestion_id).
+    """
+    external, internal = (", ".join(member.name for member in CATEGORIAS_POR_TIPO[tipo])
+                          for tipo in (TipoContexto.externa, TipoContexto.interna))
+    return (
+        Module("cuestiones_contexto", "Context issues", Resource.ORGANIZATION_CONTEXT,
+               _DatedRegister(context_issues.issues), (
+            _f("tipo", "enum", True, members=TipoContexto),
+            _f("categoria", "enum", True, members=CategoriaCuestion, note=(
+                f"Matches tipo: externa takes {external}; interna takes {internal}.")),
+            _f("titulo", required=True), _f("descripcion", required=True),
+            _f("efecto", "enum", True, members=EfectoCuestion),
+            _f("pertinente", "boolean", True, note="Whether the issue is relevant to the QMS."),
+            _f("justificacion_pertinencia", note="Why it is or is not relevant; required "
+               "when pertinente is false."),
+            _f("cambio_climatico", "boolean", note="Concerns climate change; false by default."),
+            _f("responsable_id", "integer", note="Person (personas) who owns the issue."),
+            _f("fecha_identificacion", "date", True, note="Never in the future."),
+            _f("fecha_revision", "date", note="Next review; not before fecha_identificacion."),
+            _f("estado", "enum", members=EstadoCuestion, note=(
+                "Starts vigente; superada when it no longer applies.")),
+            _f("notas"),
+        ), (_f("tipo", "enum", members=TipoContexto),
+            _f("categoria", "enum", members=CategoriaCuestion),
+            _f("pertinente", "boolean"), _f("cambio_climatico", "boolean"),
+            _f("estado", "enum", members=EstadoCuestion), _f("responsable_id", "integer"),
+            _f("revision_vencida", "boolean", note="Vigente, with fecha_revision before today.")),
+            extras=_issue_extras),
     )
 
 
@@ -623,6 +666,7 @@ _MODULES = (
         extras=_review_action_extras),
     *_risk_modules(),
     *_provider_modules(),
+    *_context_modules(),
 )
 
 MODULES: dict[str, Module] = {module.slug: module for module in _MODULES}

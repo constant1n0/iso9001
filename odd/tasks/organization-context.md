@@ -33,10 +33,11 @@ Record the organization's context (ISO 9001:2026 clause 4.1, including whether c
 
 Route for every task: **delegated direct**.
 
-- [ ] **OC-1 — Context issues and interested-party fields (model and service).** Forecast 900-1,300.
+- [x] **OC-1 — Context issues and interested-party fields (model and service).** Forecast 900-1,300.
   - Models and migration (issues, party fields, the issue link on risks and opportunities), services with OC1, OC2 and OC4 rules, delete protection, MCP modules and fields.
 - [ ] **OC-2 — QMS scope (model and service).** Forecast 800-1,200.
   - Versioned scope with the applicability catalogue, lifecycle and approval (OC3), MCP read and draft writes.
+  - Also (OC-1 review): the interested-party web routes and JSON API pass `local_today()` to `stakeholders.create` and `update`, so a JSON client sending `fecha_revision` gets a validation result instead of a server error (test it through the JSON endpoint); `_current_issue` in `app/services/risks.py` reads the issue with a shared lock, like the module's other parent checks.
 - [ ] **OC-3 — Screens and dashboard.** Forecast 1,100-1,500.
   - Issue register screens, updated party screens, scope pages (current, draft, history, approve), dashboard card (OC5).
 - [ ] **OC-4 — PDF, review inputs and docs.** Forecast 600-900.
@@ -54,8 +55,16 @@ Baseline at `9edea71`: 1,554 tests. Migrations are tested on PostgreSQL (`TEST_P
 
 | Task | Status | Commit | Checks | Review |
 |---|---|---|---|---|
-| OC-1..OC-4 | Pending | — | — | — |
+| OC-1 | Done | `08f1875` (model `CuestionContexto` with type-matched categories, relevance with a justification when not relevant, climate flag; party columns `tipo`, `pertinente`, `responsable_id`, `fecha_revision`, `requisitos_climaticos`; `cuestion_id` on risks and opportunities; migration `c8f2a4e6b0d3`; policy `ORGANIZATION_CONTEXT`; delete protection), `000fc16` (stakeholder service: the new fields, a new review date never before today; risks: `cuestion_id` validated (the issue must exist and be `vigente`) and filtered; MCP fields for parties (dated writes) and risks), `d65ef34` (`app/services/context_issues.py`: register, filters, `linked`, `attention`, `changes` for the review inputs; MCP module `cuestiones_contexto`, 27 modules) | RED: missing `TipoContexto` and `CategoriaCuestion`, `KeyError: 'ORGANIZATION_CONTEXT'`, unknown module, counts `28 != 27` and `27 != 26`, `NoSuchTableError: cuestiones_contexto`. GREEN: the first two commits alone 1,560 tests OK; all three 1,584 tests OK incl. PostgreSQL | Range `9edea71..b01fb7e`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-7e6230154396ddbd` **approved** and acknowledged; its warning and suggestion moved into OC-2 |
+| OC-2..OC-4 | Pending | — | — | — |
+
+## Findings during implementation
+
+- Decisions in OC-1: `efecto` and `fecha_identificacion` are required (no default to today); party `tipo` and `pertinente` stay optional (`None` is "sin evaluar"); `superadas` in `changes` counts issues `superada` now with `updated_at` in the period (no supersession date is kept, so a later edit moves an issue to a later period).
+- For OC-3: the web routes and the JSON API of interested parties call `stakeholders.create` and `update` without `today`; a write that sets `fecha_revision` without it raises `ValueError`, so OC-3 must pass `local_today()` in both (the MCP module already does through `_DatedWrites`).
+- The MCP `_DatedWrites` wrapper is a frozen dataclass: tests patch its wrapped `register`.
+- Test adaptations (standing approval): `tests/test_attribution.py` (28), `tests/test_mcp_modules.py` and `tests/test_mcp_http.py` (27), `tests/test_policy.py`, `tests/test_access_characterization.py` (`NO_ROUTES`), `tests/mcp_support.py`, `tests/test_mcp_write_tools.py`, `tests/test_mcp_read_tools.py`, `tests/test_risks_service.py`, `tests/test_stakeholder_service.py`, `tests/test_migrations.py`.
 
 ## Next step
 
-OC-1.
+OC-2.
