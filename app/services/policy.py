@@ -51,6 +51,10 @@ The approved role-by-action matrix (decision D1). Roles may read, write
   ``external-providers``). Approving, conditioning and blocking a provider are
   further limited to administrators outside the ``mcp`` channel by its
   service (EP2).
+- Organization context (context issues, and the QMS scope from OC-2): every
+  role reads; administrators and auditors write; administrators delete
+  (decision OC4 of ``organization-context``). Interested parties keep their own
+  open grant.
 
 Seams: the ``mcp`` channel never deletes and never writes documents (they are
 written in the web only), and token scopes intersect the role.
@@ -99,6 +103,7 @@ class Resource(StrEnum):
     QUALITY_OBJECTIVES = "quality_objectives"
     MANAGEMENT_REVIEW = "management_review"
     EXTERNAL_PROVIDERS = "external_providers"
+    ORGANIZATION_CONTEXT = "organization_context"
 
 
 _ALL = frozenset(RoleEnum)
@@ -146,6 +151,7 @@ _MATRIX: dict[Resource, Grant] = {
     Resource.QUALITY_OBJECTIVES: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
     Resource.MANAGEMENT_REVIEW: Grant(_ADMIN_AUDITOR, _ADMIN_AUDITOR, _ADMIN),
     Resource.EXTERNAL_PROVIDERS: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
+    Resource.ORGANIZATION_CONTEXT: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
 }
 
 
