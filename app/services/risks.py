@@ -30,7 +30,10 @@ Risks and opportunities:
 - Choices are member names. An owner (``responsable_id``, a person, active when
   newly chosen) is required on create; rows migrated from the old register may
   lack one until someone sets it. ``proceso_id`` and ``parte_interesada_id``
-  cite an existing process and interested party.
+  cite an existing process and interested party, and ``cuestion_id`` the
+  context issue that gives rise to the record (OC1 of ``organization-context``),
+  which must be ``vigente`` when newly linked: a link to an issue superseded
+  later stays, and the record stays editable.
 - Each 1-5 pair (likelihood and impact, the residual pair, benefit and
   feasibility) is given whole or left empty (RO4: "sin valorar"); a risk's
   residual pair needs its first pair. ``nivel`` and ``prioridad`` come from the
@@ -41,10 +44,11 @@ Risks and opportunities:
   unless it is a ``cerrado`` risk or an ``aprovechada`` or ``descartada``
   opportunity; only an open one is overdue for review (``revision_vencida``).
 - A record with actions is never deleted (``Conflict``).
-- The screens (RO-3) also filter by ``abierto``, risks by one cell of the heat map
-  (``probabilidad`` and ``impacto``, each alone too) and by ``alto_sin_accion``,
-  the open high or critical risks ``attention`` flags; ``heat_map`` counts the open
-  assessed risks by cell.
+- Both filter by ``cuestion_id`` too. The screens (RO-3) also filter by
+  ``abierto``, risks by one cell of the heat map (``probabilidad`` and
+  ``impacto``, each alone too) and by ``alto_sin_accion``, the open high or
+  critical risks ``attention`` flags; ``heat_map`` counts the open assessed
+  risks by cell.
 
 Actions belong to exactly one open risk or opportunity, which is read with a
 shared lock, and never move to another one. A ``completada`` action, and only
@@ -72,10 +76,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
-    ESCALA_MAX, ESCALA_MIN, AccionRiesgo, DecisionOportunidad, EficaciaAccion,
-    EstadoAccionRiesgo, EstadoOportunidad, EstadoRiesgo, NivelRiesgo, Oportunidad,
-    OrigenRiesgo, ParteInteresada, PrioridadOportunidad, ProcesoOperacion, Riesgo,
-    TratamientoRiesgo, nivel, prioridad,
+    ESCALA_MAX, ESCALA_MIN, AccionRiesgo, CuestionContexto, DecisionOportunidad,
+    EficaciaAccion, EstadoAccionRiesgo, EstadoCuestion, EstadoOportunidad, EstadoRiesgo,
+    NivelRiesgo, Oportunidad, OrigenRiesgo, ParteInteresada, PrioridadOportunidad,
+    ProcesoOperacion, Riesgo, TratamientoRiesgo, nivel, prioridad,
 )
 from . import crud, fields, people, policy
 from .actor import Actor
@@ -97,6 +101,8 @@ RESIDUAL_WITHOUT_ASSESSMENT = (
     "La valoración residual necesita antes la valoración del riesgo («probabilidad» e "
     "«impacto»).")
 IDENTIFIED_IN_FUTURE = "La fecha de identificación no puede ser futura."
+UNKNOWN_ISSUE = "El campo «cuestion_id» no corresponde a ninguna cuestión del contexto."
+ISSUE_SUPERSEDED = "La cuestión del contexto está superada; elige una vigente."
 REVIEW_BEFORE_IDENTIFICATION = (
     "La fecha de revisión no puede ser anterior a la fecha de identificación.")
 RISK_HAS_ACTIONS = (
@@ -186,6 +192,17 @@ def _exists(model: type, nothing: str) -> Callable[[Session, str, Any, Any], Non
     return check
 
 
+def _current_issue(session: Session, key: str, value: Any, current: Any) -> None:
+    """A ``crud.Field.check``: a newly linked context issue exists and is ``vigente``."""
+    if value is None or value == current:
+        return
+    found = session.get(CuestionContexto, value) if people.is_db_id(value) else None
+    if found is None:
+        raise ValidationError(UNKNOWN_ISSUE)
+    if found.estado is not EstadoCuestion.vigente:
+        raise ValidationError(ISSUE_SUPERSEDED)
+
+
 def _register_fields(estado: type, *assessment: str) -> tuple[crud.Field, ...]:
     """Fields a risk and an opportunity share, around their assessment scales."""
     return (
@@ -199,6 +216,7 @@ def _register_fields(estado: type, *assessment: str) -> tuple[crud.Field, ...]:
                    check=_exists(ParteInteresada, "ninguna parte interesada")),
         crud.Field("proceso_id", fields.integer,
                    check=_exists(ProcesoOperacion, "ningún proceso")),
+        crud.Field("cuestion_id", fields.integer, check=_current_issue),
         crud.Field("responsable_id", partial(fields.integer, required=True), required=True,
                    check=people.check_reference),
         *(crud.Field(name, _scale) for name in assessment),
@@ -348,14 +366,14 @@ def revision_vencida(record: Riesgo | Oportunidad, *, today: date) -> bool:
 
 def _record_conditions(model: type, closed: tuple, estado: Any, responsable_id: Any,
                        proceso_id: Any, origen: Any, sin_valorar: Any, revision_vencida: Any,
-                       today: Any, abierto: Any = None) -> list[Any]:
+                       today: Any, abierto: Any = None, cuestion_id: Any = None) -> list[Any]:
     """Filters a risk and an opportunity share (AND); members or their names."""
     where: list[Any] = []
     if abierto is not None:
         still_open = model.estado.not_in(closed)
         where.append(still_open if _flag(abierto, "abierto") else not_(still_open))
     for column, value in ((model.responsable_id, responsable_id),
-                          (model.proceso_id, proceso_id)):
+                          (model.proceso_id, proceso_id), (model.cuestion_id, cuestion_id)):
         if value is not None:
             where.append(column == value if people.is_db_id(value) else false())
     if estado:
@@ -386,11 +404,12 @@ def _risk_conditions(estado: Any = None, nivel: Any = None, responsable_id: int 
                      sin_valorar: bool | None = None, revision_vencida: bool | None = None,
                      today: date | None = None, abierto: bool | None = None,
                      probabilidad: int | None = None, impacto: int | None = None,
-                     alto_sin_accion: bool | None = None) -> list[Any]:
+                     alto_sin_accion: bool | None = None,
+                     cuestion_id: int | None = None) -> list[Any]:
     """Risk filters (AND); ``revision_vencida`` needs ``today``, the adapter's date."""
     where = [*_record_conditions(Riesgo, CLOSED_RISK_STATES, estado, responsable_id,
                                  proceso_id, origen, sin_valorar, revision_vencida, today,
-                                 abierto),
+                                 abierto, cuestion_id),
              *_band(Riesgo, nivel, NivelRiesgo, LEVEL_RANGES, "nivel")]
     for column, value, key in ((Riesgo.probabilidad, probabilidad, "probabilidad"),
                                (Riesgo.impacto, impacto, "impacto")):
@@ -423,11 +442,12 @@ def _opportunity_conditions(estado: Any = None, prioridad: Any = None,
                             responsable_id: int | None = None, proceso_id: int | None = None,
                             origen: Any = None, sin_valorar: bool | None = None,
                             revision_vencida: bool | None = None,
-                            today: date | None = None, abierto: bool | None = None) -> list[Any]:
+                            today: date | None = None, abierto: bool | None = None,
+                            cuestion_id: int | None = None) -> list[Any]:
     """Opportunity filters (AND); ``revision_vencida`` needs ``today``."""
     return [*_record_conditions(Oportunidad, CLOSED_OPPORTUNITY_STATES, estado, responsable_id,
                                 proceso_id, origen, sin_valorar, revision_vencida, today,
-                                abierto),
+                                abierto, cuestion_id),
             *_band(Oportunidad, prioridad, PrioridadOportunidad, PRIORITY_RANGES, "prioridad")]
 
 

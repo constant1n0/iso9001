@@ -186,8 +186,10 @@ class PagingTestCase(McpDbCase):
             for n in range(3):
                 self.seed(slug, **({unique[slug]: f"X-{n}"} if slug in unique else {}))
         for slug in slugs:
+            # A dated wrapper (interested parties, OC-1) delegates to its register.
+            service = getattr(MODULES[slug].service, "register", MODULES[slug].service)
             with (self.subTest(module=slug),
-                  patch.object(MODULES[slug].service, "list_") as list_everything):
+                  patch.object(service, "list_") as list_everything):
                 result = await self.call(mcp_actor(ADMIN), "qms_list",
                                          {"module": slug, "page": 2, "per_page": 2})
                 self.assertFalse(result.is_error, result.content)

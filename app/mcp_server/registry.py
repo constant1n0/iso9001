@@ -21,8 +21,8 @@ from ..models import (
     EstadoNoConformidad, EstadoObjetivo, EstadoOportunidad, EstadoProgramaAuditoria,
     EstadoProveedor, EstadoRevisionDireccion, EstadoRiesgo, FrecuenciaMedicion,
     GravedadNoConformidad, NivelRiesgo, OrigenNoConformidad, OrigenRiesgo, PrioridadOportunidad,
-    ResultadoEvaluacion, SentidoObjetivo, TipoAccionRevision, TipoHallazgo, TipoProceso,
-    TipoSuministro, TratamientoRiesgo,
+    ResultadoEvaluacion, SentidoObjetivo, TipoAccionRevision, TipoContexto, TipoHallazgo,
+    TipoProceso, TipoSuministro, TratamientoRiesgo,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, competence, corrective_actions,
@@ -221,6 +221,9 @@ def _register_fields(estado: type, assessment: tuple[FieldDef, ...]) -> tuple[Fi
         _f("origen", "enum", True, members=OrigenRiesgo),
         _f("parte_interesada_id", "integer", note="Interested party (partes_interesadas)."),
         _f("proceso_id", "integer", note="Process (procesos) it belongs to."),
+        _f("cuestion_id", "integer", note=(
+            "Context issue (cuestiones_contexto) that gives rise to it; vigente when newly "
+            "linked.")),
         _f("responsable_id", "integer", True, note=(
             "Person (personas) who owns it; records migrated from the old register may "
             "have none.")),
@@ -236,7 +239,7 @@ def _register_filters(band: FieldDef, estado: type) -> tuple[FieldDef, ...]:
     return (
         _f("estado", "enum", members=estado), band,
         _f("responsable_id", "integer"), _f("proceso_id", "integer"),
-        _f("origen", "enum", members=OrigenRiesgo),
+        _f("cuestion_id", "integer"), _f("origen", "enum", members=OrigenRiesgo),
         _f("sin_valorar", "boolean", note="Not assessed yet."),
         _f("revision_vencida", "boolean", note="Open, with fecha_revision before today."),
     )
@@ -443,10 +446,17 @@ _MODULES = (
         _f("cliente", required=True), _f("fecha_encuesta", "date", True),
         _f("puntuacion", "integer", True), _f("comentarios"),
     ), (_f("cliente"), _f("puntuacion_minima", "integer"))),
+    # Their writes take the adapter's date: a new fecha_revision is never before it (OC2).
     Module("partes_interesadas", "Interested parties", Resource.INTERESTED_PARTIES,
-           stakeholders, (
+           _DatedWrites(stakeholders), (
         _f("nombre", required=True), _f("necesidades_expectativas"),
         _f("requisitos_identificados"), _f("objetivo_estrategico"),
+        _f("tipo", "enum", members=TipoContexto),
+        _f("pertinente", "boolean", note="Whether it is relevant; null means not evaluated."),
+        _f("responsable_id", "integer", note="Person (personas) who owns the party."),
+        _f("fecha_revision", "date", note="Next review; a new date is not before today."),
+        _f("requisitos_climaticos", "boolean", note=(
+            "Has climate-related requirements; false by default.")),
     )),
     Module("mejoras", "Improvements", Resource.IMPROVEMENTS, improvements, (
         _f("no_conformidad", required=True), _f("accion_correctiva"), _f("accion_preventiva"),
