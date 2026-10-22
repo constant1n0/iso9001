@@ -80,6 +80,12 @@ SEEDS = {
     "acciones_riesgo": {"riesgo_id": 1, "descripcion": "Homologar un segundo proveedor",
                         "responsable_id": 1, "fecha_limite": "2026-12-31"},
     "proveedores": {"nombre": "Aceros del Norte", "tipo_suministro": "producto"},
+    # Identified on a past date.
+    "cuestiones_contexto": {"tipo": "externa", "categoria": "legal",
+                            "titulo": "Nueva normativa de envases",
+                            "descripcion": "Obliga a rediseñar el embalaje",
+                            "efecto": "negativo", "pertinente": True,
+                            "fecha_identificacion": "2026-10-01"},
     # Cites the provider and the person seeded above (both id 1), on a past date.
     "evaluaciones_proveedor": {"proveedor_id": 1, "fecha": "2026-10-01", "evaluador_id": 1,
                                "calidad": 4, "plazo": 4, "servicio": 3, "documentacion": 5},
