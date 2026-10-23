@@ -31,7 +31,8 @@ LATER_AUDITED_TABLES = frozenset(
      "acciones_correctivas", "document_revisions", "programas_auditoria",
      "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo",
      "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades",
-     "acciones_riesgo", "proveedores", "evaluaciones_proveedor", "cuestiones_contexto"}
+     "acciones_riesgo", "proveedores", "evaluaciones_proveedor", "cuestiones_contexto",
+     "alcances_sgc"}
 )
 
 
@@ -1434,6 +1435,87 @@ class MigrationsTestCase(unittest.TestCase):
             self.assertEqual([("Clientes", "Plazos")], self._rows(
                 "SELECT nombre, necesidades_expectativas FROM partes_interesadas"))
             self.assertEqual([("Fallo",)], self._rows("SELECT titulo FROM riesgos"))
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+    def test_qms_scope_keeps_one_draft_one_current_version_and_downgrades(self) -> None:
+        """OC-2 (e4a6c8b0d2f5): versioned scope and the applicability of each requirement."""
+        scopes, entries = "alcances_sgc", "aplicabilidad_alcance"
+        expected = {
+            "fk_alcances_sgc_aprobado_por_id_personas": ("personas", "RESTRICT"),
+            "fk_aplicabilidad_alcance_alcance_id_alcances_sgc": (scopes, "CASCADE"),
+        }
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision="c8f2a4e6b0d3")
+            with db.engine.begin() as connection:
+                connection.execute(text("INSERT INTO personas (nombre) VALUES ('Ana')"))
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            foreign_keys = {fk["name"]: (fk["referred_table"], fk["options"].get("ondelete"))
+                            for table in (scopes, entries)
+                            for fk in inspector.get_foreign_keys(table)}
+            self.assertLessEqual(expected.items(), foreign_keys.items())
+            indexes = {index["name"]: index for index in inspector.get_indexes(scopes)}
+            self.assertLessEqual({f"ix_{scopes}_aprobado_por_id", f"uq_{scopes}_borrador",
+                                  f"uq_{scopes}_vigente"}, set(indexes))
+            for name in (f"uq_{scopes}_borrador", f"uq_{scopes}_vigente"):
+                with self.subTest(partial=name):
+                    self.assertTrue(indexes[name]["unique"])
+                    self.assertIn("WHERE", self._rows(
+                        f"SELECT indexdef FROM pg_indexes WHERE indexname = '{name}'")[0][0])
+            self.assertEqual(["alcance_id", "apartado"],
+                             inspector.get_pk_constraint(entries)["constrained_columns"])
+            self.assertLessEqual(
+                {f"ck_{scopes}_{name}" for name in ("estado", "version", "aprobacion",
+                                                     "obsolescencia")}
+                | {f"ck_{entries}_justificacion"},
+                {check["name"] for table in (scopes, entries)
+                 for check in inspector.get_check_constraints(table)})
+            with db.engine.begin() as connection:
+                for statement in (
+                    "INSERT INTO alcances_sgc (version, estado, declaracion, aprobado_por_id, "
+                    "fecha_aprobacion, fecha_obsolescencia) VALUES (1, 'obsoleto', 'Uno', 1, "
+                    "'2025-01-01', '2026-01-01')",
+                    "INSERT INTO alcances_sgc (version, estado, declaracion, aprobado_por_id, "
+                    "fecha_aprobacion) VALUES (2, 'vigente', 'Dos', 1, '2026-01-01')",
+                    "INSERT INTO alcances_sgc (version, declaracion) VALUES (3, 'Tres')",
+                    "INSERT INTO aplicabilidad_alcance (alcance_id, apartado, aplica) "
+                    "VALUES (3, '4.1', true)",
+                    "INSERT INTO aplicabilidad_alcance (alcance_id, apartado, aplica, "
+                    "justificacion) VALUES (3, '8.3', false, 'No diseñamos')",
+                ):
+                    connection.execute(text(statement))
+            self.assertEqual([("borrador",)], self._rows(
+                "SELECT estado FROM alcances_sgc WHERE version = 3"))
+            for statement in (
+                "INSERT INTO alcances_sgc (version, declaracion) VALUES (4, 'Otro')",
+                "INSERT INTO alcances_sgc (version, estado, declaracion, aprobado_por_id, "
+                "fecha_aprobacion) VALUES (4, 'vigente', 'Otro', 1, '2026-10-01')",
+                "UPDATE alcances_sgc SET version = 2 WHERE version = 3",
+                "UPDATE alcances_sgc SET version = 0 WHERE version = 3",
+                "UPDATE alcances_sgc SET estado = 'aprobado' WHERE version = 3",
+                "UPDATE alcances_sgc SET aprobado_por_id = NULL WHERE version = 2",
+                "UPDATE alcances_sgc SET fecha_aprobacion = '2026-10-01' WHERE version = 3",
+                "UPDATE alcances_sgc SET fecha_obsolescencia = NULL WHERE version = 1",
+                "UPDATE alcances_sgc SET fecha_obsolescencia = '2026-10-01' WHERE version = 2",
+                "UPDATE alcances_sgc SET aprobado_por_id = 99 WHERE version = 2",
+                "UPDATE aplicabilidad_alcance SET justificacion = ' ' WHERE apartado = '8.3'",
+                "INSERT INTO aplicabilidad_alcance (alcance_id, apartado, aplica) "
+                "VALUES (3, '4.1', true)",
+                "INSERT INTO aplicabilidad_alcance (alcance_id, apartado, aplica) "
+                "VALUES (99, '4.2', true)",
+                "DELETE FROM personas",  # approved two versions
+            ):
+                with self.subTest(refused=statement):
+                    with self.assertRaises(IntegrityError):
+                        with db.engine.begin() as connection:
+                            connection.execute(text(statement))
+            with db.engine.begin() as connection:
+                connection.execute(text("DELETE FROM alcances_sgc WHERE version = 3"))
+            self.assertEqual([(0,)], self._rows("SELECT count(*) FROM aplicabilidad_alcance"))
+            downgrade(directory=MIGRATIONS_DIR, revision="c8f2a4e6b0d3")
+            self.assertFalse({scopes, entries} & set(inspect(db.engine).get_table_names()))
+            self.assertEqual([("Ana",)], self._rows("SELECT nombre FROM personas"))
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 
