@@ -153,6 +153,27 @@ class MinutesPdfTestCase(ReviewScreensBase):
         for text in ("Proveedores externos", "Estado actual:", "Sin proveedor indicado"):
             self.assertNotIn(text, html)
 
+    def test_the_minutes_carry_the_context_issues_and_scope_unless_held_before_them(
+            self) -> None:
+        self.context()
+        draft = self.review([self.ana])
+        old = self.held_with(self.before_context())
+        self.login(AUDITOR)
+        _, sections, _ = self.minutes(draft)
+        figures = self.pdf_fields(sections[CONTEXT])
+        self.assertEqual(("1", "1", "1", "1", "2", "04/05/2026"), tuple(
+            figures[label] for label in (
+                "Cuestiones nuevas en el periodo", "Cuestiones superadas en el periodo",
+                "Vigentes sobre el cambio climático", "Pertinentes sobre el cambio climático",
+                "Versión vigente del alcance", "Fecha de aprobación del alcance")))
+        self.assertIn("<td>Normativa derogada</td><td>Modificada</td><td>Externa</td>"
+                      "<td>Legal</td><td>Sí</td><td>No</td><td>Superada</td>",
+                      sections[CONTEXT])
+        _, sections, html = self.minutes(old)
+        self.assertIn("Riesgos registrados", self.pdf_fields(sections[CONTEXT]))
+        for text in ("Cuestiones vigentes", "Versión vigente del alcance", "Normativa derogada"):
+            self.assertNotIn(text, html)
+
     def test_a_minutes_pdf_that_cannot_be_rendered_returns_to_the_review(self) -> None:
         rid = self.review([self.ana])
         self.login(AUDITOR)

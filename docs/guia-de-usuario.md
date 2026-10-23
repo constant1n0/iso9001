@@ -32,6 +32,9 @@ Documentación técnica:
 - [No conformidades y acciones correctivas](#no-conformidades-y-acciones-correctivas)
 - [Control de documentos](#control-de-documentos)
 - [Programa de auditoría, auditorías y hallazgos](#programa-de-auditoría-auditorías-y-hallazgos)
+- [Contexto de la organización](#contexto-de-la-organización)
+- [Partes interesadas](#partes-interesadas)
+- [Alcance del SGC](#alcance-del-sgc)
 - [Procesos](#procesos)
 - [Riesgos y oportunidades](#riesgos-y-oportunidades)
 - [Objetivos de la calidad](#objetivos-de-la-calidad)
@@ -113,8 +116,9 @@ puede consultar.
 | Grupo | Opciones |
 |---|---|
 | (arriba) | **Panel** |
+| **Contexto** | **Contexto** 4.1, **Partes interesadas** 4.2, **Alcance del SGC** 4.3 |
 | **Calidad** | **Procesos** 4.4, **Riesgos** 6.1, **Oportunidades** 6.1, **Objetivos de calidad** 6.2, **Indicadores de auditoría** 9.1, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
-| **Clientes** | **Satisfacción** 9.1.2, **Partes interesadas** 4.2 |
+| **Clientes** | **Satisfacción** 9.1.2 |
 | **Personas y competencia** | **Roles y responsabilidades** 5.3, **Personas** 7.2, **Competencias requeridas** 7.2, **Matriz de competencias** 7.2, **Capacitaciones** 7.2, **Recursos de capacitación** 7.1 |
 | **Documentación** | **Documentos** 7.5 |
 | **Administración** | **Usuarios** 5.3 |
@@ -147,7 +151,8 @@ de la barra superior.
   persona, algunos formularios empiezan con esa persona seleccionada (el autor
   de un documento nuevo, quien registra una medición, quien aprueba un
   programa de auditoría), y el sistema la registra cuando usted celebra una
-  revisión por la dirección o da de baja un documento. Pida a un administrador
+  revisión por la dirección, aprueba el alcance del SGC o da de baja un
+  documento. Pida a un administrador
   o a un auditor que vincule su cuenta con su persona.
 - **Nombres heredados.** Los registros antiguos de capacitaciones, no
   conformidades y auditorías guardan un nombre en texto libre (**Personal**,
@@ -173,6 +178,8 @@ aprobar en cada módulo.
 | No conformidades | Consultar, crear, editar, eliminar; cancelar, cerrar, reabrir | Consultar, crear, editar; cancelar, cerrar | Consultar, crear, editar |
 | Acciones correctivas | Consultar, crear, editar, eliminar; verificar | Consultar, crear, editar; verificar | Consultar, crear, editar |
 | Documentos | Consultar todas las revisiones, crear, editar, enviar a revisión, rechazar, publicar, adjuntar ficheros; aprobar, dar de baja | Consultar todas las revisiones, crear, editar, enviar a revisión, rechazar, publicar, adjuntar ficheros | Consultar la revisión vigente |
+| Cuestiones del contexto | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
+| Alcance del SGC | Consultar; crear, editar y eliminar borradores; aprobar | Consultar; crear, editar y eliminar borradores | Consultar |
 | Programas de auditoría, auditorías y hallazgos | Consultar, crear, editar, eliminar; aprobar programas | Consultar, crear, editar | Sin acceso |
 | Riesgos, oportunidades y sus acciones | Consultar, crear, editar, eliminar; evaluar la eficacia de las acciones | Consultar, crear, editar; evaluar la eficacia de las acciones | Consultar |
 | Objetivos de la calidad y mediciones | Consultar, crear, editar, cambiar el estado, eliminar | Consultar, crear, editar, cambiar el estado | Consultar |
@@ -202,8 +209,8 @@ API desde la línea de órdenes del servidor (véase
 - Un agente nunca elimina, nunca escribe documentos y nunca gestiona tokens.
   Verificar acciones correctivas; cerrar, cancelar y reabrir no
   conformidades; aprobar programas de auditoría; celebrar y cerrar revisiones
-  por la dirección; aprobar, condicionar y bloquear proveedores, y los PDF,
-  solo se hacen desde la interfaz web.
+  por la dirección; aprobar, condicionar y bloquear proveedores; aprobar el
+  alcance del SGC, y los PDF, solo se hacen desde la interfaz web.
 - Lo que guarda un agente lleva el nombre de su usuario en el registro de
   auditoría, igual que un cambio hecho desde la web.
 - Cada usuario ve y revoca sus propios tokens en **Mi perfil**; desactivar un
@@ -260,6 +267,12 @@ ninguna cifra, área ni fecha de auditoría.
   vencida**, **Riesgos sin valorar** y **Oportunidades sin valorar**. Solo
   aparecen las cifras que no son cero; sin ninguna, la tarjeta muestra
   **Ningún riesgo ni oportunidad requiere atención.**
+- **Contexto**: cuántas cuestiones del contexto vigentes y cuántas partes
+  interesadas tienen la revisión vencida, cada cifra con un enlace a la lista
+  filtrada por ellas: **Cuestiones del contexto con la revisión vencida** y
+  **Partes interesadas con la revisión vencida**. Solo aparecen las cifras que
+  no son cero; sin ninguna, la tarjeta muestra **Ninguna cuestión ni parte
+  interesada tiene la revisión vencida.**
 - **Acciones de la revisión por la dirección**, para administradores y
   auditores: las acciones vencidas, con su responsable y su fecha límite.
   Cuando las hay, un enlace abre el registro de acciones filtrado por ellas.
@@ -795,6 +808,191 @@ A partir de entonces:
 - eliminar un hallazgo (administradores) nunca elimina su no conformidad, y
   eliminar la no conformidad borra el vínculo del hallazgo.
 
+## Contexto de la organización
+
+**Contexto** (`/contexto/`), en el menú **Contexto**, es el registro de las
+cuestiones externas e internas del apartado 4.1 de ISO 9001:2026: los factores
+que pueden afectar a la capacidad de la organización para lograr los
+resultados previstos de su SGC. Recoge también lo que la norma pide decidir
+sobre el cambio climático: si es una cuestión pertinente. Todos los roles
+consultan el registro; los administradores y los auditores crean y editan
+cuestiones; solo los administradores las eliminan.
+
+### La cuestión
+
+Pulse **+ Nueva cuestión** y rellene:
+
+- **Tipo**: **Externa** o **Interna**;
+- **Categoría (según el tipo)**: en una cuestión externa, **Política**,
+  **Económica**, **Social**, **Tecnológica**, **Legal** o **Ambiental**; en
+  una interna, **Cultura**, **Recursos**, **Conocimiento**, **Desempeño** o
+  **Estructura**. El selector ofrece los dos grupos, pero el sistema rechaza
+  una categoría del otro tipo: **La categoría no corresponde al tipo: una
+  cuestión externa es política, económica, social, tecnológica, legal o
+  ambiental, y una interna, de cultura, recursos, conocimiento, desempeño o
+  estructura.**;
+- **Título** y **Descripción**;
+- **Efecto** sobre los resultados del SGC: **Positivo**, **Negativo** o
+  **Neutro**;
+- **Pertinente para el SGC** (**Sí** o **No**) y **Justificación de la
+  pertinencia (obligatoria si no es pertinente)**;
+- **Relacionada con el cambio climático**;
+- **Responsable** (una persona, opcional);
+- **Fecha de identificación**: nunca futura (**La fecha de identificación no
+  puede ser futura.**);
+- **Próxima revisión** (opcional): nunca anterior a la fecha de
+  identificación;
+- **Estado**: **Vigente** o **Superada**;
+- **Notas**.
+
+### Pertinencia y cambio climático
+
+- Una cuestión no pertinente explica por qué: **Indica por qué la cuestión no
+  es pertinente («justificacion_pertinencia»).**
+- Marque **Relacionada con el cambio climático** en las cuestiones que tienen
+  que ver con él, sean pertinentes o no. El registro deja así constancia de
+  que la organización ha determinado si el cambio climático es una cuestión
+  pertinente: una cuestión marcada y pertinente lo afirma; una marcada y no
+  pertinente lo descarta, con su justificación.
+- Una cuestión que deja de aplicar pasa a **Superada**: no se elimina y queda
+  como evidencia.
+- **Regla de vencimiento.** Una cuestión vigente cuya **Próxima revisión** es
+  anterior a hoy muestra **Revisión vencida**, y el panel de control la
+  señala.
+
+### Pantallas
+
+- **La lista**, por tipo, categoría y título, se filtra por **Tipo**,
+  **Categoría**, **Pertinente**, **Cambio climático**, **Estado**,
+  **Responsable** y **Revisión vencida**. Muestra de cada cuestión su efecto,
+  su pertinencia, si se relaciona con el cambio climático (**Clima**), su
+  responsable, su próxima revisión (con una etiqueta si está vencida), su
+  estado y cuántos riesgos y oportunidades nacen de ella.
+- **La página de una cuestión** muestra todos sus campos, enlaza sus riesgos y
+  sus oportunidades, y abre las listas de riesgos y de oportunidades filtradas
+  por ella.
+- **Eliminación**: solo se puede eliminar una cuestión a la que no cita ningún
+  riesgo ni oportunidad. En otro caso, su página no muestra **Eliminar** y el
+  sistema la rechaza: **No se puede eliminar una cuestión del contexto a la
+  que se refieren riesgos u oportunidades; quítala antes de esos registros.**
+
+### Riesgos y oportunidades de una cuestión
+
+Un riesgo o una oportunidad puede indicar la **Cuestión del contexto** de la
+que nace (véase [Riesgos y oportunidades](#riesgos-y-oportunidades)). El
+selector solo ofrece las cuestiones vigentes, y el sistema rechaza una
+superada: **La cuestión del contexto está superada; elige una vigente.** Un
+registro que ya citaba una cuestión que después se supera la conserva al
+editarse: el selector la muestra con **(superada)**.
+
+## Partes interesadas
+
+**Partes interesadas** (`/partes_interesadas/`), en el menú **Contexto**, es el
+registro del apartado 4.2: las partes interesadas pertinentes para el SGC y
+sus necesidades y expectativas. Todos los roles consultan, crean y editan
+partes interesadas; solo los administradores las eliminan.
+
+Pulse **+ Nueva parte interesada** y rellene:
+
+- **Nombre** (obligatorio y único: **Ya existe una parte interesada con ese
+  nombre.**);
+- **Tipo**: **Externa** o **Interna**, o **— Sin indicar —**;
+- **Pertinente para el SGC**: **Sí**, **No** o **Sin evaluar**;
+- **Responsable** (una persona, opcional);
+- **Próxima revisión** (opcional): al indicarla o cambiarla, nunca es anterior
+  a hoy (**La fecha de la próxima revisión («fecha_revision») no puede ser
+  anterior a hoy.**);
+- **Tiene requisitos relacionados con el cambio climático**;
+- **Necesidades y Expectativas**, **Requisitos Identificados** y **Objetivo
+  Estratégico**.
+
+Las partes interesadas registradas antes de estos campos aparecen **Sin
+evaluar** y sin tipo hasta que se editan.
+
+- **La lista**, por nombre, muestra el tipo, la pertinencia, los requisitos
+  climáticos (**Clima**), el responsable, la próxima revisión (con **Revisión
+  vencida** si ya ha pasado, sea o no pertinente la parte) y las necesidades y
+  expectativas. El panel de control enlaza la lista filtrada por las que
+  tienen la revisión vencida.
+- **La página de una parte interesada** muestra su identificación y sus
+  textos.
+- Un riesgo o una oportunidad puede citar su **Parte interesada**.
+
+## Alcance del SGC
+
+**Alcance del SGC** (`/alcance/`), en el menú **Contexto**, recoge el alcance
+del apartado 4.3: la declaración del alcance, los productos y servicios, los
+centros y, para cada requisito de los capítulos 4 a 10, si aplica y, si no
+aplica, por qué. El alcance se guarda por versiones numeradas. Todos los roles
+consultan todas las versiones y sus PDF; los administradores y los auditores
+preparan los borradores; solo los administradores los aprueban.
+
+### Versiones y aprobación
+
+| Estado | Significado |
+|---|---|
+| **Borrador** | La versión en preparación, la única que cambia; solo hay un borrador a la vez |
+| **Vigente** | La versión aprobada en vigor; solo hay una |
+| **Obsoleto** | Una versión sustituida por otra; se conserva como evidencia |
+
+- **+ Nuevo borrador** empieza la versión siguiente con los textos y la
+  aplicabilidad de la versión vigente, que se cambian después. En el primer
+  borrador aplican todos los requisitos y la declaración es obligatoria: **La
+  primera versión del alcance necesita su declaración («declaracion»).**
+- Mientras hay un borrador, la página del alcance lo enlaza y no ofrece otro:
+  **Ya hay un borrador del alcance; modifícalo o elimínalo antes de empezar
+  otro.**
+- **Editar** cambia los textos del borrador (**Declaración del alcance**,
+  **Productos y servicios**, **Centros** y **Notas**) y su aplicabilidad.
+  **Eliminar** borra el borrador, y su número de versión queda libre.
+- **Aprobar**, solo para administradores, pone el borrador en vigor con la
+  fecha de hoy y deja obsoleta desde hoy la versión vigente. Queda registrada
+  como aprobadora la persona vinculada a su cuenta de usuario (**Tu usuario no
+  está vinculado a ninguna persona; vincúlalo para aprobar el alcance.**);
+  puede aprobar un borrador que haya preparado usted.
+- Las versiones vigentes y obsoletas nunca cambian: **Una versión vigente u
+  obsoleta del alcance no se puede modificar.**
+
+### Aplicabilidad
+
+El formulario del borrador tiene una fila por cada uno de los 38 requisitos
+del catálogo, de 4.1 a 10.3, con la casilla **Aplica** y una justificación.
+Desmarque **Aplica** en los requisitos que no aplican y justifique cada uno;
+sin justificación, el error aparece en su fila y no se guarda nada: por
+ejemplo, **Justifica por qué no aplica el apartado 8.3 (Diseño y desarrollo de
+los productos y servicios).**
+
+### Pantallas del alcance
+
+- **Alcance del SGC** muestra la versión vigente: su número, su estado, su
+  aprobación, la declaración, los productos y servicios, los centros, las
+  notas y la tabla **Aplicabilidad de los requisitos**. Sin versión vigente
+  muestra **Todavía no hay un alcance aprobado.** y enlaza el borrador, si lo
+  hay.
+- **Historial** lista todas las versiones, de la más reciente a la más
+  antigua, con su estado, quién la aprobó y cuándo, y desde cuándo está
+  obsoleta.
+- **La página de una versión** muestra lo mismo que la vigente y, en un
+  borrador, **Editar**, **Eliminar** y **Aprobar** según el rol.
+
+### PDF del alcance
+
+**PDF**, en la página del alcance vigente y en la de cada versión, genera esa
+versión del alcance (`alcance_sgc_v<N>.pdf`):
+
+- la versión, su estado, quién la aprobó y cuándo, desde cuándo está
+  obsoleta, y cuántos requisitos aplican y cuántos no;
+- la declaración del alcance, los productos y servicios, los centros y las
+  notas;
+- la tabla de aplicabilidad: apartado, requisito, **Aplica** o **No aplica**
+  y justificación;
+- al final, los requisitos que no aplican con su justificación, o **Todos los
+  requisitos aplican.**
+
+Cualquier versión se exporta, también un borrador, que el PDF identifica por
+su estado. Sin versión vigente, el PDF del alcance vigente no se genera:
+**No hay ninguna versión vigente del alcance.**
+
 ## Procesos
 
 **Procesos** (`/procesos/`), en el menú **Calidad**, es el mapa de procesos del
@@ -868,8 +1066,11 @@ Pulse **+ Nuevo riesgo** o **+ Nueva oportunidad** y rellene:
 
 - **Título** y **Descripción**;
 - **Origen**: **Interno** o **Externo** a la organización;
-- **Parte interesada** (opcional; procede de **Partes interesadas**) y
-  **Proceso** (opcional; véase [Otros registros](#otros-registros));
+- **Parte interesada** (opcional; véase
+  [Partes interesadas](#partes-interesadas)), **Cuestión del contexto**
+  (opcional; solo las vigentes, véase
+  [Contexto de la organización](#contexto-de-la-organización)) y **Proceso**
+  (opcional; véase [Procesos](#procesos));
 - **Responsable** (una persona);
 - la valoración, el **Tratamiento** del riesgo o la **Decisión** sobre la
   oportunidad (véase [Valoración](#valoración)) y el **Estado** (véase
@@ -951,8 +1152,8 @@ acción completada.**
 ### Pantallas
 
 - **La lista** se filtra por **Estado**, **Nivel** (o **Prioridad**),
-  **Responsable**, **Proceso**, **Origen**, **Sin valorar**, **Revisión
-  vencida** y **Abierto** (o **Abierta**); los riesgos, además, por
+  **Responsable**, **Proceso**, **Cuestión del contexto**, **Origen**, **Sin
+  valorar**, **Revisión vencida** y **Abierto** (o **Abierta**); los riesgos, además, por
   **Probabilidad**, **Impacto** y **Alto o crítico sin acción abierta**.
   Muestra de cada registro su proceso, su responsable, su nivel y su nivel
   residual con el tratamiento (o su prioridad con la decisión), su estado, su
@@ -1279,9 +1480,13 @@ registros del periodo, junto a su comentario:
 - **a)** las acciones de revisiones anteriores: abiertas al final del
   periodo, por estado, completadas después del periodo, vencidas y
   completadas en el periodo;
-- **b)** las partes interesadas, y los riesgos y oportunidades: registrados,
-  nuevos y modificados en el periodo, los riesgos por nivel con los altos o
-  críticos abiertos y las oportunidades por prioridad;
+- **b)** las cuestiones externas e internas: las nuevas, las modificadas y
+  las superadas en el periodo, con su lista, y cuántas hay vigentes, cuántas
+  son pertinentes y cuántas se relacionan con el cambio climático (todas y
+  solo las pertinentes); las partes interesadas; la versión vigente del
+  alcance del SGC y su fecha de aprobación; y los riesgos y oportunidades:
+  registrados, nuevos y modificados en el periodo, los riesgos por nivel con
+  los altos o críticos abiertos y las oportunidades por prioridad;
 - **c)** la satisfacción del cliente (encuestas y puntuación media), los
   objetivos de la calidad (que cumplen la meta, que no la cumplen, sin
   medición, con una medición vencida, por estado), el desempeño de los
@@ -1302,8 +1507,12 @@ registros del periodo, junto a su comentario:
 - **f)** las mejoras implantadas en el periodo.
 
 Las cifras cuentan el periodo hasta su final, o hasta hoy si el final es
-posterior (la **Fecha de corte**). Las revisiones celebradas antes de que
-existiera el registro de proveedores no muestran la parte de los proveedores. En un borrador se calculan en el momento y
+posterior (la **Fecha de corte**); los recuentos de cuestiones vigentes y la
+versión del alcance son los del momento en que se calculan. Las revisiones
+celebradas antes de que existiera el registro de proveedores no muestran la
+parte de los proveedores, ni las celebradas antes del registro de cuestiones
+del contexto muestran las cuestiones ni el alcance. En un borrador se calculan
+en el momento y
 se marcan como **Datos provisionales**. Celebrar la revisión las congela, de
 modo que la revisión y su acta siguen mostrando lo que se presentó aunque los
 registros cambien después.
@@ -1364,23 +1573,22 @@ consulta y los escribe con las mismas reglas de rol.
 
 | Registro | Apartado | Dónde | Campos |
 |---|---|---|---|
-| **Partes interesadas** | 4.2 | Menú **Clientes** | **Nombre** (único), **Necesidades y Expectativas**, **Requisitos Identificados**, **Objetivo Estratégico** |
 | **Capacitaciones** | 7.2 | Menú **Personas y competencia** | **Tema**, **Fecha**, **Personal** y **Persona**, **Duración en Horas**, **Evaluación Final** |
 | **Mejoras** | 10.3 | Menú **Calidad** | **No conformidad** (obligatoria), **Acción correctiva**, **Acción preventiva**; la fecha **Implantada** se fija al registrar la mejora |
 | **Satisfacción** | 9.1.2 | Menú **Clientes** | **Cliente**, **Fecha de Encuesta**, **Puntuación (1-10)**, **Comentarios** |
 
 Notas:
 
-- Las partes interesadas, los indicadores de auditoría, las capacitaciones y
-  las mejoras alimentan las entradas de la revisión por la dirección.
+- Los indicadores de auditoría, las capacitaciones y las mejoras alimentan
+  las entradas de la revisión por la dirección.
 - **Capacitaciones** se filtra por **Tema**, **Fecha** y **Personal**, y cada
   sesión tiene un **PDF** (**Registro de capacitación**). Una competencia
   acreditada puede citar una sesión como evidencia.
 - **Satisfacción** se filtra por **Cliente** y **Puntuación mínima**, y cada
   encuesta tiene un **PDF** (**Encuesta de satisfacción**).
 - **Mejoras** muestra las mejoras de diez en diez.
-- Todos los roles registran capacitaciones, mejoras, encuestas y partes
-  interesadas; solo los administradores las eliminan.
+- Todos los roles registran capacitaciones, mejoras y encuestas; solo los
+  administradores las eliminan.
 
 ### Recursos de capacitación
 
@@ -1476,11 +1684,13 @@ cuando alguien solicita un enlace o cuando un administrador lo envía (véase
 |---|---|
 | Acta | El PDF que recoge una revisión por la dirección |
 | Administrador, Auditor, Operativo | Los tres roles de usuario; deciden qué puede hacer cada cuenta |
+| Alcance del SGC | Los límites y la aplicabilidad del SGC (4.3), guardados por versiones: borrador, vigente y obsoleta |
 | Auditor jefe | La persona que dirige una auditoría: **Auditor (persona)** |
 | Capacitación | Una sesión de formación registrada; puede servir como evidencia de competencia |
 | Celebrada | Una revisión por la dirección ya realizada; sus entradas quedan congeladas |
 | Competencia acreditada | La evidencia de que una persona cumple un requisito de competencia |
 | Competencia requerida | Lo que exige un rol del SGC: educación, formación, habilidad o experiencia |
+| Cuestión del contexto | Un factor externo o interno que puede afectar a los resultados previstos del SGC (4.1) |
 | De baja | Un documento retirado; no se elimina y queda de solo lectura |
 | Fecha de corte | La fecha hasta la que cuentan los datos de una revisión por la dirección |
 | Línea de reporte | Los roles por encima de un rol, desde el que lo dirige directamente hasta la cúspide |
@@ -1488,12 +1698,14 @@ cuando alguien solicita un enlace o cuando un administrador lo envía (véase
 | Nivel, nivel residual | La gravedad de un riesgo según su probabilidad por su impacto, antes y después de sus acciones |
 | Obsoleto | Una revisión de un documento sustituida o retirada; se conserva como evidencia |
 | Persona | Quien trabaja bajo el SGC; no es lo mismo que una cuenta de usuario |
+| Pertinente | Una cuestión del contexto o una parte interesada que influye en el SGC; una cuestión no pertinente justifica por qué |
 | Prioridad | La importancia de una oportunidad según su beneficio por su viabilidad |
 | Proceso relacionado | Un proceso con el que interactúa otro; la relación vale en ambos sentidos |
 | Propietario | La persona responsable de un documento y de su revisión periódica |
 | Revisión (de un documento) | Cada versión numerada de su texto; distinta de la revisión periódica y de la revisión por la dirección |
-| Revisión vencida | Un riesgo o una oportunidad abiertos cuya próxima revisión ya ha pasado |
+| Revisión vencida | Un riesgo o una oportunidad abiertos, una cuestión del contexto vigente o una parte interesada cuya próxima revisión ya ha pasado |
 | SGC | Sistema de gestión de la calidad |
 | Sin valorar | Un riesgo o una oportunidad que aún no tiene valoración |
+| Superada | Una cuestión del contexto que ya no aplica; se conserva como evidencia |
 | Token de API | La credencial con la que un agente de IA actúa en nombre de un usuario |
 | Vigente | La revisión de un documento que está en vigor; la única que ve el rol Operativo |

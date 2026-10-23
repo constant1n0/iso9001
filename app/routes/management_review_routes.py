@@ -65,10 +65,10 @@ from ..forms import (
     RevisionDireccionForm, number_text, person_choices,
 )
 from ..models import (
-    AccionRevision, EstadoAccionRevision, EstadoObjetivo, EstadoOportunidad, EstadoProveedor,
-    EstadoRevisionDireccion, EstadoRiesgo, GravedadNoConformidad, NivelRiesgo,
-    OrigenNoConformidad, PrioridadOportunidad, ResultadoEvaluacion, RevisionDireccion,
-    TipoAccionRevision, TipoHallazgo,
+    AccionRevision, CategoriaCuestion, EstadoAccionRevision, EstadoCuestion, EstadoObjetivo,
+    EstadoOportunidad, EstadoProveedor, EstadoRevisionDireccion, EstadoRiesgo,
+    GravedadNoConformidad, NivelRiesgo, OrigenNoConformidad, PrioridadOportunidad,
+    ResultadoEvaluacion, RevisionDireccion, TipoAccionRevision, TipoContexto, TipoHallazgo,
 )
 from ..services import management_reviews as mr
 from ..services import people
@@ -134,6 +134,18 @@ def _number(value: Any) -> str:
         return str(value)
 
 
+class _CambioCuestion(Enum):
+    """How a listed context issue changed in the period (``contexto.cuestiones``, OC5)."""
+
+    nueva = 'Nueva'
+    modificada = 'Modificada'
+
+
+def _yes_no(value: Any) -> str:
+    """A flag of the inputs as «Sí» or «No», or a dash when missing."""
+    return '—' if value is None else ('Sí' if value else 'No')
+
+
 class _TipoAnterior(Enum):
     """The record types of ``contexto.riesgos_oportunidades``, frozen before RO-2 (RO7)."""
 
@@ -165,7 +177,9 @@ def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
     their single ``riesgos_oportunidades`` count by type instead of the risk and
     opportunity registers (RO7). The external providers (input c, EP-3 of
     ``external-providers``) show only when the inputs hold ``proveedores``: reviews
-    held before it froze none.
+    held before it froze none. Likewise the context issues and the scope in force
+    (input b, OC5 of ``organization-context``) show only when ``contexto`` holds
+    ``cuestiones`` and ``alcance``.
     """
     def n(*path: str) -> str:
         return _number(_at(datos, *path))
@@ -230,9 +244,31 @@ def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
     ], ('Tipo', 'Descripción'), (
         (_member(_TipoAnterior, r.get('tipo')), r.get('descripcion'))
         for r in rows('contexto', 'riesgos_oportunidades', 'lista')))
+    cuestiones = [_block('Cuestiones externas e internas', [
+        ('Cuestiones nuevas en el periodo', n('contexto', 'cuestiones', 'nuevas')),
+        ('Cuestiones modificadas en el periodo', n('contexto', 'cuestiones', 'modificadas')),
+        ('Cuestiones superadas en el periodo', n('contexto', 'cuestiones', 'superadas')),
+        ('Cuestiones vigentes', n('contexto', 'cuestiones', 'vigentes')),
+        ('Vigentes pertinentes', n('contexto', 'cuestiones', 'pertinentes')),
+        ('Vigentes sobre el cambio climático', n('contexto', 'cuestiones', 'cambio_climatico')),
+        ('Pertinentes sobre el cambio climático',
+         n('contexto', 'cuestiones', 'cambio_climatico_pertinentes')),
+    ], ('Cuestión nueva o modificada', 'Cambio', 'Tipo', 'Categoría', 'Pertinente',
+        'Cambio climático', 'Estado'), (
+        (c.get('titulo'), _member(_CambioCuestion, c.get('cambio')),
+         _member(TipoContexto, c.get('tipo')), _member(CategoriaCuestion, c.get('categoria')),
+         _yes_no(c.get('pertinente')), _yes_no(c.get('cambio_climatico')),
+         _member(EstadoCuestion, c.get('estado')))
+        for c in rows('contexto', 'cuestiones', 'lista')))
+    ] if isinstance(_at(datos, 'contexto', 'cuestiones'), Mapping) else []
+    alcance = [_block('Alcance del SGC', [
+        ('Versión vigente del alcance', n('contexto', 'alcance', 'version')),
+        ('Fecha de aprobación del alcance', _day(_at(datos, 'contexto', 'alcance',
+                                                     'fecha_aprobacion'))),
+    ])] if isinstance(_at(datos, 'contexto', 'alcance'), Mapping) else []
     frozen_before_registers = _at(datos, 'contexto', 'riesgos_oportunidades') is not None
-    contexto = ([partes, anteriores] if frozen_before_registers
-                else [partes, riesgos, altos, oportunidades])
+    contexto = [*cuestiones, partes, *alcance,
+                *([anteriores] if frozen_before_registers else [riesgos, altos, oportunidades])]
     satisfaccion = _block('Satisfacción del cliente', [
         ('Encuestas en el periodo', n('satisfaccion', 'encuestas')),
         ('Puntuación media', n('satisfaccion', 'media')),

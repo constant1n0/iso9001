@@ -30,9 +30,10 @@ from test_nonconformity_service import ServiceBase, actor, errors
 
 from app.extensions import db
 from app.models import (
-    AccionCorrectiva, Auditoria, AuditoriaIndicador, AuditLog, Capacitacion,
-    EstadoAuditoriaEnum, EstadoNoConformidad, EstadoObjetivo, EstadoProveedor,
-    EvaluacionProveedor, FrecuenciaMedicion, GravedadNoConformidad, HallazgoAuditoria,
+    AccionCorrectiva, AlcanceSGC, Auditoria, AuditoriaIndicador, AuditLog, Capacitacion,
+    CuestionContexto, EstadoAlcance, EstadoAuditoriaEnum, EstadoNoConformidad, EstadoObjetivo,
+    EstadoProveedor, EvaluacionProveedor, FrecuenciaMedicion, GravedadNoConformidad,
+    HallazgoAuditoria,
     MedicionObjetivo, Mejora, NoConformidad, ObjetivoCalidad, Oportunidad, OrigenNoConformidad,
     ParteInteresada, Person, Proveedor, ResultadoVerificacion, Riesgo, RoleEnum,
     SatisfaccionCliente, SentidoObjetivo, TipoHallazgo,
@@ -577,7 +578,8 @@ class InputsTestCase(Helpers, ServiceBase):
             self.insert(Oportunidad, titulo=titulo, created_at=created, updated_at=updated,
                         **(base | values))
         context = self.inputs()["contexto"]
-        self.assertEqual({"partes_interesadas", "riesgos", "oportunidades"}, set(context))
+        self.assertEqual({"cuestiones", "partes_interesadas", "alcance", "riesgos",
+                          "oportunidades"}, set(context))
         self.assertEqual({
             "total": 6,
             "por_nivel": {"bajo": 1, "medio": 1, "alto": 2, "critico": 1, "sin_valorar": 1},
@@ -620,6 +622,59 @@ class InputsTestCase(Helpers, ServiceBase):
         self.assertEqual((1, [{"id": 2, "titulo": "Diez", "nivel": "alto",
                                "estado": "identificado", "responsable": None}]),
                          (found["altos_abiertos"], found["altos_abiertos_lista"]))
+
+    def test_context_issues_changed_in_the_period_and_the_scope_in_force(self) -> None:
+        """9.3.2 b (OC5 of ``organization-context``): the issues created, or else updated,
+        in the period, those superseded in it, the register's counts now, and the number
+        and approval date of the scope version in force."""
+        base = {"tipo": "externa", "categoria": "ambiental", "descripcion": "d",
+                "efecto": "negativo", "pertinente": True, "fecha_identificacion": date(2026, 1, 1)}
+        made = {}
+        for titulo, values, created, updated in (
+            ("Sequías", {"cambio_climatico": True}, at(2026, 4, 1), at(2026, 4, 1)),
+            ("Inflación", {"categoria": "economica"}, at(2025, 12, 1), at(2026, 6, 30, 23, 59)),
+            ("Normativa derogada", {"categoria": "legal", "estado": "superada"},
+             at(2025, 1, 1), at(2026, 5, 2)),
+            ("Rotación", {"tipo": "interna", "categoria": "recursos", "pertinente": False,
+                          "justificacion_pertinencia": "Plantilla estable",
+                          "cambio_climatico": True}, at(2025, 1, 1), at(2025, 1, 1)),
+            ("Legado", {"categoria": "social"}, None, None),
+            ("Después del periodo", {}, at(2026, 7, 1), at(2026, 7, 1)),
+        ):
+            made[titulo] = self.insert(CuestionContexto, titulo=titulo, created_at=created,
+                                       updated_at=updated, **(base | values))
+        context = self.inputs()["contexto"]
+        self.assertEqual({"version": None, "fecha_aprobacion": None}, context["alcance"])
+        self.assertEqual({
+            "nuevas": 1, "modificadas": 2, "superadas": 1, "vigentes": 5, "pertinentes": 4,
+            "cambio_climatico": 2, "cambio_climatico_pertinentes": 1,
+            "lista": [
+                {"id": made["Sequías"], "titulo": "Sequías", "tipo": "externa",
+                 "categoria": "ambiental", "pertinente": True, "cambio_climatico": True,
+                 "estado": "vigente", "cambio": "nueva"},
+                {"id": made["Inflación"], "titulo": "Inflación", "tipo": "externa",
+                 "categoria": "economica", "pertinente": True, "cambio_climatico": False,
+                 "estado": "vigente", "cambio": "modificada"},
+                {"id": made["Normativa derogada"], "titulo": "Normativa derogada",
+                 "tipo": "externa", "categoria": "legal", "pertinente": True,
+                 "cambio_climatico": False, "estado": "superada", "cambio": "modificada"},
+            ],
+        }, context["cuestiones"])
+        json.dumps(context)
+
+        approver = self.person("Ana Pérez")
+        approval = {"declaracion": "Envases", "aprobado_por_id": approver}
+        self.insert(AlcanceSGC, version=1, estado=EstadoAlcance.obsoleto,
+                    fecha_aprobacion=date(2025, 3, 1), fecha_obsolescencia=date(2026, 5, 4),
+                    **approval)
+        self.insert(AlcanceSGC, version=2, estado=EstadoAlcance.vigente,
+                    fecha_aprobacion=date(2026, 5, 4), **approval)
+        self.insert(AlcanceSGC, version=3, estado=EstadoAlcance.borrador, declaracion="Nueva")
+        self.assertEqual({"version": 2, "fecha_aprobacion": "2026-05-04"},
+                         self.inputs()["contexto"]["alcance"])
+        empty = mr().inputs(db.session, CLI, date(2020, 1, 1), date(2020, 1, 31), today=TODAY)
+        self.assertEqual((0, 0, 0, []), tuple(empty["contexto"]["cuestiones"][key] for key in (
+            "nuevas", "modificadas", "superadas", "lista")))
 
     def test_objectives_are_judged_at_the_period_end_capped_at_today(self) -> None:
         owner = self.person()

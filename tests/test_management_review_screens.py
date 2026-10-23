@@ -25,8 +25,9 @@ from test_delete_forms import _PostForms
 from app.extensions import db
 from app.forms import REVIEW_INPUTS
 from app.models import (
-    AccionRevision, EstadoAccionRevision, EstadoRevisionDireccion, GravedadNoConformidad,
-    NoConformidad, Oportunidad, RevisionDireccion, Riesgo,
+    AccionRevision, AlcanceSGC, CuestionContexto, EstadoAccionRevision, EstadoAlcance,
+    EstadoRevisionDireccion, GravedadNoConformidad, NoConformidad, Oportunidad,
+    RevisionDireccion, Riesgo,
 )
 from app.routes.management_review_routes import input_sections
 from app.services import management_reviews as mr
@@ -155,6 +156,38 @@ class ReviewScreensBase(ScreensBase):
             live = mr.inputs(db.session, SYSTEM, date(2026, 4, 1), date(2026, 6, 30),
                              today=TODAY)
         return {key: value for key, value in live.items() if key != "proveedores"}
+
+    def context(self) -> None:
+        """A relevant climate-related issue created in the second quarter, an older one
+        superseded in it and version 2 of the scope in force since 4 May 2026 (core
+        inserts: source records)."""
+        utc = timezone.utc
+        base = {"tipo": "externa", "categoria": "ambiental", "descripcion": "d",
+                "efecto": "negativo", "pertinente": True, "fecha_identificacion": date(2026, 4, 2)}
+        issues = CuestionContexto.__table__
+        with self.app.app_context():
+            db.session.execute(issues.insert().values(
+                **base, titulo="Sequías prolongadas", cambio_climatico=True,
+                created_at=datetime(2026, 4, 2, 9, tzinfo=utc),
+                updated_at=datetime(2026, 4, 2, 9, tzinfo=utc)))
+            db.session.execute(issues.insert().values(
+                **(base | {"categoria": "legal"}), titulo="Normativa derogada",
+                estado="superada", created_at=datetime(2025, 1, 1, tzinfo=utc),
+                updated_at=datetime(2026, 5, 2, tzinfo=utc)))
+            db.session.execute(AlcanceSGC.__table__.insert().values(
+                version=2, estado=EstadoAlcance.vigente, declaracion="Envases metálicos",
+                aprobado_por_id=self.eva, fecha_aprobacion=date(2026, 5, 4)))
+            db.session.commit()
+
+    def before_context(self) -> dict:
+        """The second quarter's live inputs without the context issues and the scope: the
+        shape frozen before OC-4 of ``organization-context``."""
+        with self.app.app_context():
+            live = mr.inputs(db.session, SYSTEM, date(2026, 4, 1), date(2026, 6, 30),
+                             today=TODAY)
+        live["contexto"] = {key: value for key, value in live["contexto"].items()
+                            if key not in ("cuestiones", "alcance")}
+        return live
 
     def action_id(self, descripcion: str) -> int:
         with self.app.app_context():
@@ -353,6 +386,40 @@ class WebFlowTestCase(ReviewScreensBase):
         for frozen in (OLD_FROZEN, {}):
             titles = [b["titulo"] for s in input_sections(frozen) for b in s["bloques"]]
             self.assertNotIn("Proveedores externos", titles)
+
+    def test_the_inputs_show_the_context_issues_and_scope_unless_held_before_them(
+            self) -> None:
+        """OC5 of ``organization-context``: input 9.3.2 b gains the context issues and
+        the scope in force; reviews held before froze neither and show neither."""
+        self.context()
+        rid = self.review([self.ana])
+        old = self.held_with(self.before_context())
+        self.login(AUDITOR)
+        inputs = self.inputs(rid)
+        for label, value in (("Cuestiones nuevas en el periodo", "1"),
+                             ("Cuestiones modificadas en el periodo", "1"),
+                             ("Cuestiones superadas en el periodo", "1"),
+                             ("Cuestiones vigentes", "1"), ("Vigentes pertinentes", "1"),
+                             ("Vigentes sobre el cambio climático", "1"),
+                             ("Pertinentes sobre el cambio climático", "1"),
+                             ("Versión vigente del alcance", "2"),
+                             ("Fecha de aprobación del alcance", "04/05/2026")):
+            with self.subTest(label=label):
+                self.assertEqual(value, self.figure(inputs, label))
+        for cells in (("Sequías prolongadas", "Nueva", "Externa", "Ambiental", "Sí", "Sí",
+                       "Vigente"),
+                      ("Normativa derogada", "Modificada", "Externa", "Legal", "Sí", "No",
+                       "Superada")):
+            self.assertIn("".join(f"<td>{cell}</td>" for cell in cells), inputs)
+        old_inputs = self.inputs(old)
+        self.assertEqual("0", self.figure(old_inputs, "Riesgos registrados"))
+        for text in ("Cuestiones externas e internas", "Cuestiones vigentes",
+                     "Alcance del SGC", "Versión vigente del alcance", "Sequías prolongadas"):
+            self.assertNotIn(text, old_inputs)
+        for frozen in (OLD_FROZEN, {}):
+            titles = [b["titulo"] for s in input_sections(frozen) for b in s["bloques"]]
+            self.assertNotIn("Cuestiones externas e internas", titles)
+            self.assertNotIn("Alcance del SGC", titles)
 
     def test_the_list_counts_attendees_and_actions_and_filters_by_year_and_state(self) -> None:
         current = self.review([self.ana, self.luis])

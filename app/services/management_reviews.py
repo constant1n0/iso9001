@@ -71,15 +71,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
-    AccionCorrectiva, AccionRevision, Auditoria, AuditoriaIndicador, Capacitacion,
-    EstadoAccionRevision, EstadoAuditoriaEnum, EstadoNoConformidad, EstadoObjetivo,
+    AccionCorrectiva, AccionRevision, AlcanceSGC, Auditoria, AuditoriaIndicador, Capacitacion,
+    EstadoAccionRevision, EstadoAlcance, EstadoAuditoriaEnum, EstadoNoConformidad, EstadoObjetivo,
     EstadoProveedor, EstadoRevisionDireccion, EvaluacionProveedor, GravedadNoConformidad,
     HallazgoAuditoria, MedicionObjetivo, Mejora, NivelRiesgo, NoConformidad, ObjetivoCalidad,
     Oportunidad, OrigenNoConformidad, ParteInteresada, Person, Proveedor, ResultadoEvaluacion,
     ResultadoVerificacion, RevisionDireccion, Riesgo, RoleEnum, SatisfaccionCliente,
     TipoAccionRevision, TipoHallazgo,
 )
-from . import audit, crud, fields, people, policy, providers, quality_objectives, risks
+from . import (
+    audit, context_issues, crud, fields, people, policy, providers, quality_objectives, risks,
+)
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
 from .errors import Conflict, NotFound, PermissionDenied, ValidationError
@@ -620,6 +622,15 @@ def inputs(session: Session, actor: Actor, desde: date, hasta: date, *, today: d
       ``alto`` or ``critico``, listed with their owners in
       ``altos_abiertos_lista``, the highest first. Reviews held before RO-2
       froze a single ``riesgos_oportunidades`` count by type instead.
+      ``cuestiones`` (OC5 of ``organization-context``, ``context_issues.changes``)
+      counts the context issues created (``nuevas``) or else updated
+      (``modificadas``) in the period, listed in ``lista`` with ``cambio``
+      (``nueva`` or ``modificada``), and those superseded in it (``superadas``);
+      ``vigentes``, ``pertinentes``, ``cambio_climatico`` and
+      ``cambio_climatico_pertinentes`` count the issues in force now. ``alcance``
+      gives the ``version`` of the QMS scope in force now and its
+      ``fecha_aprobacion`` (both ``None`` without one). Reviews held before OC-4
+      froze neither.
     - ``satisfaccion`` (9.3.2 c 1): surveys in the period and their average
       score (``None`` without surveys).
     - ``objetivos`` (9.3.2 c 2): objectives whose period overlaps the review's,
@@ -687,7 +698,9 @@ def _inputs(session: Session, desde: date, hasta: date, *, today: date,
         "fecha_corte": cut_off,
         "acciones_previas": _earlier_actions(session, desde, hasta, cut_off, review),
         "contexto": {
+            "cuestiones": _context_issues(session, desde, hasta),
             "partes_interesadas": _changed_parties(session, desde, hasta),
+            "alcance": _scope_in_force(session),
             "riesgos": _risks(session, desde, hasta),
             "oportunidades": _opportunities(session, desde, hasta),
         },
@@ -753,6 +766,31 @@ def _changed_parties(session: Session, desde: date, hasta: date) -> dict[str, An
             select(ParteInteresada.nombre).where(or_(created, updated))
             .order_by(ParteInteresada.nombre).limit(LIST_LIMIT))),
     }
+
+
+def _context_issues(session: Session, desde: date, hasta: date) -> dict[str, Any]:
+    found = context_issues.changes(session, desde, hasta)
+    listed = [*((issue, "nueva") for issue in found.nuevas),
+              *((issue, "modificada") for issue in found.modificadas)]
+    return {
+        "nuevas": len(found.nuevas),
+        "modificadas": len(found.modificadas),
+        "superadas": len(found.superadas),
+        "vigentes": found.vigentes,
+        "pertinentes": found.pertinentes,
+        "cambio_climatico": found.cambio_climatico,
+        "cambio_climatico_pertinentes": found.cambio_climatico_pertinentes,
+        "lista": [{"id": issue.id, "titulo": _short(issue.titulo), "tipo": issue.tipo.name,
+                   "categoria": issue.categoria.name, "pertinente": issue.pertinente,
+                   "cambio_climatico": issue.cambio_climatico, "estado": issue.estado.name,
+                   "cambio": change} for issue, change in listed[:LIST_LIMIT]],
+    }
+
+
+def _scope_in_force(session: Session) -> dict[str, Any]:
+    found = session.scalar(select(AlcanceSGC).where(AlcanceSGC.estado == EstadoAlcance.vigente))
+    return {"version": None if found is None else found.version,
+            "fecha_aprobacion": None if found is None else found.fecha_aprobacion}
 
 
 def _risks(session: Session, desde: date, hasta: date) -> dict[str, Any]:

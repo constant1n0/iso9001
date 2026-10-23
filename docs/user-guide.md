@@ -30,6 +30,9 @@ Installation and server administration are in the
 - [Nonconformities and corrective actions](#nonconformities-and-corrective-actions)
 - [Document control](#document-control)
 - [Audit programme, audits and findings](#audit-programme-audits-and-findings)
+- [Organization context](#organization-context)
+- [Interested parties](#interested-parties)
+- [QMS scope](#qms-scope)
 - [Processes](#processes)
 - [Risks and opportunities](#risks-and-opportunities)
 - [Quality objectives](#quality-objectives)
@@ -111,8 +114,9 @@ clause it supports. You only see the entries your role can read.
 | Group | Entries |
 |---|---|
 | (top) | **Panel** (dashboard) |
+| **Contexto** (context) | **Contexto** 4.1, **Partes interesadas** 4.2, **Alcance del SGC** 4.3 |
 | **Calidad** (quality) | **Procesos** 4.4, **Riesgos** 6.1, **Oportunidades** 6.1, **Objetivos de calidad** 6.2, **Indicadores de auditoría** 9.1, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
-| **Clientes** (customers) | **Satisfacción** 9.1.2, **Partes interesadas** 4.2 |
+| **Clientes** (customers) | **Satisfacción** 9.1.2 |
 | **Personas y competencia** (people and competence) | **Roles y responsabilidades** 5.3, **Personas** 7.2, **Competencias requeridas** 7.2, **Matriz de competencias** 7.2, **Capacitaciones** 7.2, **Recursos de capacitación** 7.1 |
 | **Documentación** | **Documentos** 7.5 |
 | **Administración** | **Usuarios** 5.3 |
@@ -142,7 +146,8 @@ On a narrow screen, the menu opens from the button at the left of the top bar.
 - **Your own person.** When your user account is linked to a person, some
   forms start on that person (the author of a new document, the recorder of a
   measurement, the approver of an audit programme), and the system records it
-  when you hold a management review or withdraw a document. Ask an
+  when you hold a management review, approve the QMS scope or withdraw a
+  document. Ask an
   administrator or auditor to link your account to your person.
 - **Legacy names.** Older records of training, nonconformities and audits
   hold a free-text name (**Personal**, **Responsable**, **Auditor**) next to
@@ -167,6 +172,8 @@ can read, create, edit, delete and approve in each module.
 | Nonconformities | Read, create, edit, delete; cancel, close, reopen | Read, create, edit; cancel, close | Read, create, edit |
 | Corrective actions | Read, create, edit, delete; verify | Read, create, edit; verify | Read, create, edit |
 | Documents | Read every revision, create, edit, submit, reject, publish, attach files; approve, withdraw | Read every revision, create, edit, submit, reject, publish, attach files | Read the revision in force |
+| Context issues | Read, create, edit, delete | Read, create, edit | Read |
+| QMS scope | Read; create, edit and delete drafts; approve | Read; create, edit and delete drafts | Read |
 | Audit programmes, audits and findings | Read, create, edit, delete; approve programmes | Read, create, edit | No access |
 | Risks, opportunities and their actions | Read, create, edit, delete; evaluate the actions' effectiveness | Read, create, edit; evaluate the actions' effectiveness | Read |
 | Quality objectives and measurements | Read, create, edit, change state, delete | Read, create, edit, change state | Read |
@@ -194,8 +201,8 @@ guide, in Spanish).
 - An agent never deletes, never writes documents and never manages tokens.
   Verifying corrective actions, closing, cancelling and reopening
   nonconformities, approving audit programmes, holding and closing management
-  reviews, approving, conditioning and blocking providers, and the PDFs are
-  done in the web interface only.
+  reviews, approving, conditioning and blocking providers, approving the QMS
+  scope, and the PDFs are done in the web interface only.
 - What an agent saves carries its user's name in the audit log, like a change
   made on the web.
 - You see and revoke your own tokens on **Mi perfil**; deactivating a user
@@ -249,6 +256,12 @@ and auditors), **+ No conformidad**, **+ Capacitación** (training) and
   **Riesgos sin valorar** and **Oportunidades sin valorar** (not assessed).
   Only non-zero counts appear; without any, the card shows **Ningún riesgo ni
   oportunidad requiere atención.**
+- **Contexto** (context): how many context issues in force and how many
+  interested parties are overdue for review, each count linking to the list
+  filtered on them: **Cuestiones del contexto con la revisión vencida** and
+  **Partes interesadas con la revisión vencida**. Only non-zero counts appear;
+  without any, the card shows **Ninguna cuestión ni parte interesada tiene la
+  revisión vencida.**
 - **Acciones de la revisión por la dirección** (management review actions),
   for administrators and auditors: the overdue actions with their owner and
   deadline. When there are some, a link opens the action register filtered on
@@ -773,6 +786,191 @@ Afterwards:
 - deleting a finding (administrators) never deletes its nonconformity, and
   deleting the nonconformity clears the finding's link.
 
+## Organization context
+
+**Contexto** (context, `/contexto/`), in the **Contexto** menu, is the register
+of external and internal issues of ISO 9001:2026 clause 4.1: the factors that
+can affect the organization's ability to achieve the intended results of its
+QMS. It also records what the standard asks to decide about climate change:
+whether it is a relevant issue. Every role reads the register; administrators
+and auditors create and edit issues; only administrators delete them.
+
+### The issue
+
+Press **+ Nueva cuestión** (new issue) and fill in:
+
+- **Tipo**: **Externa** (external) or **Interna** (internal);
+- **Categoría (según el tipo)** (category, by type): for an external issue,
+  **Política**, **Económica**, **Social**, **Tecnológica**, **Legal** or
+  **Ambiental** (political, economic, social, technological, legal,
+  environmental); for an internal one, **Cultura**, **Recursos**,
+  **Conocimiento**, **Desempeño** or **Estructura** (culture, resources,
+  knowledge, performance, structure). The picker offers both groups, but the
+  system refuses a category of the other type: **La categoría no corresponde
+  al tipo: una cuestión externa es política, económica, social, tecnológica,
+  legal o ambiental, y una interna, de cultura, recursos, conocimiento,
+  desempeño o estructura.**;
+- **Título** and **Descripción**;
+- **Efecto** (effect on the QMS results): **Positivo**, **Negativo** or
+  **Neutro**;
+- **Pertinente para el SGC** (relevant to the QMS: **Sí** or **No**) and
+  **Justificación de la pertinencia (obligatoria si no es pertinente)** (the
+  justification, required when not relevant);
+- **Relacionada con el cambio climático** (related to climate change);
+- **Responsable** (owner, a person, optional);
+- **Fecha de identificación** (identification date): never in the future
+  (**La fecha de identificación no puede ser futura.**);
+- **Próxima revisión** (next review, optional): never before the
+  identification date;
+- **Estado**: **Vigente** (in force) or **Superada** (superseded);
+- **Notas**.
+
+### Relevance and climate change
+
+- An issue that is not relevant says why: **Indica por qué la cuestión no es
+  pertinente («justificacion_pertinencia»).**
+- Tick **Relacionada con el cambio climático** on the issues that concern it,
+  relevant or not. The register then shows that the organization has
+  determined whether climate change is a relevant issue: a ticked relevant
+  issue says it is; a ticked issue that is not relevant rules it out, with its
+  justification.
+- An issue that no longer applies becomes **Superada**: it is not deleted and
+  stays as evidence.
+- **Overdue rule.** An issue in force whose **Próxima revisión** is before
+  today shows **Revisión vencida**, and the dashboard flags it.
+
+### Screens
+
+- **The list**, by type, category and title, filters by **Tipo**,
+  **Categoría**, **Pertinente**, **Cambio climático**, **Estado**,
+  **Responsable** and **Revisión vencida**. It shows each issue's effect,
+  relevance, whether it concerns climate change (**Clima**), owner, next
+  review (with an overdue badge), state, and how many risks and opportunities
+  arise from it.
+- **An issue's page** shows every field, links its risks and opportunities,
+  and opens the risk and opportunity lists filtered by it.
+- **Deleting**: only an issue that no risk or opportunity cites can be
+  deleted. Otherwise its page shows no **Eliminar** and the system refuses it:
+  **No se puede eliminar una cuestión del contexto a la que se refieren
+  riesgos u oportunidades; quítala antes de esos registros.**
+
+### Risks and opportunities of an issue
+
+A risk or an opportunity can name the **Cuestión del contexto** (context
+issue) it arises from (see [Risks and opportunities](#risks-and-opportunities)).
+The picker offers the issues in force only, and the system refuses a
+superseded one: **La cuestión del contexto está superada; elige una
+vigente.** A record that already cited an issue superseded later keeps it when
+edited: the picker shows it with **(superada)**.
+
+## Interested parties
+
+**Partes interesadas** (interested parties, `/partes_interesadas/`), in the
+**Contexto** menu, is the register of clause 4.2: the interested parties
+relevant to the QMS and their needs and expectations. Every role reads,
+creates and edits interested parties; only administrators delete them.
+
+Press **+ Nueva parte interesada** and fill in:
+
+- **Nombre** (name, required and unique: **Ya existe una parte interesada con
+  ese nombre.**);
+- **Tipo**: **Externa** or **Interna**, or **— Sin indicar —** (not given);
+- **Pertinente para el SGC**: **Sí**, **No** or **Sin evaluar** (not
+  evaluated);
+- **Responsable** (owner, a person, optional);
+- **Próxima revisión** (next review, optional): when set or changed, never
+  before today (**La fecha de la próxima revisión («fecha_revision») no puede
+  ser anterior a hoy.**);
+- **Tiene requisitos relacionados con el cambio climático** (has
+  climate-related requirements);
+- **Necesidades y Expectativas**, **Requisitos Identificados** and **Objetivo
+  Estratégico** (needs and expectations, identified requirements, strategic
+  objective).
+
+Parties recorded before these fields show **Sin evaluar** and no type until
+they are edited.
+
+- **The list**, by name, shows the type, relevance, climate-related
+  requirements (**Clima**), owner, next review (with **Revisión vencida** once
+  it has passed, whether the party is relevant or not) and the needs and
+  expectations. The dashboard links the list filtered to the parties overdue
+  for review.
+- **A party's page** shows its identification and its texts.
+- A risk or an opportunity can cite its **Parte interesada**.
+
+## QMS scope
+
+**Alcance del SGC** (QMS scope, `/alcance/`), in the **Contexto** menu, holds
+the scope of clause 4.3: the scope statement, the products and services, the
+sites and, for each requirement of clauses 4 to 10, whether it applies and,
+when it does not, why. The scope is kept as numbered versions. Every role
+reads every version and its PDF; administrators and auditors prepare drafts;
+only administrators approve them.
+
+### Versions and approval
+
+| State | Meaning |
+|---|---|
+| **Borrador** (draft) | The version being prepared, the only one that changes; there is one draft at most |
+| **Vigente** (in force) | The approved version in force; there is only one |
+| **Obsoleto** (obsolete) | A version replaced by another; kept as evidence |
+
+- **+ Nuevo borrador** (new draft) starts the next version with the texts and
+  applicability of the version in force, to be changed afterwards. In the
+  first draft every requirement applies and the statement is required: **La
+  primera versión del alcance necesita su declaración («declaracion»).**
+- While there is a draft, the scope page links it and offers no other: **Ya
+  hay un borrador del alcance; modifícalo o elimínalo antes de empezar
+  otro.**
+- **Editar** changes the draft's texts (**Declaración del alcance**,
+  **Productos y servicios**, **Centros** and **Notas**) and its
+  applicability. **Eliminar** deletes the draft, and its version number is
+  free again.
+- **Aprobar** (approve), for administrators only, puts the draft in force
+  today and makes the version in force obsolete from today. The approver
+  recorded is the person linked to your user account (**Tu usuario no está
+  vinculado a ninguna persona; vincúlalo para aprobar el alcance.**); you may
+  approve a draft you prepared.
+- Versions in force and obsolete versions never change: **Una versión vigente
+  u obsoleta del alcance no se puede modificar.**
+
+### Applicability
+
+The draft form has one row for each of the 38 requirements of the catalogue,
+4.1 to 10.3, with the **Aplica** (applies) box and a justification. Untick
+**Aplica** on the requirements that do not apply and justify each one;
+without a justification the error shows on its row and nothing is saved: for
+example, **Justifica por qué no aplica el apartado 8.3 (Diseño y desarrollo de
+los productos y servicios).**
+
+### Scope screens
+
+- **Alcance del SGC** shows the version in force: its number, state,
+  approval, statement, products and services, sites, notes and the
+  **Aplicabilidad de los requisitos** table. Without a version in force it
+  shows **Todavía no hay un alcance aprobado.** and links the draft, if any.
+- **Historial** (history) lists every version, newest first, with its state,
+  who approved it and when, and since when it is obsolete.
+- **A version's page** shows the same as the version in force and, on a
+  draft, **Editar**, **Eliminar** and **Aprobar** by role.
+
+### Scope PDF
+
+**PDF**, on the page of the version in force and on each version's page,
+renders that version of the scope (`alcance_sgc_v<N>.pdf`):
+
+- the version, its state, who approved it and when, since when it is
+  obsolete, and how many requirements apply and how many do not;
+- the scope statement, the products and services, the sites and the notes;
+- the applicability table: clause, requirement, **Aplica** or **No aplica**,
+  and justification;
+- at the end, the requirements that do not apply with their justification,
+  or **Todos los requisitos aplican.** (every requirement applies).
+
+Any version can be exported, a draft too, which the PDF identifies by its
+state. Without a version in force, the PDF of the version in force is not
+rendered: **No hay ninguna versión vigente del alcance.**
+
 ## Processes
 
 **Procesos** (processes, `/procesos/`), in the **Calidad** menu, is the QMS
@@ -849,9 +1047,11 @@ Press **+ Nuevo riesgo** or **+ Nueva oportunidad** and fill in:
 - **Título** and **Descripción**;
 - **Origen**: **Interno** (internal) or **Externo** (external) to the
   organization;
-- **Parte interesada** (interested party, optional; from **Partes
-  interesadas**) and **Proceso** (optional; see
-  [Other registers](#other-registers));
+- **Parte interesada** (interested party, optional; see
+  [Interested parties](#interested-parties)), **Cuestión del contexto**
+  (context issue, optional; in force only, see
+  [Organization context](#organization-context)) and **Proceso** (optional;
+  see [Processes](#processes));
 - **Responsable** (owner, a person);
 - the assessment, the risk's **Tratamiento** (treatment) or the opportunity's
   **Decisión** (see [Assessment](#assessment)) and the **Estado** (see
@@ -937,8 +1137,8 @@ acción completada.**
 ### Screens
 
 - **The list** filters by **Estado**, **Nivel** (or **Prioridad**),
-  **Responsable**, **Proceso**, **Origen**, **Sin valorar**, **Revisión
-  vencida** and **Abierto** (or **Abierta**, open); risks also by
+  **Responsable**, **Proceso**, **Cuestión del contexto**, **Origen**, **Sin
+  valorar**, **Revisión vencida** and **Abierto** (or **Abierta**, open); risks also by
   **Probabilidad**, **Impacto** and **Alto o crítico sin acción abierta**
   (high or critical without an open action). It shows each record's process,
   owner, level and residual level with the treatment (or priority with the
@@ -1265,9 +1465,13 @@ the period, next to its comment:
 
 - **a)** the actions of earlier reviews: open at the end of the period, by
   state, completed after it, overdue, and completed in the period;
-- **b)** interested parties, and risks and opportunities: registered, new and
-  changed in the period, the risks by level with the open high or critical
-  ones, and the opportunities by priority;
+- **b)** external and internal issues: those new, changed and superseded in
+  the period, with their list, and how many are in force, how many are
+  relevant and how many concern climate change (all and only the relevant
+  ones); interested parties; the QMS scope version in force and its approval
+  date; and risks and opportunities: registered, new and changed in the
+  period, the risks by level with the open high or critical ones, and the
+  opportunities by priority;
 - **c)** customer satisfaction (surveys and average score), quality objectives
   (on target, off target, without measurement, with an overdue measurement,
   by state), process performance (audit indicator records), nonconformities
@@ -1286,9 +1490,11 @@ the period, next to its comment:
 - **f)** improvements implemented in the period.
 
 The figures count the period up to its end, or up to today when the end is
-later (the **Fecha de corte**, cut-off date). Reviews held before the provider
-register existed show no provider figures. In a draft they are computed
-live and marked **Datos provisionales**. Holding the review freezes them, so
+later (the **Fecha de corte**, cut-off date); the counts of issues in force
+and the scope version are those of the moment they are computed. Reviews held
+before the provider register existed show no provider figures, and those held
+before the context issue register show neither the issues nor the scope. In a
+draft they are computed live and marked **Datos provisionales**. Holding the review freezes them, so
 the review and its minutes keep showing what was presented even if the
 registers change later.
 
@@ -1350,23 +1556,22 @@ rules.
 
 | Register | Clause | Where | Fields |
 |---|---|---|---|
-| **Partes interesadas** (interested parties) | 4.2 | Menu **Clientes** | **Nombre** (unique), **Necesidades y Expectativas**, **Requisitos Identificados**, **Objetivo Estratégico** |
 | **Capacitaciones** (training) | 7.2 | Menu **Personas y competencia** | **Tema** (topic), **Fecha**, **Personal** and **Persona**, **Duración en Horas**, **Evaluación Final** |
 | **Mejoras** (improvements) | 10.3 | Menu **Calidad** | **No conformidad** (required), **Acción correctiva**, **Acción preventiva**; the **Implantada** date is set when the improvement is recorded |
 | **Satisfacción** (customer satisfaction) | 9.1.2 | Menu **Clientes** | **Cliente**, **Fecha de Encuesta**, **Puntuación (1-10)**, **Comentarios** |
 
 Notes:
 
-- Interested parties, audit indicators, training and improvements feed the
-  management review inputs.
+- Audit indicators, training and improvements feed the management review
+  inputs.
 - **Capacitaciones** filters by **Tema**, **Fecha** and **Personal**, and each
   session has a **PDF** (**Registro de capacitación**). Demonstrated competence
   can cite a session as evidence.
 - **Satisfacción** filters by **Cliente** and **Puntuación mínima** (minimum
   score), and each survey has a **PDF** (**Encuesta de satisfacción**).
 - **Mejoras** lists ten improvements per page.
-- Every role records training, improvements, surveys and interested parties;
-  only administrators delete them.
+- Every role records training, improvements and surveys; only administrators
+  delete them.
 
 ### Training resources
 
@@ -1465,6 +1670,7 @@ for a link or an administrator sends one (see
 | Acta | Minutes (of a management review) |
 | Administrador, Auditor, Operativo | The three roles: administrator, auditor, operational staff |
 | Alcance | Scope |
+| Alcance del SGC | QMS scope (clause 4.3), kept as versions: draft, in force and obsolete |
 | Auditor jefe | Lead auditor |
 | Borrador | Draft |
 | Capacitación | Training session |
@@ -1474,6 +1680,7 @@ for a link or an administrator sends one (see
 | Competencia acreditada | Demonstrated competence |
 | Competencia requerida | Required competence |
 | Contención | Containment |
+| Cuestión del contexto | Context issue (an external or internal factor, clause 4.1) |
 | Dar de baja, De baja | Withdraw, withdrawn (document) |
 | Eficaz, No eficaz | Effective, not effective |
 | En verificación | Under verification (nonconformity state) |
@@ -1493,6 +1700,7 @@ for a link or an administrator sends one (see
 | Panel | Dashboard |
 | Parte interesada | Interested party |
 | Persona | Person (who works under the QMS; not a user account) |
+| Pertinente | Relevant (a context issue or an interested party that bears on the QMS) |
 | Prioridad | Priority of an opportunity (benefit times feasibility) |
 | Proceso relacionado | Related process (the relation works both ways) |
 | Programa de auditoría | Audit programme |
@@ -1500,9 +1708,10 @@ for a link or an administrator sends one (see
 | Responsable | Responsible person, owner |
 | Revisión (documento) | Revision of a document |
 | Revisión por la dirección | Management review |
-| Revisión vencida | Review overdue (open risk or opportunity past its next review) |
+| Revisión vencida | Review overdue (an open risk or opportunity, a context issue in force or an interested party past its next review) |
 | Riesgo, Oportunidad | Risk, opportunity |
 | SGC | QMS (quality management system) |
 | Sin valorar | Not assessed yet (risk or opportunity) |
+| Superada | Superseded (context issue) |
 | Vencida | Overdue |
 | Vigente | In force |
