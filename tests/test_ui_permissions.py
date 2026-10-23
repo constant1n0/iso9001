@@ -645,6 +645,36 @@ class UiPermissionsTestCase(unittest.TestCase):
                 # Every role reads the approved-providers PDF (EP-3).
                 self.assertIn(f'href="{base}/pdf"', html)
 
+    def _check_controls(self, expected: dict) -> None:
+        """Each page's ``{marker: roles}``: exactly those roles see the marker."""
+        for page, controls in expected.items():
+            for role in RoleEnum:
+                body = self._page(role, page).get_data(as_text=True)
+                for marker, roles in controls.items():
+                    with self.subTest(page=page, role=role.name, control=marker):
+                        self.assertEqual(role in roles, marker in body)
+
+    def test_context_issue_controls_follow_the_role(self) -> None:
+        """Every role reads context issues; administrators and auditors create and edit
+        them; only administrators delete one no risk names (OC4 of organization-context)."""
+        from app.services import context_issues
+        from app.services.actor import Actor
+
+        system = Actor(None, "seed", ADMIN, "system")
+        with self.app.app_context():
+            issue = context_issues.issues.create(db.session, system, {
+                "tipo": "externa", "categoria": "legal", "titulo": "Normativa",
+                "descripcion": "d", "efecto": "neutro", "pertinente": True,
+                "fecha_identificacion": DAY}, today=DAY).id
+            db.session.commit()
+        writers, admins = {ADMIN, AUDITOR}, {ADMIN}
+        self._check_controls({
+            "/contexto/": {'href="/contexto/nueva"': writers,
+                           f'href="/contexto/{issue}/editar"': writers},
+            f"/contexto/{issue}": {f'href="/contexto/{issue}/editar"': writers,
+                                   f'action="/contexto/{issue}/eliminar"': admins},
+        })
+
     def test_navigation_links_follow_the_read_permission(self) -> None:
         expected = {"/auditorias/": {ADMIN, AUDITOR}, "/programas-auditoria/": {ADMIN, AUDITOR},
                     "/documents/": set(RoleEnum), "/no_conformidades/": set(RoleEnum),
@@ -657,10 +687,16 @@ class UiPermissionsTestCase(unittest.TestCase):
                     "/procesos/": set(RoleEnum), "/roles/": set(RoleEnum),
                     "/recursos-formacion/": set(RoleEnum),
                     "/indicadores-auditoria/": set(RoleEnum),
-                    "/proveedores/": set(RoleEnum)}
+                    "/proveedores/": set(RoleEnum), "/contexto/": set(RoleEnum),
+                    "/partes_interesadas/": set(RoleEnum)}
         for role in RoleEnum:
             html = self._page(role, "/dashboard/").get_data(as_text=True)
             self.assertIn('class="nav__group">Personas y competencia<', html)
+            # Clauses 4.1 and 4.2 share one group, in clause order (OC-3).
+            group = html[html.index('class="nav__group">Contexto<'):
+                         html.index('class="nav__group">Calidad<')]
+            self.assertEqual(["/contexto/", "/partes_interesadas/"],
+                             re.findall(r'class="nav__link" href="([^"]+)"', group))
             for link, roles in expected.items():
                 with self.subTest(role=role.name, link=link):
                     self.assertEqual(role in roles, f'class="nav__link" href="{link}"' in html)

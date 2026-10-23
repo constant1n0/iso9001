@@ -16,8 +16,9 @@
  -->
 {% extends "base.html" %}
 {% from "_partials/ui.html" import page_header, delete_form, empty_state %}
+{% from "contexto/_macros.html" import pertinencia_badge, clima_badge, dia %}
 {% block title %}Partes interesadas{% endblock %}
-{% block crumb %}Clientes · Partes interesadas{% endblock %}
+{% block crumb %}Contexto · Partes interesadas{% endblock %}
 {% block content %}
 {% call page_header('Cláusula 4.2 · Partes interesadas', 'Partes interesadas') %}
     {% if can('create', 'interested_parties') %}
@@ -25,25 +26,35 @@
     {% endif %}
 {% endcall %}
 
+{% if solo_vencidas %}
+<p class="muted">Solo las partes interesadas con la revisión vencida · <a href="{{ url_for('parte_interesada.listar_partes_interesadas') }}">Ver todas</a></p>
+{% endif %}
+
 {% if partes %}
 <div class="table-wrap">
     <table>
         <thead>
             <tr>
                 <th scope="col">Nombre</th>
+                <th scope="col">Tipo</th>
+                <th scope="col">Pertinencia</th>
+                <th scope="col">Clima</th>
+                <th scope="col">Responsable</th>
+                <th scope="col">Próxima revisión</th>
                 <th scope="col">Necesidades y expectativas</th>
-                <th scope="col">Requisitos</th>
-                <th scope="col">Objetivo estratégico</th>
                 <th scope="col"><span class="visually-hidden">Acciones</span></th>
             </tr>
         </thead>
         <tbody>
             {% for parte in partes %}
-            <tr>
-                <td>{{ parte.nombre }}</td>
+            <tr id="fila-{{ parte.id_interesado }}">
+                <td><a href="{{ url_for('parte_interesada.ver_parte_interesada', id=parte.id_interesado) }}">{{ parte.nombre }}</a></td>
+                <td>{{ parte.tipo.value if parte.tipo else '—' }}</td>
+                <td>{{ pertinencia_badge(parte.pertinente) }}</td>
+                <td>{{ clima_badge(parte.requisitos_climaticos, 'Requisitos climáticos') }}</td>
+                <td>{{ personas.get(parte.responsable_id, '—') }}</td>
+                <td class="date">{{ dia(parte.fecha_revision) }}{% if parte.id_interesado in vencidas %} <span class="badge badge--warn">Revisión vencida</span>{% endif %}</td>
                 <td>{{ parte.necesidades_expectativas | truncate(70) if parte.necesidades_expectativas else '—' }}</td>
-                <td>{{ parte.requisitos_identificados | truncate(70) if parte.requisitos_identificados else '—' }}</td>
-                <td>{{ parte.objetivo_estrategico | truncate(70) if parte.objetivo_estrategico else '—' }}</td>
                 <td>
                     <div class="table__actions">
                         {% if can('update', 'interested_parties') %}
@@ -60,6 +71,6 @@
     </table>
 </div>
 {% else %}
-    {{ empty_state('Todavía no hay partes interesadas registradas.') }}
+    {{ empty_state('Ninguna parte interesada tiene la revisión vencida.' if solo_vencidas else 'Todavía no hay partes interesadas registradas.') }}
 {% endif %}
 {% endblock %}

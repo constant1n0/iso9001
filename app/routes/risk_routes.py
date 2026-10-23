@@ -22,6 +22,7 @@ auditors create and edit records and add, edit and evaluate actions;
 administrators delete (policy ``RISKS_OPPORTUNITIES``, decision RO6).
 
 - The list filters by state, level (or priority), owner, process, origin,
+  context issue (``cuestion_id``, which the issue's page links),
   ``sin_valorar``, ``revision_vencida`` and ``abierto`` (``1`` or ``0``); risks
   also by one cell (``probabilidad`` and ``impacto``) and by ``alto_sin_accion``,
   what the dashboard flags. A value that names nothing is ignored, so it
@@ -30,7 +31,10 @@ administrators delete (policy ``RISKS_OPPORTUNITIES``, decision RO6).
 - Above the risks sits the 5 × 5 heat map: likelihood on rows (5 at the top),
   impact on columns, each cell counting the open assessed risks there
   (``risks.heat_map``) and linking to the list filtered by that cell.
-- A record's page shows every field, the level before and after the actions
+- The form offers the context issues in force (OC1 of ``organization-context``),
+  plus the one a record already names, marked when superseded.
+- A record's page shows every field, its context issue linked, the level before
+  and after the actions
   and its actions, each with an overdue badge. Actions live under their record;
   one asked for under another record is a 404. A closed record takes no new
   actions, and only a completed action is evaluated for effectiveness
@@ -63,13 +67,13 @@ from ..audit_notifications import local_today
 from ..extensions import db
 from ..forms import (
     CHOOSE_PERSON, AccionRiesgoForm, EficaciaAccionForm, OportunidadForm, RiesgoForm,
-    party_choices, person_choices, process_choices,
+    issue_choices, party_choices, person_choices, process_choices,
 )
 from ..models import (
     ESCALA_MAX, ESCALA_MIN, AccionRiesgo, EstadoAccionRiesgo, EstadoOportunidad, EstadoRiesgo,
     NivelRiesgo, OrigenRiesgo, PrioridadOportunidad, ProcesoOperacion, nivel,
 )
-from ..services import crud, people, process_operations, stakeholders
+from ..services import context_issues, crud, people, process_operations, stakeholders
 from ..services import risks as ro
 from ..services.actor import Actor
 from ..services.errors import NotFound
@@ -80,8 +84,9 @@ from .auditoria_routes import committed
 from .people_routes import form_data, saved
 
 RESOURCE = 'risks_opportunities'
-RECORD_FIELDS = ('titulo', 'descripcion', 'origen', 'parte_interesada_id', 'proceso_id',
-                 'responsable_id', 'estado', 'fecha_identificacion', 'fecha_revision', 'notas')
+RECORD_FIELDS = ('titulo', 'descripcion', 'origen', 'parte_interesada_id', 'cuestion_id',
+                 'proceso_id', 'responsable_id', 'estado', 'fecha_identificacion',
+                 'fecha_revision', 'notas')
 ACTION_FIELDS = ('descripcion', 'responsable_id', 'fecha_limite', 'estado', 'fecha_completada')
 EVALUATION_FIELDS = ('eficacia', 'fecha_evaluacion', 'comentario_eficacia')
 FLAGS = {'1': True, '0': False}
@@ -179,9 +184,9 @@ def _name(get: Callable[..., Any], actor: Actor, record_id: int | None, attribut
 # -- the list --------------------------------------------------------------------------
 
 
-def _filters(kind: Kind, owners: dict[int, str],
-             processes: list[ProcesoOperacion]) -> list[Filter]:
-    """The list's filters, in the form's order."""
+def _filters(kind: Kind, owners: dict[int, str], processes: list[ProcesoOperacion],
+             issues: list[Any]) -> list[Filter]:
+    """The list's filters, in the form's order; every context issue, superseded too."""
     return [
         ('estado', 'Estado', _members(kind.estados), str),
         (kind.band, kind.labels['band'], _members(kind.bands), str),
@@ -191,6 +196,7 @@ def _filters(kind: Kind, owners: dict[int, str],
          int),
         ('proceso_id', 'Proceso', [(str(p.id_proceso), p.proceso) for p in processes], int),
         ('origen', 'Origen', _members(OrigenRiesgo), str),
+        ('cuestion_id', 'Cuestión del contexto', [(str(i.id), i.titulo) for i in issues], int),
         ('sin_valorar', 'Sin valorar', YES_NO, FLAGS.get),
         ('revision_vencida', 'Revisión vencida', YES_NO, FLAGS.get),
         ('abierto', kind.labels['open'], YES_NO, FLAGS.get),
@@ -235,7 +241,7 @@ def _list(kind: Kind) -> ResponseReturnValue:
     every = kind.register.list_(db.session, actor)
     owners = people.names(db.session, actor, (r.responsable_id for r in every))
     processes = _processes(actor)
-    fields = _filters(kind, owners, processes)
+    fields = _filters(kind, owners, processes, context_issues.issues.list_(db.session, actor))
     chosen, selected = {}, {}
     for name, _, choices, value_of in fields:
         text = request.args.get(name, '')
@@ -332,15 +338,18 @@ def _show(kind: Kind, record_id: int) -> ResponseReturnValue:
         abierto=ro.is_open(registro),
         proceso=_name(process_operations.get, actor, registro.proceso_id, 'proceso'),
         parte=_name(stakeholders.get, actor, registro.parte_interesada_id, 'nombre'),
+        cuestion=_name(context_issues.issues.get, actor, registro.cuestion_id, 'titulo'),
         personas=people.names(db.session, actor, (
             registro.responsable_id, *(a.responsable_id for a in acciones))),
     )
 
 
 def _record_form(kind: Kind, actor: Actor, registro: Any = None) -> Any:
-    """The record form with its interested party, process and owner pickers."""
+    """The record form with its interested party, context issue, process and owner pickers."""
     form = kind.form(obj=registro)
     form.parte_interesada_id.choices = party_choices(stakeholders.list_(db.session, actor))
+    form.cuestion_id.choices = issue_choices(context_issues.issues.list_(db.session, actor),
+                                             include=getattr(registro, 'cuestion_id', None))
     form.proceso_id.choices = process_choices(_processes(actor))
     form.responsable_id.choices = person_choices(
         people.choices(db.session, actor, include=getattr(registro, 'responsable_id', None)),

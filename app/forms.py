@@ -17,12 +17,12 @@ import enum
 from decimal import Decimal
 
 from .models import (
-    ESCALA_MAX, ESCALA_MIN, CompetenceEvaluation, CompetenceType, DecisionOportunidad,
-    DocumentCategory, EficaciaAccion, EstadoAccionRevision, EstadoAccionRiesgo,
-    EstadoAuditoriaEnum, EstadoOportunidad, EstadoRiesgo, FrecuenciaMedicion,
-    GravedadNoConformidad, OrigenNoConformidad, OrigenRiesgo, ResultadoVerificacion, RoleEnum,
-    SentidoObjetivo, TipoAccionRevision, TipoHallazgo, TipoProceso, TipoSuministro,
-    TratamientoRiesgo,
+    CATEGORIAS_POR_TIPO, ESCALA_MAX, ESCALA_MIN, CompetenceEvaluation, CompetenceType,
+    DecisionOportunidad, DocumentCategory, EfectoCuestion, EficaciaAccion, EstadoAccionRevision,
+    EstadoAccionRiesgo, EstadoAuditoriaEnum, EstadoCuestion, EstadoOportunidad, EstadoRiesgo,
+    FrecuenciaMedicion, GravedadNoConformidad, OrigenNoConformidad, OrigenRiesgo,
+    ResultadoVerificacion, RoleEnum, SentidoObjetivo, TipoAccionRevision, TipoContexto,
+    TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -78,14 +78,6 @@ class LoginForm(BaseForm):
     username = StringField('Usuario', validators=[DataRequired(), Length(min=4, max=150)])
     password = PasswordField('Contraseña', validators=[DataRequired(), Length(min=6)])
     submit = SubmitField('Iniciar Sesión')
-
-# Formulario para ParteInteresada
-class ParteInteresadaForm(BaseForm):
-    nombre = StringField('Nombre', validators=[DataRequired(), Length(max=50)])
-    necesidades_expectativas = TextAreaField('Necesidades y Expectativas')
-    requisitos_identificados = TextAreaField('Requisitos Identificados')
-    objetivo_estrategico = TextAreaField('Objetivo Estratégico')
-    submit = SubmitField('Guardar')
 
 # Formulario para ingresar datos de Auditoría
 NO_PROGRAMME = ('', '— Sin programa —')
@@ -545,12 +537,25 @@ class AccionRevisionForm(BaseForm):
 # residual pair after the assessment, the review not before the identification,
 # completion and effectiveness dates never in the future).
 NO_PARTY = ('', '— Sin parte interesada —')
+NO_ISSUE = ('', '— Sin cuestión del contexto —')
 NOT_ASSESSED = ('', 'Sin valorar')
 
 
 def party_choices(parties):
     """The empty choice, then each interested party (``ParteInteresada``) in the given order."""
     return [NO_PARTY, *((p.id_interesado, p.nombre) for p in parties)]
+
+
+def issue_choices(issues, include=None):
+    """The empty choice, then each issue (``CuestionContexto``) in force, plus ``include``.
+
+    ``include`` is the issue a record names already, offered (marked) even when
+    superseded, so editing that record keeps it.
+    """
+    return [NO_ISSUE, *((i.id, i.titulo if i.estado is EstadoCuestion.vigente
+                         else f'{i.titulo} (superada)')
+                        for i in issues
+                        if i.estado is EstadoCuestion.vigente or i.id == include)]
 
 
 def optional_member(value):
@@ -579,6 +584,8 @@ class _RegisterRecord(BaseForm):  # the field order follows the declarations
     origen = _choice('Origen', OrigenRiesgo)
     parte_interesada_id = SelectField('Parte interesada', coerce=optional_id,
                                       choices=[NO_PARTY])
+    # The issue that gives rise to the record (OC1 of ``organization-context``).
+    cuestion_id = SelectField('Cuestión del contexto', coerce=optional_id, choices=[NO_ISSUE])
     proceso_id = SelectField('Proceso', coerce=optional_id, choices=[NO_PROCESS])
     responsable_id = required_person_field('Responsable')
 
@@ -718,3 +725,76 @@ class EvaluacionProveedorForm(BaseForm):
     documentacion = _evaluation_score('Documentación (1-5)')
     comentario = TextAreaField('Comentario')
     fecha_proxima = DateField('Próxima evaluación', validators=[Optional()])
+
+
+# Context issues, interested parties and the QMS scope (``organization-context``,
+# OC-3; clauses 4.1 to 4.3). The routes fill the people pickers; the service has
+# the last word (the category matches the type, a justification when not
+# relevant, the dates), and the routes show its refusals on the field.
+RELEVANCE = {'1': True, '0': False}
+NOT_EVALUATED = ('', 'Sin evaluar')
+
+
+def relevance(value):
+    """Select value to ``True``, ``False`` or ``None`` (not evaluated); stored values pass."""
+    if value is None or isinstance(value, bool):
+        return value
+    return RELEVANCE.get(value)
+
+
+def _relevance_field(label, empty=None):
+    """Relevant (yes or no); with ``empty``, it may stay not evaluated."""
+    choices = [('1', 'Sí'), ('0', 'No')]
+    if empty is None:
+        return SelectField(label, coerce=relevance, choices=choices,
+                           validators=[InputRequired()])
+    return SelectField(label, coerce=relevance, choices=[empty, *choices])
+
+
+# Both groups of categories are offered whatever the type: the service decides.
+CATEGORY_GROUPS = {tipo.value: [(c.name, c.value) for c in categories]
+                   for tipo, categories in CATEGORIAS_POR_TIPO.items()}
+
+
+class CuestionContextoForm(BaseForm):
+    """A context issue (clause 4.1, OC1): what it is, its relevance, owner and dates."""
+
+    tipo = _choice('Tipo', TipoContexto)
+    categoria = SelectField('Categoría (según el tipo)', coerce=member_name,
+                            choices=CATEGORY_GROUPS, validators=[DataRequired()])
+    titulo = StringField('Título', validators=[DataRequired(), Length(max=200)])
+    descripcion = TextAreaField('Descripción', validators=[DataRequired()])
+    efecto = _choice('Efecto', EfectoCuestion)
+    pertinente = _relevance_field('Pertinente para el SGC')
+    justificacion_pertinencia = TextAreaField(
+        'Justificación de la pertinencia (obligatoria si no es pertinente)')
+    cambio_climatico = BooleanField('Relacionada con el cambio climático')
+    responsable_id = person_field('Responsable')
+    fecha_identificacion = DateField('Fecha de identificación', validators=[DataRequired()])
+    fecha_revision = DateField('Próxima revisión', validators=[Optional()])
+    estado = _choice('Estado', EstadoCuestion)
+    notas = TextAreaField('Notas')
+
+
+class ParteInteresadaForm(BaseForm):
+    """An interested party (clause 4.2): its texts and the context fields of OC2."""
+
+    nombre = StringField('Nombre', validators=[DataRequired(), Length(max=50)])
+    tipo = _choice('Tipo', TipoContexto, '— Sin indicar —')
+    pertinente = _relevance_field('Pertinente para el SGC', NOT_EVALUATED)
+    responsable_id = person_field('Responsable')
+    fecha_revision = DateField('Próxima revisión', validators=[Optional()])
+    requisitos_climaticos = BooleanField('Tiene requisitos relacionados con el cambio climático')
+    necesidades_expectativas = TextAreaField('Necesidades y Expectativas')
+    requisitos_identificados = TextAreaField('Requisitos Identificados')
+    objetivo_estrategico = TextAreaField('Objetivo Estratégico')
+    submit = SubmitField('Guardar')
+
+
+class AlcanceForm(BaseForm):
+    """The texts of a scope draft (clause 4.3, OC3); the routes add the applicability rows."""
+
+    declaracion = TextAreaField('Declaración del alcance', validators=[DataRequired()])
+    productos_servicios = TextAreaField('Productos y servicios')
+    centros = TextAreaField('Centros')
+    notas = TextAreaField('Notas')

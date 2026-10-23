@@ -56,10 +56,11 @@
         </ul>
     </article>
     <article class="card">
-        <header class="card__header"><h2 class="card__title">Identificación</h2></header>
+        <header class="card__header"><h2 class="card__title" id="identificacion">Identificación</h2></header>
         <ul class="list">
             {% call item('Origen') %}{{ registro.origen.value }}{% endcall %}
             {% call item('Parte interesada') %}{{ parte or '—' }}{% endcall %}
+            {% call item('Cuestión del contexto') %}{% if cuestion %}<a href="{{ url_for('contexto.show_issue', issue_id=registro.cuestion_id) }}">{{ cuestion }}</a>{% else %}—{% endif %}{% endcall %}
             {% call item('Proceso') %}{{ proceso or '—' }}{% endcall %}
             {% call item('Responsable') %}{{ personas.get(registro.responsable_id, '—') }}{% endcall %}
             {% call item('Fecha de identificación') %}{{ dia(registro.fecha_identificacion) }}{% endcall %}

@@ -41,15 +41,18 @@ class StakeholderRoutesTestCase(RegisterRoutesBase):
         self.assertEqual(200, self.client.post(f"{self.BASE}/nueva", data=FORM | {"nombre": ""}).status_code)
         self.assertEqual(0, self.count(ParteInteresada))
 
-    def test_a_duplicate_name_flashes_the_conflict_and_returns_to_the_form(self) -> None:
+    def test_a_duplicate_name_flashes_the_conflict_and_keeps_what_was_typed(self) -> None:
+        # OC-3: a refused write re-renders the form instead of redirecting back to it.
         self.seed_with(stakeholders, {"nombre": "Clientes"})
         other = self.seed_with(stakeholders, {"nombre": "Bancos"})
         self.login()
         for url, data in ((f"{self.BASE}/nueva", FORM), (f"{self.BASE}/editar/{other}", FORM)):
             with self.subTest(url=url):
-                response = self.client.post(url, data=data, headers={"Referer": f"http://localhost{url}"})
-                self.assertEqual((302, url), (response.status_code, response.headers["Location"]))
-                self.assertIn(("danger", "Ya existe una parte interesada con ese nombre."), self.flashes())
+                response = self.client.post(url, data=data)
+                self.assertEqual(200, response.status_code)
+                html = response.get_data(as_text=True)  # the page shows the flash
+                self.assertIn("Fidelizar", html)
+                self.assertIn("Ya existe una parte interesada con ese nombre.", html)
         self.assertEqual(2, self.count(ParteInteresada))
 
     def test_writes_pass_the_local_date_and_a_json_body_gets_a_normal_result(self) -> None:
@@ -62,13 +65,20 @@ class StakeholderRoutesTestCase(RegisterRoutesBase):
             self.assertEqual(302, self.client.post(f"{self.BASE}/nueva", data=FORM).status_code)
             with self.app.app_context():
                 record_id = ParteInteresada.query.one().id_interesado
-            # A JSON client posting to the form goes through the same validation.
-            edited = self.client.post(f"{self.BASE}/editar/{record_id}", json=FORM | {
+            # A JSON client posting to the form goes through the same validation: a
+            # past review date (OC-3 adds the field) is refused, a later one is kept.
+            refused = self.client.post(f"{self.BASE}/editar/{record_id}", json=FORM | {
                 "objetivo_estrategico": "Crecer", "fecha_revision": "2026-01-01"})
+            self.assertEqual(200, refused.status_code)
+            self.assertIn("no puede ser anterior a hoy", refused.get_data(as_text=True))
+            edited = self.client.post(f"{self.BASE}/editar/{record_id}", json=FORM | {
+                "objetivo_estrategico": "Crecer", "fecha_revision": "2026-12-01"})
             self.assertEqual(302, edited.status_code)
         self.assertEqual(today, create.call_args.kwargs["today"])
         self.assertEqual(today, update.call_args.kwargs["today"])
-        self.assertEqual("Crecer", self.fetch(ParteInteresada, record_id).objetivo_estrategico)
+        found = self.fetch(ParteInteresada, record_id)
+        self.assertEqual(("Crecer", date(2026, 12, 1)),
+                         (found.objetivo_estrategico, found.fecha_revision))
 
     def test_list_is_ordered_by_name(self) -> None:
         self.seed_with(stakeholders, {"nombre": "Zapaterias"})

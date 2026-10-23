@@ -185,6 +185,9 @@
     {% if avisos_proveedores is not none %}
     {{ avisos_card('proveedores', 'Proveedores', '8.4', avisos_proveedores, 'Ningún proveedor requiere atención.') }}
     {% endif %}
+    {% if avisos_contexto is not none %}
+    {{ avisos_card('contexto', 'Contexto', '4.1 · 4.2', avisos_contexto, 'Ninguna cuestión ni parte interesada tiene la revisión vencida.') }}
+    {% endif %}
     {% if acciones_revision is not none %}
     <article class="card" id="acciones-revision">
         <header class="card__header">
