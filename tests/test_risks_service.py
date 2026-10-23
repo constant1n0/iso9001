@@ -19,7 +19,7 @@ from __future__ import annotations
 import os
 import unittest
 from datetime import date
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import test_auth_bootstrap as bootstrap
 from sqlalchemy import create_engine, text
@@ -660,6 +660,18 @@ class IssueLinkTestCase(Helpers, ServiceBase):
         self.assertEqual(ro().ISSUE_SUPERSEDED, self.refused(
             errors().ValidationError, ro().opportunities.update, CLI, opportunity.id,
             {"cuestion_id": current}, today=TODAY))
+
+    def test_a_newly_linked_issue_is_read_with_a_shared_lock(self) -> None:
+        """Like the actions' parent check: superseding it meanwhile waits for the write."""
+        current = self.issue()
+        with patch.object(ro(), "_locked", wraps=ro()._locked) as locked:
+            risk = self.risk(cuestion_id=current)
+            self.opportunity(cuestion_id=current)
+            self.edit("risks", risk.id, {"cuestion_id": current, "notas": "Sin cambio"})
+        # The unchanged link of the edit is not read again; the edit locks only its risk.
+        issue_reads = [c for c in locked.call_args_list if c.args[1] is CuestionContexto]
+        self.assertEqual([call(db.session, CuestionContexto, current, read=True)] * 2,
+                         issue_reads)
 
     def test_risks_and_opportunities_filter_by_issue(self) -> None:
         first, second = self.issue(), self.issue("Inflación")
