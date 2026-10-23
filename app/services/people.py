@@ -63,11 +63,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
-    AccionCorrectiva, AccionRevision, AccionRiesgo, Auditoria, Capacitacion, CompetenceRecord,
-    CuestionContexto, Document, DocumentRevision, EvaluacionProveedor, MedicionObjetivo,
-    NoConformidad, ObjetivoCalidad, Oportunidad, ParteInteresada, Person, ProcesoOperacion,
-    ProgramaAuditoria, Proveedor, RevisionDireccion, Riesgo, RolResponsabilidad, User,
-    auditoria_equipo, revision_asistentes,
+    AccionCorrectiva, AccionRevision, AccionRiesgo, AlcanceSGC, Auditoria, Capacitacion,
+    CompetenceRecord, CuestionContexto, Document, DocumentRevision, EvaluacionProveedor,
+    MedicionObjetivo, NoConformidad, ObjetivoCalidad, Oportunidad, ParteInteresada, Person,
+    ProcesoOperacion, ProgramaAuditoria, Proveedor, RevisionDireccion, Riesgo,
+    RolResponsabilidad, User, auditoria_equipo, revision_asistentes,
 )
 from . import audit, crud, fields, policy
 from .actor import Actor
@@ -109,6 +109,7 @@ REFERENCES = (
     ProcesoOperacion.responsable_id,
     Proveedor.decidido_por_id, EvaluacionProveedor.evaluador_id,
     CuestionContexto.responsable_id, ParteInteresada.responsable_id,
+    AlcanceSGC.aprobado_por_id,
 )
 
 _READS = crud.Spec(

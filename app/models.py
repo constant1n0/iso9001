@@ -1311,6 +1311,100 @@ class CuestionContexto(RecordMetadataMixin, db.Model):
         return f'<CuestionContexto {self.id} {self.titulo}>'
 
 
+class EstadoAlcance(enum.Enum):
+    """Where a version of the QMS scope stands (decision OC3 of ``organization-context``).
+
+    Only ``services.qms_scope`` moves it, and only forward; ``vigente`` and
+    ``obsoleto`` versions never change again.
+    """
+
+    borrador = 'Borrador'
+    vigente = 'Vigente'
+    obsoleto = 'Obsoleto'
+
+
+# OC3: at most one draft and one current version; approval data exactly when approved;
+# an obsolescence date exactly when obsolete; a requirement that does not apply says why.
+_DRAFT_SCOPE = db.text("estado = 'borrador'")
+_CURRENT_SCOPE = db.text("estado = 'vigente'")
+_SCOPE_APPROVAL = (
+    "(estado = 'borrador' AND aprobado_por_id IS NULL AND fecha_aprobacion IS NULL) OR "
+    "(estado <> 'borrador' AND aprobado_por_id IS NOT NULL AND fecha_aprobacion IS NOT NULL)"
+)
+_SCOPE_OBSOLESCENCE = (
+    "(estado = 'obsoleto' AND fecha_obsolescencia IS NOT NULL) OR "
+    "(estado <> 'obsoleto' AND fecha_obsolescencia IS NULL)"
+)
+_EXCLUSION_JUSTIFIED = "aplica OR (justificacion IS NOT NULL AND trim(justificacion) <> '')"
+
+
+class AlcanceSGC(RecordMetadataMixin, db.Model):
+    """One numbered version of the scope of the QMS (ISO 9001 clause 4.3, decision OC3).
+
+    The statement, the products and services, the sites and notes; the
+    applicability of each requirement lives in ``aplicabilidad_alcance``. A
+    version starts ``borrador``; an administrator approves it (the approving
+    person and date), which makes the current version ``obsoleto`` that day.
+    Two partial unique indexes keep one draft and one current version. A person
+    who approved a version cannot be deleted.
+    """
+
+    __tablename__ = 'alcances_sgc'
+    __table_args__ = (
+        db.UniqueConstraint('version', name='uq_alcances_sgc_version'),
+        db.CheckConstraint('version >= 1', name='ck_alcances_sgc_version'),
+        db.CheckConstraint(_SCOPE_APPROVAL, name='ck_alcances_sgc_aprobacion'),
+        db.CheckConstraint(_SCOPE_OBSOLESCENCE, name='ck_alcances_sgc_obsolescencia'),
+        db.ForeignKeyConstraint(
+            ['aprobado_por_id'], ['personas.id'],
+            name='fk_alcances_sgc_aprobado_por_id_personas', ondelete='RESTRICT',
+        ),
+        db.Index('ix_alcances_sgc_aprobado_por_id', 'aprobado_por_id'),
+        db.Index('uq_alcances_sgc_borrador', 'estado', unique=True,
+                 postgresql_where=_DRAFT_SCOPE, sqlite_where=_DRAFT_SCOPE),
+        db.Index('uq_alcances_sgc_vigente', 'estado', unique=True,
+                 postgresql_where=_CURRENT_SCOPE, sqlite_where=_CURRENT_SCOPE),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    version = db.Column(db.Integer, nullable=False)
+    estado = db.Column(
+        text_enum(EstadoAlcance, 'ck_alcances_sgc_estado'),
+        nullable=False,
+        default=EstadoAlcance.borrador,
+        server_default=EstadoAlcance.borrador.name,
+    )
+    declaracion = db.Column(db.Text, nullable=False)  # the scope statement
+    productos_servicios = db.Column(db.Text)
+    centros = db.Column(db.Text)  # the sites
+    notas = db.Column(db.Text)
+    aprobado_por_id = db.Column(db.Integer, nullable=True)
+    fecha_aprobacion = db.Column(db.Date)
+    fecha_obsolescencia = db.Column(db.Date)
+
+    def __repr__(self):
+        return f'<AlcanceSGC {self.version} {self.estado.name if self.estado else None}>'
+
+
+# The applicability of each requirement of a scope version (OC3), keyed by the
+# requirement's code (``services.qms_scope.CATALOGUE``). A plain table, not
+# audited itself: every audit row of a version carries its ``aplicabilidad``.
+# Its rows go with their version, which the service deletes only as a draft.
+aplicabilidad_alcance = db.Table(
+    'aplicabilidad_alcance',
+    db.Column('alcance_id', db.Integer, nullable=False),
+    db.Column('apartado', db.String(10), nullable=False),
+    db.Column('aplica', db.Boolean, nullable=False),
+    db.Column('justificacion', db.Text),
+    db.PrimaryKeyConstraint('alcance_id', 'apartado', name='pk_aplicabilidad_alcance'),
+    db.ForeignKeyConstraint(
+        ['alcance_id'], ['alcances_sgc.id'],
+        name='fk_aplicabilidad_alcance_alcance_id_alcances_sgc', ondelete='CASCADE',
+    ),
+    db.CheckConstraint(_EXCLUSION_JUSTIFIED, name='ck_aplicabilidad_alcance_justificacion'),
+)
+
+
 class OrigenRiesgo(enum.Enum):
     """Whether a risk or an opportunity arises inside or outside the organization (RO1)."""
 
