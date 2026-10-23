@@ -15,6 +15,7 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
+from ..audit_notifications import local_today
 from ..forms import ParteInteresadaForm  # Importar el formulario
 from ..extensions import db
 from ..services import stakeholders
@@ -43,7 +44,8 @@ def listar_partes_interesadas():
 def crear_parte_interesada():
     form = ParteInteresadaForm()
     if form.validate_on_submit():
-        stakeholders.create(db.session, current_actor(), _form_data(form))
+        # The adapter's date: a new next review is never before it (OC2).
+        stakeholders.create(db.session, current_actor(), _form_data(form), today=local_today())
         db.session.commit()
         flash('Parte interesada creada exitosamente', 'success')
         return redirect(url_for('parte_interesada.listar_partes_interesadas'))
@@ -57,7 +59,7 @@ def editar_parte_interesada(id):
     parte = stakeholders.get(db.session, actor, id)
     form = ParteInteresadaForm(obj=parte)
     if form.validate_on_submit():
-        stakeholders.update(db.session, actor, id, _form_data(form))
+        stakeholders.update(db.session, actor, id, _form_data(form), today=local_today())
         db.session.commit()
         flash('Parte interesada actualizada exitosamente', 'success')
         return redirect(url_for('parte_interesada.listar_partes_interesadas'))

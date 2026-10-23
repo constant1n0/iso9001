@@ -193,10 +193,14 @@ def _exists(model: type, nothing: str) -> Callable[[Session, str, Any, Any], Non
 
 
 def _current_issue(session: Session, key: str, value: Any, current: Any) -> None:
-    """A ``crud.Field.check``: a newly linked context issue exists and is ``vigente``."""
+    """A ``crud.Field.check``: a newly linked context issue exists and is ``vigente``.
+
+    The issue is read with ``FOR SHARE``, like the actions' parent, so superseding
+    it meanwhile waits for this write.
+    """
     if value is None or value == current:
         return
-    found = session.get(CuestionContexto, value) if people.is_db_id(value) else None
+    found = _locked(session, CuestionContexto, value, read=True)
     if found is None:
         raise ValidationError(UNKNOWN_ISSUE)
     if found.estado is not EstadoCuestion.vigente:

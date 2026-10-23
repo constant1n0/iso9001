@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import unittest
+from datetime import date
+from unittest.mock import patch
 
 from register_routes import RegisterRoutesBase
 
@@ -49,6 +51,24 @@ class StakeholderRoutesTestCase(RegisterRoutesBase):
                 self.assertEqual((302, url), (response.status_code, response.headers["Location"]))
                 self.assertIn(("danger", "Ya existe una parte interesada con ese nombre."), self.flashes())
         self.assertEqual(2, self.count(ParteInteresada))
+
+    def test_writes_pass_the_local_date_and_a_json_body_gets_a_normal_result(self) -> None:
+        """OC-1 review: a write that sets the next review needs the adapter's date."""
+        today = date(2026, 10, 22)
+        self.login()
+        with (patch("app.routes.parte_interesada_routes.local_today", return_value=today),
+              patch.object(stakeholders, "create", wraps=stakeholders.create) as create,
+              patch.object(stakeholders, "update", wraps=stakeholders.update) as update):
+            self.assertEqual(302, self.client.post(f"{self.BASE}/nueva", data=FORM).status_code)
+            with self.app.app_context():
+                record_id = ParteInteresada.query.one().id_interesado
+            # A JSON client posting to the form goes through the same validation.
+            edited = self.client.post(f"{self.BASE}/editar/{record_id}", json=FORM | {
+                "objetivo_estrategico": "Crecer", "fecha_revision": "2026-01-01"})
+            self.assertEqual(302, edited.status_code)
+        self.assertEqual(today, create.call_args.kwargs["today"])
+        self.assertEqual(today, update.call_args.kwargs["today"])
+        self.assertEqual("Crecer", self.fetch(ParteInteresada, record_id).objetivo_estrategico)
 
     def test_list_is_ordered_by_name(self) -> None:
         self.seed_with(stakeholders, {"nombre": "Zapaterias"})
