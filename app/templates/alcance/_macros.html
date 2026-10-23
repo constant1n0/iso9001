@@ -1,0 +1,27 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{# Shared by the QMS scope pages (clause 4.3). #}
+
+{% macro estado_badge(estado) -%}
+<span class="badge{{ {'vigente': ' badge--ok', 'borrador': ' badge--warn'}.get(estado.name, '') }}">{{ estado.value }}</span>
+{%- endmacro %}
+
+{% macro aplica_badge(aplica) -%}
+{%- if aplica %}<span class="badge badge--ok">Aplica</span>{% else %}<span class="badge badge--danger">No aplica</span>{% endif -%}
+{%- endmacro %}
+
+{% macro dia(value) %}{{ value.strftime('%d/%m/%Y') if value else '—' }}{% endmacro %}

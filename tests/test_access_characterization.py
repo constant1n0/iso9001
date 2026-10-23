@@ -21,6 +21,7 @@ from app.models import (
     AccionCorrectiva,
     AccionRevision,
     AccionRiesgo,
+    AlcanceSGC,
     Auditoria,
     AuditoriaIndicador,
     Capacitacion,
@@ -34,6 +35,7 @@ from app.models import (
     DocumentRevision,
     EfectoCuestion,
     EstadoAccionRiesgo,
+    EstadoAlcance,
     EstadoRevision,
     EstadoRevisionDireccion,
     EvaluacionProveedor,
@@ -63,6 +65,7 @@ from app.models import (
     TipoSuministro,
     User,
 )
+from app.services.qms_scope import CATALOGUE
 
 PASSWORD_HASH = generate_password_hash("StrongPassword123!")  # hashed once: scrypt is slow
 DASHBOARD = "/dashboard/"
@@ -190,11 +193,14 @@ PROVIDER = dict(nombre="Proveedor nuevo", nif="", contacto="", email="", telefon
                 fecha_proxima_evaluacion="", notas="")
 PROVIDER_EVALUATION = dict(fecha="2026-02-28", evaluador_id="1", calidad="4", plazo="4",
                            servicio="3", documentacion="5", comentario="", fecha_proxima="")
-# Context issues (OC-3 of organization-context). Issue 1 is cited by nothing.
+# Context issues and the QMS scope (OC-3 of organization-context). Issue 1 is cited by
+# nothing; scope version 1 is in force and version 2 is the draft.
 ISSUE = dict(tipo="interna", categoria="recursos", titulo="Cuestión nueva", descripcion="d",
              efecto="neutro", pertinente="1", justificacion_pertinencia="",
              cambio_climatico="", responsable_id="", fecha_identificacion="2026-02-01",
              fecha_revision="", estado="vigente", notas="")
+SCOPE_TEXTS = dict(declaracion="Alcance", productos_servicios="", centros="", notas="")
+SCOPE_DRAFT = SCOPE_TEXTS | {f"aplica-{code}": "y" for code, _ in CATALOGUE}
 
 
 def _register(base, new, action_id):
@@ -376,6 +382,14 @@ ENDPOINTS = [
     *_html("ORGANIZATION_CONTEXT", "/contexto/", ("nueva", ISSUE), ("1/editar", ISSUE),
            "1/eliminar"),
     Endpoint("ORGANIZATION_CONTEXT", "read", "GET", "/contexto/1", 200),
+    # Every role reads every scope version. A draft exists, so «Nuevo borrador» goes to
+    # it; deleting a draft is for its writers (an update). Approving narrows the role to
+    # administrators, so tests/test_scope_screens.py characterizes it.
+    *[Endpoint("ORGANIZATION_CONTEXT", "read", "GET", url, 200)
+      for url in ("/alcance/", "/alcance/historial", "/alcance/1", "/alcance/2")],
+    Endpoint("ORGANIZATION_CONTEXT", "create", "POST", "/alcance/nuevo", 302, SCOPE_TEXTS),
+    Endpoint("ORGANIZATION_CONTEXT", "update", "POST", "/alcance/2/editar", 302, SCOPE_DRAFT),
+    Endpoint("ORGANIZATION_CONTEXT", "update", "POST", "/alcance/2/eliminar", 302),
     *_json("IMPROVEMENTS", "/mejoras/api/", {"no_conformidad": "NC"},
            {"accion_correctiva": "x"}),
     *_json("AUDIT_INDICATORS", "/auditoria_indicador/",
@@ -514,6 +528,9 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                         no_conformidad_id=1, descripcion="Seed", responsable_id=1,
                         fecha_prevista=date(2026, 10, 20),
                     ),
+                    AlcanceSGC(version=1, estado=EstadoAlcance.vigente, declaracion="Seed",
+                               aprobado_por_id=1, fecha_aprobacion=date(2026, 2, 1)),
+                    AlcanceSGC(version=2, estado=EstadoAlcance.borrador, declaracion="Seed 2"),
                     DocumentRevision(
                         document_id=1, numero=1, estado=EstadoRevision.vigente,
                         content="c", effective_from=date(2026, 10, 5),

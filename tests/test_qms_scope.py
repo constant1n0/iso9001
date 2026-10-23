@@ -231,6 +231,36 @@ class DraftTestCase(Helpers, ServiceBase):
         self.assertEqual(["create"], [r.action for r in self.rows()])
         self.assertEqual(applies(), self.entries(scope.id))
 
+    def test_a_requirement_missing_from_a_draft_reads_as_applying_and_is_stored_on_edit(
+            self) -> None:
+        """OC-2 review: a catalogue code a draft does not store is backfilled, not a KeyError."""
+        scope = self.draft()
+        table = aplicabilidad_alcance
+        db.session.execute(table.delete().where(table.c.alcance_id == scope.id,
+                                                table.c.apartado.in_(("8.3", "10.3"))))
+        db.session.commit()
+        self.assertEqual(applies(), self.entries(scope.id))  # catalogue order, applying
+        self.assertEqual(CODES, [r.apartado for r in qs().applicability(
+            db.session, actor(OPERATIVO), scope.id)])
+        self.edit(scope.id, {"aplicabilidad": {"8.3": {"aplica": True}}})  # nothing changes
+        self.assertEqual(["create"], [r.action for r in self.rows()])
+        stored = select(func.count()).select_from(table).where(table.c.alcance_id == scope.id)
+        self.assertEqual(len(CODES) - 2, db.session.scalar(stored))
+        self.edit(scope.id, {"aplicabilidad": {"8.3": EXCLUDED}})
+        self.assertEqual(applies() | {"8.3": EXCLUDED}, self.entries(scope.id))
+        self.assertEqual(len(CODES), db.session.scalar(stored))  # every missing code stored
+        row = self.rows()[-1]
+        self.assertEqual((applies(), applies() | {"8.3": EXCLUDED}),
+                         (row.before["aplicabilidad"], row.after["aplicabilidad"]))
+        db.session.execute(table.delete().where(table.c.alcance_id == scope.id,
+                                                table.c.apartado == "4.1"))
+        db.session.commit()
+        self.edit(scope.id, {"notas": "Revisado"})  # a text edit stores the missing code too
+        self.assertEqual(len(CODES), db.session.scalar(stored))
+        who, _ = self.admin()
+        self.approve(scope.id, who)
+        self.assertEqual(applies() | {"8.3": EXCLUDED}, self.entries(self.draft(data={}).id))
+
     def test_a_draft_is_deleted_with_its_applicability_and_frees_its_number(self) -> None:
         scope = self.draft(data=SCOPE | {"aplicabilidad": {"8.3": EXCLUDED}})
         for who in (actor(OPERATIVO), mcp_actor(AUDITOR), actor(AUDITOR, scopes={"read"})):
