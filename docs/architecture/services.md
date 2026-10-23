@@ -61,9 +61,10 @@ bounded: the page is clamped to `1..crud.MAX_PAGE` and the size to
 | `quality_objectives.py` | Quality objectives and their measurements, target checks and overdue measurements (see below) |
 | `management_reviews.py` | Management reviews, their inputs drawn from the registers, holding and closing, and their actions (see below) |
 | `providers.py` | External providers and their evaluations: state decisions, scores and results, the next-evaluation rule, performance and the dashboard's flags (see below) |
+| `context_issues.py`, `qms_scope.py`, `stakeholders.py` | Context issues and their link to risks; the versioned QMS scope with its applicability; interested parties with their context fields (see below) |
 | `people.py`, `competence.py` | People (each linked to at most one user and holding QMS roles), and competence required per role and demonstrated per person, with the required-versus-demonstrated matrix |
 | `crud.py` | Generic helper driven by a `Spec` (model, resource, fields, ordering) |
-| `training.py`, `satisfaction.py`, `stakeholders.py`, `improvements.py` | Plain HTML registers on `crud` |
+| `training.py`, `satisfaction.py`, `improvements.py` | Plain HTML registers on `crud` |
 | `process_operations.py`, `roles_responsibilities.py` | Processes with their related processes and the records citing them; roles with their reporting line and holders (see below) |
 | `training_resources.py`, `audit_indicators.py` | Legacy registers on `crud`, with web screens and JSON endpoints |
 | `users.py` | User accounts: administration and self-service (see below) |
@@ -90,7 +91,7 @@ then the scopes, then the role.
 
 | Resource | Read | Create / update | Delete |
 |---|---|---|---|
-| Nonconformities, corrective actions, improvements, surveys, training, stakeholders | all roles | all roles | ADMIN |
+| Nonconformities, corrective actions, improvements, surveys, training, stakeholders (`INTERESTED_PARTIES`) | all roles | all roles | ADMIN |
 | Audits, audit programmes, audit findings | ADMIN, AUDITOR | ADMIN, AUDITOR (approve a programme: ADMIN) | ADMIN |
 | Documents | all roles (drafts: ADMIN, AUDITOR) | ADMIN, AUDITOR, never `mcp` (approve and withdraw: ADMIN) | nobody (withdrawn instead) |
 | Roles, training resources, process operations, audit indicators | all roles | ADMIN, AUDITOR | ADMIN |
@@ -99,6 +100,7 @@ then the scopes, then the role.
 | Quality objectives and their measurements | all roles | ADMIN, AUDITOR | ADMIN |
 | Management reviews and their actions | ADMIN, AUDITOR | ADMIN, AUDITOR (hold and close: ADMIN, never `mcp`) | ADMIN |
 | External providers and their evaluations (`EXTERNAL_PROVIDERS`) | all roles | ADMIN, AUDITOR (approve, condition and block: ADMIN, never `mcp`) | ADMIN |
+| Context issues and QMS scope (`ORGANIZATION_CONTEXT`) | all roles | ADMIN, AUDITOR (approve the scope: ADMIN, never `mcp`) | context issues: ADMIN; scope drafts: ADMIN, AUDITOR as an update, never `mcp`; approved scope versions: nobody |
 | Users (web screens; no MCP module); audit log (policy only, no screen or tool) | ADMIN, AUDITOR | ADMIN | nobody |
 | API tokens (list, issue, revoke) | ADMIN | ADMIN | nobody |
 
@@ -211,7 +213,8 @@ filter is used.
 - **Records**: choices are member names. An owner (`responsable_id`) is
   required on create; rows migrated from the old `riesgos_oportunidades` table
   may lack one until someone sets it. `proceso_id` and `parte_interesada_id`
-  cite an existing process and interested party. `fecha_identificacion`
+  cite an existing process and interested party; `cuestion_id` cites the
+  context issue the record arises from (see "Organization context"). `fecha_identificacion`
   defaults to `today` and is never after it (`IDENTIFIED_IN_FUTURE`);
   `fecha_revision`, the next review, is never before it
   (`REVIEW_BEFORE_IDENTIFICATION`).
@@ -393,6 +396,13 @@ Decisions MR1-MR6 of `management-review` (ISO 9001 clause 9.3).
     the `proveedor` origin detected in the period, the most cited providers
     first. Reviews held before EP-3 froze no such section, and the screens
     (`input_sections`) show it only when it is there.
+  - The `contexto` section (9.3.2 b) gains `cuestiones` (OC5 of
+    `organization-context`, from `context_issues.changes`): the issues
+    created, or else updated, in the period, those superseded in it, and the
+    counts of the issues in force now (relevant, climate-related, both); and
+    `alcance`, the version of the QMS scope in force and its approval date
+    (`None` without one). Reviews held before OC-4 froze neither, and
+    `input_sections` shows each only when it is there.
   - `preview` (read grant) and `preview_of` (no check, for adapters that
     already read the review) give the frozen inputs of a held review and the
     live ones of a draft. "No data" is SQL NULL, so the CHECK that a draft
@@ -500,6 +510,70 @@ Services never read the clock: adapters pass `today`.
   forms, the provider picker on nonconformities, the dashboard card, the
   approved-providers PDF (`/proveedores/pdf`); the MCP modules `proveedores`
   and `evaluaciones_proveedor` (no deletes and no decisions).
+
+## Organization context
+
+Decisions OC1 to OC5 of `organization-context` (ISO 9001:2026 clauses 4.1 to
+4.3). Context issues (`CuestionContexto`, the `Register` `context_issues.issues`
+on `crud`) and the QMS scope (`AlcanceSGC`, `qms_scope`) share the
+`ORGANIZATION_CONTEXT` resource; interested parties (`ParteInteresada`,
+`stakeholders`) keep `INTERESTED_PARTIES`. Writes that judge a date take
+`today` from the adapter (`local_today()`).
+
+- **Context issues**: `tipo`, `categoria`, `titulo`, `descripcion`,
+  `efecto`, `pertinente` and `fecha_identificacion` are required.
+  - The category matches the type (`CATEGORIAS_POR_TIPO`,
+    `CATEGORY_MISMATCH`). An issue that is not relevant says why
+    (`justificacion_pertinencia`, `JUSTIFICATION_REQUIRED`). `cambio_climatico`
+    marks the issues concerning climate change, relevant or not.
+  - `fecha_identificacion` is never after `today` (`IDENTIFIED_IN_FUTURE`);
+    `fecha_revision`, the next review, is never before it
+    (`REVIEW_BEFORE_IDENTIFICATION`). A `vigente` issue whose next review is
+    before `today` is overdue (`revision_vencida`); a `superada` one never is.
+  - An issue cited by a risk or an opportunity is never deleted
+    (`CITED_BY_RISKS`). The delete locks the row (`FOR UPDATE`); when the
+    database refuses it, the message is `CITED_BY_RISKS` if a citation was
+    inserted meanwhile and `DELETE_CONFLICT` otherwise.
+- **The risk link**: risks and opportunities name the issue they arise from
+  (`cuestion_id`). A newly linked issue must exist and be `vigente`
+  (`risks.ISSUE_SUPERSEDED`) and is read with a shared lock (`FOR SHARE`); an
+  edit that keeps an issue already cited is accepted after it is superseded.
+  `linked` and `linked_ids` give the records citing an issue.
+- **Interested parties**: OC2 adds `tipo`, `pertinente` (`None` is not
+  evaluated), `responsable_id`, `fecha_revision` and `requisitos_climaticos`.
+  A new or changed `fecha_revision` is never before `today`
+  (`REVIEW_IN_PAST`). A party is overdue for review when its next review is
+  before `today`, whatever its relevance.
+- **QMS scope**: numbered versions with a statement, products and services,
+  sites, notes and one applicability entry per requirement of the fixed
+  `CATALOGUE` (38 entries, 4.1 to 10.3), stored in the plain table
+  `aplicabilidad_alcance`. A requirement that does not apply needs a
+  justification (`JUSTIFICATION_REQUIRED`; `applicability_errors` reports it
+  row by row for a form).
+  - States `borrador` -> `vigente` -> `obsoleto`. Two partial unique indexes
+    keep one draft and one current version; the loser of a race gets
+    `Conflict`.
+  - `new_draft` starts the next version as a copy of the current one; the
+    first needs a statement (`STATEMENT_REQUIRED`) and applies everything.
+    There is at most one draft (`ONE_DRAFT`).
+  - `update_draft` changes only a draft (`IMMUTABLE`). A catalogue code a
+    version does not store reads as applying, and the next write stores it.
+  - `approve` (ADMIN, never `mcp`) records the acting user's linked person
+    (`APPROVER_REQUIRED`) and `today`, and makes the current version
+    `obsoleto` from `today`. `delete_draft` deletes a draft only
+    (`ONLY_DRAFTS_DELETED`; its writers, never `mcp`).
+  - The applicability table has no audit row of its own: each version's audit
+    rows carry `aplicabilidad`.
+- `context_issues.attention(session, actor, *, today)` gathers the dashboard's
+  flags: the `vigente` issues and the interested parties overdue for review
+  (read grants of both resources). `context_issues.changes(session, desde,
+  hasta)` (no policy check) feeds the management review inputs.
+- Adapters: the web screens (`/contexto/`, `/partes_interesadas/`,
+  `/alcance/`) with the scope PDF (`/alcance/pdf` for the current version,
+  `/alcance/<id>/pdf` for any version), the dashboard card, the MCP modules
+  `cuestiones_contexto`, `alcances_sgc` (draft writes only) and
+  `partes_interesadas` (no deletes, no approval), and the management review
+  inputs.
 
 ## Document control
 

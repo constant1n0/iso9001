@@ -186,6 +186,27 @@ class IssueFlowTestCase(ContextScreensBase):
         self.assertIn(("success", "Cuestión eliminada."), self.flashes())
         self.assertEqual(issue, self.load(Riesgo, risk).cuestion_id)
 
+    def test_a_risk_citing_an_issue_superseded_since_is_edited_and_keeps_it(self) -> None:
+        """OC-3 review: the form keeps offering the superseded issue a risk cites, and
+        saving the risk with it unchanged succeeds."""
+        issue = self.issue()
+        risk = self.risk(cuestion_id=issue)
+        with self.app.app_context():
+            context_issues.issues.update(db.session, SYSTEM, issue, {"estado": "superada"},
+                                         today=TODAY)
+            db.session.commit()
+        self.login(AUDITOR)
+        self.assertIn(f'<option selected value="{issue}">Sequías prolongadas (superada)</option>',
+                      self.select(self.html(f"/riesgos/{risk}/editar"), "cuestion_id"))
+        self.post(f"/riesgos/{risk}/editar", RISK_FORM | {
+            "titulo": "Paradas largas", "responsable_id": str(self.eva),
+            "cuestion_id": str(issue)}, expect=f"/riesgos/{risk}")
+        self.assertIn(("success", "Riesgo actualizado."), self.flashes())
+        found = self.load(Riesgo, risk)
+        self.assertEqual((issue, "Paradas largas"), (found.cuestion_id, found.titulo))
+        self.assertIn(f'href="{ISSUES}/{issue}">Sequías prolongadas</a>',
+                      self.html(f"/riesgos/{risk}"))
+
     def test_the_list_filters_and_flags_overdue_reviews(self) -> None:
         drought = self.issue("Sequías", cambio_climatico=True, responsable_id=self.eva,
                              fecha_identificacion=date(2026, 1, 10),

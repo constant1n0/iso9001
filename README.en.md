@@ -21,6 +21,11 @@ an agent can never delete anything.
 - **Dashboard**: key figures, charts and alerts.
 - **Users and profile** (clause 5.3): the *Administrador*, *Auditor* and
   *Operativo* roles, deactivation instead of deletion, profile and API tokens.
+- **Context, interested parties and scope** (4.1, 4.2, 4.3): external and
+  internal issues with their relevance and that of climate change, cited by
+  risks; interested parties with type, relevance, owner, next review and
+  climate-related requirements; the QMS scope as approved versions, with the
+  justified applicability of each requirement and its PDF.
 - **Processes** (4.4, 8.1): type, owner, inputs, outputs, resources,
   operating and acceptance criteria, related processes and the records citing
   each process.
@@ -43,9 +48,9 @@ an agent can never delete anything.
   linked nonconformities and the approved-providers PDF.
 - **Management review** (9.3): inputs drawn from the registers, conclusions,
   actions and the minutes PDF.
-- **Earlier registers**: interested parties (4.2), training resources (7.1),
-  training (7.2), audit indicators (9.1), customer satisfaction (9.1.2) and
-  improvements (10.3), all with screens.
+- **Earlier registers**: training resources (7.1), training (7.2), audit
+  indicators (9.1), customer satisfaction (9.1.2) and improvements (10.3), all
+  with screens.
 - **Reports and notifications** (9.1): PDFs of the records, a monthly quality
   report and scheduled e-mail alerts.
 

@@ -1,0 +1,74 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "_partials/pdf_base.html" %}
+{% from "_partials/pdf.html" import fields, section %}
+{% from "alcance/_macros.html" import dia %}
+{# One version of the QMS scope (OC-4 of organization-context); every cell is plain text. #}
+{% set a = alcance %}
+{% block title %}Alcance del sistema de gestión de la calidad{% endblock %}
+{% block clause %}Cláusula 4.3 · Alcance del sistema de gestión de la calidad{% endblock %}
+{% block subtitle %}Versión {{ a.version }} · {{ a.estado.value }}{% endblock %}
+{% block content %}
+{# PDF-only template (never served to a browser, so the CSP does not apply):
+   the applicability table has more columns than the print theme's key/value tables. #}
+<style>
+.grupo { margin: 8mm 0 4mm; font: 700 16pt/1.2 "Barlow Condensed"; }
+.tabla { width: 100%; border-collapse: collapse; margin-bottom: 4mm; font-size: 8pt; line-height: 1.35; }
+.tabla th, .tabla td { padding: 1.5mm 1.5mm; border-bottom: 0.3mm solid #d9d4c8; text-align: left; vertical-align: top; }
+.tabla thead th { border-top: 0.6mm solid #0a0a0a; color: #6b675f; font: 500 6pt "IBM Plex Mono"; letter-spacing: 0.06em; text-transform: uppercase; }
+.tabla tr { page-break-inside: avoid; }
+</style>
+{{ fields([
+    ('Versión', a.version),
+    ('Estado', a.estado.value),
+    ('Aprobada el', dia(a.fecha_aprobacion)),
+    ('Aprobada por', personas.get(a.aprobado_por_id, '—')),
+    ('Obsoleta desde', dia(a.fecha_obsolescencia)),
+    ('Requisitos que aplican', requisitos | length - no_aplican | length),
+    ('Requisitos que no aplican', no_aplican | length),
+]) }}
+{{ section('Declaración del alcance', a.declaracion) }}
+{{ section('Productos y servicios', a.productos_servicios, 'Sin indicar') }}
+{{ section('Centros', a.centros, 'Sin indicar') }}
+{% if a.notas %}{{ section('Notas', a.notas) }}{% endif %}
+<h2 class="grupo" id="aplicabilidad">Aplicabilidad de los requisitos</h2>
+<table class="tabla">
+    <thead>
+        <tr><th>Apartado</th><th>Requisito</th><th>Aplicabilidad</th><th>Justificación</th></tr>
+    </thead>
+    <tbody>
+        {% for r in requisitos %}
+        <tr id="apartado-{{ r.apartado }}"><td>{{ r.apartado }}</td><td>{{ r.titulo }}</td><td>{{ 'Aplica' if r.aplica else 'No aplica' }}</td><td>{{ r.justificacion or '—' }}</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+<h2 class="grupo" id="no-aplican">Requisitos que no aplican</h2>
+{% if no_aplican %}
+<table class="tabla">
+    <thead>
+        <tr><th>Apartado</th><th>Requisito</th><th>Justificación</th></tr>
+    </thead>
+    <tbody>
+        {% for r in no_aplican %}
+        <tr id="no-aplica-{{ r.apartado }}"><td>{{ r.apartado }}</td><td>{{ r.titulo }}</td><td>{{ r.justificacion }}</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="muted">Todos los requisitos aplican.</p>
+{% endif %}
+{% endblock %}

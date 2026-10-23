@@ -33,6 +33,11 @@ and OC4). The scope lives under ``/alcance`` (blueprint ``alcance``):
 - Approving is for administrators (``qms_scope.may_approve``); deleting a draft
   is for its writers. Current and obsolete versions never change: their forms
   return to the version's page with the reason.
+- Every role exports a version as a PDF (task OC-4): ``/alcance/pdf`` the
+  current one and ``/alcance/<id>/pdf`` any one, as ``alcance_sgc_v<N>.pdf``,
+  with its approval, texts and applicability table, and the requirements that
+  do not apply listed again at the end. Without a current version, or when the
+  PDF cannot be rendered, the page it came from shows again with the reason.
 
 A service ``ValidationError`` or ``Conflict`` is rolled back: on a form it
 shows again with what was typed and the reason flashed, on a one-button action
@@ -41,7 +46,7 @@ it is flashed on the version's page. Dates come from ``local_today``.
 
 from typing import Any
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from flask_login import login_required
 
@@ -52,6 +57,7 @@ from ..models import AlcanceSGC, EstadoAlcance
 from ..services import people, qms_scope
 from ..services.actor import Actor
 from ..services.errors import PermissionDenied
+from ..utils.pdf import pdf_response, render_pdf
 from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
 from .auditoria_routes import committed
@@ -60,6 +66,8 @@ from .people_routes import form_data, saved
 scope_bp = Blueprint('alcance', __name__, url_prefix='/alcance')
 
 RESOURCE = 'organization_context'
+NO_CURRENT = 'No hay ninguna versión vigente del alcance.'
+PDF_ERROR = 'Error al generar el PDF del alcance.'
 
 
 def _version_page(scope_id: int) -> ResponseReturnValue:
@@ -107,6 +115,51 @@ def history() -> ResponseReturnValue:
 def show_version(scope_id: int) -> ResponseReturnValue:
     actor = current_actor()
     return _version(actor, qms_scope.get(db.session, actor, scope_id))
+
+
+# -- a version as a PDF ----------------------------------------------------------------
+
+
+def _pdf(actor: Actor, alcance: AlcanceSGC, back: str) -> ResponseReturnValue:
+    """``alcance`` as a PDF; one that cannot be rendered returns to ``back``.
+
+    The template gets the version, its applicability (``requisitos``), the
+    requirements that do not apply (``no_aplican``) and the approver's name.
+    """
+    requisitos = qms_scope.applicability(db.session, actor, alcance.id)
+    try:
+        pdf = render_pdf(
+            'alcance/pdf_template.html', alcance=alcance, requisitos=requisitos,
+            no_aplican=[r for r in requisitos if not r.aplica],
+            personas=people.names(db.session, actor, (alcance.aprobado_por_id,)))
+    except Exception:
+        current_app.logger.exception('Error generating the QMS scope PDF')
+        flash(PDF_ERROR, 'danger')
+        return redirect(back)
+    return pdf_response(pdf, f'alcance_sgc_v{alcance.version}.pdf')
+
+
+@scope_bp.route('/pdf', methods=['GET'])
+@login_required
+@require_permission('read', RESOURCE)
+def export_pdf() -> ResponseReturnValue:
+    """The version in force as a PDF; without one, the scope page with the reason."""
+    actor = current_actor()
+    vigente = qms_scope.current(db.session, actor)
+    if vigente is None:
+        flash(NO_CURRENT, 'warning')
+        return redirect(url_for('alcance.show_current'))
+    return _pdf(actor, vigente, url_for('alcance.show_current'))
+
+
+@scope_bp.route('/<int:scope_id>/pdf', methods=['GET'])
+@login_required
+@require_permission('read', RESOURCE)
+def export_version_pdf(scope_id: int) -> ResponseReturnValue:
+    """Any version as a PDF, a draft or an obsolete one included."""
+    actor = current_actor()
+    alcance = qms_scope.get(db.session, actor, scope_id)
+    return _pdf(actor, alcance, url_for('alcance.show_version', scope_id=scope_id))
 
 
 @scope_bp.route('/nuevo', methods=['GET', 'POST'])

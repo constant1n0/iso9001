@@ -34,7 +34,7 @@ nunca puede eliminar.
 
   | Herramienta | Finalidad |
   |---|---|
-  | `qms_modules` | Los 26 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
+  | `qms_modules` | Los 28 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
   | `qms_list` | Una página acotada de un módulo, con los filtros que enumera `qms_modules` |
   | `qms_get` | Un registro por su `id` |
   | `qms_create` | Crea un registro |
@@ -59,15 +59,15 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 26 módulos: `no_conformidades`, `auditorias`,
+`qms_modules` enumera 28 módulos: `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
 `indicadores_auditoria`, `personas`, `competencias_requeridas`,
 `competencias_acreditadas`, `acciones_correctivas`, `objetivos_calidad`,
 `mediciones_objetivo`, `revisiones_direccion`, `acciones_revision`,
-`riesgos`, `oportunidades`, `acciones_riesgo`, `proveedores` y
-`evaluaciones_proveedor`. Cada
+`riesgos`, `oportunidades`, `acciones_riesgo`, `proveedores`,
+`evaluaciones_proveedor`, `cuestiones_contexto` y `alcances_sgc`. Cada
 campo tiene un `type`, un indicador `required`, los valores `allowed` de los
 enumerados y, cuando los indicadores no bastan, una breve `note`.
 
@@ -287,7 +287,13 @@ elimina, celebra ni cierra una revisión.
     `contexto`, `satisfaccion`, `objetivos`, `indicadores`,
     `no_conformidades`, `auditorias`, `mejoras`, `capacitaciones`,
     `proveedores`) recuenta el periodo hasta esa fecha, y sus listas contienen
-    como máximo diez elementos. `proveedores` (9.1.3 f) cuenta los proveedores
+    como máximo diez elementos. `contexto` (9.3.2 b) incluye `cuestiones`: las
+    cuestiones del contexto nuevas, modificadas y superadas en el periodo, con
+    su lista (`cambio` es `nueva` o `modificada`), y los recuentos actuales de
+    las vigentes, las pertinentes y las relacionadas con el cambio climático;
+    y `alcance`: la `version` vigente del alcance del SGC y su
+    `fecha_aprobacion` (`null` sin versión vigente). Las revisiones celebradas
+    antes de que existieran no los tienen. `proveedores` (9.1.3 f) cuenta los proveedores
     por su estado actual, los que tienen la evaluación vencida en la fecha de
     corte, las evaluaciones del periodo con su media (texto decimal) y sus
     resultados, los proveedores con una evaluación `no_apto` en el periodo y
@@ -319,7 +325,10 @@ todos los roles leen, y solo los tokens de ADMIN o AUDITOR (con el ámbito
 - `riesgos` y `oportunidades` comparten estos campos: `titulo`, `descripcion`,
   `origen` (`interno`, `externo`) y `responsable_id` (una persona) son
   obligatorios; `parte_interesada_id` (un registro de `partes_interesadas`),
-  `proceso_id` (un registro de `procesos`), `estado`,
+  `proceso_id` (un registro de `procesos`), `cuestion_id` (la cuestión de
+  `cuestiones_contexto` de la que nace; debe estar `vigente` cuando se vincula
+  de nuevo, y un registro conserva la que ya citaba aunque se haya superado),
+  `estado`,
   `fecha_identificacion` (por defecto, hoy; nunca futura), `fecha_revision`
   (la próxima revisión; nunca anterior a la identificación) y `notas` son
   opcionales. Los registros migrados del registro antiguo pueden no tener
@@ -335,7 +344,7 @@ todos los roles leen, y solo los tokens de ADMIN o AUDITOR (con el ámbito
     `null` sin valorar), y `revision_vencida` (abierto, con `fecha_revision`
     anterior a hoy).
   - Filtros: `estado`, `nivel` (`bajo`, `medio`, `alto`, `critico`),
-    `responsable_id`, `proceso_id`, `origen`, `sin_valorar` y
+    `responsable_id`, `proceso_id`, `cuestion_id`, `origen`, `sin_valorar` y
     `revision_vencida`.
 - `oportunidades`: `beneficio` y `viabilidad`; `decision` (`aprovechar`,
   `posponer`, `descartar`). `estado` empieza en `identificada` y pasa por
@@ -343,7 +352,7 @@ todos los roles leen, y solo los tokens de ADMIN o AUDITOR (con el ámbito
   - Los registros añaden `prioridad` (`"Baja"` 1-6, `"Media"` 8-12,
     `"Alta"` 15-25; `null` sin valorar) y `revision_vencida`.
   - Filtros: `estado`, `prioridad` (`baja`, `media`, `alta`),
-    `responsable_id`, `proceso_id`, `origen`, `sin_valorar` y
+    `responsable_id`, `proceso_id`, `cuestion_id`, `origen`, `sin_valorar` y
     `revision_vencida`.
 - `acciones_riesgo`: `riesgo_id` u `oportunidad_id` (uno de los dos; nunca
   cambia), `descripcion`, `responsable_id` (una persona) y `fecha_limite` son
@@ -413,6 +422,61 @@ decide el estado de un proveedor.
   las eliminaciones, el filtro `con_procesos` y el PDF de proveedores
   aprobados. Un proveedor con evaluaciones o no conformidades nunca se
   elimina.
+
+Contexto de la organización (cláusulas 4.1, 4.2 y 4.3 de ISO 9001:2026).
+`cuestiones_contexto` y `alcances_sgc` comparten un mismo permiso: todos los
+roles leen, y solo los tokens de ADMIN o AUDITOR (con el ámbito `write`) crean
+y actualizan. Ningún token elimina ni aprueba.
+
+- Los enumerados se devuelven con su etiqueta en español; las escrituras y
+  los filtros usan el nombre del miembro.
+- `cuestiones_contexto` (4.1): `tipo` (`externa`, `interna`), `categoria`,
+  `titulo`, `descripcion`, `efecto` (`positivo`, `negativo`, `neutro`),
+  `pertinente` (booleano) y `fecha_identificacion` (nunca futura) son
+  obligatorios.
+  - `categoria` corresponde al tipo: una cuestión `externa` es `politica`,
+    `economica`, `social`, `tecnologica`, `legal` o `ambiental`, y una
+    `interna`, `cultura`, `recursos`, `conocimiento`, `desempeno` o
+    `estructura`.
+  - `justificacion_pertinencia` es obligatoria cuando `pertinente` es
+    `false`. `cambio_climatico` (por defecto, `false`) marca las cuestiones
+    relacionadas con el cambio climático, pertinentes o no.
+  - Opcionales: `responsable_id` (una persona), `fecha_revision` (la próxima
+    revisión; nunca anterior a la identificación), `estado` (`vigente` al
+    empezar; `superada` cuando deja de aplicar) y `notas`.
+  - Los registros añaden `revision_vencida` (`vigente`, con `fecha_revision`
+    anterior a hoy) y `riesgos` y `oportunidades`: los ids de los registros
+    que citan la cuestión (`cuestion_id`).
+  - Filtros: `tipo`, `categoria`, `pertinente`, `cambio_climatico`, `estado`,
+    `responsable_id` y `revision_vencida`.
+- `alcances_sgc` (4.3): las versiones del alcance del SGC.
+  - `qms_create` empieza el borrador de la versión siguiente como copia de la
+    vigente, con los cambios indicados; la primera versión necesita
+    `declaracion` y en ella aplican todos los requisitos. Solo hay un
+    borrador a la vez.
+  - `qms_update` solo modifica el borrador: una versión `vigente` u `obsoleto`
+    nunca cambia.
+  - Campos: `declaracion`, `productos_servicios`, `centros`, `notas` y
+    `aplicabilidad`, los cambios por requisito, como
+    `{"8.3": {"aplica": false, "justificacion": "…"}}`, solo con los
+    requisitos y las claves que cambian. Un requisito que no aplica necesita
+    una justificación. Los requisitos son los 38 del catálogo, de `4.1` a
+    `10.3`.
+  - `version`, `estado` (`borrador`, `vigente`, `obsoleto`),
+    `aprobado_por_id`, `fecha_aprobacion` y `fecha_obsolescencia` nunca se
+    escriben. Los registros añaden la `aplicabilidad` completa: cada requisito
+    con `aplica` y `justificacion`.
+  - Filtro: `estado`.
+- `partes_interesadas` (4.2): todos los roles leen, crean y actualizan.
+  `nombre` (único) es obligatorio; `necesidades_expectativas`,
+  `requisitos_identificados` y `objetivo_estrategico` son texto. Los campos
+  del contexto son opcionales: `tipo` (`externa`, `interna`), `pertinente`
+  (booleano; `null` es sin evaluar), `responsable_id` (una persona),
+  `fecha_revision` (la próxima revisión; una fecha nueva nunca es anterior a
+  hoy) y `requisitos_climaticos` (por defecto, `false`).
+- «Hoy» es la fecha local del servidor (`APP_TIMEZONE`).
+- Solo en la web: aprobar el alcance (administradores), eliminar un borrador
+  del alcance, una cuestión o una parte interesada, y el PDF del alcance.
 
 ## Emisión de un token
 

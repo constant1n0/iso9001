@@ -26,6 +26,7 @@
 {% call page_header('Cláusula 4.3 · Alcance del sistema de gestión de la calidad', 'Alcance del SGC' if actual else 'Alcance del SGC · versión ' ~ a.version) %}
     {% if not actual %}<a class="btn" href="{{ url_for('alcance.show_current') }}">Versión vigente</a>{% endif %}
     <a class="btn" href="{{ url_for('alcance.history') }}">Historial</a>
+    <a class="btn" href="{{ url_for('alcance.export_pdf') if actual else url_for('alcance.export_version_pdf', scope_id=a.id) }}" target="_blank" rel="noopener">PDF</a>
     {% if borrador_actual and can('update', 'organization_context') %}
     <a class="btn" href="{{ url_for('alcance.edit_draft', scope_id=a.id) }}">Editar</a>
     {{ delete_form(url_for('alcance.delete_draft', scope_id=a.id), '¿Eliminar el borrador de la versión ' ~ a.version ~ ' del alcance?') }}

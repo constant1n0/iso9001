@@ -387,6 +387,9 @@ ENDPOINTS = [
     # administrators, so tests/test_scope_screens.py characterizes it.
     *[Endpoint("ORGANIZATION_CONTEXT", "read", "GET", url, 200)
       for url in ("/alcance/", "/alcance/historial", "/alcance/1", "/alcance/2")],
+    # The scope PDF (OC-4): the current version and any version, the draft included.
+    *[Endpoint("ORGANIZATION_CONTEXT", "read", "GET", url, 200)
+      for url in ("/alcance/pdf", "/alcance/1/pdf", "/alcance/2/pdf")],
     Endpoint("ORGANIZATION_CONTEXT", "create", "POST", "/alcance/nuevo", 302, SCOPE_TEXTS),
     Endpoint("ORGANIZATION_CONTEXT", "update", "POST", "/alcance/2/editar", 302, SCOPE_DRAFT),
     Endpoint("ORGANIZATION_CONTEXT", "update", "POST", "/alcance/2/eliminar", 302),

@@ -61,6 +61,7 @@ No enlazar imágenes hasta que existan en el repositorio. -->
 |---|---|---|
 | Panel de control | — | Cifras, gráficos y avisos, entre ellos las revisiones de documentos vencidas, los objetivos que no alcanzan la meta y las acciones vencidas de la revisión por la dirección |
 | Usuarios y perfil | 5.3 | Cuentas con los roles Administrador, Auditor y Operativo, desactivación en lugar de eliminación, y el perfil y los tokens de API de cada usuario |
+| Contexto, partes interesadas y alcance | 4.1, 4.2, 4.3 | Cuestiones externas e internas con su pertinencia y la del cambio climático, que citan los riesgos; partes interesadas con tipo, pertinencia, responsable, próxima revisión y requisitos climáticos; alcance del SGC por versiones aprobadas, con la aplicabilidad justificada de cada requisito y su PDF |
 | Procesos | 4.4, 8.1 | Tipo, responsable, entradas, salidas, recursos, criterios de operación y de aceptación, procesos relacionados y los registros que citan cada proceso |
 | Personas y competencia | 5.3, 7.2 | Personas, roles del SGC con sus responsabilidades, autoridades y línea de reporte, competencias requeridas y acreditadas, y la matriz de competencias |
 | No conformidades y acciones correctivas | 10.2 | Contención, causa raíz, acciones correctivas, verificación de la eficacia, cierre y reapertura |
@@ -72,10 +73,9 @@ No enlazar imágenes hasta que existan en el repositorio. -->
 | Revisión por la dirección | 9.3 | Entradas tomadas de los registros, conclusiones, acciones y acta en PDF |
 | Informes y notificaciones | 9.1 | PDF de los registros, informe mensual de calidad y avisos programados por correo electrónico |
 
-**Otros registros**, anteriores a los módulos de la tabla: partes interesadas
-(4.2), recursos de capacitación (7.1), capacitaciones (7.2), indicadores de
-auditoría (9.1), satisfacción del cliente (9.1.2) y mejoras (10.3). Todos
-tienen pantallas.
+**Otros registros**, anteriores a los módulos de la tabla: recursos de
+capacitación (7.1), capacitaciones (7.2), indicadores de auditoría (9.1),
+satisfacción del cliente (9.1.2) y mejoras (10.3). Todos tienen pantallas.
 
 La [guía de usuario](docs/guia-de-usuario.md) explica cada pantalla, los
 permisos de cada rol y las reglas de cada módulo.
