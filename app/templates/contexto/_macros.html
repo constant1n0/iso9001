@@ -1,0 +1,37 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{# Shared by the context issue and interested party pages (clauses 4.1 and 4.2). #}
+
+{# Relevance: «Pertinente», «No pertinente» or, for a party not yet evaluated, «Sin evaluar». #}
+{% macro pertinencia_badge(pertinente) -%}
+{%- if pertinente is none %}<span class="badge">Sin evaluar</span>
+{%- elif pertinente %}<span class="badge badge--ok">Pertinente</span>
+{%- else %}<span class="badge">No pertinente</span>{% endif -%}
+{%- endmacro %}
+
+{# The climate-change badge, or a dash. #}
+{% macro clima_badge(flag, label='Cambio climático') -%}
+{%- if flag %}<span class="badge badge--warn">{{ label }}</span>{% else %}—{% endif -%}
+{%- endmacro %}
+
+{% macro estado_badge(estado) -%}
+<span class="badge{{ ' badge--ok' if estado.name == 'vigente' else '' }}">{{ estado.value }}</span>
+{%- endmacro %}
+
+{% macro si_no(value) %}{{ 'Sí' if value else 'No' }}{% endmacro %}
+
+{% macro dia(value) %}{{ value.strftime('%d/%m/%Y') if value else '—' }}{% endmacro %}

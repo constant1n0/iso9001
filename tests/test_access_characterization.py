@@ -24,12 +24,15 @@ from app.models import (
     Auditoria,
     AuditoriaIndicador,
     Capacitacion,
+    CategoriaCuestion,
     CompetenceRecord,
     CompetenceRequirement,
     CompetenceType,
+    CuestionContexto,
     Document,
     DocumentCategory,
     DocumentRevision,
+    EfectoCuestion,
     EstadoAccionRiesgo,
     EstadoRevision,
     EstadoRevisionDireccion,
@@ -55,6 +58,7 @@ from app.models import (
     SatisfaccionCliente,
     SentidoObjetivo,
     TipoAccionRevision,
+    TipoContexto,
     TipoHallazgo,
     TipoSuministro,
     User,
@@ -186,6 +190,11 @@ PROVIDER = dict(nombre="Proveedor nuevo", nif="", contacto="", email="", telefon
                 fecha_proxima_evaluacion="", notas="")
 PROVIDER_EVALUATION = dict(fecha="2026-02-28", evaluador_id="1", calidad="4", plazo="4",
                            servicio="3", documentacion="5", comentario="", fecha_proxima="")
+# Context issues (OC-3 of organization-context). Issue 1 is cited by nothing.
+ISSUE = dict(tipo="interna", categoria="recursos", titulo="Cuestión nueva", descripcion="d",
+             efecto="neutro", pertinente="1", justificacion_pertinencia="",
+             cambio_climatico="", responsable_id="", fecha_identificacion="2026-02-01",
+             fecha_revision="", estado="vigente", notas="")
 
 
 def _register(base, new, action_id):
@@ -364,6 +373,9 @@ ENDPOINTS = [
              PROVIDER_EVALUATION),
     Endpoint("EXTERNAL_PROVIDERS", "delete", "POST", "/proveedores/1/evaluaciones/1/eliminar",
              302),
+    *_html("ORGANIZATION_CONTEXT", "/contexto/", ("nueva", ISSUE), ("1/editar", ISSUE),
+           "1/eliminar"),
+    Endpoint("ORGANIZATION_CONTEXT", "read", "GET", "/contexto/1", 200),
     *_json("IMPROVEMENTS", "/mejoras/api/", {"no_conformidad": "NC"},
            {"accion_correctiva": "x"}),
     *_json("AUDIT_INDICATORS", "/auditoria_indicador/",
@@ -407,12 +419,12 @@ ALLOWED = {
     "QUALITY_OBJECTIVES": JSON_REGISTER,  # decision QO4 of quality-objectives
     "MANAGEMENT_REVIEW": (ADMIN_AUDITOR, ADMIN_AUDITOR, {ADMIN}),  # MR5 of management-review
     "EXTERNAL_PROVIDERS": JSON_REGISTER,  # EP5 of external-providers
+    "ORGANIZATION_CONTEXT": JSON_REGISTER,  # OC4 of organization-context
 }
 # Policy entries without routes. AUDIT_LOG has no adapter yet. The API_TOKENS
 # matrix (issue, list, revoke any token) stays CLI-only; "Mi perfil" bypasses it
 # with an ownership check, so tests/test_profile_routes.py characterizes it.
-# ORGANIZATION_CONTEXT gets its screens in OC-3 of organization-context.
-NO_ROUTES = {"AUDIT_LOG", "API_TOKENS", "ORGANIZATION_CONTEXT"}
+NO_ROUTES = {"AUDIT_LOG", "API_TOKENS"}
 
 
 def allowed_roles(endpoint: Endpoint) -> set:
@@ -476,6 +488,10 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                     Person(nombre="Unreferenced"),
                     *(Proveedor(nombre=nombre, tipo_suministro=TipoSuministro.producto)
                       for nombre in ("Seed", "Sin evaluaciones")),
+                    CuestionContexto(tipo=TipoContexto.interna,
+                                     categoria=CategoriaCuestion.recursos, titulo="Seed",
+                                     descripcion="d", efecto=EfectoCuestion.neutro,
+                                     pertinente=True, fecha_identificacion=date(2026, 2, 1)),
                 ]
             )
             db.session.flush()  # the competence rows cite role 2 and person 1

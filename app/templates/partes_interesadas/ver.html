@@ -1,0 +1,59 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form %}
+{% from "contexto/_macros.html" import pertinencia_badge, clima_badge, si_no, dia %}
+{% macro item(titulo) %}<li class="list__item"><span class="list__primary">{{ titulo }}</span><span class="list__secondary">{{ caller() }}</span></li>{% endmacro %}
+{% set p = parte %}
+{% block title %}{{ p.nombre }}{% endblock %}
+{% block crumb %}Contexto · Partes interesadas{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 4.2 · Parte interesada', p.nombre) %}
+    {% if can('update', 'interested_parties') %}
+    <a class="btn" href="{{ url_for('parte_interesada.editar_parte_interesada', id=p.id_interesado) }}">Editar</a>
+    {% endif %}
+    {% if can('delete', 'interested_parties') %}
+    {{ delete_form(url_for('parte_interesada.eliminar_parte_interesada', id=p.id_interesado), '¿Eliminar la parte interesada ' ~ p.nombre ~ '?') }}
+    {% endif %}
+{% endcall %}
+
+<section class="grid grid--2" aria-label="Identificación y necesidades">
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="identificacion">Identificación</h2>{{ pertinencia_badge(p.pertinente) }}</header>
+        <ul class="list">
+            {% call item('Tipo') %}{{ p.tipo.value if p.tipo else 'Sin indicar' }}{% endcall %}
+            {% call item('Pertinente') %}{{ 'Sin evaluar' if p.pertinente is none else si_no(p.pertinente) }}{% endcall %}
+            {% call item('Responsable') %}{% if p.responsable_id in personas %}<a href="{{ url_for('people.show_person', person_id=p.responsable_id) }}">{{ personas[p.responsable_id] }}</a>{% else %}—{% endif %}{% endcall %}
+            {% call item('Próxima revisión') %}{{ dia(p.fecha_revision) }}{% if vencida %} <span class="badge badge--warn">Revisión vencida</span>{% endif %}{% endcall %}
+            {% call item('Requisitos relacionados con el cambio climático') %}{{ si_no(p.requisitos_climaticos) }}{% endcall %}
+        </ul>
+    </article>
+    <article class="card">
+        <header class="card__header"><h2 class="card__title">Necesidades y expectativas</h2>{{ clima_badge(p.requisitos_climaticos, 'Requisitos climáticos') if p.requisitos_climaticos }}</header>
+        {% if p.necesidades_expectativas %}<div class="card__body"><p class="card__text">{{ p.necesidades_expectativas }}</p></div>{% else %}<p class="empty">Sin indicar.</p>{% endif %}
+    </article>
+</section>
+
+<section class="grid grid--2" aria-label="Requisitos y objetivo">
+    {% for titulo, texto in [('Requisitos identificados', p.requisitos_identificados), ('Objetivo estratégico', p.objetivo_estrategico)] %}
+    <article class="card">
+        <header class="card__header"><h2 class="card__title">{{ titulo }}</h2></header>
+        {% if texto %}<div class="card__body"><p class="card__text">{{ texto }}</p></div>{% else %}<p class="empty">Sin indicar.</p>{% endif %}
+    </article>
+    {% endfor %}
+</section>
+{% endblock %}

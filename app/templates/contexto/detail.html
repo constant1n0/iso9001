@@ -1,0 +1,76 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form, empty_state %}
+{% from "contexto/_macros.html" import pertinencia_badge, clima_badge, estado_badge, si_no, dia %}
+{% macro item(titulo) %}<li class="list__item"><span class="list__primary">{{ titulo }}</span><span class="list__secondary">{{ caller() }}</span></li>{% endmacro %}
+{% set c = cuestion %}
+{% block title %}{{ c.titulo }}{% endblock %}
+{% block crumb %}Contexto · Cuestiones del contexto{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 4.1 · Cuestión ' ~ c.tipo.value | lower, c.titulo) %}
+    {% if can('update', 'organization_context') %}
+    <a class="btn" href="{{ url_for('contexto.edit_issue', issue_id=c.id) }}">Editar</a>
+    {% endif %}
+    {% if eliminable and can('delete', 'organization_context') %}
+    {{ delete_form(url_for('contexto.delete_issue', issue_id=c.id), '¿Eliminar la cuestión «' ~ c.titulo ~ '»?') }}
+    {% endif %}
+{% endcall %}
+
+<section class="grid grid--2" aria-label="Identificación y pertinencia">
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="identificacion">Identificación</h2>{{ estado_badge(c.estado) }}</header>
+        <ul class="list">
+            {% call item('Tipo') %}{{ c.tipo.value }}{% endcall %}
+            {% call item('Categoría') %}{{ c.categoria.value }}{% endcall %}
+            {% call item('Efecto') %}{{ c.efecto.value }}{% endcall %}
+            {% call item('Pertinente') %}{{ si_no(c.pertinente) }}{% endcall %}
+            {% call item('Justificación de la pertinencia') %}{{ c.justificacion_pertinencia or '—' }}{% endcall %}
+            {% call item('Cambio climático') %}{{ si_no(c.cambio_climatico) }}{% endcall %}
+            {% call item('Responsable') %}{% if c.responsable_id in personas %}<a href="{{ url_for('people.show_person', person_id=c.responsable_id) }}">{{ personas[c.responsable_id] }}</a>{% else %}—{% endif %}{% endcall %}
+            {% call item('Fecha de identificación') %}{{ dia(c.fecha_identificacion) }}{% endcall %}
+            {% call item('Próxima revisión') %}{{ dia(c.fecha_revision) }}{% if vencida %} <span class="badge badge--warn">Revisión vencida</span>{% endif %}{% endcall %}
+            {% call item('Estado') %}{{ c.estado.value }}{% endcall %}
+        </ul>
+    </article>
+    <article class="card">
+        <header class="card__header"><h2 class="card__title">Descripción</h2>{{ pertinencia_badge(c.pertinente) }} {{ clima_badge(c.cambio_climatico) if c.cambio_climatico }}</header>
+        <div class="card__body"><p class="card__text">{{ c.descripcion }}</p></div>
+        {% if c.notas %}<div class="card__body"><h3 class="card__title">Notas</h3><p class="card__text">{{ c.notas }}</p></div>{% endif %}
+    </article>
+</section>
+
+<section class="grid grid--2" aria-label="Riesgos y oportunidades">
+    {% for clave, titulo, base, vacio in [('riesgos', 'Riesgos', 'riesgo', 'Sin riesgos vinculados.'), ('oportunidades', 'Oportunidades', 'oportunidad', 'Sin oportunidades vinculadas.')] %}
+    <article class="card">
+        <header class="card__header">
+            <h2 class="card__title" id="{{ clave }}">{{ titulo }} que origina</h2>
+            <a class="btn btn--sm" href="{{ url_for(base ~ '.list_records', cuestion_id=c.id) }}">Ver en la lista</a>
+        </header>
+        {% if vinculos[clave] %}
+        <ul class="list">
+            {% for registro in vinculos[clave] %}
+            <li class="list__item"><span class="list__primary"><a href="{{ url_for(base ~ '.show_record', record_id=registro.id) }}">{{ registro.titulo }}</a></span><span class="list__secondary"><span class="badge">{{ registro.estado.value }}</span></span></li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty">{{ vacio }}</p>
+        {% endif %}
+    </article>
+    {% endfor %}
+</section>
+{% endblock %}

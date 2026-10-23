@@ -52,6 +52,7 @@ from .routes import (
     process_role_routes,
     register_routes,
     provider_routes,
+    context_routes,
 )
 from .utils.error_handlers import register_error_handlers
 from .utils.permissions import can
@@ -168,6 +169,7 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
     app.register_blueprint(register_routes.resources_bp)
     app.register_blueprint(register_routes.indicators_bp)
     app.register_blueprint(provider_routes.bp)
+    app.register_blueprint(context_routes.issues_bp)
 
     # Registrar manejadores de errores
     register_error_handlers(app)

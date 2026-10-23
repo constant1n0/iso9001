@@ -19,6 +19,10 @@
   (None, [
     ('dashboard', 'dashboard.dashboard', 'Panel', 'P-00', True),
   ]),
+  ('Contexto', [
+    ('contexto', 'contexto.list_issues', 'Contexto', '4.1', can('read', 'organization_context')),
+    ('parte_interesada', 'parte_interesada.listar_partes_interesadas', 'Partes interesadas', '4.2', can('read', 'interested_parties')),
+  ]),
   ('Calidad', [
     ('proceso', 'proceso.list_processes', 'Procesos', '4.4', can('read', 'process_operations')),
     ('riesgo', 'riesgo.list_records', 'Riesgos', '6.1', can('read', 'risks_opportunities')),
@@ -34,7 +38,6 @@
   ]),
   ('Clientes', [
     ('satisfaccion_cliente', 'satisfaccion_cliente.listar_encuestas', 'Satisfacción', '9.1.2', True),
-    ('parte_interesada', 'parte_interesada.listar_partes_interesadas', 'Partes interesadas', '4.2', True),
   ]),
   ('Personas y competencia', [
     ('rol', 'rol.list_roles', 'Roles y responsabilidades', '5.3', can('read', 'roles_responsibilities')),

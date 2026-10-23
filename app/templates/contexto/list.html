@@ -1,0 +1,96 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% from "contexto/_macros.html" import pertinencia_badge, clima_badge, estado_badge, dia %}
+{% block title %}Contexto de la organización{% endblock %}
+{% block crumb %}Contexto · Cuestiones del contexto{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 4.1 · Contexto de la organización', 'Cuestiones internas y externas') %}
+    {% if can('create', 'organization_context') %}
+    <a class="btn btn--primary" href="{{ url_for('contexto.new_issue') }}">+ Nueva cuestión</a>
+    {% endif %}
+{% endcall %}
+
+<details class="filters"{% if applied %} open{% endif %}>
+    <summary>Filtros{% if applied %} <span class="badge badge--warn">{{ applied }} {{ 'activo' if applied == 1 else 'activos' }}</span>{% endif %}</summary>
+    <form method="get" action="{{ url_for('contexto.list_issues') }}" class="filters__body">
+        {% for name, label, choices, _ in campos %}
+        <div class="field"><label for="filtro-{{ name }}">{{ label }}</label>
+            <select name="{{ name }}" id="filtro-{{ name }}">
+                <option {% if name not in elegidos %}selected {% endif %}value="">Todos</option>
+                {% for value, text in choices %}
+                <option {% if elegidos.get(name) == value %}selected {% endif %}value="{{ value }}">{{ text }}</option>
+                {% endfor %}
+            </select></div>
+        {% endfor %}
+        <div class="filters__actions">
+            <button type="submit" class="btn btn--primary">Buscar</button>
+            <a class="btn btn--ghost" href="{{ url_for('contexto.list_issues') }}">Limpiar</a>
+        </div>
+    </form>
+</details>
+
+{% if cuestiones %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Tipo</th>
+                <th scope="col">Categoría</th>
+                <th scope="col">Título</th>
+                <th scope="col">Efecto</th>
+                <th scope="col">Pertinencia</th>
+                <th scope="col">Clima</th>
+                <th scope="col">Responsable</th>
+                <th scope="col">Próxima revisión</th>
+                <th scope="col">Estado</th>
+                <th scope="col" class="num">Riesgos</th>
+                <th scope="col" class="num">Oportunidades</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cuestion in cuestiones %}
+            <tr id="fila-{{ cuestion.id }}">
+                <td>{{ cuestion.tipo.value }}</td>
+                <td>{{ cuestion.categoria.value }}</td>
+                <td><a href="{{ url_for('contexto.show_issue', issue_id=cuestion.id) }}">{{ cuestion.titulo }}</a></td>
+                <td>{{ cuestion.efecto.value }}</td>
+                <td>{{ pertinencia_badge(cuestion.pertinente) }}</td>
+                <td>{{ clima_badge(cuestion.cambio_climatico) }}</td>
+                <td>{{ personas.get(cuestion.responsable_id, '—') }}</td>
+                <td class="date">{{ dia(cuestion.fecha_revision) }}{% if cuestion.id in vencidas %} <span class="badge badge--warn">Revisión vencida</span>{% endif %}</td>
+                <td>{{ estado_badge(cuestion.estado) }}</td>
+                <td class="num">{{ riesgos[cuestion.id] }}</td>
+                <td class="num">{{ oportunidades[cuestion.id] }}</td>
+                <td>
+                    <div class="table__actions">
+                        {% if can('update', 'organization_context') %}
+                        <a class="btn btn--sm" href="{{ url_for('contexto.edit_issue', issue_id=cuestion.id) }}">Editar</a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    {{ empty_state('Ninguna cuestión coincide con los filtros.' if applied else 'Todavía no hay cuestiones del contexto.') }}
+{% endif %}
+{% endblock %}
