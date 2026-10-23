@@ -18,7 +18,7 @@ from ..audit_notifications import local_today
 from ..models import (
     CATEGORIAS_POR_TIPO, CategoriaCuestion, CompetenceEvaluation, CompetenceType,
     DecisionOportunidad, DocumentCategory, EfectoCuestion, EficaciaAccion, EstadoAccionCorrectiva,
-    EstadoAccionRevision, EstadoAccionRiesgo, EstadoAuditoriaEnum, EstadoCuestion,
+    EstadoAccionRevision, EstadoAccionRiesgo, EstadoAlcance, EstadoAuditoriaEnum, EstadoCuestion,
     EstadoNoConformidad, EstadoObjetivo, EstadoOportunidad, EstadoProgramaAuditoria,
     EstadoProveedor, EstadoRevisionDireccion, EstadoRiesgo, FrecuenciaMedicion,
     GravedadNoConformidad, NivelRiesgo, OrigenNoConformidad, OrigenRiesgo, PrioridadOportunidad,
@@ -28,8 +28,8 @@ from ..models import (
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, competence, context_issues,
     corrective_actions, document_revisions, documents, improvements, management_reviews,
-    nonconformities, people, process_operations, providers, quality_objectives, risks,
-    roles_responsibilities, satisfaction, stakeholders, training, training_resources,
+    nonconformities, people, process_operations, providers, qms_scope, quality_objectives,
+    risks, roles_responsibilities, satisfaction, stakeholders, training, training_resources,
 )
 from ..services.policy import Resource
 
@@ -41,7 +41,8 @@ class FieldDef:
     ``type`` is ``string``, ``date`` (YYYY-MM-DD), ``datetime`` (ISO 8601),
     ``integer``, ``integer_list`` (a JSON array of integers), ``number`` (a
     JSON number or decimal text; records return it as decimal text with four
-    decimals, e.g. ``"95.0000"``), ``boolean`` or ``enum`` (one of ``allowed``).
+    decimals, e.g. ``"95.0000"``), ``boolean``, ``enum`` (one of ``allowed``) or
+    ``object`` (a JSON object, shaped as ``note`` says).
     ``members`` names the Python enum a filter must be turned into before the
     service sees it; without it an enum filter is passed on as the plain string.
     ``note`` is a short hint shown to the agent when the type and flags do not
@@ -158,6 +159,30 @@ def _issue_extras(issue: Any) -> dict[str, Any]:
     """Whether the review is overdue and the ids of the risks and opportunities citing it."""
     return {"revision_vencida": context_issues.revision_vencida(issue, today=local_today()),
             **context_issues.linked_ids(object_session(issue), issue.id)}
+
+
+def _scope_extras(scope: Any) -> dict[str, Any]:
+    """Whether each requirement of the catalogue applies to the version, and why not."""
+    return {"aplicabilidad": qms_scope.applicability_of(object_session(scope), scope.id)}
+
+
+class _ScopeVersions:
+    """The QMS scope's versions as a register: create starts a draft, update edits it.
+
+    Approving and deleting drafts are web-only (OC4).
+    """
+
+    def get(self, session: Any, actor: Any, record_id: int) -> Any:
+        return qms_scope.get(session, actor, record_id)
+
+    def list_page(self, session: Any, actor: Any, **kwargs: Any) -> tuple[list[Any], int]:
+        return qms_scope.list_page(session, actor, **kwargs)
+
+    def create(self, session: Any, actor: Any, data: Any) -> Any:
+        return qms_scope.new_draft(session, actor, data)
+
+    def update(self, session: Any, actor: Any, record_id: int, data: Any) -> Any:
+        return qms_scope.update_draft(session, actor, record_id, data)
 
 
 @dataclass(frozen=True)
@@ -368,14 +393,18 @@ def _provider_modules() -> tuple[Module, ...]:
 
 
 def _context_modules() -> tuple[Module, ...]:
-    """Context issues (4.1) under ``ORGANIZATION_CONTEXT`` (OC4).
+    """Context issues (4.1) and the QMS scope (4.3), sharing ``ORGANIZATION_CONTEXT`` (OC4).
 
-    Enums show the Spanish label; the filters take the member name. Records add
+    Enums show the Spanish label; the filters take the member name. Issue records add
     ``revision_vencida`` and ``riesgos`` and ``oportunidades``, the ids of the risks
     and opportunities that cite the issue (riesgos and oportunidades, cuestion_id).
+    Scope records show ``version``, ``estado`` and the approval columns, which no tool
+    writes, and add ``aplicabilidad``. Creating starts the next draft; approving it and
+    deleting it are web-only, for administrators (OC3).
     """
     external, internal = (", ".join(member.name for member in CATEGORIAS_POR_TIPO[tipo])
                           for tipo in (TipoContexto.externa, TipoContexto.interna))
+    codes = ", ".join(code for code, _ in qms_scope.CATALOGUE)
     return (
         Module("cuestiones_contexto", "Context issues", Resource.ORGANIZATION_CONTEXT,
                _DatedRegister(context_issues.issues), (
@@ -400,6 +429,22 @@ def _context_modules() -> tuple[Module, ...]:
             _f("estado", "enum", members=EstadoCuestion), _f("responsable_id", "integer"),
             _f("revision_vencida", "boolean", note="Vigente, with fecha_revision before today.")),
             extras=_issue_extras),
+        Module("alcances_sgc", "QMS scope", Resource.ORGANIZATION_CONTEXT, _ScopeVersions(), (
+            _f("declaracion", note=(
+                "Scope statement. Required for the first version; a new draft starts as a "
+                "copy of the current version, so only the changes are needed.")),
+            _f("productos_servicios", note="Products and services covered."),
+            _f("centros", note="Sites covered."),
+            _f("notas"),
+            _f("aplicabilidad", "object", note=(
+                'Changes to the applicability, by requirement: {"8.3": {"aplica": false, '
+                '"justificacion": "..."}}; give only the requirements and keys that change. '
+                "A requirement that does not apply needs a justification. Requirements: "
+                f"{codes}.")),
+        ), (_f("estado", "enum", members=EstadoAlcance, note=(
+            "borrador: being prepared (at most one); vigente: in force (at most one); "
+            "obsoleto: replaced.")),),
+            extras=_scope_extras),
     )
 
 

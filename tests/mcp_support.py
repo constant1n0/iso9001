@@ -86,6 +86,8 @@ SEEDS = {
                             "descripcion": "Obliga a rediseñar el embalaje",
                             "efecto": "negativo", "pertinente": True,
                             "fecha_identificacion": "2026-10-01"},
+    # The first version of the scope needs its statement; later ones copy the current one.
+    "alcances_sgc": {"declaracion": "Fabricación de envases metálicos"},
     # Cites the provider and the person seeded above (both id 1), on a past date.
     "evaluaciones_proveedor": {"proveedor_id": 1, "fecha": "2026-10-01", "evaluador_id": 1,
                                "calidad": 4, "plazo": 4, "servicio": 3, "documentacion": 5},
