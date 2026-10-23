@@ -1,0 +1,25 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% block title %}Nuevo borrador del alcance{% endblock %}
+{% block crumb %}Contexto · Alcance del SGC{% endblock %}
+{% block content %}
+{{ page_header('Cláusula 4.3 · Alcance del sistema de gestión de la calidad', 'Nuevo borrador del alcance') }}
+<p class="muted">{% if vigente %}El borrador parte de la versión {{ vigente.version }} vigente y copia su aplicabilidad; después podrás cambiarla.{% else %}En el primer borrador aplican todos los requisitos; después podrás indicar los que no aplican y por qué.{% endif %}</p>
+{{ form_card(form, url_for('alcance.show_current'), 'Crear borrador') }}
+{% endblock %}

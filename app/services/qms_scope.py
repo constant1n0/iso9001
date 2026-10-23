@@ -30,6 +30,11 @@ not; one that does not says why (``JUSTIFICATION_REQUIRED``).
   ``{apartado: {"aplica": bool, "justificacion": str}}`` that gives only the
   requirements and keys it changes. Only a draft changes: current and obsolete
   versions never do (``IMMUTABLE``).
+- A catalogue requirement a version does not store (a row lost, or a code the
+  catalogue gained later) reads as applying, with no justification; an edit
+  that writes anything stores every such row (``applicability_of``).
+- ``applicability_errors`` tells, row by row, what ``update_draft`` would
+  refuse in a given ``aplicabilidad``, so a form can show each on its row.
 - ``approve`` is for administrators outside the ``mcp`` channel. The approving
   person is the one linked to the acting user (``APPROVER_REQUIRED`` without
   one); approving the draft one wrote is allowed. The current version becomes
@@ -222,15 +227,30 @@ def applicability(session: Session, actor: Actor, scope_id: Any) -> list[Require
 def applicability_of(session: Session, scope_id: int) -> Entries:
     """``{apartado: {"aplica", "justificacion"}}`` of a version, in catalogue order.
 
-    For adapters that already read the version (no policy check of its own).
+    Every catalogue requirement is a key: one the version does not store reads
+    as applying, with no justification. A stored code the catalogue lacks comes
+    last. For adapters that already read the version (no policy check of its own).
     """
-    table = aplicabilidad_alcance
-    rows = session.execute(select(table.c.apartado, table.c.aplica, table.c.justificacion)
-                           .where(table.c.alcance_id == scope_id))
-    order = {code: index for index, (code, _) in enumerate(CATALOGUE)}
-    return {code: {"aplica": aplica, "justificacion": justificacion}
-            for code, aplica, justificacion in sorted(
-                rows, key=lambda row: (order.get(row[0], len(order)), row[0]))}
+    return _backfilled(_stored(session, scope_id))
+
+
+def applicability_errors(aplicabilidad: Mapping[str, Any]) -> dict[str, str]:
+    """What ``update_draft`` would refuse in each requirement of ``aplicabilidad``.
+
+    Each entry is checked alone against a requirement that applies, so give it
+    whole (``aplica`` and ``justificacion``), as a form posts it. The result
+    maps a code to its message and leaves the valid ones out; the write still
+    decides. Raises ``ValidationError`` when ``aplicabilidad`` is not a mapping.
+    """
+    if not isinstance(aplicabilidad, Mapping):
+        raise ValidationError(APPLICABILITY_NOT_A_MAPPING)
+    errors: dict[str, str] = {}
+    for code, change in aplicabilidad.items():
+        try:
+            _applied({APPLICABILITY: {code: change}}, {code: dict(_APPLIES)})
+        except ValidationError as exc:
+            errors[str(code)] = exc.message
+    return errors
 
 
 # -- writes ----------------------------------------------------------------------------
@@ -262,8 +282,7 @@ def new_draft(session: Session, actor: Actor, data: Mapping[str, Any] | None = N
     else:
         values = {key: getattr(base, key) for key in TEXT_FIELDS}
         copied = applicability_of(session, base.id)
-        entries = {code: copied.get(code, {"aplica": True, "justificacion": None})
-                   for code, _ in CATALOGUE}
+        entries = {code: copied[code] for code, _ in CATALOGUE}
     values |= texts
     entries = _applied(data, entries)
     if values["declaracion"] is None:
@@ -299,7 +318,8 @@ def update_draft(session: Session, actor: Actor, scope_id: Any,
     if found.estado is not E.borrador:
         raise ValidationError(IMMUTABLE)
     texts = _texts(data)
-    entries = applicability_of(session, found.id)
+    stored = _stored(session, found.id)
+    entries = _backfilled(stored)
     wanted = _applied(data, entries)
     changes = {key: value for key, value in texts.items() if getattr(found, key) != value}
     changed_entries = {code: entry for code, entry in wanted.items() if entries.get(code) != entry}
@@ -308,8 +328,13 @@ def update_draft(session: Session, actor: Actor, scope_id: Any,
     before = _snapshot(found, entries)
     table = aplicabilidad_alcance
     for code, entry in changed_entries.items():
-        session.execute(update(table).where(table.c.alcance_id == found.id,
-                                            table.c.apartado == code).values(**entry))
+        if code in stored:
+            session.execute(update(table).where(table.c.alcance_id == found.id,
+                                                table.c.apartado == code).values(**entry))
+    missing = [code for code in wanted if code not in stored]  # backfilled: stored now
+    if missing:
+        session.execute(insert(table), [{"alcance_id": found.id, "apartado": code,
+                                         **wanted[code]} for code in missing])
     for key, value in changes.items():
         setattr(found, key, value)
     stamp_updated(found, actor)
@@ -373,6 +398,23 @@ def delete_draft(session: Session, actor: Actor, scope_id: Any) -> None:
 
 
 # -- helpers ---------------------------------------------------------------------------
+
+_APPLIES = {"aplica": True, "justificacion": None}  # a requirement a version does not store
+
+
+def _stored(session: Session, scope_id: int) -> Entries:
+    """The applicability rows a version stores, by code (no backfill, no order)."""
+    table = aplicabilidad_alcance
+    rows = session.execute(select(table.c.apartado, table.c.aplica, table.c.justificacion)
+                           .where(table.c.alcance_id == scope_id))
+    return {code: {"aplica": aplica, "justificacion": justificacion}
+            for code, aplica, justificacion in rows}
+
+
+def _backfilled(stored: Entries) -> Entries:
+    """``stored`` in catalogue order with every missing requirement applying; others last."""
+    entries = {code: dict(stored.get(code, _APPLIES)) for code, _ in CATALOGUE}
+    return entries | {code: stored[code] for code in sorted(stored) if code not in entries}
 
 
 def _mapping(data: Any) -> Mapping[str, Any]:

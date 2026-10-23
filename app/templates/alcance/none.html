@@ -1,0 +1,36 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header %}
+{% block title %}Alcance del SGC{% endblock %}
+{% block crumb %}Contexto · Alcance del SGC{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 4.3 · Alcance del sistema de gestión de la calidad', 'Alcance del SGC') %}
+    <a class="btn" href="{{ url_for('alcance.history') }}">Historial</a>
+    {% if borrador is none and can('create', 'organization_context') %}
+    <a class="btn btn--primary" href="{{ url_for('alcance.new_draft') }}">+ Nuevo borrador</a>
+    {% endif %}
+{% endcall %}
+<div class="card">
+    <p class="empty">Todavía no hay un alcance aprobado.</p>
+    {% if borrador is not none %}
+    <p class="card__body">Hay un borrador en preparación: <a href="{{ url_for('alcance.show_version', scope_id=borrador.id) }}">versión {{ borrador.version }}</a>.</p>
+    {% elif can('create', 'organization_context') %}
+    <p class="card__body muted">Empieza por el primer borrador: la declaración del alcance y, después, qué requisitos aplican.</p>
+    {% endif %}
+</div>
+{% endblock %}

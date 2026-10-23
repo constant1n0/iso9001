@@ -675,6 +675,37 @@ class UiPermissionsTestCase(unittest.TestCase):
                                    f'action="/contexto/{issue}/eliminar"': admins},
         })
 
+    def test_scope_controls_follow_role_and_state(self) -> None:
+        """Every role reads the scope; administrators and auditors start, edit and delete
+        drafts; only administrators approve, so OPERATIVO and AUDITOR never see «Aprobar»;
+        an approved version offers no draft action (OC4 of organization-context)."""
+        from app.services import qms_scope
+        from app.services.actor import Actor
+
+        system = Actor(None, "seed", ADMIN, "system")
+        with self.app.app_context():
+            draft = qms_scope.new_draft(db.session, system, {"declaracion": "Alcance"}).id
+            db.session.get(Person, self.owner_id).user_id = self.ids[ADMIN]  # the approver
+            db.session.commit()
+        writers, admins, nobody = {ADMIN, AUDITOR}, {ADMIN}, set()
+        draft_page = f"/alcance/{draft}"
+        self._check_controls({
+            "/alcance/": {f'href="{draft_page}"': EVERYONE, 'href="/alcance/nuevo"': nobody},
+            draft_page: {f'href="{draft_page}/editar"': writers,
+                         f'action="{draft_page}/eliminar"': writers,
+                         f'action="{draft_page}/aprobar"': admins, ">Aprobar<": admins},
+        })
+        with self.app.app_context():
+            qms_scope.approve(db.session, Actor(self.ids[ADMIN], "admin", ADMIN, "web"), draft,
+                              today=DAY)
+            db.session.commit()
+        self._check_controls({
+            "/alcance/": {'href="/alcance/nuevo"': writers, ">Aprobar<": nobody},
+            draft_page: {f'href="{draft_page}/editar"': nobody,
+                         f'action="{draft_page}/eliminar"': nobody,
+                         f'action="{draft_page}/aprobar"': nobody},
+        })
+
     def test_navigation_links_follow_the_read_permission(self) -> None:
         expected = {"/auditorias/": {ADMIN, AUDITOR}, "/programas-auditoria/": {ADMIN, AUDITOR},
                     "/documents/": set(RoleEnum), "/no_conformidades/": set(RoleEnum),
@@ -688,14 +719,14 @@ class UiPermissionsTestCase(unittest.TestCase):
                     "/recursos-formacion/": set(RoleEnum),
                     "/indicadores-auditoria/": set(RoleEnum),
                     "/proveedores/": set(RoleEnum), "/contexto/": set(RoleEnum),
-                    "/partes_interesadas/": set(RoleEnum)}
+                    "/partes_interesadas/": set(RoleEnum), "/alcance/": set(RoleEnum)}
         for role in RoleEnum:
             html = self._page(role, "/dashboard/").get_data(as_text=True)
             self.assertIn('class="nav__group">Personas y competencia<', html)
-            # Clauses 4.1 and 4.2 share one group, in clause order (OC-3).
+            # Clauses 4.1 to 4.3 share one group, in clause order (OC-3).
             group = html[html.index('class="nav__group">Contexto<'):
                          html.index('class="nav__group">Calidad<')]
-            self.assertEqual(["/contexto/", "/partes_interesadas/"],
+            self.assertEqual(["/contexto/", "/partes_interesadas/", "/alcance/"],
                              re.findall(r'class="nav__link" href="([^"]+)"', group))
             for link, roles in expected.items():
                 with self.subTest(role=role.name, link=link):
