@@ -17,6 +17,7 @@
 {% extends "base.html" %}
 {% from "_partials/ui.html" import page_header, action_form, delete_form, empty_state %}
 {% from "no_conformidades/_macros.html" import estado_badge, accion_badge, cancel_form %}
+{% from "cambios/_citing.html" import cambios_card %}
 {% set nc = no_conformidad %}
 {% block title %}No conformidad n.º {{ nc.id }}{% endblock %}
 {% block crumb %}Calidad · No conformidades{% endblock %}
@@ -136,6 +137,8 @@
         {{ empty_state('Todavía no hay acciones correctivas.') }}
     {% endif %}
 </section>
+
+{{ cambios_card(cambios) }}
 
 {% if puede_cancelar %}
 {{ cancel_form(nc) }}

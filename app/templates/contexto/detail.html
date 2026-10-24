@@ -17,6 +17,7 @@
 {% extends "base.html" %}
 {% from "_partials/ui.html" import page_header, delete_form, empty_state %}
 {% from "contexto/_macros.html" import pertinencia_badge, clima_badge, estado_badge, si_no, dia %}
+{% from "cambios/_citing.html" import cambios_card %}
 {% macro item(titulo) %}<li class="list__item"><span class="list__primary">{{ titulo }}</span><span class="list__secondary">{{ caller() }}</span></li>{% endmacro %}
 {% set c = cuestion %}
 {% block title %}{{ c.titulo }}{% endblock %}
@@ -73,4 +74,6 @@
     </article>
     {% endfor %}
 </section>
+
+{{ cambios_card(cambios) }}
 {% endblock %}

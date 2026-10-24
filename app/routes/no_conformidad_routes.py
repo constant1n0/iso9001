@@ -26,6 +26,7 @@ from ..utils.permissions import require_permission
 from ..utils.pdf import pdf_response, render_pdf
 from ..utils.web_actor import current_actor
 from ..utils.web_args import date_arg
+from .change_routes import citing_changes
 from .corrective_action_routes import may_verify
 
 # Define el blueprint y la URL base
@@ -153,6 +154,7 @@ def ver_no_conformidad(id):
         bloqueos=nonconformities.close_blockers(acciones),
         puede_cancelar=nonconformities.may_cancel(actor, no_conformidad),
         puede_reabrir=nonconformities.may_reopen(actor, no_conformidad),
+        cambios=citing_changes(actor, 'no_conformidad', id),
     )
 
 # Ruta para editar una no conformidad

@@ -182,6 +182,9 @@
     {% if avisos_riesgos is not none %}
     {{ avisos_card('riesgos-oportunidades', 'Riesgos y oportunidades', '6.1', avisos_riesgos, 'Ningún riesgo ni oportunidad requiere atención.') }}
     {% endif %}
+    {% if avisos_cambios is not none %}
+    {{ avisos_card('cambios', 'Cambios en el SGC', '6.3', avisos_cambios, 'Ningún cambio requiere atención.') }}
+    {% endif %}
     {% if avisos_proveedores is not none %}
     {{ avisos_card('proveedores', 'Proveedores', '8.4', avisos_proveedores, 'Ningún proveedor requiere atención.') }}
     {% endif %}

@@ -208,13 +208,16 @@ def _audit_context(actor: Actor, auditoria: Auditoria) -> dict:
 @login_required
 @require_permission('read', 'audits')
 def ver_auditoria(id: int) -> ResponseReturnValue:
-    """An audit's page: its planning fields and its findings."""
+    """An audit's page: its planning fields, its findings and the changes it gives rise to."""
+    from .change_routes import citing_changes  # here: change_routes imports this module
+
     actor = current_actor()
     auditoria = audits.get(db.session, actor, id)
     return render_template(
         'auditorias/detalle.html',
         **_audit_context(actor, auditoria),
         cancelada=auditoria.estado is EstadoAuditoriaEnum.CANCELADA,
+        cambios=citing_changes(actor, 'auditoria', id),
     )
 
 

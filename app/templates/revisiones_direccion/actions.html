@@ -17,6 +17,7 @@
 {% extends "base.html" %}
 {% from "_partials/ui.html" import page_header, empty_state %}
 {% from "revisiones_direccion/_macros.html" import estado_accion, vencida_badge, dia %}
+{% from "cambios/_citing.html" import planificar %}
 {% block title %}Acciones de la revisión por la dirección{% endblock %}
 {% block crumb %}Calidad · Revisión por la dirección{% endblock %}
 {% block content %}
@@ -73,6 +74,7 @@
                 <th scope="col">Fecha límite</th>
                 <th scope="col">Estado</th>
                 <th scope="col">Finalizada</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
             </tr>
         </thead>
         <tbody>
@@ -85,6 +87,7 @@
                 <td class="date">{{ dia(accion.fecha_limite) }} {{ vencida_badge(accion.id in vencidas) }}</td>
                 <td>{{ estado_accion(accion) }}</td>
                 <td class="date">{{ dia(accion.fecha_completada) }}</td>
+                <td><div class="table__actions">{{ planificar(accion, puede_planificar) }}</div></td>
             </tr>
             {% endfor %}
         </tbody>

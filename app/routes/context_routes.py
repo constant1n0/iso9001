@@ -28,11 +28,13 @@ Context issues live under ``/contexto`` (blueprint ``contexto``):
   issue shows its next review with an overdue badge and how many risks and
   opportunities it gives rise to.
 - An issue's page shows every field and links its risks and opportunities, and
-  the risk and opportunity lists filtered by the issue.
+  the risk and opportunity lists filtered by the issue, and the changes to the
+  QMS it gives rise to (CP6 of ``change-planning``).
 - The form offers both groups of categories whatever the type: the service
   decides, and its refusals (category, justification, dates) show on their
-  field with the input kept. A cited issue offers no delete; the service
-  refuses it anyway and the reason is flashed on its page.
+  field with the input kept. An issue a risk, an opportunity or a change cites
+  offers no delete; the service refuses it anyway and the reason is flashed on
+  its page.
 
 A service ``ValidationError`` or ``Conflict`` is rolled back: on a form it
 shows again with what was typed, on a one-button action it is flashed on the
@@ -58,6 +60,7 @@ from ..services.errors import Conflict, ValidationError
 from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
 from .auditoria_routes import committed
+from .change_routes import citing_changes
 from .people_routes import form_data
 
 issues_bp = Blueprint('contexto', __name__, url_prefix='/contexto')
@@ -151,15 +154,16 @@ def _citations(records: list[Any]) -> Counter:
 @login_required
 @require_permission('read', RESOURCE)
 def show_issue(issue_id: int) -> ResponseReturnValue:
-    """An issue's page: its fields and the risks and opportunities it gives rise to."""
+    """An issue's page: its fields and the risks, opportunities and changes it gives rise to."""
     actor = current_actor()
     cuestion = ci.issues.get(db.session, actor, issue_id)
     vinculos = ci.linked(db.session, actor, issue_id)
+    cambios = citing_changes(actor, 'cuestion_contexto', issue_id)
     return render_template(
-        'contexto/detail.html', cuestion=cuestion, vinculos=vinculos,
+        'contexto/detail.html', cuestion=cuestion, vinculos=vinculos, cambios=cambios,
         vencida=ci.revision_vencida(cuestion, today=local_today()),
         personas=people.names(db.session, actor, (cuestion.responsable_id,)),
-        eliminable=not vinculos['riesgos'] and not vinculos['oportunidades'])
+        eliminable=not vinculos['riesgos'] and not vinculos['oportunidades'] and not cambios)
 
 
 def _issue_form(actor: Actor, cuestion: CuestionContexto | None = None) -> CuestionContextoForm:
