@@ -72,10 +72,33 @@ Baseline at `9edea71`: 1,554 tests. Migrations are tested on PostgreSQL (`TEST_P
 - The MCP `_DatedWrites` wrapper is a frozen dataclass: tests patch its wrapped `register`.
 - Test adaptations (standing approval): `tests/test_attribution.py` (28), `tests/test_mcp_modules.py` and `tests/test_mcp_http.py` (27), `tests/test_policy.py`, `tests/test_access_characterization.py` (`NO_ROUTES`), `tests/mcp_support.py`, `tests/test_mcp_write_tools.py`, `tests/test_mcp_read_tools.py`, `tests/test_risks_service.py`, `tests/test_stakeholder_service.py`, `tests/test_migrations.py`.
 
-## Production deployment (pending authorization)
+## Delivery
 
-Two migrations (`c8f2a4e6b0d3` context issues, party fields and the risk link; `e4a6c8b0d2f5` QMS scope) on top of `d2f4a6c8e1b3`: back up the database and the code, fast-forward, `flask db upgrade`, `flask db check`, then the user restarts the four services. Smoke tests: `/contexto/`, `/alcance/` and `/alcance/pdf` redirect to the login, 28 MCP modules.
+| Slice | Pull request | Commits | Merged as |
+|---|---|---|---|
+| 1 | [#149](https://github.com/constant1n0/iso9001/pull/149) | tracker, OC-1 model and migration | `84e6cce` |
+| 2 | [#150](https://github.com/constant1n0/iso9001/pull/150) | OC-1 party fields and the issue link in the services | `73f8a35` |
+| 3 | [#151](https://github.com/constant1n0/iso9001/pull/151) | OC-1 context issue service and MCP module | `ba4a5d9` |
+| 4 | [#152](https://github.com/constant1n0/iso9001/pull/152) | OC-2 scope model and migration | `31f24be` |
+| 5 | [#153](https://github.com/constant1n0/iso9001/pull/153) | OC-1 review fixes: dated party writes, the issue lock | `d34fbfd` |
+| 6 | [#154](https://github.com/constant1n0/iso9001/pull/154) | OC-2 scope service and MCP module | `953acb5` |
+| 7 | [#155](https://github.com/constant1n0/iso9001/pull/155) | OC-3 context, party and risk-link screens | `d3365a8` |
+| 8 | [#156](https://github.com/constant1n0/iso9001/pull/156) | OC-3 scope screens | `94e8ec9` |
+| 9 | [#157](https://github.com/constant1n0/iso9001/pull/157) | OC-4, closing record | `a5fd807` |
+
+## Production deployment (2026-10-24)
+
+`main@a5fd807` runs on `vulcano`. The user authorized this deployment over SSH as `dcm`, with no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `e256b0c`, clean, migration `d2f4a6c8e1b3`; the four services active; 0 interested parties, 0 risks and 0 opportunities stored |
+| Backups | `~/work/backups/calidad-*-pre-a5fd807.dump` (`pg_dump -Fc`, 425 entries listed by `pg_restore -l`) and `iso9001-code-*-pre-a5fd807.tar.gz` (without `instance/documents`), both mode 600 |
+| Code | Incremental git bundle `e256b0c..main`, fast-forward to `a5fd807`; `pip check` clean |
+| Database | `flask db upgrade` `d2f4a6c8e1b3` → `c8f2a4e6b0d3` → `e4a6c8b0d2f5`; `flask db check` clean; 0 parties, 0 risks, 0 context issues, 0 scope versions |
+| Restart (user, with sudo) | All four services (14:36 CEST) |
+| Smoke tests | Services active, no error entries in the journal; `/login` 200; `/contexto/`, `/alcance/`, `/alcance/pdf`, `/partes_interesadas/` and `/riesgos/` redirect to the login; `/mcp` 401 with `WWW-Authenticate: Bearer`; 28 MCP modules including `cuestiones_contexto` and `alcances_sgc` |
 
 ## Next step
 
-**Feature complete** once OC-4 merges. Next: the production deployment above, after explicit authorization. Follow-up: a test pinning the cap of the review's issue list (new issues first).
+**Feature complete and deployed.** Wave 2 continues with the gap analysis order: planning of changes (6.3), customers and complaints (8.2, 9.1.2), nonconforming outputs (8.7), and the link between nonconformities and processes. Follow-up: a test pinning the cap of the review's issue list (new issues first).
