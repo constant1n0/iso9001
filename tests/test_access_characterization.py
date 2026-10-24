@@ -24,6 +24,7 @@ from app.models import (
     AlcanceSGC,
     Auditoria,
     AuditoriaIndicador,
+    CambioSGC,
     Capacitacion,
     CategoriaCuestion,
     CompetenceRecord,
@@ -46,6 +47,7 @@ from app.models import (
     NoConformidad,
     ObjetivoCalidad,
     Oportunidad,
+    OrigenCambio,
     OrigenRiesgo,
     ParteInteresada,
     Person,
@@ -59,6 +61,7 @@ from app.models import (
     RolResponsabilidad,
     SatisfaccionCliente,
     SentidoObjetivo,
+    TareaCambio,
     TipoAccionRevision,
     TipoContexto,
     TipoHallazgo,
@@ -200,6 +203,13 @@ ISSUE = dict(tipo="interna", categoria="recursos", titulo="Cuestión nueva", des
              cambio_climatico="", responsable_id="", fecha_identificacion="2026-02-01",
              fecha_revision="", estado="vigente", notas="")
 SCOPE_TEXTS = dict(declaracion="Alcance", productos_servicios="", centros="", notas="")
+# Changes to the QMS (CP-3 of change-planning); change 1 has task 1, change 2 none.
+CHANGE = dict(titulo="Cambio nuevo", descripcion="d", origen="otro", registro_origen="",
+              proposito="p", consecuencias="", integridad="", recursos="", responsabilidades="",
+              comunicacion="", responsable_id="1", fecha_propuesta="2026-02-01",
+              fecha_prevista="")
+CHANGE_TASK = dict(descripcion="Tarea", responsable_id="1", fecha_limite="2026-12-31",
+                   estado="pendiente", fecha_completada="", resultado="")
 SCOPE_DRAFT = SCOPE_TEXTS | {f"aplica-{code}": "y" for code, _ in CATALOGUE}
 
 
@@ -393,6 +403,14 @@ ENDPOINTS = [
     Endpoint("ORGANIZATION_CONTEXT", "create", "POST", "/alcance/nuevo", 302, SCOPE_TEXTS),
     Endpoint("ORGANIZATION_CONTEXT", "update", "POST", "/alcance/2/editar", 302, SCOPE_DRAFT),
     Endpoint("ORGANIZATION_CONTEXT", "update", "POST", "/alcance/2/eliminar", 302),
+    # Changes to the QMS (CP-3 of change-planning): change 2 has no tasks, so deleting it
+    # succeeds. Approving, implementing, reviewing and cancelling narrow the role, so
+    # tests/test_change_screens.py characterizes them.
+    *_html("QMS_CHANGES", "/cambios/", ("nuevo", CHANGE), ("1/editar", CHANGE), "2/eliminar"),
+    Endpoint("QMS_CHANGES", "read", "GET", "/cambios/1", 200),
+    Endpoint("QMS_CHANGES", "create", "POST", "/cambios/1/tareas/nueva", 302, CHANGE_TASK),
+    Endpoint("QMS_CHANGES", "update", "POST", "/cambios/1/tareas/1/editar", 302, CHANGE_TASK),
+    Endpoint("QMS_CHANGES", "delete", "POST", "/cambios/1/tareas/1/eliminar", 302),
     *_json("IMPROVEMENTS", "/mejoras/api/", {"no_conformidad": "NC"},
            {"accion_correctiva": "x"}),
     *_json("AUDIT_INDICATORS", "/auditoria_indicador/",
@@ -442,8 +460,7 @@ ALLOWED = {
 # Policy entries without routes. AUDIT_LOG has no adapter yet. The API_TOKENS
 # matrix (issue, list, revoke any token) stays CLI-only; "Mi perfil" bypasses it
 # with an ownership check, so tests/test_profile_routes.py characterizes it.
-# QMS_CHANGES has no screens until CP-3 of change-planning.
-NO_ROUTES = {"AUDIT_LOG", "API_TOKENS", "QMS_CHANGES"}
+NO_ROUTES = {"AUDIT_LOG", "API_TOKENS"}
 
 
 def allowed_roles(endpoint: Endpoint) -> set:
@@ -570,6 +587,12 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                               responsable_id=1, fecha_identificacion=date(2026, 2, 1))
                         for model in (Riesgo, Oportunidad) for titulo in ("Seed", "Sin acciones")
                     ),
+                    *(
+                        CambioSGC(titulo=titulo, descripcion="d", origen=OrigenCambio.otro,
+                                  proposito="p", responsable_id=1,
+                                  fecha_propuesta=date(2026, 2, 1))
+                        for titulo in ("Seed", "Sin tareas")
+                    ),
                 ]
             )
             db.session.flush()  # the measurement cites objective 1, the action review 1
@@ -580,6 +603,8 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                 AccionRevision(revision_id=1, tipo=TipoAccionRevision.mejora, descripcion="Seed",
                                responsable_id=1, fecha_limite=date(2026, 12, 31))
             )
+            db.session.add(TareaCambio(cambio_id=1, descripcion="Seed", responsable_id=1,
+                                       fecha_limite=date(2026, 12, 31)))
             db.session.add_all([
                 AccionRiesgo(descripcion="Seed", responsable_id=1, fecha_limite=date(2026, 12, 31),
                              estado=EstadoAccionRiesgo.completada,

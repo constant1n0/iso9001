@@ -16,11 +16,14 @@
 import enum
 from decimal import Decimal
 
+from markupsafe import Markup
+
 from .models import (
-    CATEGORIAS_POR_TIPO, ESCALA_MAX, ESCALA_MIN, CompetenceEvaluation, CompetenceType,
-    DecisionOportunidad, DocumentCategory, EfectoCuestion, EficaciaAccion, EstadoAccionRevision,
-    EstadoAccionRiesgo, EstadoAuditoriaEnum, EstadoCuestion, EstadoOportunidad, EstadoRiesgo,
-    FrecuenciaMedicion, GravedadNoConformidad, OrigenNoConformidad, OrigenRiesgo,
+    CATEGORIAS_POR_TIPO, CHANGE_LINKS, ESCALA_MAX, ESCALA_MIN, CompetenceEvaluation,
+    CompetenceType, DecisionOportunidad, DocumentCategory, EfectoCuestion, EficaciaAccion,
+    EficaciaCambio, EstadoAccionRevision, EstadoAccionRiesgo, EstadoAuditoriaEnum,
+    EstadoCuestion, EstadoOportunidad, EstadoRiesgo, EstadoTareaCambio, FrecuenciaMedicion,
+    GravedadNoConformidad, OrigenCambio, OrigenNoConformidad, OrigenRiesgo,
     ResultadoVerificacion, RoleEnum, SentidoObjetivo, TipoAccionRevision, TipoContexto,
     TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
 )
@@ -28,6 +31,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
 from wtforms import DecimalField, widgets
 from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, EqualTo, Email, Optional
+from wtforms.validators import ValidationError
 # Person pickers (``persona_id``, ``responsable_id``, ``auditor_id``): the
 # routes fill the choices with ``person_choices``; the empty choice means no
 # person. The legacy free-text name next to each picker is optional here: the
@@ -798,3 +802,98 @@ class AlcanceForm(BaseForm):
     productos_servicios = TextAreaField('Productos y servicios')
     centros = TextAreaField('Centros')
     notas = TextAreaField('Notas')
+
+
+# Changes to the QMS and their tasks (``change-planning``, CP-3; clause 6.3). The
+# routes fill the owner, origin record, process and document pickers and drop the
+# fields an approved change keeps fixed (CP3); the service has the last word.
+NO_ORIGIN_RECORD = ('', '— Sin registro de origen —')
+ORIGIN_MISMATCH = ('El registro elegido no corresponde al origen «{origen}»; elige uno de ese '
+                   'origen o ninguno.')
+
+
+class GroupedSelect(widgets.Select):
+    """A select over grouped choices (``{group: [(value, label), ...]}``).
+
+    Each group is an ``<optgroup>``, except the group ``''``, whose options (the
+    empty choice) come first and ungrouped.
+    """
+
+    def __call__(self, field, **kwargs):
+        kwargs.setdefault('id', field.id)
+        if 'required' not in kwargs and 'required' in getattr(field, 'flags', {}):
+            kwargs['required'] = True
+        html = [f'<select {widgets.html_params(name=field.name, **kwargs)}>']
+        for group, choices in field.iter_groups():
+            options = ''.join(self.render_option(value, label, selected, **render_kw)
+                              for value, label, selected, render_kw in choices)
+            if group:
+                html.append(f'<optgroup {widgets.html_params(label=group)}>{options}</optgroup>')
+            else:
+                html.append(options)
+        html.append('</select>')
+        return Markup(''.join(html))
+
+
+class CambioSGCForm(BaseForm):
+    """A change to the QMS (CP1): its plan, the 6.3 considerations, owner and dates.
+
+    ``registro_origen`` names the record behind the change as ``<link column>:<id>``
+    (``accion_revision_id:5``), grouped by origin; it must be of the chosen origin.
+    """
+
+    titulo = StringField('Título', validators=[DataRequired(), Length(max=200)])
+    descripcion = TextAreaField('Descripción', validators=[DataRequired()])
+    origen = _choice('Origen', OrigenCambio)
+    registro_origen = SelectField('Registro que lo origina (del origen elegido)',
+                                  choices={'': [NO_ORIGIN_RECORD]}, default='',
+                                  widget=GroupedSelect())
+    proposito = TextAreaField('a) Propósito del cambio', validators=[DataRequired()])
+    consecuencias = TextAreaField('a) Consecuencias potenciales')
+    integridad = TextAreaField('b) Integridad del SGC')
+    recursos = TextAreaField('c) Disponibilidad de recursos')
+    responsabilidades = TextAreaField('d) Asignación de responsabilidades y autoridades')
+    comunicacion = TextAreaField('Comunicación (a quién y cómo)')
+    responsable_id = required_person_field('Responsable')
+    fecha_propuesta = DateField('Fecha de propuesta', validators=[DataRequired()])
+    fecha_prevista = DateField('Fecha prevista de implantación', validators=[Optional()])
+    procesos = SelectMultipleField('Procesos afectados', coerce=int, choices=[])
+    documentos = SelectMultipleField('Documentos afectados', coerce=int, choices=[])
+
+    def validate_registro_origen(self, field):
+        """The record behind the change is of the chosen origin (CP1)."""
+        column = (field.data or '').partition(':')[0]
+        if not column:
+            return
+        origen = OrigenCambio.__members__.get(self.origen.data)
+        if column not in CHANGE_LINKS or CHANGE_LINKS[column][0] is not origen:
+            raise ValidationError(ORIGIN_MISMATCH.format(
+                origen=origen.value if origen else self.origen.data))
+
+
+class TareaCambioForm(BaseForm):
+    """A task that carries out a change (CP4): its owner, deadline and follow-up."""
+
+    descripcion = TextAreaField('Descripción', validators=[DataRequired()])
+    responsable_id = required_person_field('Responsable')
+    fecha_limite = DateField('Fecha límite', validators=[DataRequired()])
+    estado = _choice('Estado', EstadoTareaCambio)
+    fecha_completada = DateField('Fecha de finalización (solo si está completada)',
+                                 validators=[Optional()])
+    resultado = TextAreaField('Resultado')
+
+
+class ImplantacionCambioForm(BaseForm):
+    fecha_implantacion = DateField('Fecha de implantación', validators=[DataRequired()])
+
+
+class EficaciaCambioForm(BaseForm):
+    eficacia = SelectField('Resultado', coerce=member_name, validators=[DataRequired()],
+                           choices=[('', '— Elige un resultado —'),
+                                    *((e.name, e.value) for e in EficaciaCambio)])
+    fecha_eficacia = DateField('Fecha de la revisión', validators=[DataRequired()])
+    comentario_eficacia = TextAreaField('Comentario (obligatorio si no ha sido eficaz)')
+
+
+class CancelacionCambioForm(BaseForm):
+    motivo_cancelacion = TextAreaField('Motivo de la cancelación', validators=[DataRequired()])
