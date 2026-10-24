@@ -16,20 +16,21 @@ from sqlalchemy.orm import object_session
 
 from ..audit_notifications import local_today
 from ..models import (
-    CATEGORIAS_POR_TIPO, CategoriaCuestion, CompetenceEvaluation, CompetenceType,
+    CATEGORIAS_POR_TIPO, CambioSGC, CategoriaCuestion, CompetenceEvaluation, CompetenceType,
     DecisionOportunidad, DocumentCategory, EfectoCuestion, EficaciaAccion, EstadoAccionCorrectiva,
-    EstadoAccionRevision, EstadoAccionRiesgo, EstadoAlcance, EstadoAuditoriaEnum, EstadoCuestion,
-    EstadoNoConformidad, EstadoObjetivo, EstadoOportunidad, EstadoProgramaAuditoria,
-    EstadoProveedor, EstadoRevisionDireccion, EstadoRiesgo, FrecuenciaMedicion,
-    GravedadNoConformidad, NivelRiesgo, OrigenNoConformidad, OrigenRiesgo, PrioridadOportunidad,
-    ResultadoEvaluacion, SentidoObjetivo, TipoAccionRevision, TipoContexto, TipoHallazgo,
-    TipoProceso, TipoSuministro, TratamientoRiesgo,
+    EstadoAccionRevision, EstadoAccionRiesgo, EstadoAlcance, EstadoAuditoriaEnum, EstadoCambio,
+    EstadoCuestion, EstadoNoConformidad, EstadoObjetivo, EstadoOportunidad,
+    EstadoProgramaAuditoria, EstadoProveedor, EstadoRevisionDireccion, EstadoRiesgo,
+    EstadoTareaCambio, FrecuenciaMedicion, GravedadNoConformidad, NivelRiesgo, OrigenCambio,
+    OrigenNoConformidad, OrigenRiesgo, PrioridadOportunidad, ResultadoEvaluacion, SentidoObjetivo,
+    TipoAccionRevision, TipoContexto, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, competence, context_issues,
     corrective_actions, document_revisions, documents, improvements, management_reviews,
-    nonconformities, people, process_operations, providers, qms_scope, quality_objectives,
-    risks, roles_responsibilities, satisfaction, stakeholders, training, training_resources,
+    nonconformities, people, process_operations, providers, qms_changes, qms_scope,
+    quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
+    training_resources,
 )
 from ..services.policy import Resource
 
@@ -164,6 +165,17 @@ def _issue_extras(issue: Any) -> dict[str, Any]:
 def _scope_extras(scope: Any) -> dict[str, Any]:
     """Whether each requirement of the catalogue applies to the version, and why not."""
     return {"aplicabilidad": qms_scope.applicability_of(object_session(scope), scope.id)}
+
+
+def _change_extras(change: Any) -> dict[str, Any]:
+    """The processes and documents the change affects and whether it is past its plan."""
+    return {"procesos": change.proceso_ids, "documentos": change.documento_ids,
+            "fuera_de_plazo": qms_changes.fuera_de_plazo(change, today=local_today())}
+
+
+def _change_task_extras(task: Any) -> dict[str, Any]:
+    change = object_session(task).get(CambioSGC, task.cambio_id)
+    return {"vencida": qms_changes.is_overdue(task, change, today=local_today())}
 
 
 class _ScopeVersions:
@@ -448,6 +460,90 @@ def _context_modules() -> tuple[Module, ...]:
     )
 
 
+def _change_modules() -> tuple[Module, ...]:
+    """Changes to the QMS (6.3) and their tasks, sharing ``QMS_CHANGES`` (CP5).
+
+    Enums show the Spanish label; the filters take the member name. Change records show
+    ``estado`` and the columns of each stage, which no tool writes: approving, implementing,
+    reviewing the effectiveness and cancelling are web-only (CP2), and so is deleting. They
+    add ``procesos``, ``documentos`` and ``fuera_de_plazo``; task records add ``vencida``.
+    """
+    link = "{record}; only with origen {origin}.".format
+    consideration = "{what} (6.3 {letter}); needed to approve the change.".format
+    return (
+        Module("cambios_sgc", "Changes to the QMS", Resource.QMS_CHANGES,
+               _DatedRegister(qms_changes.changes), (
+            _f("titulo", required=True, note=(
+                "With descripcion, origen and its link, proposito, fecha_propuesta and the four "
+                "considerations, fixed once the change is aprobado; nothing changes once it is "
+                "implantado, eficacia_revisada or cancelado.")),
+            _f("descripcion", required=True),
+            _f("origen", "enum", True, members=OrigenCambio, note=(
+                "What gives rise to the change; only the link of this origin may be given. "
+                "Clear the link before changing the origin.")),
+            _f("accion_revision_id", "integer", note=link(
+                record="Management review action (acciones_revision) of tipo cambio_sgc",
+                origin="revision_direccion")),
+            _f("no_conformidad_id", "integer", note=link(
+                record="Non-conformity (no_conformidades)", origin="no_conformidad")),
+            _f("auditoria_id", "integer", note=link(record="Audit (auditorias)",
+                                                    origin="auditoria")),
+            _f("riesgo_id", "integer", note=link(record="Risk (riesgos)", origin="riesgo")),
+            _f("oportunidad_id", "integer", note=link(record="Opportunity (oportunidades)",
+                                                      origin="oportunidad")),
+            _f("cuestion_id", "integer", note=link(
+                record="Context issue (cuestiones_contexto), vigente when newly linked",
+                origin="cuestion_contexto")),
+            _f("proposito", required=True, note="Purpose of the change (6.3 a)."),
+            _f("consecuencias", note=consideration(what="Its potential consequences",
+                                                   letter="a")),
+            _f("integridad", note=consideration(what="How the integrity of the QMS is kept",
+                                                letter="b")),
+            _f("recursos", note=consideration(what="Resources available", letter="c")),
+            _f("responsabilidades", note=consideration(
+                what="Responsibilities and authorities", letter="d")),
+            _f("comunicacion", note="To whom and how the change is communicated."),
+            _f("responsable_id", "integer", True, note=(
+                "Person (personas) who owns the change; never its effectiveness reviewer.")),
+            _f("fecha_propuesta", "date", True, note="Never in the future."),
+            _f("fecha_prevista", "date", note=(
+                "Planned implementation; not before fecha_propuesta. Needed to approve.")),
+            _f("procesos", "integer_list", note="Processes (procesos) it affects; replaces them."),
+            _f("documentos", "integer_list", note=(
+                "Documents (documentos) it affects, withdrawn ones too; replaces them.")),
+        ), (_f("estado", "enum", members=EstadoCambio, note=(
+                "Starts propuesto. Approving (aprobado) and cancelling (cancelado) are done on "
+                "the web by administrators; recording the implementation (implantado) and the "
+                "effectiveness review (eficacia_revisada), on the web by administrators and "
+                "auditors.")),
+            _f("origen", "enum", members=OrigenCambio), _f("responsable_id", "integer"),
+            _f("proceso_id", "integer"), _f("documento_id", "integer"),
+            _f("fuera_de_plazo", "boolean", note="Aprobado, with fecha_prevista before today."),
+            _f("texto", note="Text in titulo or descripcion, any case.")),
+            extras=_change_extras),
+        Module("tareas_cambio", "Tasks of changes to the QMS", Resource.QMS_CHANGES,
+               _DatedRegister(qms_changes.tasks), (
+            _f("cambio_id", "integer", True, note=(
+                "Change (cambios_sgc) the task carries out; it cannot change later. Tasks are "
+                "created, changed and deleted only while the change is propuesto or "
+                "aprobado.")),
+            _f("descripcion", required=True),
+            _f("responsable_id", "integer", True, note="Person (personas) who owns the task."),
+            _f("fecha_limite", "date", True),
+            _f("estado", "enum", members=EstadoTareaCambio, note=(
+                "Starts pendiente. Implementing the change needs every task completada or "
+                "cancelada, one of them completada.")),
+            _f("fecha_completada", "date", note=(
+                "Given exactly when estado is completada; not in the future.")),
+            _f("resultado"),
+        ), (_f("cambio_id", "integer"), _f("estado", "enum", members=EstadoTareaCambio),
+            _f("responsable_id", "integer"),
+            _f("vencida", "boolean", note=(
+                "Pendiente or en_curso past fecha_limite, in a propuesto or aprobado change."))),
+            extras=_change_task_extras),
+    )
+
+
 # ``responsable_id``, ``auditor_id`` and ``persona_id`` are ids of ``personas``
 # records (an existing person, active when newly chosen; ``null`` clears the
 # link). The free-text ``responsable``, ``auditor`` and ``personal`` stay as
@@ -712,6 +808,7 @@ _MODULES = (
     *_risk_modules(),
     *_provider_modules(),
     *_context_modules(),
+    *_change_modules(),
 )
 
 MODULES: dict[str, Module] = {module.slug: module for module in _MODULES}

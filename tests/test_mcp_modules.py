@@ -19,6 +19,7 @@ SLUGS = {
     "programas_auditoria", "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo",
     "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades", "acciones_riesgo",
     "proveedores", "evaluaciones_proveedor", "cuestiones_contexto", "alcances_sgc",
+    "cambios_sgc", "tareas_cambio",
 }
 # The two competence registers share one policy resource (decision Q1 of qms-people),
 # and so do audits, their programmes and their findings (decision AP7 of audit-programme).
@@ -34,6 +35,8 @@ SHARED_RISKS = ("riesgos", "oportunidades", "acciones_riesgo")
 SHARED_PROVIDERS = ("proveedores", "evaluaciones_proveedor")
 # Context issues and the QMS scope (decision OC4 of organization-context).
 SHARED_CONTEXT = ("cuestiones_contexto", "alcances_sgc")
+# Changes to the QMS and their tasks (decision CP5 of change-planning).
+SHARED_CHANGES = ("cambios_sgc", "tareas_cambio")
 # (module, legacy free-text name, person link that can fill it)
 LEGACY_NAMES = (("capacitaciones", "personal", "persona_id"),
                 ("auditorias", "auditor", "auditor_id"),
@@ -57,7 +60,7 @@ class LayoutTestCase(unittest.TestCase):
 
 
 class RegistryTestCase(unittest.TestCase):
-    def test_registry_holds_the_twenty_eight_modules(self) -> None:
+    def test_registry_holds_the_thirty_modules(self) -> None:
         self.assertEqual(SLUGS, set(registry().MODULES))
 
     def test_each_module_maps_to_its_own_policy_resource(self) -> None:
@@ -65,7 +68,7 @@ class RegistryTestCase(unittest.TestCase):
 
         modules = registry().MODULES
         shared = (SHARED_RESOURCE + SHARED_AUDITS + SHARED_OBJECTIVES + SHARED_REVIEWS
-                  + SHARED_RISKS + SHARED_PROVIDERS + SHARED_CONTEXT)
+                  + SHARED_RISKS + SHARED_PROVIDERS + SHARED_CONTEXT + SHARED_CHANGES)
         resources = [m.resource for slug, m in modules.items() if slug not in shared]
         self.assertEqual(len(resources), len(set(resources)))
         self.assertEqual({Resource.COMPETENCE}, {modules[s].resource for s in SHARED_RESOURCE})
@@ -80,15 +83,17 @@ class RegistryTestCase(unittest.TestCase):
                          {modules[s].resource for s in SHARED_PROVIDERS})
         self.assertEqual({Resource.ORGANIZATION_CONTEXT},
                          {modules[s].resource for s in SHARED_CONTEXT})
+        self.assertEqual({Resource.QMS_CHANGES}, {modules[s].resource for s in SHARED_CHANGES})
         self.assertFalse({Resource.COMPETENCE, Resource.AUDITS, Resource.QUALITY_OBJECTIVES,
                           Resource.MANAGEMENT_REVIEW, Resource.RISKS_OPPORTUNITIES,
-                          Resource.EXTERNAL_PROVIDERS, Resource.ORGANIZATION_CONTEXT}
+                          Resource.EXTERNAL_PROVIDERS, Resource.ORGANIZATION_CONTEXT,
+                          Resource.QMS_CHANGES}
                          & set(resources))
 
     def test_declared_fields_match_what_each_service_requires(self) -> None:
         from app.services import (
             audit_findings, audit_programmes, audits, management_reviews, nonconformities,
-            people, process_operations, providers, qms_scope,
+            people, process_operations, providers, qms_changes, qms_scope,
         )
 
         bespoke = {
@@ -111,6 +116,9 @@ class RegistryTestCase(unittest.TestCase):
             # Texts plus ``aplicabilidad``, written to ``aplicabilidad_alcance`` (OC-2);
             # only the first version needs its statement, so nothing is always required.
             "alcances_sgc": (qms_scope.DRAFT_WRITABLE, frozenset()),
+            # Columns plus ``procesos`` and ``documentos``, written to ``cambio_procesos``
+            # and ``cambio_documentos`` (CP-2).
+            "cambios_sgc": (qms_changes.CHANGE_WRITABLE, qms_changes.CHANGE_REQUIRED),
         }
         for slug, module in registry().MODULES.items():
             with self.subTest(module=slug):

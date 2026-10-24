@@ -14,8 +14,8 @@ from app.mcp_server import context
 from app.mcp_server.server import build_server
 from app.mcp_server.registry import MODULES
 from app.models import (
-    EstadoNoConformidad, NoConformidad, ObjetivoCalidad, Person, Proveedor, RevisionDireccion,
-    Riesgo, RoleEnum, User,
+    CambioSGC, EstadoNoConformidad, NoConformidad, ObjetivoCalidad, Person, Proveedor,
+    RevisionDireccion, Riesgo, RoleEnum, User,
 )
 from app.services import api_tokens
 from app.services.actor import Actor
@@ -91,6 +91,13 @@ SEEDS = {
     # Cites the provider and the person seeded above (both id 1), on a past date.
     "evaluaciones_proveedor": {"proveedor_id": 1, "fecha": "2026-10-01", "evaluador_id": 1,
                                "calidad": 4, "plazo": 4, "servicio": 3, "documentacion": 5},
+    # Owned by the person seeded above (id 1), proposed on a past date.
+    "cambios_sgc": {"titulo": "Nuevo ERP", "descripcion": "Sustituir la hoja de pedidos",
+                    "origen": "otro", "proposito": "Trazabilidad de los pedidos",
+                    "responsable_id": 1, "fecha_propuesta": "2026-10-01"},
+    # Cites the change and the person seeded above (both id 1).
+    "tareas_cambio": {"cambio_id": 1, "descripcion": "Migrar los pedidos abiertos",
+                      "responsable_id": 1, "fecha_limite": "2026-12-31"},
 }
 
 
@@ -129,8 +136,10 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
         if (slug in ("documentos", "objetivos_calidad", "acciones_revision", "riesgos",
-                     "oportunidades") and db.session.get(Person, 1) is None):
+                     "oportunidades", "cambios_sgc") and db.session.get(Person, 1) is None):
             self.seed("personas")
+        if slug == "tareas_cambio" and db.session.get(CambioSGC, 1) is None:
+            self.seed("cambios_sgc")
         if slug == "acciones_riesgo" and db.session.get(Riesgo, 1) is None:
             self.seed("riesgos")
         if slug == "mediciones_objetivo" and db.session.get(ObjetivoCalidad, 1) is None:

@@ -19,7 +19,7 @@ from app.services import audit
 JSON_REGISTERS = ("roles_responsabilidades", "recursos_capacitacion", "procesos",
                   "indicadores_auditoria", "riesgos", "oportunidades", "acciones_riesgo",
                   "proveedores", "evaluaciones_proveedor", "cuestiones_contexto",
-                  "alcances_sgc")
+                  "alcances_sgc", "cambios_sgc", "tareas_cambio")
 
 
 def error_text(result) -> str:
