@@ -479,6 +479,30 @@ class ConstraintCases:
             "(SELECT count(*) FROM acciones_revision), (SELECT count(*) FROM no_conformidades), "
             "(SELECT count(*) FROM auditorias), (SELECT count(*) FROM cuestiones_contexto)"))
 
+    def test_a_loaded_change_orders_its_tasks_processes_and_documents(self) -> None:
+        # Inserted out of order; the relationships order what a loaded change holds:
+        # tasks by deadline then id, processes by name, documents by code.
+        self.enforce_foreign_keys()
+        owner = self.person()
+        change = self.change(responsable_id=owner)
+        late = self.task(change, responsable_id=owner, fecha_limite=date(2026, 12, 15))
+        soon = self.task(change, responsable_id=owner, fecha_limite=date(2026, 11, 2))
+        tied = self.task(change, responsable_id=owner, fecha_limite=date(2026, 12, 15))
+        for proceso in ("Ventas", "Compras", "Logistica"):
+            process = self.insert(ProcesoOperacion.__table__, proceso=proceso)
+            self.insert(models().cambio_procesos, cambio_id=change, proceso_id=process)
+        for code in ("PR-09", "MC-01", "PR-02"):
+            document = self.insert(Document.__table__, title=f"Documento {code}", code=code,
+                                   category=DocumentCategory.OTRO)
+            self.insert(models().cambio_documentos, cambio_id=change, documento_id=document)
+        db.session.expunge_all()
+        loaded = db.session.get(models().CambioSGC, change)
+        self.assertEqual([soon, late, tied], [task.id for task in loaded.tareas])
+        self.assertEqual(["Compras", "Logistica", "Ventas"],
+                         [process.proceso for process in loaded.procesos])
+        self.assertEqual(["MC-01", "PR-02", "PR-09"],
+                         [document.code for document in loaded.documentos])
+
 
 class SqliteTestCase(ConstraintCases, Helpers, ServiceBase):
     def tearDown(self) -> None:
