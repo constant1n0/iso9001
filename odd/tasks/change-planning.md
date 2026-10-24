@@ -27,6 +27,7 @@ Carry out changes to the quality management system in a planned manner (ISO 9001
 | CP6 | The dashboard card "Cambios" (6.3) flags changes awaiting approval, approved changes past their planned date, overdue tasks and implemented changes awaiting the effectiveness review. The management review gains a `cambios` input for the period (proposed, approved, implemented, reviewed with their results, cancelled, overdue), rendered only when present so reviews held before still render. The review action, nonconformity, audit, risk, opportunity and context issue pages list the changes they gave rise to | Assistant design |
 | CP7 | PDFs: the change register (`/cambios/pdf`) and the change plan (`/cambios/<id>/pdf`: plan, considerations, tasks, approval, implementation and effectiveness) | Assistant design |
 | Delivery | `auto-chain`, `stacked-to-main`; push, PR and merge when CI is green; standing Wave 2 `size:exception` (ask only above 1,500 lines); production deployment needs explicit authorization | User authorizations (2026-10-02, 2026-10-17) |
+| Size CP-2 | One-off `size:exception` for the services pull request (2,387 lines) | User (2026-10-24) |
 | Test adaptations | Standing Wave 2 approval: existing tests that only need adapting to an approved design may join a writer's surface, reported here and in the PR; application code outside the planned surface still needs approval | User (2026-10-17) |
 | Docs | Spanish reference documents first (`docs/guia-de-usuario.md`, `docs/mcp.md`, `docs/analisis-brechas-iso-9001.md`), then `docs/user-guide.md`; `docs/architecture/services.md` in English | Documentation language decision (2026-10-16) |
 | RDD | On (global); assess every work-unit commit | `gentle-ai review mode status` |
@@ -37,11 +38,13 @@ Route for every task: **delegated direct** (each task touches more than two non-
 
 - [x] **CP-1 — Change and task models, migration and policy.** Forecast 600-900.
   - Models `CambioSGC` and `TareaCambio`, plain tables `cambio_procesos` and `cambio_documentos`, CHECKs (origin links, approval, implementation, effectiveness, cancellation, task completion), migration on top of `e4a6c8b0d2f5`, resource `QMS_CHANGES`, delete protection for owners, approvers and reviewers (`people.REFERENCES`), processes, and the origin records (review actions and reviews, nonconformities, audits, risks, opportunities, context issues) with Spanish messages.
-- [ ] **CP-2 — Change and task services and MCP modules.** Forecast 1,200-1,600.
+- [x] **CP-2 — Change and task services and MCP modules.** Forecast 1,200-1,600.
   - Services with the CP1–CP5 rules (references, editing by state, transitions `approve`, `implement`, `review_effectiveness`, `cancel` with `may_*` guards, tasks), filters, `attention()`, `changes(session, desde, hasta)` for the review inputs, `linked` readers for the origin pages; MCP modules `cambios_sgc` and `tareas_cambio` (30 modules), transitions and deletes not exposed.
   - Also (CP-1 review): a test that inserts tasks, processes and documents out of order and loads the change through the session, pinning the order of `tareas` (`fecha_limite`, `id`), `procesos` (`proceso`) and `documentos` (`code`).
 - [ ] **CP-3 — Screens and dashboard.** Forecast 1,200-1,500.
   - `/cambios/` list with filters, detail with tasks, forms, transition forms, task forms; the related changes on the origin pages; dashboard card "Cambios" (CP6); navigation 6.3.
+  - Also (CP-2 review): an approved change refuses clearing `fecha_prevista` with a rule message (today it drops out of every overdue check), with a test; `_update` and `_move` translate an integrity failure raised inside `audit.record` into `Conflict(WRITE_CONFLICT)` as `_create` does, with a test that drives one.
+  - The document picker and the change detail respect the documents service's visibility rule (an OPERATIVO user does not see draft documents).
 - [ ] **CP-4 — PDFs, review inputs and docs.** Forecast 700-1,000.
   - The two PDFs (CP7), the `cambios` review input (CP6), guides (Spanish first), `docs/mcp.md`, `docs/architecture/services.md`, gap analysis 6.3.
 
@@ -69,20 +72,27 @@ Baseline at `339a9a8`: 1,632 tests. Migrations are tested on PostgreSQL (`TEST_P
 |---|---|---|---|---|
 | CP-1 | Done | `a341b90` (enums `OrigenCambio`, `EstadoCambio`, `EficaciaCambio`, `EstadoTareaCambio`; models `CambioSGC` with six origin links, each RESTRICT with an origin CHECK, and the approval, implementation, effectiveness, ineffective-comment, independent-reviewer and cancellation CHECKs; `TareaCambio` with the completion CHECK; plain tables `cambio_procesos` and `cambio_documentos`; `CHANGE_LINKS`, `proceso_ids`, `documento_ids`; migration `29637060aaf0`; resource `QMS_CHANGES`), `3451ebe` (delete protection: the four person columns in `people.REFERENCES`; processes `LINKED_TO_CHANGES`; review actions `ACTION_CITED_BY_CHANGES` and reviews `ACTIONS_CITED_BY_CHANGES` before `HAS_ACTIONS`; nonconformities, audits, risks, opportunities and context issues `*_CITED_BY_CHANGES`, checked first and mapped by foreign key name where the service already had a map) | RED: 48 errors and 2 failures, e.g. `module 'app.models' has no attribute 'CambioSGC'`, `KeyError: 'QMS_CHANGES'`, `31 != 29`, `NoSuchTableError: cambios_sgc`, missing `RISK_CITED_BY_CHANGES`. GREEN: `a341b90` alone 1,657 tests OK; both 1,679 tests OK incl. PostgreSQL; adapted `tests/test_attribution.py` (31), `tests/test_policy.py`, `tests/test_access_characterization.py` (`NO_ROUTES`), `tests/test_migrations.py` | Range `339a9a8..3451ebe`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-af97da5665dad63f` **approved** and acknowledged; its suggestion (relationship order observed through a loaded instance) moved into CP-2 |
 
+| CP-2 | Done | `7ae726f` (`app/services/qms_changes.py`: registers `changes` and `tasks` with `create`, `update` and `delete` taking `today`; origin links checked (matching origin, existing record, review action `cambio_sgc`, issue `vigente`, each locked `FOR SHARE`); processes and documents in the audit snapshots; editing by state (`CHANGE_WRITABLE`, `APPROVED_WRITABLE`); delete only `propuesto`, tasks first; transitions `approve`, `implement`, `review_effectiveness`, `cancel` with `may_approve`, `may_implement`, `may_review_effectiveness`, `may_cancel` (role and state; never `mcp`); filters incl. `fuera_de_plazo` and `vencida`; readers `attention`, `in_period` (`PeriodChanges`), `for_origin`; the CP-1 review ordering test), `3114de4` (MCP modules `cambios_sgc` and `tareas_cambio` through `_DatedRegister`, create, update, list and get only; 30 modules) | RED: `cannot import name 'qms_changes'` (125 errors), `KeyError: 'cambios_sgc'`, `30 != 28`, «Módulo desconocido: «cambios_sgc»»; the ordering test passed at once (CP-1 already orders the relationships). GREEN: `7ae726f` alone 1,742 tests OK; both 1,748 tests OK incl. PostgreSQL; adapted `tests/test_mcp_modules.py`, `tests/test_mcp_http.py`, `tests/test_mcp_write_tools.py`, `tests/mcp_support.py` | Range `3451ebe..3114de4`: **medium**, `slice_budget_reached`; consent granted; reliability review `review-53b8b900068f7295` **approved** and acknowledged; its warning (an approved change can clear its planned date) and suggestion (integrity failures inside `audit.record` in `_update`) moved into CP-3 |
+
 ## Findings during implementation
 
 - The refusal messages state only the citation (for example «No se puede eliminar un riesgo al que se refieren cambios en el SGC.»), without the usual "remove it first" advice, because an approved change's origin link cannot change.
 - Where a service had no foreign-key map (nonconformities, review actions), a citation added after the check ends as a plain `Conflict` with the default message, never a raw `IntegrityError`. Deleting an audit programme never deletes its audits, so it needs no check.
 - For CP-2: create tasks as `TareaCambio(cambio_id=...)`, not by appending to `cambio.tareas` (appending marks the change as modified and the audit guard then expects an audit row for it); `tareas` uses `passive_deletes='all'`, so delete a change's tasks before the change. The database does not check that a linked review action is of type `cambio_sgc`, that a linked context issue is `vigente`, or the approval prerequisites: the service must.
 - `ServiceBase.setUp` assigns `self.audit` to the audit module, so a test helper named `audit` is shadowed.
+- CP-2 choices: the period reader is `in_period` (`changes` is the register) and returns uncapped lists, so CP-4 caps them in the review inputs; `attention` and `for_origin` take the actor and check the read grant; overdue tasks count only while their change is `propuesto` or `aprobado`; an update that changes nothing is accepted and writes nothing, even on a closed change; `fecha_propuesta` is fixed once approved; MCP field notes are in English like their neighbours.
+- A change built without process or document lists lazy-loaded them between `audit.record` and the `row.after` patch, so the autoflush persisted the audit row and the patch raised `AuditLogImmutable`; both lists are now set, even empty, when the change is built.
+- For CP-3: the `may_*` guards check only role and state; the owner-reviewing refusal comes back as a message on submit.
 
 ## Delivery
 
 | Slice | Pull request | Commits | Merged as |
 |---|---|---|---|
-| 1 | pending | tracker `f677450`, CP-1 models `a341b90` | |
-| 2 | pending | CP-1 delete protection `3451ebe`, this record | |
+| 1 | [#159](https://github.com/constant1n0/iso9001/pull/159) | tracker `f677450`, CP-1 models `a341b90` | `8982daa` |
+| 2 | [#160](https://github.com/constant1n0/iso9001/pull/160) | CP-1 delete protection `3451ebe`, record `fc677d2` | `920f929` |
+| 3 | pending | CP-2 services `7ae726f` (one-off `size:exception`, 2,387 lines, approved by the user on 2026-10-24) | |
+| 4 | pending | CP-2 MCP modules `3114de4`, this record | |
 
 ## Next step
 
-CP-2: change and task services and the MCP modules.
+CP-3: screens and dashboard.
