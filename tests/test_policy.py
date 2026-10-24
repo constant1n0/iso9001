@@ -45,6 +45,7 @@ EXPECTED = {
     "EXTERNAL_PROVIDERS": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),  # EP5 of external-providers
     # OC4 of organization-context: context issues and the QMS scope.
     "ORGANIZATION_CONTEXT": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),
+    "QMS_CHANGES": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),  # CP5 of change-planning
 }
 
 FORBIDDEN_MODULES = ("flask", "flask_login", "werkzeug.local", "app.routes")
