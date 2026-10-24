@@ -32,7 +32,7 @@ LATER_AUDITED_TABLES = frozenset(
      "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo",
      "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades",
      "acciones_riesgo", "proveedores", "evaluaciones_proveedor", "cuestiones_contexto",
-     "alcances_sgc"}
+     "alcances_sgc", "cambios_sgc", "tareas_cambio"}
 )
 
 
@@ -1516,6 +1516,119 @@ class MigrationsTestCase(unittest.TestCase):
             downgrade(directory=MIGRATIONS_DIR, revision="c8f2a4e6b0d3")
             self.assertFalse({scopes, entries} & set(inspect(db.engine).get_table_names()))
             self.assertEqual([("Ana",)], self._rows("SELECT nombre FROM personas"))
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+    def test_qms_changes_guard_their_links_and_downgrade(self) -> None:
+        """CP-1 (29637060aaf0): changes to the QMS, their tasks and what they affect."""
+        changes, tasks = "cambios_sgc", "tareas_cambio"
+        processes, documents = "cambio_procesos", "cambio_documentos"
+        links = {"accion_revision_id": "acciones_revision",
+                 "no_conformidad_id": "no_conformidades",
+                 "auditoria_id": "auditorias", "riesgo_id": "riesgos",
+                 "oportunidad_id": "oportunidades", "cuestion_id": "cuestiones_contexto"}
+        people = ("responsable_id", "aprobado_por_id", "revisor_eficacia_id")
+        expected = {
+            **{f"fk_{changes}_{column}_{table}": (table, "RESTRICT")
+               for column, table in links.items()},
+            **{f"fk_{changes}_{column}_personas": ("personas", "RESTRICT") for column in people},
+            f"fk_{changes}_created_by_id_users": ("users", "SET NULL"),
+            f"fk_{tasks}_cambio_id_{changes}": (changes, "RESTRICT"),
+            f"fk_{tasks}_responsable_id_personas": ("personas", "RESTRICT"),
+            f"fk_{processes}_cambio_id_{changes}": (changes, "RESTRICT"),
+            f"fk_{processes}_proceso_id_procesos_operacion": ("procesos_operacion", "RESTRICT"),
+            f"fk_{documents}_cambio_id_{changes}": (changes, "RESTRICT"),
+            f"fk_{documents}_documento_id_documents": ("documents", "RESTRICT"),
+        }
+        checks = ("origen", "estado", "eficacia", "accion_revision", "no_conformidad",
+                  "auditoria", "riesgo", "oportunidad", "cuestion", "aprobacion", "implantacion",
+                  "revision_eficacia", "comentario_eficacia", "revisor_eficacia", "cancelacion")
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision="e4a6c8b0d2f5")
+            with db.engine.begin() as connection:
+                for statement in (
+                    "INSERT INTO personas (nombre) VALUES ('Ana'), ('Eva')",
+                    "INSERT INTO procesos_operacion (proceso) VALUES ('Ventas')",
+                    "INSERT INTO documents (title, code, category) "
+                    "VALUES ('Pedidos', 'PR-07', 'OTRO')",
+                    "INSERT INTO no_conformidades (descripcion, fecha_detectada) "
+                    "VALUES ('Pedido perdido', '2026-09-01')",
+                ):
+                    connection.execute(text(statement))
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            foreign_keys = {fk["name"]: (fk["referred_table"], fk["options"].get("ondelete"))
+                            for table in (changes, tasks, processes, documents)
+                            for fk in inspector.get_foreign_keys(table)}
+            self.assertLessEqual(expected.items(), foreign_keys.items())
+            self.assertLessEqual({f"ix_{changes}_{column}" for column in (*links, *people)},
+                                 {index["name"] for index in inspector.get_indexes(changes)})
+            self.assertEqual({f"ix_{tasks}_cambio_id", f"ix_{tasks}_responsable_id"},
+                             {index["name"] for index in inspector.get_indexes(tasks)})
+            for table, second in ((processes, "proceso_id"), (documents, "documento_id")):
+                with self.subTest(link_table=table):
+                    self.assertEqual(["cambio_id", second],
+                                     inspector.get_pk_constraint(table)["constrained_columns"])
+                    self.assertEqual([f"ix_{table}_{second}"],
+                                     [index["name"] for index in inspector.get_indexes(table)])
+            self.assertLessEqual(
+                {f"ck_{changes}_{name}" for name in checks}
+                | {f"ck_{tasks}_estado", f"ck_{tasks}_completada"},
+                {check["name"] for table in (changes, tasks)
+                 for check in inspector.get_check_constraints(table)})
+            with db.engine.begin() as connection:
+                for statement in (
+                    "INSERT INTO cambios_sgc (titulo, descripcion, origen, no_conformidad_id, "
+                    "proposito, responsable_id, fecha_propuesta) VALUES ('ERP', 'Pedidos', "
+                    "'no_conformidad', 1, 'Trazabilidad', 1, '2026-10-01')",
+                    "INSERT INTO tareas_cambio (cambio_id, descripcion, responsable_id, "
+                    "fecha_limite) VALUES (1, 'Migrar', 2, '2026-12-15')",
+                    "INSERT INTO cambio_procesos (cambio_id, proceso_id) VALUES (1, 1)",
+                    "INSERT INTO cambio_documentos (cambio_id, documento_id) VALUES (1, 1)",
+                ):
+                    connection.execute(text(statement))
+            self.assertEqual([("propuesto", "pendiente")], self._rows(
+                "SELECT c.estado, t.estado FROM cambios_sgc c JOIN tareas_cambio t "
+                "ON t.cambio_id = c.id"))
+            for statement in (
+                "UPDATE cambios_sgc SET origen = 'auditoria'",  # keeps the nonconformity
+                "UPDATE cambios_sgc SET origen = 'otro'",
+                "UPDATE cambios_sgc SET origen = 'riesgo', no_conformidad_id = NULL, "
+                "riesgo_id = 99",
+                "UPDATE cambios_sgc SET estado = 'aprobado'",  # without its approval
+                "UPDATE cambios_sgc SET aprobado_por_id = 2, fecha_aprobacion = '2026-10-10'",
+                "UPDATE cambios_sgc SET estado = 'implantado', aprobado_por_id = 2, "
+                "fecha_aprobacion = '2026-10-10'",  # without its date
+                "UPDATE cambios_sgc SET estado = 'eficacia_revisada', aprobado_por_id = 2, "
+                "fecha_aprobacion = '2026-10-10', fecha_implantacion = '2026-11-20', "
+                "eficacia = 'no_eficaz', fecha_eficacia = '2027-01-15', "
+                "revisor_eficacia_id = 2",  # ineffective without a comment
+                "UPDATE cambios_sgc SET estado = 'eficacia_revisada', aprobado_por_id = 2, "
+                "fecha_aprobacion = '2026-10-10', fecha_implantacion = '2026-11-20', "
+                "eficacia = 'eficaz', fecha_eficacia = '2027-01-15', "
+                "revisor_eficacia_id = 1",  # the owner reviews it
+                "UPDATE cambios_sgc SET estado = 'cancelado'",  # without its reason
+                "UPDATE cambios_sgc SET estado = 'Propuesto'",
+                "UPDATE tareas_cambio SET estado = 'completada'",  # without its date
+                "UPDATE tareas_cambio SET fecha_completada = '2026-11-15'",
+                "INSERT INTO cambio_procesos (cambio_id, proceso_id) VALUES (1, 1)",
+                "INSERT INTO cambio_documentos (cambio_id, documento_id) VALUES (1, 99)",
+                "DELETE FROM no_conformidades",  # the change names it
+                "DELETE FROM procesos_operacion",  # the change affects it
+                "DELETE FROM documents",
+                "DELETE FROM cambios_sgc",  # it has a task and links
+                "DELETE FROM personas",  # they own the change and the task
+            ):
+                with self.subTest(refused=statement):
+                    with self.assertRaises(IntegrityError):
+                        with db.engine.begin() as connection:
+                            connection.execute(text(statement))
+            downgrade(directory=MIGRATIONS_DIR, revision="e4a6c8b0d2f5")
+            self.assertFalse({changes, tasks, processes, documents}
+                             & set(inspect(db.engine).get_table_names()))
+            self.assertEqual([(2, 1, 1)], self._rows(
+                "SELECT (SELECT count(*) FROM personas), (SELECT count(*) FROM no_conformidades), "
+                "(SELECT count(*) FROM documents)"))
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 

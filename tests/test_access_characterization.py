@@ -437,11 +437,13 @@ ALLOWED = {
     "MANAGEMENT_REVIEW": (ADMIN_AUDITOR, ADMIN_AUDITOR, {ADMIN}),  # MR5 of management-review
     "EXTERNAL_PROVIDERS": JSON_REGISTER,  # EP5 of external-providers
     "ORGANIZATION_CONTEXT": JSON_REGISTER,  # OC4 of organization-context
+    "QMS_CHANGES": JSON_REGISTER,  # CP5 of change-planning
 }
 # Policy entries without routes. AUDIT_LOG has no adapter yet. The API_TOKENS
 # matrix (issue, list, revoke any token) stays CLI-only; "Mi perfil" bypasses it
 # with an ownership check, so tests/test_profile_routes.py characterizes it.
-NO_ROUTES = {"AUDIT_LOG", "API_TOKENS"}
+# QMS_CHANGES has no screens until CP-3 of change-planning.
+NO_ROUTES = {"AUDIT_LOG", "API_TOKENS", "QMS_CHANGES"}
 
 
 def allowed_roles(endpoint: Endpoint) -> set:

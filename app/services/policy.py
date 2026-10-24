@@ -55,6 +55,13 @@ The approved role-by-action matrix (decision D1). Roles may read, write
   role reads; administrators and auditors write; administrators delete
   (decision OC4 of ``organization-context``). Interested parties keep their own
   open grant.
+- Changes to the QMS and their tasks: every role reads; administrators and
+  auditors create and update; administrators delete (decision CP5 of
+  ``change-planning``). Their service narrows it further: approving and
+  cancelling a change are for administrators, implementing it and reviewing
+  its effectiveness for administrators and auditors, and every state change is
+  web only, so the ``mcp`` channel creates and updates changes and tasks but
+  never approves, implements, reviews, cancels or deletes.
 
 Seams: the ``mcp`` channel never deletes and never writes documents (they are
 written in the web only), and token scopes intersect the role.
@@ -104,6 +111,7 @@ class Resource(StrEnum):
     MANAGEMENT_REVIEW = "management_review"
     EXTERNAL_PROVIDERS = "external_providers"
     ORGANIZATION_CONTEXT = "organization_context"
+    QMS_CHANGES = "qms_changes"
 
 
 _ALL = frozenset(RoleEnum)
@@ -152,6 +160,7 @@ _MATRIX: dict[Resource, Grant] = {
     Resource.MANAGEMENT_REVIEW: Grant(_ADMIN_AUDITOR, _ADMIN_AUDITOR, _ADMIN),
     Resource.EXTERNAL_PROVIDERS: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
     Resource.ORGANIZATION_CONTEXT: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
+    Resource.QMS_CHANGES: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
 }
 
 

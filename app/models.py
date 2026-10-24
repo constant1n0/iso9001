@@ -2043,6 +2043,315 @@ class DocumentRevision(RecordMetadataMixin, db.Model):
         return f'<DocumentRevision {self.document_id}#{self.numero}>'
 
 
+class OrigenCambio(enum.Enum):
+    """What gives rise to a change to the QMS (ISO 9001 clause 6.3, decision CP1).
+
+    Every origin but ``otro`` may name the record behind the change
+    (``CHANGE_LINKS``).
+    """
+
+    revision_direccion = 'Revisión por la dirección'
+    no_conformidad = 'No conformidad'
+    auditoria = 'Auditoría'
+    riesgo = 'Riesgo'
+    oportunidad = 'Oportunidad'
+    cuestion_contexto = 'Cuestión del contexto'
+    otro = 'Otro'
+
+
+class EstadoCambio(enum.Enum):
+    """Where a change to the QMS stands (decision CP2 of ``change-planning``).
+
+    Only the service moves it: ``propuesto`` -> ``aprobado`` -> ``implantado``
+    -> ``eficacia_revisada``, and ``cancelado`` from ``propuesto`` or ``aprobado``.
+    """
+
+    propuesto = 'Propuesto'
+    aprobado = 'Aprobado'
+    implantado = 'Implantado'
+    eficacia_revisada = 'Eficacia revisada'
+    cancelado = 'Cancelado'
+
+
+class EficaciaCambio(enum.Enum):
+    """Result of reviewing an implemented change's effectiveness (decision CP2)."""
+
+    eficaz = 'Eficaz'
+    no_eficaz = 'No eficaz'
+
+
+class EstadoTareaCambio(enum.Enum):
+    """Where a task that carries out a change stands (decision CP4)."""
+
+    pendiente = 'Pendiente'
+    en_curso = 'En curso'
+    completada = 'Completada'
+    cancelada = 'Cancelada'
+
+
+# CP1: the record behind a change, by column: the origin that allows it and its
+# target. Each link is optional, ``ON DELETE RESTRICT`` and refused with any
+# other origin (CHECK ``ck_cambios_sgc_<column without _id>``).
+CHANGE_LINKS: dict[str, tuple[OrigenCambio, str]] = {
+    'accion_revision_id': (OrigenCambio.revision_direccion, 'acciones_revision.id'),
+    'no_conformidad_id': (OrigenCambio.no_conformidad, 'no_conformidades.id'),
+    'auditoria_id': (OrigenCambio.auditoria, 'auditorias.id'),
+    'riesgo_id': (OrigenCambio.riesgo, 'riesgos.id'),
+    'oportunidad_id': (OrigenCambio.oportunidad, 'oportunidades.id'),
+    'cuestion_id': (OrigenCambio.cuestion_contexto, 'cuestiones_contexto.id'),
+}
+
+# The CHECKs of a change's lifecycle (CP2). Every branch says IS NULL or IS NOT
+# NULL: a CHECK whose expression is NULL passes. An approval (person and date
+# together) is absent while proposed and present once approved, implemented or
+# reviewed; a cancelled change may have been cancelled before or after it.
+_CHANGE_APPROVAL = (
+    "(aprobado_por_id IS NULL AND fecha_aprobacion IS NULL "
+    "AND estado IN ('propuesto', 'cancelado')) OR "
+    "(aprobado_por_id IS NOT NULL AND fecha_aprobacion IS NOT NULL AND estado <> 'propuesto')"
+)
+_CHANGE_IMPLEMENTATION = (
+    "(fecha_implantacion IS NOT NULL AND estado IN ('implantado', 'eficacia_revisada')) OR "
+    "(fecha_implantacion IS NULL AND estado NOT IN ('implantado', 'eficacia_revisada'))"
+)
+_CHANGE_EFFECTIVENESS = (
+    "(eficacia IS NOT NULL AND fecha_eficacia IS NOT NULL AND revisor_eficacia_id IS NOT NULL "
+    "AND estado = 'eficacia_revisada') OR "
+    "(eficacia IS NULL AND fecha_eficacia IS NULL AND revisor_eficacia_id IS NULL "
+    "AND estado <> 'eficacia_revisada')"
+)
+_INEFFECTIVE_EXPLAINED = (
+    "eficacia IS NULL OR eficacia = 'eficaz' OR comentario_eficacia IS NOT NULL"
+)
+_INDEPENDENT_REVIEWER = (
+    "revisor_eficacia_id IS NULL OR revisor_eficacia_id <> responsable_id"
+)
+_CHANGE_CANCELLATION = (
+    "(motivo_cancelacion IS NOT NULL AND fecha_cancelacion IS NOT NULL "
+    "AND estado = 'cancelado') OR "
+    "(motivo_cancelacion IS NULL AND fecha_cancelacion IS NULL AND estado <> 'cancelado')"
+)
+
+
+def _change_links() -> tuple:
+    """Foreign key, index and origin CHECK of each link in ``CHANGE_LINKS``."""
+    table = 'cambios_sgc'
+    constraints: list = []
+    for column, (origin, target) in CHANGE_LINKS.items():
+        constraints += [
+            db.ForeignKeyConstraint(
+                [column], [target],
+                name=f"fk_{table}_{column}_{target.split('.')[0]}", ondelete='RESTRICT',
+            ),
+            db.Index(f'ix_{table}_{column}', column),
+            db.CheckConstraint(f"{column} IS NULL OR origen = '{origin.name}'",
+                               name=f'ck_{table}_{column.removesuffix("_id")}'),
+        ]
+    return tuple(constraints)
+
+
+# The processes and documents a change affects (decision CP1); plain tables,
+# not audited themselves: their changes are recorded on the change's own rows
+# (``proceso_ids``, ``documento_ids``). Both keys are ``ON DELETE RESTRICT``: a
+# change keeps the processes and documents it cites (documents are never
+# deleted anyway), and its links go before it does.
+cambio_procesos = db.Table(
+    'cambio_procesos',
+    db.Column('cambio_id', db.Integer, nullable=False),
+    db.Column('proceso_id', db.Integer, nullable=False),
+    db.PrimaryKeyConstraint('cambio_id', 'proceso_id', name='pk_cambio_procesos'),
+    db.ForeignKeyConstraint(
+        ['cambio_id'], ['cambios_sgc.id'],
+        name='fk_cambio_procesos_cambio_id_cambios_sgc', ondelete='RESTRICT',
+    ),
+    db.ForeignKeyConstraint(
+        ['proceso_id'], ['procesos_operacion.id_proceso'],
+        name='fk_cambio_procesos_proceso_id_procesos_operacion', ondelete='RESTRICT',
+    ),
+    db.Index('ix_cambio_procesos_proceso_id', 'proceso_id'),
+)
+
+cambio_documentos = db.Table(
+    'cambio_documentos',
+    db.Column('cambio_id', db.Integer, nullable=False),
+    db.Column('documento_id', db.Integer, nullable=False),
+    db.PrimaryKeyConstraint('cambio_id', 'documento_id', name='pk_cambio_documentos'),
+    db.ForeignKeyConstraint(
+        ['cambio_id'], ['cambios_sgc.id'],
+        name='fk_cambio_documentos_cambio_id_cambios_sgc', ondelete='RESTRICT',
+    ),
+    db.ForeignKeyConstraint(
+        ['documento_id'], ['documents.id'],
+        name='fk_cambio_documentos_documento_id_documents', ondelete='RESTRICT',
+    ),
+    db.Index('ix_cambio_documentos_documento_id', 'documento_id'),
+)
+
+
+class CambioSGC(RecordMetadataMixin, db.Model):
+    """A planned change to the QMS (ISO 9001 clause 6.3, decisions CP1-CP4 of ``change-planning``).
+
+    Its origin, and optionally the record behind it (``CHANGE_LINKS``); the
+    purpose (``proposito``) and the considerations of 6.3: potential
+    consequences (a), integrity of the QMS (b), resources (c) and
+    responsibilities and authorities (d), which the service requires to approve
+    it; how it is communicated; an owner, the proposal and planned dates, the
+    processes and documents it affects and the tasks that carry it out. Each
+    stage of its lifecycle (approval, implementation, effectiveness review,
+    cancellation) has columns that only the states carrying them hold (CHECK
+    constraints); the effectiveness reviewer is never the owner. People and
+    records it cites cannot be deleted.
+    """
+
+    __tablename__ = 'cambios_sgc'
+    __table_args__ = (
+        *_change_links(),
+        db.CheckConstraint(_CHANGE_APPROVAL, name='ck_cambios_sgc_aprobacion'),
+        db.CheckConstraint(_CHANGE_IMPLEMENTATION, name='ck_cambios_sgc_implantacion'),
+        db.CheckConstraint(_CHANGE_EFFECTIVENESS, name='ck_cambios_sgc_revision_eficacia'),
+        db.CheckConstraint(_INEFFECTIVE_EXPLAINED, name='ck_cambios_sgc_comentario_eficacia'),
+        db.CheckConstraint(_INDEPENDENT_REVIEWER, name='ck_cambios_sgc_revisor_eficacia'),
+        db.CheckConstraint(_CHANGE_CANCELLATION, name='ck_cambios_sgc_cancelacion'),
+        db.ForeignKeyConstraint(
+            ['responsable_id'], ['personas.id'],
+            name='fk_cambios_sgc_responsable_id_personas', ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['aprobado_por_id'], ['personas.id'],
+            name='fk_cambios_sgc_aprobado_por_id_personas', ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['revisor_eficacia_id'], ['personas.id'],
+            name='fk_cambios_sgc_revisor_eficacia_id_personas', ondelete='RESTRICT',
+        ),
+        db.Index('ix_cambios_sgc_responsable_id', 'responsable_id'),
+        db.Index('ix_cambios_sgc_aprobado_por_id', 'aprobado_por_id'),
+        db.Index('ix_cambios_sgc_revisor_eficacia_id', 'revisor_eficacia_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    titulo = db.Column(db.String(200), nullable=False)
+    descripcion = db.Column(db.Text, nullable=False)
+    origen = db.Column(text_enum(OrigenCambio, 'ck_cambios_sgc_origen'), nullable=False)
+    accion_revision_id = db.Column(db.Integer, nullable=True)
+    no_conformidad_id = db.Column(db.Integer, nullable=True)
+    auditoria_id = db.Column(db.Integer, nullable=True)
+    riesgo_id = db.Column(db.Integer, nullable=True)
+    oportunidad_id = db.Column(db.Integer, nullable=True)
+    cuestion_id = db.Column(db.Integer, nullable=True)
+    proposito = db.Column(db.Text, nullable=False)  # 6.3 a: the purpose
+    consecuencias = db.Column(db.Text)  # 6.3 a: its potential consequences
+    integridad = db.Column(db.Text)  # 6.3 b: the integrity of the QMS
+    recursos = db.Column(db.Text)  # 6.3 c: the resources available
+    responsabilidades = db.Column(db.Text)  # 6.3 d: responsibilities and authorities
+    comunicacion = db.Column(db.Text)  # to whom and how it is communicated
+    responsable_id = db.Column(db.Integer, nullable=False)
+    fecha_propuesta = db.Column(db.Date, nullable=False)
+    fecha_prevista = db.Column(db.Date)  # the planned implementation
+    estado = db.Column(
+        text_enum(EstadoCambio, 'ck_cambios_sgc_estado'),
+        nullable=False,
+        default=EstadoCambio.propuesto,
+        server_default=EstadoCambio.propuesto.name,
+    )
+    aprobado_por_id = db.Column(db.Integer, nullable=True)
+    fecha_aprobacion = db.Column(db.Date)
+    fecha_implantacion = db.Column(db.Date)
+    eficacia = db.Column(text_enum(EficaciaCambio, 'ck_cambios_sgc_eficacia'))
+    fecha_eficacia = db.Column(db.Date)
+    revisor_eficacia_id = db.Column(db.Integer, nullable=True)
+    comentario_eficacia = db.Column(db.Text)  # required when ``no_eficaz``
+    motivo_cancelacion = db.Column(db.Text)
+    fecha_cancelacion = db.Column(db.Date)
+
+    # One-way on purpose, like ``Proveedor.procesos``: a back-reference would mark
+    # the cited records as changed (and unaudited) whenever a change's links change.
+    accion_revision = db.relationship('AccionRevision')
+    no_conformidad = db.relationship('NoConformidad')
+    auditoria = db.relationship('Auditoria')
+    riesgo = db.relationship('Riesgo')
+    oportunidad = db.relationship('Oportunidad')
+    cuestion = db.relationship('CuestionContexto')
+    responsable = db.relationship('Person', foreign_keys='CambioSGC.responsable_id')
+    aprobado_por = db.relationship('Person', foreign_keys='CambioSGC.aprobado_por_id')
+    revisor_eficacia = db.relationship('Person', foreign_keys='CambioSGC.revisor_eficacia_id')
+    procesos = db.relationship(
+        'ProcesoOperacion',
+        secondary=cambio_procesos,
+        order_by='ProcesoOperacion.proceso',
+        lazy='selectin',
+    )
+    documentos = db.relationship(
+        'Document',
+        secondary=cambio_documentos,
+        order_by='Document.code',
+        lazy='selectin',
+    )
+    # Read-only in practice: tasks are written on their own rows (``cambio_id``),
+    # so the change is not marked as changed. ``passive_deletes='all'`` leaves the
+    # foreign key to refuse deleting a change that still has tasks.
+    tareas = db.relationship(
+        'TareaCambio',
+        order_by=lambda: (TareaCambio.fecha_limite, TareaCambio.id),
+        lazy='selectin',
+        passive_deletes='all',
+    )
+
+    @property
+    def proceso_ids(self) -> list[int]:
+        """Ids of the affected processes, ascending."""
+        return sorted(process.id_proceso for process in self.procesos)
+
+    @property
+    def documento_ids(self) -> list[int]:
+        """Ids of the affected documents, ascending."""
+        return sorted(document.id for document in self.documentos)
+
+    def __repr__(self):
+        return f'<CambioSGC {self.id} {self.titulo}>'
+
+
+class TareaCambio(RecordMetadataMixin, db.Model):
+    """A task that carries out a change to the QMS (decision CP4 of ``change-planning``).
+
+    An owner, a deadline and its follow-up; a completed task records when, and
+    only a completed one (CHECK). It never moves to another change, and a change
+    with tasks cannot be deleted before them.
+    """
+
+    __tablename__ = 'tareas_cambio'
+    __table_args__ = (
+        db.CheckConstraint(_ACTION_COMPLETION, name='ck_tareas_cambio_completada'),
+        db.ForeignKeyConstraint(
+            ['cambio_id'], ['cambios_sgc.id'],
+            name='fk_tareas_cambio_cambio_id_cambios_sgc', ondelete='RESTRICT',
+        ),
+        db.ForeignKeyConstraint(
+            ['responsable_id'], ['personas.id'],
+            name='fk_tareas_cambio_responsable_id_personas', ondelete='RESTRICT',
+        ),
+        db.Index('ix_tareas_cambio_cambio_id', 'cambio_id'),
+        db.Index('ix_tareas_cambio_responsable_id', 'responsable_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    cambio_id = db.Column(db.Integer, nullable=False)
+    descripcion = db.Column(db.Text, nullable=False)
+    responsable_id = db.Column(db.Integer, nullable=False)
+    fecha_limite = db.Column(db.Date, nullable=False)
+    estado = db.Column(
+        text_enum(EstadoTareaCambio, 'ck_tareas_cambio_estado'),
+        nullable=False,
+        default=EstadoTareaCambio.pendiente,
+        server_default=EstadoTareaCambio.pendiente.name,
+    )
+    fecha_completada = db.Column(db.Date)
+    resultado = db.Column(db.Text)
+
+    def __repr__(self):
+        return f'<TareaCambio {self.id} {self.estado.name if self.estado else None}>'
+
+
 # Registro de auditoría append-only: quién cambió qué y cuándo (ISO 9001 7.5.3)
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
