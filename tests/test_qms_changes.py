@@ -504,6 +504,17 @@ class EditingByStateTestCase(Helpers, ServiceBase):
                          (edited.responsable_id, edited.fecha_prevista, edited.comunicacion,
                           edited.proceso_ids, edited.documento_ids))
 
+    def test_an_approved_change_keeps_a_planned_date(self) -> None:
+        """Clearing it would take the change out of every overdue check (CP-2 review)."""
+        change = self.approved()
+        message = self.refused(errors().ValidationError, qc().changes.update, CLI, change.id,
+                               {"fecha_prevista": None, "comunicacion": "Correo"}, today=TODAY)
+        self.assertEqual(qc().PLANNED_DATE_KEPT, message)
+        self.assertEqual(date(2027, 2, 1),
+                         self.edit(change.id, {"fecha_prevista": date(2027, 2, 1)}).fecha_prevista)
+        proposed = self.change(fecha_prevista=date(2026, 12, 1))
+        self.assertIsNone(self.edit(proposed.id, {"fecha_prevista": None}).fecha_prevista)
+
     def test_implemented_reviewed_and_cancelled_changes_change_nothing(self) -> None:
         for make, state in ((self.implemented, EstadoCambio.implantado),
                             (self.reviewed, EstadoCambio.eficacia_revisada),
@@ -864,6 +875,33 @@ class FilterTestCase(Helpers, ServiceBase):
         page, total = qc().changes.list_page(db.session, who, page=1, per_page=2, today=TODAY)
         self.assertEqual(([proposed.id, on_time.id], 3), (self.ids(page), total))
 
+    def test_the_changes_with_an_overdue_task_while_still_open(self) -> None:
+        """``tareas_vencidas``: what the dashboard's overdue-task alert links (CP-3)."""
+        late = self.change(titulo="Con una tarea vencida")
+        self.task(late.id, fecha_limite=YESTERDAY)
+        self.task(late.id, fecha_limite=TOMORROW)
+        on_time = self.change(titulo="Al día")
+        self.task(on_time.id, fecha_limite=TOMORROW)
+        done = self.change(titulo="Tarea hecha")
+        self.complete(self.task(done.id, fecha_limite=YESTERDAY).id)
+        stopped = self.change(titulo="Cancelado")
+        self.task(stopped.id, fecha_limite=YESTERDAY)
+        qc().cancel(db.session, self.admin(), stopped.id, motivo="Ya no hace falta", today=TODAY)
+        db.session.commit()
+        bare = self.change(titulo="Sin tareas")
+
+        def found(**filters):
+            return self.ids(qc().changes.list_(db.session, actor(OPERATIVO), today=TODAY,
+                                               **filters))
+
+        self.assertEqual([late.id], found(tareas_vencidas=True))
+        self.assertEqual([bare.id, stopped.id, done.id, on_time.id], found(tareas_vencidas=False))
+        self.assertEqual([], found(tareas_vencidas=True, estado="aprobado"))
+        self.refused(errors().ValidationError, qc().changes.list_, actor(), today=TODAY,
+                     tareas_vencidas="1")
+        with self.assertRaises(ValueError):
+            qc().changes.list_(db.session, actor(), tareas_vencidas=True, today=None)
+
     def test_bad_filter_values_are_refused(self) -> None:
         for filters in ({"estado": "Aprobado"}, {"origen": "cliente"},
                         {"fuera_de_plazo": "si"}, {"fuera_de_plazo": 1}, {"texto": 5}):
@@ -974,6 +1012,36 @@ class ReadersTestCase(Helpers, ServiceBase):
         self.refused(errors().PermissionDenied, qc().for_origin, actor(scopes={"write"}),
                      "riesgo", 1)
         self.assertEqual([], qc().for_origin(db.session, actor(), "riesgo", "1"))
+
+
+class WriteConflictTestCase(Helpers, ServiceBase):
+    def test_an_integrity_failure_while_auditing_is_a_write_conflict(self) -> None:
+        """An update and a transition translate it as a creation does (CP-2 review)."""
+        from sqlalchemy.exc import IntegrityError
+
+        admin = self.admin()
+        change = self.change(**PLAN)
+        self.task(change.id)
+        race = IntegrityError("INSERT INTO audit_log", {}, Exception("unique"))
+        writes = {
+            "create": lambda: qc().changes.create(db.session, CLI, CHANGE | {
+                "responsable_id": change.responsable_id}, today=TODAY),
+            "update": lambda: qc().changes.update(db.session, CLI, change.id,
+                                                  {"comunicacion": "Correo"}, today=TODAY),
+            "approve": lambda: qc().approve(db.session, admin, change.id, today=TODAY),
+            "cancel": lambda: qc().cancel(db.session, admin, change.id, motivo="Sin fondos",
+                                          today=TODAY),
+        }
+        for name, write in writes.items():
+            with self.subTest(write=name):
+                with patch.object(qc().audit, "record", side_effect=race):
+                    with self.assertRaises(errors().Conflict) as caught:
+                        write()
+                db.session.rollback()
+                self.assertEqual(qc().WRITE_CONFLICT, caught.exception.message)
+                self.assertIs(race, caught.exception.__cause__)
+        self.assertEqual(EstadoCambio.propuesto,
+                         qc().changes.get(db.session, CLI, change.id).estado)
 
 
 class PolicyTestCase(Helpers, ServiceBase):

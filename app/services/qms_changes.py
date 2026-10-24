@@ -57,10 +57,13 @@ Changes:
   ``cancelado`` one nothing (``READ_ONLY``).
 - Only a ``propuesto`` change is deleted, with its tasks (each with its own
   audit row) and its links.
+- An approved change keeps a planned date (``PLANNED_DATE_KEPT``): it may move,
+  never be cleared, or the change would drop out of every overdue check.
 - Filters: ``estado``, ``origen``, ``responsable_id``, ``proceso_id``,
   ``documento_id``, ``fuera_de_plazo`` (``aprobado`` with ``fecha_prevista``
-  before ``today``) and ``texto`` (in the title or the description, any case);
-  the latest proposed first.
+  before ``today``), ``tareas_vencidas`` (with a task ``is_overdue``) and
+  ``texto`` (in the title or the description, any case); the latest proposed
+  first.
 
 Tasks belong to one change, which they never leave, and are created, changed
 and deleted only while it is ``propuesto`` or ``aprobado`` (the change read
@@ -123,6 +126,9 @@ NOT_A_MAPPING = "Los datos deben ser un objeto con campos."
 PROPOSED_IN_FUTURE = "La fecha de propuesta no puede ser futura."
 PLANNED_BEFORE_PROPOSAL = (
     "La fecha prevista de implantación no puede ser anterior a la fecha de propuesta.")
+PLANNED_DATE_KEPT = (
+    "Un cambio aprobado necesita su fecha prevista de implantación: puedes cambiarla, pero no "
+    "quitarla.")
 LINK_NEEDS_ORIGIN = "El campo «{key}» solo se admite con el origen «{origen}»."
 CLEAR_LINK_FIRST = (
     "El cambio sigue vinculado a su origen «{origen}» por «{key}»; quita antes ese vínculo "
@@ -330,8 +336,7 @@ def _update(session: Session, actor: Actor, change_id: int, data: Mapping[str, A
     for key, value in (changes | linked).items():
         setattr(found, key, value)
     stamp_updated(found, actor)
-    audit.record(session, actor, "update", found, before=before, after=_snapshot(found))
-    _flush(session, WRITE_CONFLICT)
+    _record_update(session, actor, found, before)
     return found
 
 
@@ -378,6 +383,9 @@ def _check(session: Session, changes: Mapping[str, Any], found: CambioSGC | None
     proposed, planned = final("fecha_propuesta"), final("fecha_prevista")
     if planned is not None and proposed is not None and planned < proposed:
         raise ValidationError(PLANNED_BEFORE_PROPOSAL)
+    if (planned is None and "fecha_prevista" in changes and found is not None
+            and found.estado is EstadoCambio.aprobado):
+        raise ValidationError(PLANNED_DATE_KEPT)
     origin = final("origen")
     for column, (needed, _) in CHANGE_LINKS.items():
         if final(column) is not None and needed is not origin:
@@ -584,9 +592,22 @@ def _move(session: Session, actor: Actor, found: CambioSGC, **values: Any) -> Ca
     for key, value in values.items():
         setattr(found, key, value)
     stamp_updated(found, actor)
-    audit.record(session, actor, "update", found, before=before, after=_snapshot(found))
-    _flush(session, WRITE_CONFLICT)
+    _record_update(session, actor, found, before)
     return found
+
+
+def _record_update(session: Session, actor: Actor, found: CambioSGC,
+                   before: dict[str, Any]) -> None:
+    """The update's audit row (before and after), then the flush.
+
+    An integrity failure in either, an autoflush inside the audit row
+    included, is a ``Conflict``, as in ``_create``.
+    """
+    try:
+        audit.record(session, actor, "update", found, before=before, after=_snapshot(found))
+    except IntegrityError as exc:
+        raise Conflict(WRITE_CONFLICT) from exc
+    _flush(session, WRITE_CONFLICT)
 
 
 # -- tasks (decision CP4) --------------------------------------------------------------
@@ -687,8 +708,9 @@ def _late_task(today: date) -> Any:
 def _change_conditions(estado: Any = None, origen: Any = None,
                        responsable_id: int | None = None, proceso_id: int | None = None,
                        documento_id: int | None = None, fuera_de_plazo: bool | None = None,
-                       texto: str | None = None, today: date | None = None) -> list[Any]:
-    """Change filters (AND); ``fuera_de_plazo`` needs ``today``, the adapter's date."""
+                       texto: str | None = None, tareas_vencidas: bool | None = None,
+                       today: date | None = None) -> list[Any]:
+    """Change filters (AND); ``fuera_de_plazo`` and ``tareas_vencidas`` need ``today``."""
     where: list[Any] = []
     if estado:
         where.append(CambioSGC.estado == _member(estado, EstadoCambio, "estado"))
@@ -704,6 +726,9 @@ def _change_conditions(estado: Any = None, origen: Any = None,
     if fuera_de_plazo is not None:
         late = _late(_today(today))
         where.append(late if _flag(fuera_de_plazo, "fuera_de_plazo") else not_(late))
+    if tareas_vencidas is not None:
+        late = CambioSGC.id.in_(select(TareaCambio.cambio_id).where(_late_task(_today(today))))
+        where.append(late if _flag(tareas_vencidas, "tareas_vencidas") else not_(late))
     if texto is not None:
         if not isinstance(texto, str):
             raise ValidationError(BAD_FILTER.format(key="texto"))
