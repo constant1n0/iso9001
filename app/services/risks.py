@@ -43,7 +43,9 @@ Risks and opportunities:
   ``fecha_revision``, the next review, is never before it. A record is open
   unless it is a ``cerrado`` risk or an ``aprovechada`` or ``descartada``
   opportunity; only an open one is overdue for review (``revision_vencida``).
-- A record with actions is never deleted (``Conflict``).
+- A record with actions is never deleted (``Conflict``), nor one that a change
+  to the QMS names as its origin (``RISK_CITED_BY_CHANGES``,
+  ``OPPORTUNITY_CITED_BY_CHANGES``, CP1 of ``change-planning``).
 - Both filter by ``cuestion_id`` too. The screens (RO-3) also filter by
   ``abierto``, risks by one cell of the heat map (``probabilidad`` and
   ``impacto``, each alone too) and by ``alto_sin_accion``, the open high or
@@ -76,7 +78,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
-    ESCALA_MAX, ESCALA_MIN, AccionRiesgo, CuestionContexto, DecisionOportunidad,
+    ESCALA_MAX, ESCALA_MIN, AccionRiesgo, CambioSGC, CuestionContexto, DecisionOportunidad,
     EficaciaAccion, EstadoAccionRiesgo, EstadoCuestion, EstadoOportunidad, EstadoRiesgo,
     NivelRiesgo, Oportunidad, OrigenRiesgo, ParteInteresada, PrioridadOportunidad,
     ProcesoOperacion, Riesgo, TratamientoRiesgo, nivel, prioridad,
@@ -109,6 +111,9 @@ RISK_HAS_ACTIONS = (
     "No se puede eliminar un riesgo que tiene acciones; elimina antes sus acciones.")
 OPPORTUNITY_HAS_ACTIONS = (
     "No se puede eliminar una oportunidad que tiene acciones; elimina antes sus acciones.")
+RISK_CITED_BY_CHANGES = "No se puede eliminar un riesgo al que se refieren cambios en el SGC."
+OPPORTUNITY_CITED_BY_CHANGES = (
+    "No se puede eliminar una oportunidad a la que se refieren cambios en el SGC.")
 DELETE_CONFLICT = (
     "No se ha podido eliminar el registro porque sus datos han cambiado entretanto; "
     "vuelve a intentarlo.")
@@ -277,9 +282,9 @@ _PAIRS = {Riesgo: (("probabilidad", "impacto"), ("probabilidad_residual", "impac
           Oportunidad: (("beneficio", "viabilidad"),)}
 
 
-def _actions_foreign_key(target: type) -> str:
-    """Name of the actions' foreign key to ``target``, as the model declares it."""
-    (name,) = {fk.constraint.name for fk in AccionRiesgo.__table__.foreign_keys
+def _foreign_key(model: type, target: type) -> str:
+    """Name of ``model``'s foreign key to ``target``, as the model declares it."""
+    (name,) = {fk.constraint.name for fk in model.__table__.foreign_keys
                if fk.column.table is target.__table__}
     return name
 
@@ -287,10 +292,14 @@ def _actions_foreign_key(target: type) -> str:
 # -- risks and opportunities -----------------------------------------------------------
 
 
-def _writes(spec: crud.Spec, has_actions: str) -> tuple[Callable, Callable, Callable]:
+def _writes(spec: crud.Spec, has_actions: str,
+            cited_by_changes: str) -> tuple[Callable, Callable, Callable]:
     """``create``, ``update`` and ``delete`` of the risks' or the opportunities' register."""
     model = spec.model
-    foreign_key = _actions_foreign_key(model)
+    # The message for each foreign key whose violation means "still has actions"
+    # or "still cited by a change".
+    refusals = {_foreign_key(AccionRiesgo, model): has_actions,
+                _foreign_key(CambioSGC, model): cited_by_changes}
 
     def create(session: Session, actor: Actor, data: Mapping[str, Any], *, today: date) -> Any:
         """Create a record; ``fecha_identificacion`` defaults to ``today``."""
@@ -316,19 +325,23 @@ def _writes(spec: crud.Spec, has_actions: str) -> tuple[Callable, Callable, Call
         return crud.update(spec, session, actor, found.id, data)
 
     def delete(session: Session, actor: Actor, record_id: int) -> None:
-        """Hard-delete a record without actions; an action added meanwhile meets the key."""
+        """Hard-delete a record without actions that no change to the QMS cites.
+
+        An action or a citation added meanwhile meets its foreign key.
+        """
         policy.require(actor, Action.DELETE, RESOURCE)
         found = _locked(session, model, record_id, read=False)
         if found is None:
             raise NotFound(spec.not_found)
         if _has_actions(session, model, found.id):
             raise Conflict(has_actions)
+        if _cited_by_changes(session, model, found.id):
+            raise Conflict(cited_by_changes)
         try:
             crud.delete(spec, session, actor, found.id)
         except Conflict as exc:
             cause = exc.__cause__
-            mine = _violated_constraint(cause) == foreign_key
-            raise Conflict(has_actions if mine else DELETE_CONFLICT) from cause
+            raise Conflict(refusals.get(_violated_constraint(cause), DELETE_CONFLICT)) from cause
 
     return create, update, delete
 
@@ -562,9 +575,10 @@ def is_overdue(action: AccionRiesgo, *, today: date) -> bool:
 
 # -- the registers ---------------------------------------------------------------------
 
-_create_risk, _update_risk, _delete_risk = _writes(RISK_SPEC, RISK_HAS_ACTIONS)
+_create_risk, _update_risk, _delete_risk = _writes(
+    RISK_SPEC, RISK_HAS_ACTIONS, RISK_CITED_BY_CHANGES)
 _create_opportunity, _update_opportunity, _delete_opportunity = _writes(
-    OPPORTUNITY_SPEC, OPPORTUNITY_HAS_ACTIONS)
+    OPPORTUNITY_SPEC, OPPORTUNITY_HAS_ACTIONS, OPPORTUNITY_CITED_BY_CHANGES)
 
 risks = Register(
     SPEC=RISK_SPEC,
@@ -668,6 +682,11 @@ def _changed(spec: crud.Spec, found: Any, data: Any) -> bool:
 
 def _has_actions(session: Session, model: type, record_id: int) -> bool:
     column = AccionRiesgo.riesgo_id if model is Riesgo else AccionRiesgo.oportunidad_id
+    return bool(session.scalar(select(exists().where(column == record_id))))
+
+
+def _cited_by_changes(session: Session, model: type, record_id: int) -> bool:
+    column = CambioSGC.riesgo_id if model is Riesgo else CambioSGC.oportunidad_id
     return bool(session.scalar(select(exists().where(column == record_id))))
 
 

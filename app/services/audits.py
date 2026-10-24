@@ -44,7 +44,9 @@ raises ``Conflict`` asking to delete them first, and the foreign key
 (``ON DELETE RESTRICT``) refuses one recorded after that check. When the
 database refuses a delete, the message mentions findings only if the refusal
 names that foreign key (``FINDINGS_FK``, read from the model; PostgreSQL names
-it, SQLite names no constraint); otherwise it is ``DELETE_CONFLICT``.
+it, SQLite names no constraint); otherwise it is ``DELETE_CONFLICT``. Nor is an
+audit that a change to the QMS names as its origin deleted
+(``CITED_BY_CHANGES``, CP1 of ``change-planning``; ``CHANGES_FK`` likewise).
 """
 
 from __future__ import annotations
@@ -58,7 +60,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
-    Auditoria, EstadoAuditoriaEnum, HallazgoAuditoria, Person, ProgramaAuditoria,
+    Auditoria, CambioSGC, EstadoAuditoriaEnum, HallazgoAuditoria, Person, ProgramaAuditoria,
 )
 from . import audit, crud, fields, people, policy
 from .actor import Actor
@@ -78,16 +80,18 @@ DELETE_CONFLICT = (
     "No se ha podido eliminar la auditoría porque sus datos han cambiado entretanto; "
     "vuelve a intentarlo."
 )
+CITED_BY_CHANGES = "No se puede eliminar una auditoría a la que se refieren cambios en el SGC."
 
 
-def _findings_foreign_key() -> str:
-    """Name of the findings' foreign key to audits, as ``HallazgoAuditoria`` declares it."""
-    (name,) = {fk.constraint.name for fk in HallazgoAuditoria.__table__.foreign_keys
+def _foreign_key(model: type) -> str:
+    """Name of ``model``'s foreign key to audits, as the model declares it."""
+    (name,) = {fk.constraint.name for fk in model.__table__.foreign_keys
                if fk.column.table is Auditoria.__table__}
     return name
 
 
-FINDINGS_FK = _findings_foreign_key()
+FINDINGS_FK = _foreign_key(HallazgoAuditoria)
+CHANGES_FK = _foreign_key(CambioSGC)
 
 
 def get(session: Session, actor: Actor, audit_id: int) -> Auditoria:
@@ -317,6 +321,10 @@ def _has_findings(session: Session, audit_id: int) -> bool:
         select(exists().where(HallazgoAuditoria.auditoria_id == audit_id))))
 
 
+def _cited_by_changes(session: Session, audit_id: int) -> bool:
+    return bool(session.scalar(select(exists().where(CambioSGC.auditoria_id == audit_id))))
+
+
 def create(session: Session, actor: Actor, data: Mapping[str, Any]) -> Auditoria:
     """Create an audit; area, date, result and the auditor (name or person) are required."""
     policy.require(actor, Action.CREATE, Resource.AUDITS)
@@ -365,15 +373,21 @@ def update(
 
 
 def delete(session: Session, actor: Actor, audit_id: int) -> None:
-    """Hard-delete an audit without findings, keeping its full snapshot in the audit log."""
+    """Hard-delete an audit without findings that no change to the QMS cites.
+
+    Its full snapshot stays in the audit log.
+    """
     policy.require(actor, Action.DELETE, Resource.AUDITS)
     found = _load(session, audit_id)
     if _has_findings(session, found.id):
         raise Conflict(HAS_FINDINGS)
+    if _cited_by_changes(session, found.id):
+        raise Conflict(CITED_BY_CHANGES)
     audit.record(session, actor, "delete", found, before=_snapshot(found))
     session.delete(found)
     try:
         session.flush()
     except IntegrityError as exc:  # e.g. a finding recorded after the check
-        findings = _violated_constraint(exc) == FINDINGS_FK
-        raise Conflict(HAS_FINDINGS if findings else DELETE_CONFLICT) from exc
+        message = {FINDINGS_FK: HAS_FINDINGS, CHANGES_FK: CITED_BY_CHANGES}.get(
+            _violated_constraint(exc), DELETE_CONFLICT)
+        raise Conflict(message) from exc

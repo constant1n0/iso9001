@@ -46,7 +46,9 @@ the first one's outcome.
 
 An audit finding may cite the nonconformity it created (``audit_findings``);
 ``delete`` clears that link with an audit row on the finding before the row goes
-(the foreign key would set it NULL anyway, unaudited).
+(the foreign key would set it NULL anyway, unaudited). A nonconformity that a
+change to the QMS names as its origin is never deleted (``CITED_BY_CHANGES``,
+CP1 of ``change-planning``).
 
 A nonconformity whose origin is ``proveedor`` may name the external provider
 (``proveedor_id``, decision EP4 of ``external-providers``); naming one with any
@@ -62,12 +64,12 @@ from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import false, func, select
+from sqlalchemy import exists, false, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
-    AccionCorrectiva, EstadoNoConformidad, GravedadNoConformidad, HallazgoAuditoria,
+    AccionCorrectiva, CambioSGC, EstadoNoConformidad, GravedadNoConformidad, HallazgoAuditoria,
     NoConformidad, OrigenNoConformidad, Proveedor, ResultadoVerificacion, RoleEnum,
 )
 from . import audit, crud, fields, people, policy
@@ -103,6 +105,9 @@ CLEAR_PROVIDER_FIRST = (
     "La no conformidad indica un proveedor: quita antes el proveedor para cambiar el origen."
 )
 UNKNOWN_PROVIDER = "El campo «proveedor_id» no corresponde a ningún proveedor."
+CITED_BY_CHANGES = (
+    "No se puede eliminar una no conformidad a la que se refieren cambios en el SGC."
+)
 
 
 def get(session: Session, actor: Actor, nc_id: int) -> NoConformidad:
@@ -318,6 +323,10 @@ def _flush(session: Session) -> None:
         session.flush()
     except IntegrityError as exc:
         raise Conflict() from exc
+
+
+def _cited_by_changes(session: Session, nc_id: int) -> bool:
+    return bool(session.scalar(select(exists().where(CambioSGC.no_conformidad_id == nc_id))))
 
 
 def create(session: Session, actor: Actor, data: Mapping[str, Any]) -> NoConformidad:
@@ -573,10 +582,14 @@ def _set_state(
 def delete(session: Session, actor: Actor, nc_id: int) -> None:
     """Hard-delete a nonconformity and its corrective actions, with full audit snapshots.
 
-    The audit finding that cites it keeps existing, without the link.
+    The audit finding that cites it keeps existing, without the link. One a
+    change to the QMS cites is refused (``Conflict``) before anything is
+    deleted; a citation added after the check meets the foreign key at the flush.
     """
     policy.require(actor, Action.DELETE, Resource.NONCONFORMITIES)
     nc = lock(session, nc_id)
+    if _cited_by_changes(session, nc.id):
+        raise Conflict(CITED_BY_CHANGES)
     for action in _actions(session, nc.id):
         audit.record(session, actor, "delete", action)
         session.delete(action)

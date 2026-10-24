@@ -36,9 +36,10 @@ clock), and so do the lists whose ``revision_vencida`` filter is used.
   ``fecha_revision``, the next review, is never before it. ``estado`` starts
   ``vigente``; ``superada`` marks an issue that no longer applies.
 - An issue that risks or opportunities cite (their ``cuestion_id``) is never
-  deleted (``CITED_BY_RISKS``). Their ``ON DELETE RESTRICT`` foreign keys refuse
-  a citation the check did not see, and PostgreSQL names them, so the message
-  still says why.
+  deleted (``CITED_BY_RISKS``), nor one that a change to the QMS names as its
+  origin (``CITED_BY_CHANGES``, CP1 of ``change-planning``). Their ``ON DELETE
+  RESTRICT`` foreign keys refuse a citation the checks did not see, and
+  PostgreSQL names them, so the message still says why.
 - Filters: ``tipo``, ``categoria``, ``pertinente``, ``cambio_climatico``,
   ``estado``, ``responsable_id`` and ``revision_vencida`` (a ``vigente`` issue
   whose next review is before ``today``); by type, category and title.
@@ -65,8 +66,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
-    CATEGORIAS_POR_TIPO, CategoriaCuestion, CuestionContexto, EfectoCuestion, EstadoCuestion,
-    Oportunidad, ParteInteresada, Riesgo, TipoContexto,
+    CATEGORIAS_POR_TIPO, CambioSGC, CategoriaCuestion, CuestionContexto, EfectoCuestion,
+    EstadoCuestion, Oportunidad, ParteInteresada, Riesgo, TipoContexto,
 )
 from . import crud, fields, people, policy, risks, stakeholders
 from .actor import Actor
@@ -97,6 +98,8 @@ REVIEW_BEFORE_IDENTIFICATION = (
 CITED_BY_RISKS = (
     "No se puede eliminar una cuestión del contexto a la que se refieren riesgos u "
     "oportunidades; quítala antes de esos registros.")
+CITED_BY_CHANGES = (
+    "No se puede eliminar una cuestión del contexto a la que se refieren cambios en el SGC.")
 DELETE_CONFLICT = (
     "No se ha podido eliminar la cuestión del contexto porque sus datos han cambiado "
     "entretanto; vuelve a intentarlo.")
@@ -180,21 +183,23 @@ def _update(session: Session, actor: Actor, issue_id: int, data: Mapping[str, An
 
 
 def _delete(session: Session, actor: Actor, issue_id: int) -> None:
-    """Hard-delete an issue no risk or opportunity cites, keeping its audit snapshot.
+    """Hard-delete an issue no risk, opportunity or change cites, keeping its audit snapshot.
 
-    A citation added after the check meets a foreign key at the flush;
+    A citation added after the checks meets a foreign key at the flush;
     PostgreSQL names it, so the message still says why.
     """
     policy.require(actor, Action.DELETE, RESOURCE)
     found = _locked(session, issue_id)
     if _is_cited(session, found.id):
         raise Conflict(CITED_BY_RISKS)
+    if _cited_by_changes(session, found.id):
+        raise Conflict(CITED_BY_CHANGES)
     try:
         crud.delete(SPEC, session, actor, found.id)
     except Conflict as exc:
         cause = exc.__cause__
-        cited = _violated_constraint(cause) in _CITING_KEYS
-        raise Conflict(CITED_BY_RISKS if cited else DELETE_CONFLICT) from cause
+        message = _CITING_KEYS.get(_violated_constraint(cause), DELETE_CONFLICT)
+        raise Conflict(message) from cause
 
 
 def _check_issue(data: Any, found: CuestionContexto | None, today: date) -> None:
@@ -406,6 +411,10 @@ def _is_cited(session: Session, issue_id: int) -> bool:
                for column in (Riesgo.cuestion_id, Oportunidad.cuestion_id))
 
 
+def _cited_by_changes(session: Session, issue_id: int) -> bool:
+    return bool(session.scalar(select(exists().where(CambioSGC.cuestion_id == issue_id))))
+
+
 def _locked(session: Session, issue_id: Any) -> CuestionContexto:
     """The issue loaded afresh with its row locked (``FOR UPDATE``), or ``NotFound``."""
     found = None
@@ -469,5 +478,6 @@ def _foreign_key(model: type) -> str:
     return name
 
 
-# The foreign keys whose violation means "still cited by a risk or an opportunity".
-_CITING_KEYS = frozenset({_foreign_key(Riesgo), _foreign_key(Oportunidad)})
+# The message for each foreign key whose violation means "still cited".
+_CITING_KEYS = {_foreign_key(Riesgo): CITED_BY_RISKS, _foreign_key(Oportunidad): CITED_BY_RISKS,
+                _foreign_key(CambioSGC): CITED_BY_CHANGES}

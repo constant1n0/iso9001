@@ -34,7 +34,8 @@ Reviews (``reviews``, ``RevisionDireccion``):
   review ``borrador`` -> ``celebrada`` -> ``cerrada`` (MR4), with no reopening.
 - A draft is editable; a held review takes only comments and conclusions; a
   closed one nothing. An edit that changes nothing writes nothing.
-- Only a draft without actions is deleted (MR6).
+- Only a draft without actions is deleted (MR6); one whose actions a change to
+  the QMS cites says so (``ACTIONS_CITED_BY_CHANGES``).
 
 ``hold`` and ``close`` are for administrators and never on the ``mcp``
 channel. Holding needs a meeting date not after ``today`` and an attendee; it
@@ -49,7 +50,9 @@ chosen; ``fecha_completada`` is given exactly when the action is
 ``completada``, never after ``today`` nor before the review's date. Actions
 are added, edited and deleted while their review is a draft or held; once it
 is closed only ``estado``, ``fecha_completada`` and ``resultado`` change and
-none is deleted. An action never moves to another review. It is overdue
+none is deleted. An action a change to the QMS cites is never deleted
+(``ACTION_CITED_BY_CHANGES``, CP1 of ``change-planning``). An action never moves
+to another review. It is overdue
 (``is_overdue``, the ``vencida`` filter, ``overdue_actions``, ``action_counts``)
 when pending or in progress after its deadline.
 
@@ -71,13 +74,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
-    AccionCorrectiva, AccionRevision, AlcanceSGC, Auditoria, AuditoriaIndicador, Capacitacion,
-    EstadoAccionRevision, EstadoAlcance, EstadoAuditoriaEnum, EstadoNoConformidad, EstadoObjetivo,
-    EstadoProveedor, EstadoRevisionDireccion, EvaluacionProveedor, GravedadNoConformidad,
-    HallazgoAuditoria, MedicionObjetivo, Mejora, NivelRiesgo, NoConformidad, ObjetivoCalidad,
-    Oportunidad, OrigenNoConformidad, ParteInteresada, Person, Proveedor, ResultadoEvaluacion,
-    ResultadoVerificacion, RevisionDireccion, Riesgo, RoleEnum, SatisfaccionCliente,
-    TipoAccionRevision, TipoHallazgo,
+    AccionCorrectiva, AccionRevision, AlcanceSGC, Auditoria, AuditoriaIndicador, CambioSGC,
+    Capacitacion, EstadoAccionRevision, EstadoAlcance, EstadoAuditoriaEnum, EstadoNoConformidad,
+    EstadoObjetivo, EstadoProveedor, EstadoRevisionDireccion, EvaluacionProveedor,
+    GravedadNoConformidad, HallazgoAuditoria, MedicionObjetivo, Mejora, NivelRiesgo,
+    NoConformidad, ObjetivoCalidad, Oportunidad, OrigenNoConformidad, ParteInteresada, Person,
+    Proveedor, ResultadoEvaluacion, ResultadoVerificacion, RevisionDireccion, Riesgo, RoleEnum,
+    SatisfaccionCliente, TipoAccionRevision, TipoHallazgo,
 )
 from . import (
     audit, context_issues, crud, fields, people, policy, providers, quality_objectives, risks,
@@ -113,6 +116,12 @@ ONLY_COMMENTS = "Una revisión celebrada solo admite cambios en los comentarios 
 REVIEW_CLOSED = "Una revisión cerrada no se puede modificar."
 DELETE_NOT_DRAFT = "Solo se puede eliminar una revisión en borrador."
 HAS_ACTIONS = "No se puede eliminar una revisión que tiene acciones; elimina antes sus acciones."
+ACTIONS_CITED_BY_CHANGES = (
+    "No se puede eliminar una revisión con acciones a las que se refieren cambios en el SGC."
+)
+ACTION_CITED_BY_CHANGES = (
+    "No se puede eliminar una acción de la revisión a la que se refieren cambios en el SGC."
+)
 DELETE_CONFLICT = (
     "No se ha podido eliminar la revisión porque sus datos han cambiado entretanto; "
     "vuelve a intentarlo."
@@ -263,6 +272,8 @@ def _delete_review(session: Session, actor: Actor, review_id: int) -> None:
     found = _lock_review(session, review_id)
     if found.estado is not EstadoRevisionDireccion.borrador:
         raise ValidationError(DELETE_NOT_DRAFT)
+    if _actions_cited_by_changes(session, found.id):
+        raise Conflict(ACTIONS_CITED_BY_CHANGES)
     if _has_actions(session, found.id):
         raise Conflict(HAS_ACTIONS)
     audit.record(session, actor, "delete", found, before=_snapshot(found))
@@ -461,11 +472,17 @@ def _update_action(session: Session, actor: Actor, action_id: int, data: Mapping
 
 
 def _delete_action(session: Session, actor: Actor, action_id: int) -> None:
-    """Hard-delete an action of a review that is not closed, keeping an audit snapshot."""
+    """Hard-delete an action of a review that is not closed, keeping an audit snapshot.
+
+    One a change to the QMS cites is refused; a citation added after the check
+    meets the foreign key at the flush.
+    """
     policy.require(actor, Action.DELETE, RESOURCE)
     found = crud.get(ACTION_SPEC, session, actor, action_id)
     if _actions_review(session, found.revision_id).estado is EstadoRevisionDireccion.cerrada:
         raise ValidationError(REVIEW_CLOSED_FOR_ACTIONS)
+    if _cited_by_changes(session, found.id):
+        raise Conflict(ACTION_CITED_BY_CHANGES)
     crud.delete(ACTION_SPEC, session, actor, found.id)
 
 
@@ -1054,6 +1071,17 @@ def _member(value: Any, enum_cls: Any, message: str) -> Any:
 
 def _has_actions(session: Session, review_id: int) -> bool:
     return bool(session.scalar(select(exists().where(AccionRevision.revision_id == review_id))))
+
+
+def _cited_by_changes(session: Session, action_id: int) -> bool:
+    return bool(session.scalar(select(exists().where(
+        CambioSGC.accion_revision_id == action_id))))
+
+
+def _actions_cited_by_changes(session: Session, review_id: int) -> bool:
+    return bool(session.scalar(select(exists().where(
+        CambioSGC.accion_revision_id == AccionRevision.id,
+        AccionRevision.revision_id == review_id))))
 
 
 def _locked(session: Session, review_id: Any, *, read: bool) -> RevisionDireccion | None:
