@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form %}
+{% block title %}{{ customer.nombre }}{% endblock %}
+{% block crumb %}Clientes · Registro{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 8.2 · Cliente', customer.nombre) %}
+    {% if can('update', 'customers') %}<a class="btn" href="{{ url_for('cliente.edit_cliente', customer_id=customer.id) }}">Editar</a>{% endif %}
+    {% if can('delete', 'customers') %}{{ delete_form(url_for('cliente.delete_cliente', customer_id=customer.id), '¿Eliminar el cliente «' ~ customer.nombre ~ '»?') }}{% endif %}
+{% endcall %}
+<article class="card">
+    <header class="card__header"><h2 class="card__title">Datos de contacto</h2></header>
+    <ul class="list">{% for label, value in [('NIF', customer.nif), ('Persona de contacto', customer.contacto), ('Correo electrónico', customer.email), ('Teléfono', customer.telefono), ('Notas', customer.notas)] %}
+        <li class="list__item"><span class="list__primary">{{ label }}</span><span class="list__secondary">{{ value or '—' }}</span></li>
+    {% endfor %}</ul>
+</article>
+<p><a href="{{ url_for('satisfaccion_cliente.listar_encuestas', cliente_id=customer.id) }}">Encuestas de satisfacción</a> · <a href="{{ url_for('reclamacion.listar_reclamaciones', cliente_id=customer.id) }}">Reclamaciones</a></p>
+<p class="muted">Un cliente con encuestas o reclamaciones no se puede eliminar.</p>
+{% endblock %}

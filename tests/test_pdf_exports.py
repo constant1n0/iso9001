@@ -8,6 +8,7 @@ import zlib
 from datetime import date
 
 import test_auth_bootstrap as bootstrap
+from mcp_support import survey_values
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db
@@ -76,7 +77,7 @@ class PdfExportsTestCase(unittest.TestCase):
                 auditoria,
                 nonconformity,
                 Capacitacion(tema="ISO 9001", fecha=DAY, personal="Equipo", duracion_horas=4),
-                SatisfaccionCliente(fecha_encuesta=DAY, cliente="Farmacia Sol", puntuacion=9),
+                SatisfaccionCliente(fecha_encuesta=DAY, **survey_values("Farmacia Sol"), puntuacion=9),
                 owner,
                 verifier,
             ])

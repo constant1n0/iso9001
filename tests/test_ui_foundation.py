@@ -10,6 +10,7 @@ from datetime import date
 from unittest.mock import patch
 
 import test_auth_bootstrap as bootstrap
+from mcp_support import survey_values
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db
@@ -125,7 +126,7 @@ class UiFoundationTestCase(unittest.TestCase):
             for day, score in ((date(2026, 8, 3), 6), (date(2026, 8, 20), 8),
                                (date(2026, 9, 1), 9)):
                 db.session.add(
-                    SatisfaccionCliente(fecha_encuesta=day, cliente="C", puntuacion=score)
+                    SatisfaccionCliente(fecha_encuesta=day, **survey_values("C"), puntuacion=score)
                 )
             db.session.commit()
         self._login("admin")

@@ -16,7 +16,9 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from ..forms import SatisfaccionClienteForm
 from ..extensions import db
-from ..services import satisfaction
+from ..services import clientes, satisfaction
+from ..models import CanalContacto, TipoEncuesta
+from .people_routes import saved
 from flask_login import login_required
 from ..utils.pdf import pdf_response, render_pdf
 from ..utils.permissions import require_permission
@@ -24,7 +26,14 @@ from ..utils.web_actor import current_actor
 
 bp = Blueprint('satisfaccion_cliente', __name__, url_prefix='/satisfaccion_cliente')
 
-FORM_FIELDS = ('cliente', 'fecha_encuesta', 'puntuacion', 'comentarios')
+FORM_FIELDS = ('cliente_id', 'tipo_encuesta', 'canal', 'fecha_encuesta', 'puntuacion', 'comentarios')
+
+
+def _form(actor, encuesta=None):
+    form = SatisfaccionClienteForm(obj=encuesta)
+    form.cliente_id.choices = [('', '— Elige un cliente —'),
+                               *((c.id, c.nombre) for c in clientes.list_(db.session, actor))]
+    return form
 
 
 def _form_data(form):
@@ -49,13 +58,20 @@ def listar_encuestas():
     else:
         puntuacion = None
 
-    encuestas = satisfaction.list_(
-        db.session,
-        current_actor(),
-        cliente=request.args.get('cliente'),
-        puntuacion_minima=puntuacion,
-    )
-    return render_template('satisfaccion_cliente/listar.html', encuestas=encuestas)
+    actor = current_actor()
+    customers = clientes.list_(db.session, actor)
+    chosen = {}
+    customer_id = request.args.get('cliente_id', type=int)
+    if customer_id in {c.id for c in customers}:
+        chosen['cliente_id'] = customer_id
+    for key, enum_cls in (('tipo_encuesta', TipoEncuesta), ('canal', CanalContacto)):
+        value = request.args.get(key, '')
+        if value in enum_cls.__members__:
+            chosen[key] = value
+    encuestas = satisfaction.list_(db.session, actor, puntuacion_minima=puntuacion, **chosen)
+    return render_template('satisfaccion_cliente/listar.html', encuestas=encuestas,
+                           clientes=customers, tipos=TipoEncuesta, canales=CanalContacto,
+                           elegidos=chosen)
 
 @bp.route('/nueva', methods=['GET', 'POST'])
 @login_required
@@ -64,10 +80,9 @@ def nueva_encuesta():
     """
     Muestra el formulario para crear una nueva encuesta de satisfacción y guarda el registro en la base de datos.
     """
-    form = SatisfaccionClienteForm()
-    if form.validate_on_submit():
-        satisfaction.create(db.session, current_actor(), _form_data(form))
-        db.session.commit()
+    form = _form(current_actor())
+    if form.validate_on_submit() and saved(lambda: satisfaction.create(
+            db.session, current_actor(), _form_data(form))):
         flash('Encuesta de satisfacción registrada exitosamente', 'success')
         return redirect(url_for('satisfaccion_cliente.listar_encuestas'))
     return render_template('satisfaccion_cliente/nueva.html', form=form)
@@ -82,10 +97,9 @@ def editar_encuesta(id):
     """
     actor = current_actor()
     encuesta = satisfaction.get(db.session, actor, id)
-    form = SatisfaccionClienteForm(obj=encuesta)
-    if form.validate_on_submit():
-        satisfaction.update(db.session, actor, id, _form_data(form))
-        db.session.commit()
+    form = _form(actor, encuesta)
+    if form.validate_on_submit() and saved(lambda: satisfaction.update(
+            db.session, actor, id, _form_data(form))):
         flash('Encuesta actualizada exitosamente', 'success')
         return redirect(url_for('satisfaccion_cliente.listar_encuestas'))
     return render_template('satisfaccion_cliente/editar.html', form=form, encuesta=encuesta)

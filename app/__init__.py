@@ -52,6 +52,8 @@ from .routes import (
     process_role_routes,
     register_routes,
     provider_routes,
+    cliente_routes,
+    reclamacion_routes,
     context_routes,
     scope_routes,
     change_routes,
@@ -171,6 +173,8 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
     app.register_blueprint(register_routes.resources_bp)
     app.register_blueprint(register_routes.indicators_bp)
     app.register_blueprint(provider_routes.bp)
+    app.register_blueprint(cliente_routes.bp)
+    app.register_blueprint(reclamacion_routes.bp)
     app.register_blueprint(context_routes.issues_bp)
     app.register_blueprint(scope_routes.scope_bp)
     app.register_blueprint(change_routes.bp)

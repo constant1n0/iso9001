@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% set titulo = 'Editar la reclamación' if reclamacion else 'Nueva reclamación' %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block crumb %}Clientes · Reclamaciones{% endblock %}
+{% block content %}
+{{ page_header('Cláusula 9.1.2 · Reclamaciones', titulo) }}
+<p class="muted">La respuesta, el cierre y la cancelación se registran en la página de la reclamación.</p>
+{{ form_card(form, url_for('reclamacion.show_reclamacion', complaint_id=reclamacion.id) if reclamacion else url_for('reclamacion.listar_reclamaciones'), 'Guardar cambios' if reclamacion else 'Registrar') }}
+{% endblock %}

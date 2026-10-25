@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% set titulo = 'Editar el cliente' if customer else 'Nuevo cliente' %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block crumb %}Clientes · Registro{% endblock %}
+{% block content %}
+{{ page_header('Cláusula 8.2 · Clientes', titulo) }}
+{{ form_card(form, url_for('cliente.show_cliente', customer_id=customer.id) if customer else url_for('cliente.list_clientes'), 'Guardar cambios' if customer else 'Crear') }}
+{% endblock %}
