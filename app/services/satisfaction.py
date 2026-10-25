@@ -23,14 +23,14 @@ from __future__ import annotations
 from functools import partial
 from typing import Any
 
+from sqlalchemy import false
 from sqlalchemy.orm import Session
 
-from ..models import SatisfaccionCliente
-from . import crud, fields
+from ..models import CanalContacto, SatisfaccionCliente, TipoEncuesta
+from . import clientes, crud, fields, people
 from .actor import Actor
 from .policy import Resource
 
-CLIENTE_MAX = 100  # mirrors SatisfaccionCliente.cliente and the web form
 PUNTUACION_MIN, PUNTUACION_MAX = 1, 10  # mirrors the web form
 
 SPEC = crud.Spec(
@@ -38,7 +38,10 @@ SPEC = crud.Spec(
     resource=Resource.CUSTOMER_SATISFACTION,
     not_found="Encuesta no encontrada.",
     fields=(
-        crud.Field("cliente", partial(fields.text, required=True, max_length=CLIENTE_MAX), required=True),
+        crud.Field("cliente_id", partial(fields.integer, required=True), required=True,
+                   check=clientes.check_reference),
+        crud.Field("tipo_encuesta", partial(fields.enum_member, enum_cls=TipoEncuesta), required=True),
+        crud.Field("canal", partial(fields.enum_member, enum_cls=CanalContacto), required=True),
         crud.Field("fecha_encuesta", fields.required_date, required=True),
         crud.Field("puntuacion", partial(fields.integer, required=True,
                                          minimum=PUNTUACION_MIN, maximum=PUNTUACION_MAX), required=True),
@@ -53,11 +56,18 @@ update = partial(crud.update, SPEC)
 delete = partial(crud.delete, SPEC)
 
 
-def _conditions(cliente: str | None, puntuacion_minima: int | None) -> list[Any]:
+def _conditions(cliente_id: int | None, puntuacion_minima: int | None,
+                tipo_encuesta: Any = None, canal: Any = None) -> list[Any]:
     """The filters shared by ``list_`` and ``list_page``; they combine with AND."""
     where: list[Any] = []
-    if cliente:
-        where.append(SatisfaccionCliente.cliente.ilike(f"%{cliente}%"))
+    if cliente_id is not None:
+        where.append(SatisfaccionCliente.cliente_id == cliente_id
+                     if people.is_db_id(cliente_id) else false())
+    for key, value, enum_cls in (("tipo_encuesta", tipo_encuesta, TipoEncuesta),
+                                  ("canal", canal, CanalContacto)):
+        if value is not None and value != "":
+            where.append(getattr(SatisfaccionCliente, key) ==
+                         fields.enum_member({key: value}, key, enum_cls))
     if puntuacion_minima is not None:
         where.append(SatisfaccionCliente.puntuacion >= puntuacion_minima)
     return where
@@ -67,22 +77,28 @@ def list_(
     session: Session,
     actor: Actor,
     *,
-    cliente: str | None = None,
+    cliente_id: int | None = None,
     puntuacion_minima: int | None = None,
+    tipo_encuesta: Any = None,
+    canal: Any = None,
 ) -> list[SatisfaccionCliente]:
     """Surveys, newest first; filters combine with AND."""
-    return crud.list_(SPEC, session, actor, _conditions(cliente, puntuacion_minima))
+    return crud.list_(SPEC, session, actor, _conditions(cliente_id, puntuacion_minima,
+                                                       tipo_encuesta, canal))
 
 
 def list_page(
     session: Session,
     actor: Actor,
     *,
-    cliente: str | None = None,
+    cliente_id: int | None = None,
     puntuacion_minima: int | None = None,
+    tipo_encuesta: Any = None,
+    canal: Any = None,
     page: int = 1,
     per_page: int = crud.DEFAULT_PER_PAGE,
 ) -> tuple[list[SatisfaccionCliente], int]:
     """One page in the ``list_`` order plus the total matching the same filters."""
-    return crud.list_page(SPEC, session, actor, _conditions(cliente, puntuacion_minima),
+    return crud.list_page(SPEC, session, actor, _conditions(cliente_id, puntuacion_minima,
+                                                           tipo_encuesta, canal),
                           page=page, per_page=per_page)

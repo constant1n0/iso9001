@@ -13,6 +13,7 @@ from datetime import date, timedelta
 from unittest.mock import patch
 
 import test_auth_bootstrap as bootstrap
+from mcp_support import survey_values
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db, mail
@@ -163,7 +164,7 @@ class ScheduledNotificationsTestCase(unittest.TestCase):
         db.session.add(NoConformidad(descripcion="NC", fecha_detectada=TODAY))
         for score in (4, 5):
             db.session.add(
-                SatisfaccionCliente(fecha_encuesta=TODAY, cliente="C", puntuacion=score)
+                SatisfaccionCliente(fecha_encuesta=TODAY, **survey_values("C"), puntuacion=score)
             )
         db.session.add(Capacitacion(tema="ISO", fecha=TODAY, personal="Equipo"))
         db.session.commit()

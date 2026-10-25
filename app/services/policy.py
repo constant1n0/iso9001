@@ -92,6 +92,8 @@ class Resource(StrEnum):
     NONCONFORMITIES = "nonconformities"
     IMPROVEMENTS = "improvements"
     CUSTOMER_SATISFACTION = "customer_satisfaction"
+    CUSTOMERS = "customers"
+    COMPLAINTS = "complaints"
     TRAINING = "training"
     AUDITS = "audits"
     AUDIT_INDICATORS = "audit_indicators"
@@ -140,6 +142,8 @@ _MATRIX: dict[Resource, Grant] = {
     Resource.NONCONFORMITIES: _OPEN_REGISTER,
     Resource.IMPROVEMENTS: _OPEN_REGISTER,
     Resource.CUSTOMER_SATISFACTION: _OPEN_REGISTER,
+    Resource.CUSTOMERS: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
+    Resource.COMPLAINTS: _OPEN_REGISTER,
     Resource.TRAINING: _OPEN_REGISTER,
     Resource.INTERESTED_PARTIES: _OPEN_REGISTER,
     Resource.AUDITS: Grant(_ADMIN_AUDITOR, _ADMIN_AUDITOR, _ADMIN),
