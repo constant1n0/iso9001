@@ -1,0 +1,196 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form, empty_state %}
+{% from "_partials/forms.html" import field %}
+{% from "cambios/_macros.html" import estado_badge, tarea_badge, eficacia_badge, origen_de, dia %}
+{% macro item(titulo) %}<li class="list__item"><span class="list__primary">{{ titulo }}</span><span class="list__secondary">{{ caller() }}</span></li>{% endmacro %}
+{% macro persona(person_id) %}{% if person_id in personas %}<a href="{{ url_for('people.show_person', person_id=person_id) }}">{{ personas[person_id] }}</a>{% else %}—{% endif %}{% endmacro %}
+{% set c = cambio %}
+{% block title %}{{ c.titulo }}{% endblock %}
+{% block crumb %}Calidad · Cambios{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 6.3 · Cambio en el SGC', c.titulo) %}
+    {% if abierto and can('update', 'qms_changes') %}
+    <a class="btn" href="{{ url_for('changes.edit_change', change_id=c.id) }}">Editar</a>
+    {% endif %}
+    {% if c.estado.name == 'propuesto' and can('delete', 'qms_changes') %}
+    {{ delete_form(url_for('changes.delete_change', change_id=c.id), '¿Eliminar el cambio «' ~ c.titulo ~ '» y sus tareas?') }}
+    {% endif %}
+{% endcall %}
+
+<section class="grid grid--2" aria-label="Plan y consideraciones">
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="plan">Plan del cambio</h2>{{ estado_badge(c.estado) }}</header>
+        <div class="card__body"><p class="card__text">{{ c.descripcion }}</p></div>
+        <ul class="list">
+            {% call item('Origen') %}{{ origen_de(c, origen) }}{% endcall %}
+            {% call item('Responsable') %}{{ persona(c.responsable_id) }}{% endcall %}
+            {% call item('Fecha de propuesta') %}{{ dia(c.fecha_propuesta) }}{% endcall %}
+            {% call item('Implantación prevista') %}{{ dia(c.fecha_prevista) }}{% if fuera_de_plazo %} <span class="badge badge--warn">Fuera de plazo</span>{% endif %}{% endcall %}
+            {% call item('Comunicación (a quién y cómo)') %}{{ c.comunicacion or 'Sin indicar' }}{% endcall %}
+        </ul>
+    </article>
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="consideraciones">Consideraciones</h2><span class="card__meta">6.3 a) a d)</span></header>
+        <div class="card__body">
+            <h3 class="card__title">a) Propósito y consecuencias potenciales</h3>
+            <p class="card__text">{{ c.proposito }}</p>
+            <p class="card__text">{{ c.consecuencias or 'Consecuencias sin indicar.' }}</p>
+        </div>
+        {% for titulo, texto in [('b) Integridad del SGC', c.integridad), ('c) Disponibilidad de recursos', c.recursos), ('d) Responsabilidades y autoridades', c.responsabilidades)] %}
+        <div class="card__body">
+            <h3 class="card__title">{{ titulo }}</h3>
+            <p class="card__text">{{ texto or 'Sin indicar.' }}</p>
+        </div>
+        {% endfor %}
+    </article>
+</section>
+
+<section class="grid grid--2" aria-label="Procesos y documentos afectados">
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="procesos">Procesos afectados</h2><span class="badge">{{ c.procesos | length }}</span></header>
+        {% if c.procesos %}
+        <ul class="list">
+            {% for proceso in c.procesos %}
+            <li class="list__item"><a class="list__primary" href="{{ url_for('proceso.show_process', process_id=proceso.id_proceso) }}">{{ proceso.proceso }}</a><span class="list__secondary">{{ proceso.tipo.value if proceso.tipo else '' }}</span></li>
+            {% endfor %}
+        </ul>
+        {% else %}<p class="empty">No afecta a ningún proceso.</p>{% endif %}
+    </article>
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="documentos">Documentos afectados</h2><span class="badge">{{ documentos | length }}</span></header>
+        {% if documentos %}
+        <ul class="list">
+            {% for documento in documentos %}
+            <li class="list__item"><a class="list__primary" href="{{ url_for('document.view_document', document_id=documento.id) }}">{{ documento.code }} · {{ documento.title }}</a><span class="list__secondary">{% if documento.withdrawn_at %}<span class="badge">Retirado</span>{% endif %}</span></li>
+            {% endfor %}
+        </ul>
+        {% else %}<p class="empty">No afecta a ningún documento que puedas consultar.</p>{% endif %}
+    </article>
+</section>
+
+<section aria-label="Tareas">
+    <article class="card">
+        <header class="card__header">
+            <h2 class="card__title" id="tareas">Tareas</h2>
+            {% if abierto and can('create', 'qms_changes') %}
+            <a class="btn btn--primary btn--sm" href="{{ url_for('changes.new_task', change_id=c.id) }}">+ Nueva tarea</a>
+            {% endif %}
+        </header>
+        {% if tareas %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">Descripción</th>
+                        <th scope="col">Responsable</th>
+                        <th scope="col">Fecha límite</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col">Finalizada</th>
+                        <th scope="col">Resultado</th>
+                        <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tarea in tareas %}
+                    <tr id="tarea-{{ tarea.id }}">
+                        <td>{{ tarea.descripcion }}</td>
+                        <td>{{ personas.get(tarea.responsable_id, '—') }}</td>
+                        <td class="date">{{ dia(tarea.fecha_limite) }}{% if tarea.id in vencidas %} <span class="badge badge--danger">Vencida</span>{% endif %}</td>
+                        <td>{{ tarea_badge(tarea.estado) }}</td>
+                        <td class="date">{{ dia(tarea.fecha_completada) }}</td>
+                        <td>{{ tarea.resultado or '—' }}</td>
+                        <td>
+                            <div class="table__actions">
+                                {% if abierto and can('update', 'qms_changes') %}
+                                <a class="btn btn--sm" href="{{ url_for('changes.edit_task', change_id=c.id, task_id=tarea.id) }}">Editar</a>
+                                {% endif %}
+                                {% if abierto and can('delete', 'qms_changes') %}
+                                {{ delete_form(url_for('changes.delete_task', change_id=c.id, task_id=tarea.id), '¿Eliminar la tarea?') }}
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty">Sin tareas todavía: aprobar el cambio exige al menos una.</p>
+        {% endif %}
+    </article>
+</section>
+
+<section aria-label="Aprobación, implantación y eficacia">
+    <article class="card">
+        <header class="card__header"><h2 class="card__title" id="ciclo">Aprobación, implantación y eficacia</h2>{{ estado_badge(c.estado) }}</header>
+        <ul class="list">
+            {% call item('Aprobado por') %}{{ persona(c.aprobado_por_id) }}{% endcall %}
+            {% call item('Fecha de aprobación') %}{{ dia(c.fecha_aprobacion) }}{% endcall %}
+            {% call item('Fecha de implantación') %}{{ dia(c.fecha_implantacion) }}{% endcall %}
+            {% call item('Resultado de la eficacia') %}{{ eficacia_badge(c.eficacia) }}{% endcall %}
+            {% call item('Revisada por') %}{{ persona(c.revisor_eficacia_id) }}{% endcall %}
+            {% call item('Fecha de la revisión') %}{{ dia(c.fecha_eficacia) }}{% endcall %}
+            {% call item('Comentario de la revisión') %}{{ c.comentario_eficacia or '—' }}{% endcall %}
+            {% if c.estado.name == 'cancelado' %}
+            {% call item('Cancelado el') %}{{ dia(c.fecha_cancelacion) }}{% endcall %}
+            {% call item('Motivo de la cancelación') %}{{ c.motivo_cancelacion }}{% endcall %}
+            {% endif %}
+        </ul>
+    </article>
+</section>
+
+{% if puede.aprobar or puede.implantar or puede.eficacia or puede.cancelar %}
+<section aria-labelledby="decisiones">
+    <div class="section-header"><h2 id="decisiones">Decidir sobre el cambio</h2></div>
+    <div class="grid grid--3">
+        {% if puede.aprobar %}
+        <form method="post" class="form-card" action="{{ url_for('changes.approve_change', change_id=c.id) }}" data-confirm="¿Aprobar el cambio «{{ c.titulo }}»? Su plan ya no se podrá modificar.">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <p class="muted">Se aprueba hoy, a tu nombre. Hacen falta las cuatro consideraciones, la fecha prevista y al menos una tarea que no esté cancelada.</p>
+            <div class="form-actions"><button type="submit" class="btn btn--primary">Aprobar</button></div>
+        </form>
+        {% endif %}
+        {% if puede.implantar %}
+        <form method="post" class="form-card" action="{{ url_for('changes.implement_change', change_id=c.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {{ field(implantacion.fecha_implantacion) }}
+            <p class="muted">Todas las tareas deben estar completadas o canceladas, y al menos una completada.</p>
+            <div class="form-actions"><button type="submit" class="btn btn--primary">Registrar la implantación</button></div>
+        </form>
+        {% endif %}
+        {% if puede.eficacia %}
+        <form method="post" class="form-card" action="{{ url_for('changes.review_change', change_id=c.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {{ field(eficacia.eficacia) }}
+            {{ field(eficacia.fecha_eficacia) }}
+            {{ field(eficacia.comentario_eficacia) }}
+            <p class="muted">La revisa una persona distinta de la responsable del cambio.</p>
+            <div class="form-actions"><button type="submit" class="btn btn--primary">Revisar la eficacia</button></div>
+        </form>
+        {% endif %}
+        {% if puede.cancelar %}
+        <form method="post" class="form-card" action="{{ url_for('changes.cancel_change', change_id=c.id) }}" data-confirm="¿Cancelar el cambio «{{ c.titulo }}»?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {{ field(cancelacion.motivo_cancelacion) }}
+            <div class="form-actions"><button type="submit" class="btn btn--danger">Cancelar el cambio</button></div>
+        </form>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,37 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+{# Shared by the QMS change pages (clause 6.3, ``change-planning``). #}
+
+{% macro estado_badge(estado) -%}
+{%- set variante = {'propuesto': ' badge--warn', 'eficacia_revisada': ' badge--ok'} -%}
+<span class="badge{{ variante.get(estado.name, '') }}">{{ estado.value }}</span>
+{%- endmacro %}
+
+{% macro tarea_badge(estado) -%}
+{%- set variante = {'en_curso': ' badge--warn', 'completada': ' badge--ok'} -%}
+<span class="badge{{ variante.get(estado.name, '') }}">{{ estado.value }}</span>
+{%- endmacro %}
+
+{% macro eficacia_badge(eficacia) -%}
+{%- if eficacia %}<span class="badge{{ ' badge--ok' if eficacia.name == 'eficaz' else ' badge--danger' }}">{{ eficacia.value }}</span>{% else %}—{% endif -%}
+{%- endmacro %}
+
+{# The origin of a change and, below it, the record behind it (linked when the role reads it). #}
+{% macro origen_de(cambio, registro) -%}
+{{ cambio.origen.value }}{% if registro %}<br>{% if registro.url %}<a href="{{ registro.url }}">{{ registro.label }}</a>{% else %}<span class="muted">{{ registro.label }}</span>{% endif %}{% endif %}
+{%- endmacro %}
+
+{% macro dia(value) %}{{ value.strftime('%d/%m/%Y') if value else '—' }}{% endmacro %}

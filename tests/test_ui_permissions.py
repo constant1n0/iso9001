@@ -675,6 +675,28 @@ class UiPermissionsTestCase(unittest.TestCase):
                                    f'action="/contexto/{issue}/eliminar"': admins},
         })
 
+    def test_change_controls_follow_the_role(self) -> None:
+        """Every role reads changes to the QMS; administrators and auditors create and edit
+        them and their tasks; only administrators delete a proposed one, approve and cancel
+        (CP5 of change-planning)."""
+        from app.services import qms_changes
+        from app.services.actor import Actor
+
+        system = Actor(None, "seed", ADMIN, "system")
+        with self.app.app_context():
+            change = qms_changes.changes.create(db.session, system, {
+                "titulo": "Nuevo ERP", "descripcion": "d", "origen": "otro", "proposito": "p",
+                "responsable_id": self.owner_id, "fecha_propuesta": DAY}, today=DAY).id
+            db.session.commit()
+        writers, admins = {ADMIN, AUDITOR}, {ADMIN}
+        page = f"/cambios/{change}"
+        self._check_controls({
+            "/cambios/": {'href="/cambios/nuevo"': writers, f'href="{page}/editar"': writers},
+            page: {f'href="{page}/editar"': writers, f'action="{page}/eliminar"': admins,
+                   f'href="{page}/tareas/nueva"': writers, f'action="{page}/aprobar"': admins,
+                   f'action="{page}/cancelar"': admins},
+        })
+
     def test_scope_controls_follow_role_and_state(self) -> None:
         """Every role reads the scope; administrators and auditors start, edit and delete
         drafts; only administrators approve, so OPERATIVO and AUDITOR never see «Aprobar»;
@@ -719,7 +741,8 @@ class UiPermissionsTestCase(unittest.TestCase):
                     "/recursos-formacion/": set(RoleEnum),
                     "/indicadores-auditoria/": set(RoleEnum),
                     "/proveedores/": set(RoleEnum), "/contexto/": set(RoleEnum),
-                    "/partes_interesadas/": set(RoleEnum), "/alcance/": set(RoleEnum)}
+                    "/partes_interesadas/": set(RoleEnum), "/alcance/": set(RoleEnum),
+                    "/cambios/": set(RoleEnum)}
         for role in RoleEnum:
             html = self._page(role, "/dashboard/").get_data(as_text=True)
             self.assertIn('class="nav__group">Personas y competencia<', html)

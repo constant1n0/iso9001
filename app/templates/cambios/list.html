@@ -1,0 +1,94 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% from "cambios/_macros.html" import estado_badge, origen_de, dia %}
+{% block title %}Cambios en el SGC{% endblock %}
+{% block crumb %}Calidad · Cambios{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 6.3 · Planificación de los cambios', 'Cambios en el SGC') %}
+    {% if can('create', 'qms_changes') %}
+    <a class="btn btn--primary" href="{{ url_for('changes.new_change') }}">+ Nuevo cambio</a>
+    {% endif %}
+{% endcall %}
+
+<details class="filters"{% if applied %} open{% endif %}>
+    <summary>Filtros{% if applied %} <span class="badge badge--warn">{{ applied }} {{ 'activo' if applied == 1 else 'activos' }}</span>{% endif %}</summary>
+    <form method="get" action="{{ url_for('changes.list_changes') }}" class="filters__body">
+        <div class="field"><label for="filtro-texto">Texto (título o descripción)</label>
+            <input type="text" name="texto" id="filtro-texto" value="{{ texto }}"></div>
+        {% for name, label, choices, _ in campos %}
+        <div class="field"><label for="filtro-{{ name }}">{{ label }}</label>
+            <select name="{{ name }}" id="filtro-{{ name }}">
+                <option {% if name not in elegidos %}selected {% endif %}value="">Todos</option>
+                {% for value, text in choices %}
+                <option {% if elegidos.get(name) == value %}selected {% endif %}value="{{ value }}">{{ text }}</option>
+                {% endfor %}
+            </select></div>
+        {% endfor %}
+        <div class="filters__actions">
+            <button type="submit" class="btn btn--primary">Buscar</button>
+            <a class="btn btn--ghost" href="{{ url_for('changes.list_changes') }}">Limpiar</a>
+        </div>
+    </form>
+</details>
+
+{% if cambios %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Título</th>
+                <th scope="col">Origen</th>
+                <th scope="col">Responsable</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Implantación prevista</th>
+                <th scope="col" class="num">Tareas abiertas</th>
+                <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cambio in cambios %}
+            <tr id="fila-{{ cambio.id }}">
+                <td><a href="{{ url_for('changes.show_change', change_id=cambio.id) }}">{{ cambio.titulo }}</a></td>
+                <td>{{ origen_de(cambio, origenes[cambio.id]) }}</td>
+                <td>{{ personas.get(cambio.responsable_id, '—') }}</td>
+                <td>{{ estado_badge(cambio.estado) }}</td>
+                <td class="date">{{ dia(cambio.fecha_prevista) }}{% if cambio.id in fuera %} <span class="badge badge--warn">Fuera de plazo</span>{% endif %}</td>
+                <td class="num">{{ abiertas[cambio.id] }}</td>
+                <td>
+                    <div class="table__actions">
+                        {% if can('update', 'qms_changes') and cambio.estado.name in ('propuesto', 'aprobado') %}
+                        <a class="btn btn--sm" href="{{ url_for('changes.edit_change', change_id=cambio.id) }}">Editar</a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if pages > 1 %}
+<nav class="pagination" aria-label="Paginación">
+    {% if page > 1 %}<a class="btn btn--sm" href="{{ url_for('changes.list_changes', page=page - 1, **elegidos) }}">← Anterior</a>{% else %}<span></span>{% endif %}
+    <span>Página {{ page }} de {{ pages }}</span>
+    {% if page < pages %}<a class="btn btn--sm" href="{{ url_for('changes.list_changes', page=page + 1, **elegidos) }}">Siguiente →</a>{% else %}<span></span>{% endif %}
+</nav>
+{% endif %}
+{% else %}
+    {{ empty_state('Ningún cambio coincide con los filtros.' if applied else 'Todavía no hay cambios en el SGC.') }}
+{% endif %}
+{% endblock %}
