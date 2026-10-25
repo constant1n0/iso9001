@@ -19,7 +19,7 @@ import enum
 import hashlib
 import hmac
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 
 from flask import current_app
 from flask_login import UserMixin
@@ -727,14 +727,108 @@ class AccionCorrectiva(RecordMetadataMixin, db.Model):
             return EstadoAccionCorrectiva.realizada
         return EstadoAccionCorrectiva.planificada
 
+class CanalContacto(enum.Enum):
+    telefono = 'Teléfono'
+    email = 'Correo electrónico'
+    presencial = 'Presencial'
+    web = 'Web'
+    escrito = 'Escrito'
+    otro = 'Otro'
+
+
+class TipoEncuesta(enum.Enum):
+    postventa = 'Postventa'
+    periodica = 'Periódica'
+    puntual = 'Puntual'
+    otra = 'Otra'
+
+
+class EstadoReclamacion(enum.Enum):
+    recibida = 'Recibida'
+    respondida = 'Respondida'
+    cerrada = 'Cerrada'
+    cancelada = 'Cancelada'
+
+
+class Cliente(RecordMetadataMixin, db.Model):
+    """Customer master data (ISO 9001 clause 8.2); cited customers cannot be deleted."""
+
+    __tablename__ = 'clientes'
+    __table_args__ = (
+        db.UniqueConstraint('nombre', name='uq_clientes_nombre'),
+        db.UniqueConstraint('nif', name='uq_clientes_nif'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(200), nullable=False)
+    nif = db.Column(db.String(20))
+    contacto = db.Column(db.String(150))
+    email = db.Column(db.String(255))
+    telefono = db.Column(db.String(30))
+    notas = db.Column(db.Text)
+
+
+_COMPLAINT_RESPONSE = (
+    "(estado IN ('respondida','cerrada') AND respuesta IS NOT NULL "
+    "AND fecha_respuesta IS NOT NULL) OR (estado IN ('recibida','cancelada') "
+    "AND respuesta IS NULL AND fecha_respuesta IS NULL)"
+)
+_COMPLAINT_CLOSING = (
+    "(estado = 'cerrada' AND fecha_cierre IS NOT NULL) OR "
+    "(estado <> 'cerrada' AND fecha_cierre IS NULL)"
+)
+_COMPLAINT_CANCELLATION = (
+    "(estado = 'cancelada' AND motivo_cancelacion IS NOT NULL) OR "
+    "(estado <> 'cancelada' AND motivo_cancelacion IS NULL)"
+)
+
+
+class Reclamacion(RecordMetadataMixin, db.Model):
+    """A customer's complaint and response (9.1.2); transitions are service-only."""
+
+    __tablename__ = 'reclamaciones'
+    __table_args__ = (
+        db.CheckConstraint(_COMPLAINT_RESPONSE, name='ck_reclamaciones_respuesta'),
+        db.CheckConstraint(_COMPLAINT_CLOSING, name='ck_reclamaciones_cierre'),
+        db.CheckConstraint(_COMPLAINT_CANCELLATION, name='ck_reclamaciones_cancelacion'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    cliente_id = db.Column(
+        db.Integer, db.ForeignKey('clientes.id', name='fk_reclamaciones_cliente_id_clientes',
+                                  ondelete='RESTRICT'), nullable=False, index=True)
+    fecha_recepcion = db.Column(db.Date, nullable=False, default=date.today)
+    descripcion = db.Column(db.Text, nullable=False)
+    canal = db.Column(text_enum(CanalContacto, 'ck_reclamaciones_canal'))
+    estado = db.Column(text_enum(EstadoReclamacion, 'ck_reclamaciones_estado'), nullable=False,
+                       default=EstadoReclamacion.recibida, server_default='recibida')
+    respuesta = db.Column(db.Text)
+    fecha_respuesta = db.Column(db.Date)
+    fecha_cierre = db.Column(db.Date)
+    motivo_cancelacion = db.Column(db.Text)
+    no_conformidad_id = db.Column(
+        db.Integer, db.ForeignKey('no_conformidades.id',
+                                  name='fk_reclamaciones_no_conformidad_id_no_conformidades',
+                                  ondelete='RESTRICT'), nullable=True, index=True)
+    customer = db.relationship('Cliente', lazy='selectin')
+
+
 # Modelo para almacenar resultados de Satisfacción del Cliente
 class SatisfaccionCliente(RecordMetadataMixin, db.Model):
     __tablename__ = 'satisfaccion_cliente'
     id = db.Column(db.Integer, primary_key=True)
     fecha_encuesta = db.Column(db.Date, nullable=False, default=datetime.utcnow)
-    cliente = db.Column(db.String(100), nullable=False)
+    cliente_id = db.Column(
+        db.Integer, db.ForeignKey('clientes.id', name='fk_satisfaccion_cliente_cliente_id_clientes',
+                                  ondelete='RESTRICT'), nullable=False, index=True)
+    tipo_encuesta = db.Column(
+        text_enum(TipoEncuesta, 'ck_satisfaccion_cliente_tipo_encuesta'), nullable=False,
+        default=TipoEncuesta.otra, server_default='otra')
+    canal = db.Column(text_enum(CanalContacto, 'ck_satisfaccion_cliente_canal'), nullable=False,
+                      default=CanalContacto.otro, server_default='otro')
     puntuacion = db.Column(db.Integer, nullable=False)
     comentarios = db.Column(db.Text)
+    customer = db.relationship('Cliente', lazy='selectin')
 
 # Modelo para registrar Capacitaciones del Personal
 class Capacitacion(RecordMetadataMixin, db.Model):
