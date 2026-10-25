@@ -24,7 +24,7 @@ from ..models import (
     Auditoria, Capacitacion, EstadoNoConformidad, NoConformidad, SatisfaccionCliente,
 )
 from ..services import (
-    audits, context_issues, documents, management_reviews, people, providers,
+    audits, context_issues, documents, management_reviews, people, providers, qms_changes,
     quality_objectives, risks,
 )
 from ..services.nonconformities import OPEN_STATES
@@ -69,6 +69,17 @@ CONTEXT_ALERTS = (
      'contexto.list_issues'),
     ('partes_revision_vencida', 'Partes interesadas con la revisión vencida',
      'parte_interesada.listar_partes_interesadas'),
+)
+
+# What ``qms_changes.attention`` flags (CP6 of change-planning), in the card's order: its
+# key, label and the change list filtered to the same changes (for overdue tasks, the
+# changes holding them).
+CHANGE_ALERTS = (
+    ('pendientes_aprobacion', 'Cambios pendientes de aprobación', {'estado': 'propuesto'}),
+    ('fuera_de_plazo', 'Cambios aprobados con la implantación vencida', {'fuera_de_plazo': 1}),
+    ('tareas_vencidas', 'Tareas de cambios vencidas', {'tareas_vencidas': 1}),
+    ('eficacia_pendiente', 'Cambios implantados sin revisar su eficacia',
+     {'estado': 'implantado'}),
 )
 
 
@@ -152,6 +163,14 @@ def dashboard():
         avisos_contexto = [(label, url_for(endpoint, revision_vencida=1), len(flagged[key]))
                            for key, label, endpoint in CONTEXT_ALERTS if flagged[key]]
 
+    # Changes to the QMS needing attention, each with its count and filtered list; every
+    # role reads them. None hides the card, and nothing flagged leaves it empty.
+    avisos_cambios = None
+    if can('read', 'qms_changes'):
+        flagged = qms_changes.attention(db.session, current_actor(), today=hoy)
+        avisos_cambios = [(label, url_for('changes.list_changes', **query), len(flagged[key]))
+                          for key, label, query in CHANGE_ALERTS if flagged[key]]
+
     # Puntuación media de satisfacción por mes
     # (year, month) grouping, last 12 calendar months including the current one
     indice_actual = hoy.year * 12 + hoy.month - 1
@@ -197,6 +216,7 @@ def dashboard():
         avisos_riesgos=avisos_riesgos,
         avisos_proveedores=avisos_proveedores,
         avisos_contexto=avisos_contexto,
+        avisos_cambios=avisos_cambios,
         review_window_days=REVIEW_WINDOW_DAYS,
         upcoming_audit_days=UPCOMING_AUDIT_DAYS,
         chart_data=chart_data,

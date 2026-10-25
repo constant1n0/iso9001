@@ -78,6 +78,7 @@ from ..utils.pdf import pdf_response, render_pdf
 from ..utils.permissions import can, require_permission
 from ..utils.web_actor import current_actor
 from .auditoria_routes import committed
+from .change_routes import citing_changes
 from .people_routes import form_data, saved
 
 bp = Blueprint('revision_direccion', __name__, url_prefix='/revisiones-direccion')
@@ -375,8 +376,9 @@ def _review_context(actor: Actor, review_id: int) -> dict[str, Any]:
     """What a review's page and its minutes show, judged on ``local_today``.
 
     The review, its actions (soonest deadline first) with the overdue ones, the
-    inputs as ``input_sections`` with their cut-off date, and the names of the
-    person who held it and of the actions' owners.
+    inputs as ``input_sections`` with their cut-off date, the names of the
+    person who held it and of the actions' owners, and the changes to the QMS
+    each ``cambio_sgc`` action gives rise to (``None`` without their read grant).
     """
     today = local_today()
     revision = mr.reviews.get(db.session, actor, review_id)
@@ -390,6 +392,8 @@ def _review_context(actor: Actor, review_id: int) -> dict[str, Any]:
         corte=_day(_at(datos, 'fecha_corte')),
         personas=people.names(db.session, actor, (
             revision.celebrada_por_id, *(a.responsable_id for a in acciones))),
+        cambios={a.id: citing_changes(actor, 'revision_direccion', a.id) for a in acciones
+                 if a.tipo is TipoAccionRevision.cambio_sgc},
     )
 
 
@@ -400,7 +404,8 @@ def show_review(review_id: int) -> ResponseReturnValue:
     """A review's page: the meeting, the inputs with their comments, conclusions, actions."""
     return render_template('revisiones_direccion/detail.html',
                            **_review_context(current_actor(), review_id),
-                           puede_decidir=may_decide())
+                           puede_decidir=may_decide(),
+                           puede_planificar=can('create', 'qms_changes'))
 
 
 @bp.route('/<int:review_id>/pdf', methods=['GET'])
@@ -630,4 +635,5 @@ def list_actions() -> ResponseReturnValue:
         tipos=list(TipoAccionRevision),
         filtros=filters,
         applied=applied,
+        puede_planificar=can('create', 'qms_changes'),
     )

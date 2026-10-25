@@ -10,16 +10,21 @@ auditors only, and empties once they are followed up. Other roles are refused.
 The risks and opportunities card (clause 6.1, ``risks-opportunities``) counts
 what ``risks.attention`` flags, each linked to the list filtered to the same
 records, for every role; the external providers card (clause 8.4,
-``external-providers``) does the same with ``providers.attention``.
+``external-providers``) does the same with ``providers.attention``, and the
+changes card (clause 6.3, ``change-planning``) with ``qms_changes.attention``.
 """
 
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, timedelta
 from html import unescape
+from unittest.mock import patch
 
 from test_audit_screens import ADMIN, AUDITOR, OPERATIVO, SYSTEM
+from test_change_screens import BASE as CHANGES
+from test_change_screens import TODAY as CHANGES_TODAY
+from test_change_screens import ChangeScreensBase
 from test_management_review_screens import BASE, OVERDUE, ReviewScreensBase
 from test_provider_screens import BAD, ProviderScreensBase
 from test_provider_screens import BASE as PROVIDERS
@@ -190,3 +195,48 @@ class ProviderCardTestCase(ProviderScreensBase):
             providers.providers.update(db.session, SYSTEM, blocked, {"procesos": []})
             db.session.commit()
         self.assertIn("Ningún proveedor requiere atención.", self.card())
+
+
+class ChangeCardTestCase(ChangeScreensBase):
+    """The changes card (CP6 of change-planning): what ``qms_changes.attention`` flags."""
+
+    routes = ("app.routes.change_routes", "app.routes.dashboard_routes")
+
+    def card(self) -> str | None:
+        match = re.search(r'<article class="card" id="cambios">(.*?)</article>',
+                          self.html("/dashboard/"), re.S)
+        return match.group(1) if match else None
+
+    def test_the_card_links_what_needs_attention_to_the_filtered_lists(self) -> None:
+        self.login(ADMIN)
+        self.assertIn("Ningún cambio requiere atención.", self.card())
+        proposed = self.change("Firma digital")
+        self.task(proposed, fecha_limite=CHANGES_TODAY - timedelta(days=1))
+        late = self.approved("ERP con retraso",
+                             fecha_prevista=CHANGES_TODAY - timedelta(days=1))
+        self.approved("ERP al día")
+        implemented = self.implemented("Portal de clientes")
+        self.reviewed("Ya revisado")
+        expected = [
+            (f"{CHANGES}/?estado=propuesto", "Cambios pendientes de aprobación", {proposed}),
+            (f"{CHANGES}/?fuera_de_plazo=1", "Cambios aprobados con la implantación vencida",
+             {late}),
+            (f"{CHANGES}/?tareas_vencidas=1", "Tareas de cambios vencidas", {proposed}),
+            (f"{CHANGES}/?estado=implantado", "Cambios implantados sin revisar su eficacia",
+             {implemented}),
+        ]
+        for role in RoleEnum:
+            with self.subTest(role=role.name):
+                self.login(role)
+                items = [(unescape(href), label, int(count))
+                         for href, label, count in CARD_ITEM.findall(self.card())]
+                self.assertEqual([(href, label, len(ids)) for href, label, ids in expected],
+                                 items)
+                self.assertIn('<span class="badge badge--danger">4</span>', self.card())
+        for href, _, ids in expected:
+            with self.subTest(link=href):
+                self.assertEqual(ids, set(self.rows(href)))
+        self.login(ADMIN)  # who reads everything else the dashboard shows
+        with patch("app.routes.dashboard_routes.can",
+                   side_effect=lambda action, resource: resource != "qms_changes"):
+            self.assertIsNone(self.card())

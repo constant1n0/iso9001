@@ -1,0 +1,50 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+{# The changes to the QMS a record gives rise to (CP6 of ``change-planning``), for the
+   pages of the records behind them. ``none`` (no read grant of the changes) shows nothing. #}
+{% from "cambios/_macros.html" import estado_badge %}
+
+{% macro cambios_card(cambios) %}
+{% if cambios is not none %}
+<article class="card">
+    <header class="card__header"><h2 class="card__title" id="cambios">Cambios en el SGC que origina</h2><span class="card__meta">6.3</span></header>
+    {% if cambios %}
+    <ul class="list">
+        {% for cambio in cambios %}
+        <li class="list__item"><a class="list__primary" href="{{ url_for('changes.show_change', change_id=cambio.id) }}">{{ cambio.titulo }}</a><span class="list__secondary">{{ estado_badge(cambio.estado) }}</span></li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">Ningún cambio en el SGC nace de este registro.</p>
+    {% endif %}
+</article>
+{% endif %}
+{% endmacro %}
+
+{# The same changes inline, for a row (a review action). #}
+{% macro cambios_inline(cambios) %}
+{% if cambios %}
+<br><span class="muted">Cambios:</span>
+{% for cambio in cambios %}<a href="{{ url_for('changes.show_change', change_id=cambio.id) }}">{{ cambio.titulo }}</a> {{ estado_badge(cambio.estado) }}{{ ', ' if not loop.last }}{% endfor %}
+{% endif %}
+{% endmacro %}
+
+{# «Planificar cambio» on a review action of type ``cambio_sgc``, for those who create changes. #}
+{% macro planificar(accion, puede) %}
+{% if puede and accion.tipo.name == 'cambio_sgc' %}
+<a class="btn btn--sm" href="{{ url_for('changes.new_change', origen='revision_direccion', accion_revision_id=accion.id) }}">Planificar cambio</a>
+{% endif %}
+{% endmacro %}

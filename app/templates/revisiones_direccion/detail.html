@@ -17,6 +17,7 @@
 {% extends "base.html" %}
 {% from "_partials/ui.html" import page_header, action_form, delete_form, empty_state %}
 {% from "revisiones_direccion/_macros.html" import estado_revision, estado_accion, vencida_badge, dia %}
+{% from "cambios/_citing.html" import cambios_inline, planificar %}
 {% set estado = revision.estado.name %}
 {% block title %}Revisión por la dirección del {{ dia(revision.fecha) }}{% endblock %}
 {% block crumb %}Calidad · Revisión por la dirección{% endblock %}
@@ -127,7 +128,7 @@
                 {% for accion in acciones %}
                 <tr id="accion-{{ accion.id }}">
                     <td>{{ accion.tipo.value }}</td>
-                    <td>{{ accion.descripcion }}</td>
+                    <td>{{ accion.descripcion }}{{ cambios_inline(cambios.get(accion.id)) }}</td>
                     <td>{{ personas.get(accion.responsable_id, '—') }}</td>
                     <td class="date">{{ dia(accion.fecha_limite) }} {{ vencida_badge(accion.id in vencidas) }}</td>
                     <td>{{ estado_accion(accion) }}</td>
@@ -135,6 +136,7 @@
                     <td>{{ accion.resultado or '—' }}</td>
                     <td>
                         <div class="table__actions">
+                            {{ planificar(accion, puede_planificar) }}
                             {% if can('update', 'management_review') %}
                             <a class="btn btn--sm" href="{{ url_for('revision_direccion.edit_action', review_id=revision.id, action_id=accion.id) }}">{{ 'Seguimiento' if estado == 'cerrada' else 'Editar' }}</a>
                             {% endif %}

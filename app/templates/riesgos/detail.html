@@ -17,6 +17,7 @@
 {% extends "base.html" %}
 {% from "_partials/ui.html" import page_header, delete_form, empty_state %}
 {% from "riesgos/_macros.html" import nivel_badge, prioridad_badge, accion_badge, eficacia_badge, dia, etiqueta %}
+{% from "cambios/_citing.html" import cambios_card %}
 {% set riesgo = kind.band == 'nivel' %}
 {% set base = kind.bp.name %}
 {% macro item(titulo) %}<li class="list__item"><span class="list__primary">{{ titulo }}</span><span class="list__secondary">{{ caller() }}</span></li>{% endmacro %}
@@ -27,7 +28,7 @@
     {% if can('update', 'risks_opportunities') %}
     <a class="btn" href="{{ url_for(base ~ '.edit_record', record_id=registro.id) }}">Editar</a>
     {% endif %}
-    {% if not acciones and can('delete', 'risks_opportunities') %}
+    {% if not acciones and not cambios and can('delete', 'risks_opportunities') %}
     {{ delete_form(url_for(base ~ '.delete_record', record_id=registro.id), kind.labels.delete.format(registro.titulo)) }}
     {% endif %}
 {% endcall %}
@@ -131,4 +132,6 @@
         {{ empty_state('Sin acciones todavía.') }}
     {% endif %}
 </section>
+
+{{ cambios_card(cambios) }}
 {% endblock %}

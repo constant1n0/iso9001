@@ -35,12 +35,14 @@ administrators delete (policy ``RISKS_OPPORTUNITIES``, decision RO6).
   plus the one a record already names, marked when superseded.
 - A record's page shows every field, its context issue linked, the level before
   and after the actions
-  and its actions, each with an overdue badge. Actions live under their record;
+  and its actions, each with an overdue badge, and the changes to the QMS it gives
+  rise to (CP6 of ``change-planning``). Actions live under their record;
   one asked for under another record is a 404. A closed record takes no new
   actions, and only a completed action is evaluated for effectiveness
   (``/eficacia``); either form asked for otherwise returns to the record's page
   with the reason.
-- A record with actions offers no delete; the service refuses it anyway.
+- A record with actions, or one a change names, offers no delete; the service
+  refuses it anyway.
 - Each list links its register as a PDF (``/pdf``, task RO-4), which every role
   reads: a header with the open records by level (or priority), the unassessed
   ones and those overdue for review, and for risks the heat map as a table; then
@@ -81,6 +83,7 @@ from ..utils.pdf import pdf_response, render_pdf
 from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
 from .auditoria_routes import committed
+from .change_routes import citing_changes
 from .people_routes import form_data, saved
 
 RESOURCE = 'risks_opportunities'
@@ -341,6 +344,7 @@ def _show(kind: Kind, record_id: int) -> ResponseReturnValue:
         cuestion=_name(context_issues.issues.get, actor, registro.cuestion_id, 'titulo'),
         personas=people.names(db.session, actor, (
             registro.responsable_id, *(a.responsable_id for a in acciones))),
+        cambios=citing_changes(actor, 'riesgo' if kind is RISKS else 'oportunidad', record_id),
     )
 
 

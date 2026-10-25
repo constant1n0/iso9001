@@ -17,6 +17,7 @@
 {% extends "base.html" %}
 {% from "_partials/ui.html" import page_header, delete_form, empty_state %}
 {% from "auditorias/_macros.html" import estado_badge, tipo_badge %}
+{% from "cambios/_citing.html" import cambios_card %}
 {% block title %}Auditoría n.º {{ auditoria.id }}{% endblock %}
 {% block crumb %}Calidad · Auditorías{% endblock %}
 {% block content %}
@@ -114,4 +115,6 @@
         {{ empty_state('Todavía no hay hallazgos.') }}
     {% endif %}
 </section>
+
+{{ cambios_card(cambios) }}
 {% endblock %}
