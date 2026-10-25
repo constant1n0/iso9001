@@ -50,10 +50,15 @@ an agent can never delete anything.
 - **External providers** (8.4, 9.1.3): selection criteria, affected processes,
   approval by an administrator, scored evaluations with the next evaluation,
   linked nonconformities and the approved-providers PDF.
+- **Customers, complaints and satisfaction** (8.2, 9.1.2): customer master data
+  with unique names and optional tax IDs, complaints with responses, closure,
+  cancellation and administrator reopening, optional nonconformity links, and
+  surveys linked to customers with a survey type and contact channel. Complaint
+  transitions are web-only; MCP creates and updates ordinary fields.
 - **Management review** (9.3): inputs drawn from the registers, conclusions,
   actions and the minutes PDF.
 - **Earlier registers**: training resources (7.1), training (7.2), audit
-  indicators (9.1), customer satisfaction (9.1.2) and improvements (10.3), all
+  indicators (9.1) and improvements (10.3), all
   with screens.
 - **Reports and notifications** (9.1): PDFs of the records, a monthly quality
   report and scheduled e-mail alerts.

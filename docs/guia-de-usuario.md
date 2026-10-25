@@ -41,6 +41,7 @@ Documentación técnica:
 - [Cambios en el SGC](#cambios-en-el-sgc)
 - [Proveedores externos](#proveedores-externos)
 - [Revisión por la dirección](#revisión-por-la-dirección)
+- [Clientes, reclamaciones y satisfacción](#clientes-reclamaciones-y-satisfacción)
 - [Otros registros](#otros-registros)
 - [Informes y notificaciones por correo electrónico](#informes-y-notificaciones-por-correo-electrónico)
 - [Términos](#términos)
@@ -119,7 +120,7 @@ puede consultar.
 | (arriba) | **Panel** |
 | **Contexto** | **Contexto** 4.1, **Partes interesadas** 4.2, **Alcance del SGC** 4.3 |
 | **Calidad** | **Procesos** 4.4, **Riesgos** 6.1, **Oportunidades** 6.1, **Objetivos de calidad** 6.2, **Indicadores de auditoría** 9.1, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
-| **Clientes** | **Satisfacción** 9.1.2 |
+| **Clientes** | **Cliente** 8.2, **Reclamaciones** 9.1.2, **Satisfacción** 9.1.2 |
 | **Personas y competencia** | **Roles y responsabilidades** 5.3, **Personas** 7.2, **Competencias requeridas** 7.2, **Matriz de competencias** 7.2, **Capacitaciones** 7.2, **Recursos de capacitación** 7.1 |
 | **Documentación** | **Documentos** 7.5 |
 | **Administración** | **Usuarios** 5.3 |
@@ -187,6 +188,8 @@ aprobar en cada módulo.
 | Cambios en el SGC y sus tareas | Consultar, crear, editar, eliminar; aprobar, cancelar, registrar la implantación, revisar la eficacia | Consultar, crear, editar; registrar la implantación, revisar la eficacia | Consultar |
 | Proveedores externos y sus evaluaciones | Consultar, crear, editar, eliminar; aprobar, condicionar, bloquear | Consultar, crear, editar | Consultar |
 | Revisiones por la dirección y sus acciones | Consultar, crear, editar, eliminar; celebrar, cerrar | Consultar, crear, editar | Sin acceso |
+| Clientes | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
+| Reclamaciones | Consultar, crear, editar; responder, cerrar, cancelar y reabrir | Consultar, crear, editar; responder, cerrar y cancelar | Consultar, crear, editar; responder, cerrar y cancelar |
 | Mejoras, satisfacción del cliente, partes interesadas | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar, crear, editar |
 | Procesos, roles, recursos de capacitación, indicadores de auditoría | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
 
@@ -213,7 +216,8 @@ API desde la línea de órdenes del servidor (véase
   conformidades; aprobar programas de auditoría; celebrar y cerrar revisiones
   por la dirección; aprobar, condicionar y bloquear proveedores; aprobar el
   alcance del SGC; aprobar, implantar, revisar la eficacia y cancelar cambios
-  en el SGC, y los PDF, solo se hacen desde la interfaz web.
+  en el SGC; responder, cerrar, cancelar y reabrir reclamaciones, y los PDF,
+  solo se hacen desde la interfaz web.
 - Lo que guarda un agente lleva el nombre de su usuario en el registro de
   auditoría, igual que un cambio hecho desde la web.
 - Cada usuario ve y revoca sus propios tokens en **Mi perfil**; desactivar un
@@ -1733,6 +1737,63 @@ En **Salidas: acciones**, **+ Nueva acción** registra una decisión:
   finalización y resultado;
 - la fecha en que se generó el acta.
 
+## Clientes, reclamaciones y satisfacción
+
+### Clientes (8.2)
+
+**Cliente** (`/clientes/`), en el grupo **Clientes**, abre el registro por nombre,
+con búsqueda y páginas. Un administrador o un auditor registra **Nombre**,
+**NIF**, **Persona de contacto**, **Correo electrónico**, **Teléfono** y **Notas**.
+El nombre es obligatorio y único. El NIF es opcional y único cuando se indica:
+se guarda en mayúsculas, sin espacios ni guiones, con entre 8 y 10 letras o
+cifras. El correo se valida y se guarda en minúsculas.
+
+Todos los roles consultan la ficha. Solo un administrador elimina clientes;
+si hay encuestas o reclamaciones asociadas, el sistema lo impide con un aviso.
+La ficha enlaza las encuestas y reclamaciones del cliente. Este registro no
+sustituye una revisión de requisitos, pedidos o contratos (8.2.2–8.2.4).
+
+### Reclamaciones (9.1.2)
+
+**Reclamaciones** (`/reclamaciones/`) se filtra por cliente, estado y canal.
+Todos los roles pueden registrar y editar una reclamación mientras no esté
+cerrada o cancelada: **Cliente**, **Fecha de recepción** (hoy por defecto,
+nunca futura), **Descripción**, **Canal** opcional y **No conformidad relacionada**
+opcional. Los canales son Teléfono, Correo electrónico, Presencial, Web,
+Escrito y Otro. El vínculo con una no conformidad no la crea ni cambia su origen.
+
+En la página de la reclamación, las operaciones son:
+
+| Estado actual | Operación | Resultado |
+|---|---|---|
+| Recibida | **Registrar respuesta**, con una respuesta no vacía | Respondida; guarda la respuesta y la fecha de hoy, no anterior a la recepción |
+| Respondida | **Cerrar** | Cerrada; guarda la fecha de hoy, no anterior a la respuesta |
+| Recibida | **Cancelar reclamación**, con motivo | Cancelada; una reclamación respondida se cierra, nunca se cancela |
+| Cerrada | **Reabrir**, solo un administrador | Respondida; borra la fecha de cierre y conserva la respuesta |
+| Cancelada | **Reabrir**, solo un administrador | Recibida; borra el motivo de cancelación |
+
+Responder, cerrar y cancelar están disponibles para todos los roles; reabrir,
+solo para administradores. Los estados y sus fechas no se editan en el
+formulario. El registro de auditoría conserva los valores anteriores. Estas
+operaciones solo se realizan en la web, nunca mediante MCP.
+
+### Encuestas de satisfacción (9.1.2)
+
+**Satisfacción** (`/satisfaccion_cliente/`) elige un **Cliente** del registro,
+no un nombre en texto libre. Son obligatorios el **Tipo de encuesta** (Postventa,
+Periódica, Puntual u Otra), el **Canal**, la **Fecha de Encuesta** y la
+**Puntuación (1-10)**. **Comentarios** es opcional. Las listas se filtran por
+cliente, tipo, canal y puntuación mínima; el PDF muestra también estos datos.
+Las metas se siguen definiendo en los objetivos de la calidad.
+
+Al actualizar la base de datos, cada nombre antiguo distinto y no vacío crea
+un cliente y sus encuestas quedan vinculadas a él, con tipo Otra y canal Otro.
+No se atribuye una autoría a esos clientes históricos. Los nombres vacíos deben
+corregirse antes de migrar; no se inventa un cliente ni se descarta una encuesta.
+La migración inversa recupera los nombres, pero elimina los datos de los nuevos
+registros; se rechaza si un nombre usado supera los 100 caracteres del campo
+antiguo, para evitar truncarlo. Haga una copia de seguridad antes de migrar.
+
 ## Otros registros
 
 Estos registros son anteriores a los módulos descritos más arriba. Todos
@@ -1744,7 +1805,7 @@ consulta y los escribe con las mismas reglas de rol.
 |---|---|---|---|
 | **Capacitaciones** | 7.2 | Menú **Personas y competencia** | **Tema**, **Fecha**, **Personal** y **Persona**, **Duración en Horas**, **Evaluación Final** |
 | **Mejoras** | 10.3 | Menú **Calidad** | **No conformidad** (obligatoria), **Acción correctiva**, **Acción preventiva**; la fecha **Implantada** se fija al registrar la mejora |
-| **Satisfacción** | 9.1.2 | Menú **Clientes** | **Cliente**, **Fecha de Encuesta**, **Puntuación (1-10)**, **Comentarios** |
+| **Satisfacción** | 9.1.2 | Menú **Clientes** | **Cliente** (selector), **Tipo de encuesta**, **Canal**, **Fecha de Encuesta**, **Puntuación (1-10)**, **Comentarios** |
 
 Notas:
 
@@ -1753,7 +1814,8 @@ Notas:
 - **Capacitaciones** se filtra por **Tema**, **Fecha** y **Personal**, y cada
   sesión tiene un **PDF** (**Registro de capacitación**). Una competencia
   acreditada puede citar una sesión como evidencia.
-- **Satisfacción** se filtra por **Cliente** y **Puntuación mínima**, y cada
+- **Satisfacción** se filtra por **Cliente**, **Tipo de encuesta**, **Canal** y
+  **Puntuación mínima**, y cada
   encuesta tiene un **PDF** (**Encuesta de satisfacción**).
 - **Mejoras** muestra las mejoras de diez en diez.
 - Todos los roles registran capacitaciones, mejoras y encuestas; solo los

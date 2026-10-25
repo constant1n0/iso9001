@@ -19,7 +19,7 @@ SLUGS = {
     "programas_auditoria", "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo",
     "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades", "acciones_riesgo",
     "proveedores", "evaluaciones_proveedor", "cuestiones_contexto", "alcances_sgc",
-    "cambios_sgc", "tareas_cambio",
+    "cambios_sgc", "tareas_cambio", "clientes", "reclamaciones",
 }
 # The two competence registers share one policy resource (decision Q1 of qms-people),
 # and so do audits, their programmes and their findings (decision AP7 of audit-programme).
@@ -60,7 +60,7 @@ class LayoutTestCase(unittest.TestCase):
 
 
 class RegistryTestCase(unittest.TestCase):
-    def test_registry_holds_the_thirty_modules(self) -> None:
+    def test_registry_holds_the_thirty_two_modules(self) -> None:
         self.assertEqual(SLUGS, set(registry().MODULES))
 
     def test_each_module_maps_to_its_own_policy_resource(self) -> None:

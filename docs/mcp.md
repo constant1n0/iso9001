@@ -34,7 +34,7 @@ nunca puede eliminar.
 
   | Herramienta | Finalidad |
   |---|---|
-  | `qms_modules` | Los 30 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
+  | `qms_modules` | Los 32 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
   | `qms_list` | Una página acotada de un módulo, con los filtros que enumera `qms_modules` |
   | `qms_get` | Un registro por su `id` |
   | `qms_create` | Crea un registro |
@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 30 módulos: `no_conformidades`, `auditorias`,
+`qms_modules` enumera 32 módulos: `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -68,9 +68,36 @@ nunca puede eliminar.
 `mediciones_objetivo`, `revisiones_direccion`, `acciones_revision`,
 `riesgos`, `oportunidades`, `acciones_riesgo`, `proveedores`,
 `evaluaciones_proveedor`, `cuestiones_contexto`, `alcances_sgc`,
-`cambios_sgc` y `tareas_cambio`. Cada campo tiene un `type`, un indicador
+`cambios_sgc`, `tareas_cambio`, `clientes` y `reclamaciones`. Cada campo tiene un `type`, un indicador
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
+
+Clientes, reclamaciones y satisfacción (cláusulas 8.2 y 9.1.2):
+
+- `clientes`: `nombre` es obligatorio y único; `nif` es opcional y único cuando
+  se indica (8–10 letras o cifras, mayúsculas, sin espacios ni guiones).
+  `contacto`, `email`, `telefono` y `notas` son opcionales. Todos los roles
+  leen; administradores y auditores crean y actualizan con ámbito `write`.
+  Filtro: `nombre` (contiene, sin distinguir mayúsculas).
+- `reclamaciones`: `cliente_id` (entero que cita a `clientes`) y `descripcion`
+  son obligatorios. `fecha_recepcion` toma hoy si se omite y nunca es futura;
+  `canal` es opcional y `no_conformidad_id` permite vincular una no conformidad.
+  Todos los roles leen y escriben con el ámbito correspondiente. Los registros
+  muestran `estado` y los campos de respuesta, cierre y cancelación como solo
+  lectura. Nacen en `recibida`; responder, cerrar, cancelar y reabrir se hacen
+  exclusivamente en la web. Cerradas o canceladas rechazan actualizaciones.
+  Filtros: `cliente_id`, `estado` (`recibida`, `respondida`, `cerrada`, `cancelada`)
+  y `canal`.
+- `satisfaccion_clientes`: `cliente_id` sustituye al antiguo texto `cliente`.
+  Son obligatorios también `tipo_encuesta` (`postventa`, `periodica`, `puntual`,
+  `otra`), `canal`, `fecha_encuesta` y `puntuacion` (entero del 1 al 10).
+  `comentarios` es opcional. Todos los roles leen y escriben con el ámbito
+  correspondiente. Filtros: `cliente_id`, `tipo_encuesta`, `canal` y
+  `puntuacion_minima`.
+- Los canales admitidos son `telefono`, `email`, `presencial`, `web`, `escrito`
+  y `otro`. Los valores de escritura y de filtro son nombres de miembro;
+  los registros devuelven las etiquetas en español, por ejemplo `"Teléfono"`
+  o `"Respondida"`. Ningún token elimina clientes, reclamaciones o encuestas.
 
 No conformidades y acciones correctivas (cláusula 10.2 de ISO 9001):
 
