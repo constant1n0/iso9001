@@ -38,6 +38,7 @@ Documentación técnica:
 - [Procesos](#procesos)
 - [Riesgos y oportunidades](#riesgos-y-oportunidades)
 - [Objetivos de la calidad](#objetivos-de-la-calidad)
+- [Cambios en el SGC](#cambios-en-el-sgc)
 - [Proveedores externos](#proveedores-externos)
 - [Revisión por la dirección](#revisión-por-la-dirección)
 - [Otros registros](#otros-registros)
@@ -183,6 +184,7 @@ aprobar en cada módulo.
 | Programas de auditoría, auditorías y hallazgos | Consultar, crear, editar, eliminar; aprobar programas | Consultar, crear, editar | Sin acceso |
 | Riesgos, oportunidades y sus acciones | Consultar, crear, editar, eliminar; evaluar la eficacia de las acciones | Consultar, crear, editar; evaluar la eficacia de las acciones | Consultar |
 | Objetivos de la calidad y mediciones | Consultar, crear, editar, cambiar el estado, eliminar | Consultar, crear, editar, cambiar el estado | Consultar |
+| Cambios en el SGC y sus tareas | Consultar, crear, editar, eliminar; aprobar, cancelar, registrar la implantación, revisar la eficacia | Consultar, crear, editar; registrar la implantación, revisar la eficacia | Consultar |
 | Proveedores externos y sus evaluaciones | Consultar, crear, editar, eliminar; aprobar, condicionar, bloquear | Consultar, crear, editar | Consultar |
 | Revisiones por la dirección y sus acciones | Consultar, crear, editar, eliminar; celebrar, cerrar | Consultar, crear, editar | Sin acceso |
 | Mejoras, satisfacción del cliente, partes interesadas | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar, crear, editar |
@@ -210,7 +212,8 @@ API desde la línea de órdenes del servidor (véase
   Verificar acciones correctivas; cerrar, cancelar y reabrir no
   conformidades; aprobar programas de auditoría; celebrar y cerrar revisiones
   por la dirección; aprobar, condicionar y bloquear proveedores; aprobar el
-  alcance del SGC, y los PDF, solo se hacen desde la interfaz web.
+  alcance del SGC; aprobar, implantar, revisar la eficacia y cancelar cambios
+  en el SGC, y los PDF, solo se hacen desde la interfaz web.
 - Lo que guarda un agente lleva el nombre de su usuario en el registro de
   auditoría, igual que un cambio hecho desde la web.
 - Cada usuario ve y revoca sus propios tokens en **Mi perfil**; desactivar un
@@ -282,6 +285,13 @@ ninguna cifra, área ni fecha de auditoría.
   vinculados a algún proceso) y **Proveedores aprobados con resultado «No
   apto»** (en su última evaluación). Solo aparecen las cifras que no son cero;
   sin ninguna, la tarjeta muestra **Ningún proveedor requiere atención.**
+- **Cambios en el SGC**: cuántos cambios requieren atención, cada cifra con
+  un enlace a la lista de cambios filtrada por ellos: **Cambios pendientes de
+  aprobación** (propuestos), **Cambios aprobados con la implantación vencida**
+  (fuera de plazo), **Cambios con tareas vencidas** (cada cambio cuenta una
+  vez, aunque tenga varias tareas vencidas) y **Cambios implantados sin
+  revisar su eficacia**. Solo aparecen las cifras que no son cero; sin
+  ninguna, la tarjeta muestra **Ningún cambio requiere atención.**
 
 **Gráficos:**
 
@@ -1278,6 +1288,155 @@ o del año en curso:
   evaluación;
 - una tabla de sus mediciones: fecha, valor, si cumple o no y comentario.
 
+## Cambios en el SGC
+
+**Cambios** (`/cambios/`, en el menú **Calidad**) registra los cambios en el
+sistema de gestión de la calidad que se planifican según el apartado 6.3 de
+ISO 9001:2026. Cada cambio guarda de dónde nace, su propósito y sus
+consecuencias potenciales, cómo se mantiene la integridad del SGC, los
+recursos, las responsabilidades y autoridades, a quién y cómo se comunica, los
+procesos y documentos que afecta y las tareas que lo llevan a cabo. Después
+registra su aprobación, su implantación y la revisión de su eficacia. Todos los
+roles consultan los cambios, sus tareas y sus PDF. Los administradores y los
+auditores proponen y editan cambios y tareas, registran la implantación y
+revisan la eficacia; solo los administradores aprueban, cancelan y eliminan.
+
+### El cambio
+
+Pulse **+ Nuevo cambio** y rellene:
+
+- **Título** y **Descripción**;
+- **Origen**: **Revisión por la dirección**, **No conformidad**,
+  **Auditoría**, **Riesgo**, **Oportunidad**, **Cuestión del contexto** u
+  **Otro**;
+- **Registro que lo origina (del origen elegido)** (opcional): el registro del
+  que nace el cambio, con los registros agrupados por origen. Solo se ofrecen
+  las acciones de revisión del tipo **Cambio en el SGC** y las cuestiones del
+  contexto vigentes. Un registro de otro origen se rechaza (**El registro
+  elegido no corresponde al origen «…»; elige uno de ese origen o
+  ninguno.**). El origen **Otro** no tiene registro;
+- las consideraciones del apartado 6.3: **a) Propósito del cambio**
+  (obligatorio), **a) Consecuencias potenciales**, **b) Integridad del SGC**,
+  **c) Disponibilidad de recursos** y **d) Asignación de responsabilidades y
+  autoridades**. Las cuatro últimas pueden quedar en blanco al proponer el
+  cambio, pero aprobarlo las exige;
+- **Comunicación (a quién y cómo)**;
+- **Responsable** (una persona);
+- **Fecha de propuesta**: el formulario empieza con la de hoy; nunca es
+  futura;
+- **Fecha prevista de implantación** (opcional al proponerlo; aprobarlo la
+  exige): nunca anterior a la fecha de propuesta;
+- **Procesos afectados** y **Documentos afectados** (solo los documentos que
+  el rol puede consultar).
+
+Un registro que da origen a un cambio no se puede eliminar; por ejemplo:
+**No se puede eliminar un riesgo al que se refieren cambios en el SGC.**
+
+### Tareas del cambio
+
+En la página del cambio, **+ Nueva tarea** registra:
+
+- **Descripción**;
+- **Responsable** (una persona);
+- **Fecha límite**;
+- **Estado**: **Pendiente** (al empezar), **En curso**, **Completada** o
+  **Cancelada**;
+- **Fecha de finalización (solo si está completada)**: obligatoria en una
+  tarea completada, nunca futura y solo en ese estado;
+- **Resultado**.
+
+Las tareas se añaden, editan y eliminan mientras el cambio está propuesto o
+aprobado; eliminarlas es cosa de los administradores. Una tarea nunca pasa a
+otro cambio. Una tarea pendiente o en curso cuya fecha límite ya ha pasado,
+en un cambio propuesto o aprobado, muestra **Vencida**.
+
+### Ciclo de vida del cambio
+
+| Estado | Qué se puede cambiar | Siguiente paso |
+|---|---|---|
+| **Propuesto** | Todo, con **Editar**, y sus tareas | Un administrador lo aprueba (**Aprobar**) o lo cancela |
+| **Aprobado** | El responsable, la fecha prevista, la comunicación, los procesos, los documentos y las tareas | Un administrador o un auditor registra la implantación (**Registrar la implantación**); un administrador puede cancelarlo |
+| **Implantado** | Nada | Un administrador o un auditor revisa la eficacia (**Revisar la eficacia**) |
+| **Eficacia revisada** | Nada | Estado final |
+| **Cancelado** | Nada | Estado final |
+
+Las decisiones se toman en **Decidir sobre el cambio**, en la página del
+cambio, que solo ofrece a cada rol las que puede tomar:
+
+- **Aprobar** exige las cuatro consideraciones, la fecha prevista y al menos
+  una tarea que no esté cancelada. Si falta algo, el mensaje lo enumera
+  (**Para aprobar el cambio falta: …**). El cambio se aprueba hoy, a nombre
+  de la persona vinculada al usuario. Desde entonces su plan (el título, la
+  descripción, el origen con su registro, el propósito y las cuatro
+  consideraciones) ya no cambia. La fecha prevista se puede mover, pero no
+  quitar.
+- **Registrar la implantación** exige que todas las tareas estén completadas
+  o canceladas, y al menos una completada (**Quedan tareas pendientes o en
+  curso; complétalas o cancélalas antes de implantar el cambio.**). La
+  **Fecha de implantación** nunca es futura ni anterior a la aprobación.
+- **Revisar la eficacia** registra el **Resultado** (**Eficaz** o **No
+  eficaz**), la **Fecha de la revisión** (nunca anterior a la implantación ni
+  futura) y el **Comentario (obligatorio si no ha sido eficaz)**. La revisa una persona distinta de la responsable del cambio (**La persona que
+  revisa la eficacia no puede ser la responsable del cambio.**).
+- **Cancelar el cambio** exige el **Motivo de la cancelación**; el cambio se
+  cancela hoy y sus tareas quedan como estaban.
+- **Eliminar** (administradores) solo es posible con un cambio propuesto, y
+  elimina también sus tareas.
+
+Un cambio aprobado está **Fuera de plazo** cuando su fecha prevista de
+implantación es anterior a hoy. Ninguna de estas decisiones se toma desde el
+servidor MCP (véase [Agentes y tokens de API](#agentes-y-tokens-de-api)).
+
+### Pantallas de los cambios
+
+- **La lista** se filtra por **Texto (título o descripción)**, **Estado**,
+  **Origen**, **Responsable**, **Proceso**, **Fuera de plazo** y **Con tareas
+  vencidas**, y se pagina; una página posterior a la última muestra la
+  última. De cada cambio muestra el origen con el registro que lo origina, el
+  responsable, el estado, la **Implantación prevista** (con la etiqueta
+  **Fuera de plazo**) y las **Tareas abiertas** (pendientes o en curso).
+- **La página del cambio** muestra el **Plan del cambio**, las
+  **Consideraciones** de a) a d), los **Procesos afectados**, los
+  **Documentos afectados** que el rol puede consultar (un usuario con rol
+  Operativo solo ve los vigentes), las **Tareas** y **Aprobación,
+  implantación y eficacia**. El registro que origina el cambio se enlaza
+  para los roles que pueden consultarlo; los demás ven **Registro
+  vinculado**.
+- **Las páginas de los registros de origen.** La página de una no
+  conformidad, una auditoría, un riesgo, una oportunidad o una cuestión del
+  contexto muestra la tarjeta **Cambios en el SGC que origina**, con el
+  estado de cada cambio. En la página de una revisión por la dirección, cada
+  acción enumera los cambios que origina, y las acciones del tipo **Cambio en
+  el SGC** ofrecen **Planificar cambio** a quien puede crear cambios: abre el
+  formulario del cambio con el origen y la acción ya elegidos.
+- **El panel de control** muestra la tarjeta **Cambios en el SGC** (véase
+  [Panel de control](#panel-de-control)).
+
+### PDF de los cambios
+
+- **PDF**, en la lista, genera el registro de cambios a fecha de hoy:
+  - cuántos cambios hay en cada estado y cuántos aprobados están fuera de
+    plazo, con su lista;
+  - los cambios agrupados por estado, primero los abiertos (propuestos,
+    aprobados e implantados) y después los de eficacia revisada y los
+    cancelados. De cada cambio: el origen con su registro, el responsable,
+    las fechas de propuesta, prevista, de aprobación y de implantación, las
+    tareas completadas sobre el total y el resultado (el de la eficacia, o la
+    fecha y el motivo de la cancelación).
+- **Plan PDF**, en la página del cambio, genera su plan:
+  - el título, el estado, el origen con su registro, el responsable y las
+    fechas de propuesta y prevista;
+  - la descripción, las consideraciones de a) a d) y la comunicación;
+  - los procesos y los documentos afectados, con la misma regla de
+    visibilidad que la página;
+  - las tareas: descripción, responsable, fecha límite (y si está vencida),
+    estado, fecha de finalización y resultado;
+  - la aprobación, la implantación, la revisión de la eficacia y, si se
+    canceló, la cancelación.
+
+Los cambios del periodo son también una entrada de la revisión por la
+dirección (véase [Entradas (9.3.2)](#entradas-932)).
+
 ## Proveedores externos
 
 **Proveedores** (`/proveedores/`), en el menú **Calidad**, es el registro de
@@ -1498,7 +1657,15 @@ registros del periodo, junto a su comentario:
   evaluación vencida en la fecha de corte, las evaluaciones del periodo con su
   puntuación media y sus resultados, los proveedores con una evaluación **No
   apto** en el periodo, y las no conformidades de origen **Proveedor**
-  detectadas en el periodo, con los diez proveedores más citados;
+  detectadas en el periodo, con los diez proveedores más citados; y los
+  cambios en el SGC (6.3): los propuestos, aprobados, implantados, con la
+  eficacia revisada (eficaces y no eficaces) y cancelados en el periodo, cada
+  uno contado por la fecha de esa etapa; los implantados o revisados en el
+  periodo, con su estado, sus fechas y su resultado, del más reciente al más
+  antiguo; y los aprobados que en la fecha de corte estaban fuera de plazo
+  sin implantar ni cancelar, con su responsable, del más atrasado al menos.
+  Cada lista muestra como mucho diez y avisa cuando hay más (**Se muestran los
+  10 más recientes de …**);
 - **d)** la capacitación: sesiones, horas y temas;
 - **e)** la eficacia de las acciones tomadas para abordar los riesgos y las
   oportunidades: cada acción registra la suya (véase
@@ -1511,7 +1678,8 @@ posterior (la **Fecha de corte**); los recuentos de cuestiones vigentes y la
 versión del alcance son los del momento en que se calculan. Las revisiones
 celebradas antes de que existiera el registro de proveedores no muestran la
 parte de los proveedores, ni las celebradas antes del registro de cuestiones
-del contexto muestran las cuestiones ni el alcance. En un borrador se calculan
+del contexto muestran las cuestiones ni el alcance, ni las celebradas antes
+del registro de cambios muestran los cambios. En un borrador se calculan
 en el momento y
 se marcan como **Datos provisionales**. Celebrar la revisión las congela, de
 modo que la revisión y su acta siguen mostrando lo que se presentó aunque los
@@ -1560,8 +1728,9 @@ En **Salidas: acciones**, **+ Nueva acción** registra una decisión:
 - cada entrada con sus cifras y su comentario, marcada **BORRADOR — datos
   provisionales** mientras la revisión es un borrador;
 - las conclusiones;
-- las acciones: tipo, descripción, responsable, fecha límite (y si está
-  vencida), estado, fecha de finalización y resultado;
+- las acciones: tipo, descripción con los cambios en el SGC que origina y su
+  estado, responsable, fecha límite (y si está vencida), estado, fecha de
+  finalización y resultado;
 - la fecha en que se generó el acta.
 
 ## Otros registros
@@ -1686,6 +1855,7 @@ cuando alguien solicita un enlace o cuando un administrador lo envía (véase
 | Administrador, Auditor, Operativo | Los tres roles de usuario; deciden qué puede hacer cada cuenta |
 | Alcance del SGC | Los límites y la aplicabilidad del SGC (4.3), guardados por versiones: borrador, vigente y obsoleta |
 | Auditor jefe | La persona que dirige una auditoría: **Auditor (persona)** |
+| Cambio en el SGC | Un cambio planificado en el sistema de gestión de la calidad (6.3), con su plan, sus tareas, su aprobación, su implantación y la revisión de su eficacia |
 | Capacitación | Una sesión de formación registrada; puede servir como evidencia de competencia |
 | Celebrada | Una revisión por la dirección ya realizada; sus entradas quedan congeladas |
 | Competencia acreditada | La evidencia de que una persona cumple un requisito de competencia |
@@ -1693,6 +1863,7 @@ cuando alguien solicita un enlace o cuando un administrador lo envía (véase
 | Cuestión del contexto | Un factor externo o interno que puede afectar a los resultados previstos del SGC (4.1) |
 | De baja | Un documento retirado; no se elimina y queda de solo lectura |
 | Fecha de corte | La fecha hasta la que cuentan los datos de una revisión por la dirección |
+| Fuera de plazo | Un cambio en el SGC aprobado cuya fecha prevista de implantación ya ha pasado |
 | Línea de reporte | Los roles por encima de un rol, desde el que lo dirige directamente hasta la cúspide |
 | Medición vencida | Un objetivo activo cuya siguiente medición debía haberse registrado ya |
 | Nivel, nivel residual | La gravedad de un riesgo según su probabilidad por su impacto, antes y después de sus acciones |
