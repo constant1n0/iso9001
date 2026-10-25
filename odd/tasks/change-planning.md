@@ -109,13 +109,22 @@ Baseline at `339a9a8`: 1,632 tests. Migrations are tested on PostgreSQL (`TEST_P
 | 4 | [#162](https://github.com/constant1n0/iso9001/pull/162) | CP-2 MCP modules `3114de4`, record `e7c6750` | `b88e692` |
 | 5 | [#163](https://github.com/constant1n0/iso9001/pull/163) | CP-3 service fixes `480fc75` and screens `54bbaa4` (one-off `size:exception`, about 1,890 lines, approved by the user on 2026-10-24) | `6065586` |
 | 6 | [#164](https://github.com/constant1n0/iso9001/pull/164) | CP-3 dashboard and origin pages `e4278b5`, record `73653fc` | `385cf77` |
-| 7 | pending | CP-4 PDFs and review input `1aaaf29` | |
-| 8 | pending | CP-4 docs `024dc97`, template comment test `aec9bb4`, closing record | |
+| 7 | [#165](https://github.com/constant1n0/iso9001/pull/165) | CP-4 PDFs and review input `1aaaf29` | `fac5672` |
+| 8 | [#166](https://github.com/constant1n0/iso9001/pull/166) | CP-4 docs `024dc97`, template comment test `aec9bb4`, closing record `95195df` | `63a1596` |
 
-## Production deployment (pending authorization)
+## Production deployment (2026-10-25)
 
-One migration (`29637060aaf0`, the change and task tables) on top of `e4a6c8b0d2f5`: back up the database and the code, fast-forward, `flask db upgrade`, `flask db check`, then the user restarts the four services. Smoke tests: `/cambios/` and `/cambios/pdf` redirect to the login, 30 MCP modules including `cambios_sgc` and `tareas_cambio`.
+`main@63a1596` runs on `vulcano`. The user authorized this deployment over SSH as `dcm`, with no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `a5fd807`, clean, migration `e4a6c8b0d2f5`; the four services active and the database healthy; 0 nonconformities, 0 risks and 0 review actions stored |
+| Backups | `~/work/backups/calidad-*-pre-63a1596.dump` (`pg_dump -Fc`, 460 entries listed by `pg_restore -l`) and `iso9001-code-*-pre-63a1596.tar.gz` (without `instance/documents`), both mode 600 |
+| Code | Incremental git bundle `a5fd807..main`, fast-forward to `63a1596`; no dependency changes; `pip check` clean |
+| Database | `flask db upgrade` `e4a6c8b0d2f5` → `29637060aaf0`; `flask db check` clean; 0 changes, 0 tasks |
+| Restart (user, with sudo) | All four services (21:15 CET) |
+| Smoke tests | Services active, no error entries in the journal; `/login` 200; `/cambios/`, `/cambios/pdf`, `/cambios/1`, `/no_conformidades/` and `/revisiones-direccion/` redirect to the login; `/mcp` 401 with `WWW-Authenticate: Bearer`; 30 MCP modules including `cambios_sgc` and `tareas_cambio` |
 
 ## Next step
 
-**Feature complete** once slice 8 merges. Next: the production deployment above, after explicit authorization. Wave 2 continues with customers and complaints (8.2, 9.1.2), nonconforming outputs (8.7) and the link between nonconformities and processes.
+**Feature complete and deployed.** Wave 2 continues with the gap analysis order: customers and complaints (8.2, 9.1.2), nonconforming outputs (8.7), and the link between nonconformities and processes. Follow-ups are listed above.
