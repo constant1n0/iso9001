@@ -62,6 +62,7 @@ bounded: the page is clamped to `1..crud.MAX_PAGE` and the size to
 | `management_reviews.py` | Management reviews, their inputs drawn from the registers, holding and closing, and their actions (see below) |
 | `providers.py` | External providers and their evaluations: state decisions, scores and results, the next-evaluation rule, performance and the dashboard's flags (see below) |
 | `context_issues.py`, `qms_scope.py`, `stakeholders.py` | Context issues and their link to risks; the versioned QMS scope with its applicability; interested parties with their context fields (see below) |
+| `qms_changes.py` | Planned changes to the QMS and their tasks: origin links, editing by state, the approval, implementation, effectiveness and cancellation transitions, the dashboard's flags and the period's changes for the management review (see below) |
 | `people.py`, `competence.py` | People (each linked to at most one user and holding QMS roles), and competence required per role and demonstrated per person, with the required-versus-demonstrated matrix |
 | `crud.py` | Generic helper driven by a `Spec` (model, resource, fields, ordering) |
 | `training.py`, `satisfaction.py`, `improvements.py` | Plain HTML registers on `crud` |
@@ -101,6 +102,7 @@ then the scopes, then the role.
 | Management reviews and their actions | ADMIN, AUDITOR | ADMIN, AUDITOR (hold and close: ADMIN, never `mcp`) | ADMIN |
 | External providers and their evaluations (`EXTERNAL_PROVIDERS`) | all roles | ADMIN, AUDITOR (approve, condition and block: ADMIN, never `mcp`) | ADMIN |
 | Context issues and QMS scope (`ORGANIZATION_CONTEXT`) | all roles | ADMIN, AUDITOR (approve the scope: ADMIN, never `mcp`) | context issues: ADMIN; scope drafts: ADMIN, AUDITOR as an update, never `mcp`; approved scope versions: nobody |
+| Changes to the QMS and their tasks (`QMS_CHANGES`) | all roles | ADMIN, AUDITOR (approve and cancel: ADMIN; implement and review the effectiveness: ADMIN, AUDITOR; none on `mcp`) | ADMIN (a proposed change, with its tasks; tasks of an open change) |
 | Users (web screens; no MCP module); audit log (policy only, no screen or tool) | ADMIN, AUDITOR | ADMIN | nobody |
 | API tokens (list, issue, revoke) | ADMIN | ADMIN | nobody |
 
@@ -403,6 +405,15 @@ Decisions MR1-MR6 of `management-review` (ISO 9001 clause 9.3).
     `alcance`, the version of the QMS scope in force and its approval date
     (`None` without one). Reviews held before OC-4 froze neither, and
     `input_sections` shows each only when it is there.
+  - The `cambios` section (9.3.2 c, CP6 of `change-planning`, from
+    `qms_changes.in_period` with the review's cut-off) counts the changes
+    proposed, approved, implemented, reviewed (effective and not effective)
+    and cancelled in the period by the date of each stage; it lists the
+    changes approved and late at the cut-off (the most overdue first) and
+    those implemented or reviewed in the period (the latest stage first),
+    each list next to its full count so the screens can say when it was cut
+    (`input_sections`, a block's `nota`). Reviews held before CP-4 froze no
+    such section, and `input_sections` shows it only when it is there.
   - `preview` (read grant) and `preview_of` (no check, for adapters that
     already read the review) give the frozen inputs of a held review and the
     live ones of a draft. "No data" is SQL NULL, so the CHECK that a draft
@@ -441,7 +452,8 @@ Decisions MR1-MR6 of `management-review` (ISO 9001 clause 9.3).
 - **Locks**: a review row is locked before it changes (`FOR UPDATE`) and
   before its actions do (`FOR SHARE`), so its state holds during the write.
 - Adapters: the web screens, the action register and the dashboard card, the
-  minutes PDF (`/revisiones-direccion/<id>/pdf`); the MCP modules
+  minutes PDF (`/revisiones-direccion/<id>/pdf`, whose actions name the
+  changes to the QMS they give rise to); the MCP modules
   `revisiones_direccion` and `acciones_revision` (no deletes, holds or
   closes).
 
@@ -574,6 +586,96 @@ on `crud`) and the QMS scope (`AlcanceSGC`, `qms_scope`) share the
   `cuestiones_contexto`, `alcances_sgc` (draft writes only) and
   `partes_interesadas` (no deletes, no approval), and the management review
   inputs.
+
+## Changes to the QMS
+
+Decisions CP1 to CP7 of `change-planning` (ISO 9001:2026 clause 6.3).
+`qms_changes` offers two registers on `crud`, `changes` (`CambioSGC`) and
+`tasks` (`TareaCambio`), which share the `QMS_CHANGES` resource. Writes, and
+the lists filtered by lateness, take `today` from the adapter
+(`local_today()`).
+
+- **CP1, the change**: `titulo`, `descripcion`, `origen`, `proposito`,
+  `responsable_id` (a person, active when newly chosen) and `fecha_propuesta`
+  (never after `today`, `PROPOSED_IN_FUTURE`) are required; `fecha_prevista`,
+  the planned implementation, is never before the proposal
+  (`PLANNED_BEFORE_PROPOSAL`). The 6.3 considerations are `consecuencias` (a),
+  `integridad` (b), `recursos` (c) and `responsabilidades` (d), next to
+  `proposito` (a) and `comunicacion`.
+  - The origin may name the record behind the change through its one link
+    (`models.CHANGE_LINKS`): a review action of type `cambio_sgc`
+    (`REVIEW_ACTION_NOT_A_CHANGE`), a nonconformity, an audit, a risk, an
+    opportunity or a `vigente` context issue (`ISSUE_SUPERSEDED`). A link is
+    checked when newly set, with the action and the issue read `FOR SHARE`;
+    one made earlier stays even if its record changed since. A link with
+    another origin is refused (`LINK_NEEDS_ORIGIN`), and so is changing the
+    origin while the old link stays (`CLEAR_LINK_FIRST`). Each link is
+    `RESTRICT`: a cited record is not deleted, and its service says so
+    (`*_CITED_BY_CHANGES`).
+  - `procesos` and `documentos` replace the links in the plain tables
+    `cambio_procesos` and `cambio_documentos`, which have no audit rows of
+    their own: every audit row of a change carries both lists.
+- **CP2, the lifecycle**, only through the service: `propuesto` ->
+  `aprobado` -> `implantado` -> `eficacia_revisada`, and `cancelado` from
+  `propuesto` or `aprobado`. Each transition has a `may_*` guard (role,
+  scopes, channel and state) and refuses a failing one with a bare
+  `PermissionDenied`; none runs on `mcp`.
+  - `approve` (ADMIN) needs the four considerations, a planned date and a
+    task that is not cancelled (one `APPROVAL_INCOMPLETE` naming what is
+    missing), and records the acting user's person (`APPROVER_REQUIRED`) and
+    `today`.
+  - `implement` (ADMIN, AUDITOR) needs every task `completada` or
+    `cancelada` (`TASKS_OPEN`) and one `completada` (`NO_COMPLETED_TASK`), and
+    a date not after `today` nor before the approval.
+  - `review_effectiveness` (ADMIN, AUDITOR) records `eficaz` or `no_eficaz`
+    (a comment required for `no_eficaz`, `COMMENT_REQUIRED`), a date not
+    before the implementation nor after `today`, and the acting user's person
+    as reviewer, never the owner (`REVIEWER_IS_OWNER`; a CHECK constraint
+    repeats it).
+  - `cancel` (ADMIN) needs a reason and records `today`; the tasks and an
+    approval stay as they were.
+  - CHECK constraints keep each stage's columns to the states that carry
+    them.
+- **CP3, editing**: a `propuesto` change takes every field; an `aprobado` one
+  only `APPROVED_WRITABLE` (owner, planned date, communication, processes and
+  documents), its plan being fixed (`PLAN_FIXED`), and keeps a planned date
+  (`PLANNED_DATE_KEPT`); `implantado`, `eficacia_revisada` and `cancelado`
+  take nothing (`READ_ONLY`). An edit that changes nothing writes nothing,
+  whatever the state. Only a `propuesto` change is deleted, its tasks first
+  (`ONLY_PROPOSED_DELETED`).
+- **CP4, tasks**: `cambio_id` (never changes, `TASK_CHANGE_FIXED`),
+  `descripcion`, `responsable_id` and `fecha_limite` are required; `estado`
+  starts `pendiente`. `fecha_completada` is given exactly when the task is
+  `completada`, never after `today`. Tasks are created, changed and deleted
+  only while their change is `propuesto` or `aprobado` (`TASKS_CLOSED`; the
+  change read `FOR SHARE`, the task locked `FOR UPDATE`).
+- **CP5, access**: every role reads; ADMIN and AUDITOR create and update
+  changes and tasks; ADMIN deletes; the transitions narrow it as above.
+- **Overdue rules**: `fuera_de_plazo(change, *, today)` is an `aprobado`
+  change planned before `today`; `is_overdue(task, change, *, today)` a
+  `pendiente` or `en_curso` task past its deadline while its change is
+  `propuesto` or `aprobado`. The same rules drive the `fuera_de_plazo`,
+  `tareas_vencidas` and `vencida` filters.
+- **Readers** (CP6): `attention(session, actor, *, today)` gathers the
+  dashboard's flags (changes awaiting approval, late approved changes,
+  overdue tasks, implemented changes awaiting the effectiveness review; the
+  card counts changes, so overdue tasks count the changes holding them).
+  `in_period(session, desde, hasta, *, cut_off=None)` (no policy check)
+  counts each stage by its date in the period and lists the changes late at
+  `cut_off` (`hasta` by default) and those implemented or reviewed in the
+  period, uncapped: the management review caps them. `for_origin(session,
+  actor, origen, record_id)` gives the origin pages the changes a record
+  gives rise to.
+- Like every service it flushes and never commits and writes an audit row
+  next to each change. An integrity failure while a change is created,
+  updated or moved, inside its audit row included, is
+  `Conflict(WRITE_CONFLICT)`.
+- Adapters: the web screens (`/cambios/`) with the register PDF
+  (`/cambios/pdf`) and each change's plan PDF (`/cambios/<id>/pdf`, CP7); the
+  dashboard card; the origin pages (review actions with «Planificar cambio»,
+  nonconformities, audits, risks, opportunities and context issues); the
+  management review inputs; and the MCP modules `cambios_sgc` and
+  `tareas_cambio` (create, update, list and get only).
 
 ## Document control
 

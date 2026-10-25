@@ -36,6 +36,7 @@ Installation and server administration are in the
 - [Processes](#processes)
 - [Risks and opportunities](#risks-and-opportunities)
 - [Quality objectives](#quality-objectives)
+- [Changes to the QMS](#changes-to-the-qms)
 - [External providers](#external-providers)
 - [Management review](#management-review)
 - [Other registers](#other-registers)
@@ -177,6 +178,7 @@ can read, create, edit, delete and approve in each module.
 | Audit programmes, audits and findings | Read, create, edit, delete; approve programmes | Read, create, edit | No access |
 | Risks, opportunities and their actions | Read, create, edit, delete; evaluate the actions' effectiveness | Read, create, edit; evaluate the actions' effectiveness | Read |
 | Quality objectives and measurements | Read, create, edit, change state, delete | Read, create, edit, change state | Read |
+| Changes to the QMS and their tasks | Read, create, edit, delete; approve, cancel, record the implementation, review the effectiveness | Read, create, edit; record the implementation, review the effectiveness | Read |
 | External providers and their evaluations | Read, create, edit, delete; approve, condition, block | Read, create, edit | Read |
 | Management reviews and their actions | Read, create, edit, delete; hold, close | Read, create, edit | No access |
 | Improvements, customer satisfaction, interested parties | Read, create, edit, delete | Read, create, edit | Read, create, edit |
@@ -202,7 +204,9 @@ guide, in Spanish).
   Verifying corrective actions, closing, cancelling and reopening
   nonconformities, approving audit programmes, holding and closing management
   reviews, approving, conditioning and blocking providers, approving the QMS
-  scope, and the PDFs are done in the web interface only.
+  scope, approving, implementing, reviewing the effectiveness of and
+  cancelling changes to the QMS, and the PDFs are done in the web interface
+  only.
 - What an agent saves carries its user's name in the audit log, like a change
   made on the web.
 - You see and revoke your own tokens on **Mi perfil**; deactivating a user
@@ -273,6 +277,15 @@ and auditors), **+ No conformidad**, **+ Capacitación** (training) and
   resultado «No apto»** (approved, with a not suitable latest evaluation). Only
   non-zero counts appear; without any, the card shows **Ningún proveedor
   requiere atención.**
+- **Cambios en el SGC** (changes to the QMS): how many changes need
+  attention, each count linking to the change list filtered on them:
+  **Cambios pendientes de aprobación** (proposed, awaiting approval),
+  **Cambios aprobados con la implantación vencida** (approved and late),
+  **Cambios con tareas vencidas** (with overdue tasks; each change counts once,
+  however many overdue tasks it has) and **Cambios implantados sin revisar su
+  eficacia** (implemented, effectiveness not reviewed yet). Only non-zero
+  counts appear; without any, the card shows **Ningún cambio requiere
+  atención.**
 
 **Charts:**
 
@@ -1264,6 +1277,158 @@ On the objective's page, **+ Nueva medición** records:
   not, trend, next measurement, resources and evaluation;
 - a table of its measurements: date, value, met or not, and comment.
 
+## Changes to the QMS
+
+**Cambios** (`/cambios/`, menu **Calidad**) records the changes to the quality
+management system planned under ISO 9001:2026 clause 6.3. Each change keeps
+where it comes from, its purpose and potential consequences, how the
+integrity of the QMS is kept, the resources, the responsibilities and
+authorities, to whom and how it is communicated, the processes and documents
+it affects and the tasks that carry it out. It then records its approval, its
+implementation and the review of its effectiveness. Every role reads changes,
+their tasks and their PDFs. Administrators and auditors propose and edit
+changes and tasks, record the implementation and review the effectiveness;
+only administrators approve, cancel and delete.
+
+### The change
+
+Press **+ Nuevo cambio** and fill in:
+
+- **Título** and **Descripción**;
+- **Origen**: **Revisión por la dirección** (management review), **No
+  conformidad**, **Auditoría**, **Riesgo**, **Oportunidad**, **Cuestión del
+  contexto** (context issue) or **Otro** (other);
+- **Registro que lo origina (del origen elegido)** (optional): the record the
+  change comes from, with the records grouped by origin. Only review actions
+  of type **Cambio en el SGC** and context issues in force are offered. A
+  record of another origin is refused (**El registro elegido no corresponde
+  al origen «…»; elige uno de ese origen o ninguno.**). The origin **Otro**
+  has no record;
+- the considerations of clause 6.3: **a) Propósito del cambio** (purpose,
+  required), **a) Consecuencias potenciales** (potential consequences), **b)
+  Integridad del SGC** (integrity of the QMS), **c) Disponibilidad de
+  recursos** (resources) and **d) Asignación de responsabilidades y
+  autoridades** (responsibilities and authorities). The last four may stay
+  blank when the change is proposed, but approving it needs them;
+- **Comunicación (a quién y cómo)** (communication: to whom and how);
+- **Responsable** (owner, a person);
+- **Fecha de propuesta** (proposal date): the form starts with today's;
+  never in the future;
+- **Fecha prevista de implantación** (planned implementation date; optional
+  when proposing, needed to approve): never before the proposal date;
+- **Procesos afectados** and **Documentos afectados** (processes and
+  documents affected; only the documents the role may read).
+
+A record a change comes from cannot be deleted; for example: **No se puede
+eliminar un riesgo al que se refieren cambios en el SGC.**
+
+### Tasks of a change
+
+On the change's page, **+ Nueva tarea** records:
+
+- **Descripción**;
+- **Responsable** (owner, a person);
+- **Fecha límite** (deadline);
+- **Estado**: **Pendiente** (at first), **En curso** (in progress),
+  **Completada** or **Cancelada**;
+- **Fecha de finalización (solo si está completada)** (completion date):
+  required for a completed task, never in the future and only in that state;
+- **Resultado**.
+
+Tasks are added, edited and deleted while the change is proposed or
+approved; deleting them is for administrators. A task never moves to another
+change. A pending or in-progress task past its deadline, in a proposed or
+approved change, shows **Vencida** (overdue).
+
+### Lifecycle of a change
+
+| State | What can change | Next step |
+|---|---|---|
+| **Propuesto** (proposed) | Everything, with **Editar**, and its tasks | An administrator approves it (**Aprobar**) or cancels it |
+| **Aprobado** (approved) | The owner, the planned date, the communication, the processes, the documents and the tasks | An administrator or an auditor records the implementation (**Registrar la implantación**); an administrator may cancel it |
+| **Implantado** (implemented) | Nothing | An administrator or an auditor reviews the effectiveness (**Revisar la eficacia**) |
+| **Eficacia revisada** (effectiveness reviewed) | Nothing | Final state |
+| **Cancelado** (cancelled) | Nothing | Final state |
+
+The decisions are taken under **Decidir sobre el cambio** on the change's
+page, which offers each role only those it may take:
+
+- **Aprobar** needs the four considerations, the planned date and at least
+  one task that is not cancelled. When something is missing, the message
+  lists it (**Para aprobar el cambio falta: …**). The change is approved
+  today, in the name of the person linked to the user. From then on its plan
+  (the title, the description, the origin with its record, the purpose and
+  the four considerations) no longer changes. The planned date can move, but
+  not be removed.
+- **Registrar la implantación** needs every task completed or cancelled, and
+  at least one completed (**Quedan tareas pendientes o en curso; complétalas o
+  cancélalas antes de implantar el cambio.**). The **Fecha de implantación**
+  (implementation date) is never in the future nor before the approval.
+- **Revisar la eficacia** records the **Resultado** (**Eficaz** or **No
+  eficaz**), the **Fecha de la revisión** (never before the implementation
+  nor in the future) and the **Comentario (obligatorio si no ha sido
+  eficaz)** (comment, required when the change was not effective). Someone
+  other than the change's owner reviews it (**La persona que revisa la eficacia no puede
+  ser la responsable del cambio.**).
+- **Cancelar el cambio** needs the **Motivo de la cancelación** (reason); the
+  change is cancelled today and its tasks stay as they were.
+- **Eliminar** (administrators) works only on a proposed change, and deletes
+  its tasks too.
+
+An approved change is **Fuera de plazo** (late) when its planned
+implementation date is before today. None of these decisions is taken from the
+MCP server (see [Agents and API tokens](#agents-and-api-tokens)).
+
+### Change screens
+
+- **The list** filters by **Texto (título o descripción)** (text in the title
+  or description), **Estado**, **Origen**, **Responsable**, **Proceso**,
+  **Fuera de plazo** and **Con tareas vencidas** (with overdue tasks), and is
+  paged; a page past the last one shows the last one. For each change it
+  shows the origin with the record it comes from, the owner, the state, the
+  **Implantación prevista** (with the **Fuera de plazo** badge) and the
+  **Tareas abiertas** (pending or in progress).
+- **The change's page** shows the **Plan del cambio**, the
+  **Consideraciones** a) to d), the **Procesos afectados**, the **Documentos
+  afectados** the role may read (an Operativo user sees only those in force),
+  the **Tareas** and **Aprobación, implantación y eficacia**. The record the
+  change comes from is linked for the roles that may read it; the others see
+  **Registro vinculado** (linked record).
+- **The pages of the origin records.** The page of a nonconformity, an audit,
+  a risk, an opportunity or a context issue shows the card **Cambios en el SGC
+  que origina** (changes it gives rise to), with each change's state. On a
+  management review's page, each action lists the changes it gives rise to,
+  and actions of type **Cambio en el SGC** offer **Planificar cambio** (plan a
+  change) to those who create changes: it opens the change form with the
+  origin and the action already chosen.
+- **The dashboard** shows the **Cambios en el SGC** card (see
+  [Dashboard](#dashboard)).
+
+### Change PDFs
+
+- **PDF** on the list produces the change register as of today:
+  - how many changes are in each state and how many approved ones are late,
+    with their list;
+  - the changes grouped by state, the open ones first (proposed, approved and
+    implemented), then those with the effectiveness reviewed and the
+    cancelled ones. For each change: the origin with its record, the owner,
+    the proposal, planned, approval and implementation dates, the tasks
+    completed of the total and the result (the effectiveness one, or the date
+    and reason of the cancellation).
+- **Plan PDF** on the change's page produces its plan:
+  - the title, the state, the origin with its record, the owner and the
+    proposal and planned dates;
+  - the description, the considerations a) to d) and the communication;
+  - the processes and documents affected, with the same visibility rule as
+    the page;
+  - the tasks: description, owner, deadline (and whether overdue), state,
+    completion date and result;
+  - the approval, the implementation, the effectiveness review and, when it
+    was cancelled, the cancellation.
+
+The changes of the period are also a management review input (see
+[Inputs (9.3.2)](#inputs-932)).
+
 ## External providers
 
 **Proveedores** (`/proveedores/`, menu **Calidad**) is the register of external
@@ -1482,7 +1647,14 @@ the period, next to its comment:
   cut-off date, the evaluations in the period with their average score and
   results, the providers with a **No apto** evaluation in the period, and the
   nonconformities with the **Proveedor** origin detected in the period, with
-  the ten most cited providers;
+  the ten most cited providers; and the changes to the QMS (6.3): those
+  proposed, approved, implemented, with the effectiveness reviewed (effective
+  and not effective) and cancelled in the period, each counted by the date of
+  that stage; those implemented or reviewed in the period, with their state,
+  dates and result, the most recent first; and the approved ones that were
+  late on the cut-off date, neither implemented nor cancelled, with their
+  owner, the most overdue first. Each list shows ten at most and says when
+  there are more (**Se muestran los 10 más recientes de …**);
 - **d)** training: sessions, hours and topics;
 - **e)** the effectiveness of actions on risks and opportunities: each action
   records its own (see [Actions](#actions)), but the review does not summarize
@@ -1492,8 +1664,9 @@ the period, next to its comment:
 The figures count the period up to its end, or up to today when the end is
 later (the **Fecha de corte**, cut-off date); the counts of issues in force
 and the scope version are those of the moment they are computed. Reviews held
-before the provider register existed show no provider figures, and those held
-before the context issue register show neither the issues nor the scope. In a
+before the provider register existed show no provider figures, those held
+before the context issue register show neither the issues nor the scope, and
+those held before the change register show no changes. In a
 draft they are computed live and marked **Datos provisionales**. Holding the review freezes them, so
 the review and its minutes keep showing what was presented even if the
 registers change later.
@@ -1543,8 +1716,9 @@ decision:
 - each input with its figures and comment, marked **BORRADOR — datos
   provisionales** while the review is a draft;
 - the conclusions;
-- the actions: type, description, owner, deadline (and whether overdue),
-  state, completion date and result;
+- the actions: type, description with the changes to the QMS it gives rise
+  to and their state, owner, deadline (and whether overdue), state,
+  completion date and result;
 - the date the minutes were generated.
 
 ## Other registers
@@ -1673,6 +1847,7 @@ for a link or an administrator sends one (see
 | Alcance del SGC | QMS scope (clause 4.3), kept as versions: draft, in force and obsolete |
 | Auditor jefe | Lead auditor |
 | Borrador | Draft |
+| Cambio en el SGC | Change to the QMS (clause 6.3): its plan, tasks, approval, implementation and effectiveness review |
 | Capacitación | Training session |
 | Causa raíz | Root cause |
 | Celebrada | Held (management review) |
@@ -1686,6 +1861,7 @@ for a link or an administrator sends one (see
 | En verificación | Under verification (nonconformity state) |
 | Encuesta | Customer survey |
 | Fecha límite | Deadline |
+| Fuera de plazo | Late (an approved change past its planned implementation date) |
 | Gravedad | Severity |
 | Hallazgo | Audit finding |
 | Línea de reporte | Reporting line (the roles above a role, up to the top) |

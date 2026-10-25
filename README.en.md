@@ -43,6 +43,10 @@ an agent can never delete anything.
   evaluation, overdue reviews and PDFs.
 - **Quality objectives** (6.2): indicator, target, owner, measurements and
   trend.
+- **Changes to the QMS** (6.3): planned changes with their origin, the
+  considerations a) to d), communication, affected processes and documents,
+  tasks, approval by an administrator, implementation, effectiveness review,
+  dashboard alerts, register and plan PDFs, and a management review input.
 - **External providers** (8.4, 9.1.3): selection criteria, affected processes,
   approval by an administrator, scored evaluations with the next evaluation,
   linked nonconformities and the approved-providers PDF.

@@ -69,6 +69,7 @@ No enlazar imágenes hasta que existan en el repositorio. -->
 | Auditorías internas | 9.2 | Programa anual de auditoría, auditorías con alcance, equipo y comprobación de independencia, y hallazgos clasificados que abren no conformidades |
 | Riesgos y oportunidades | 6.1 | Registros separados de riesgos y de oportunidades con valoración, valoración residual, mapa de calor, acciones con la evaluación de su eficacia, revisiones vencidas y PDF |
 | Objetivos de la calidad | 6.2 | Indicador, meta, responsable, mediciones, tendencia y mediciones vencidas |
+| Cambios en el SGC | 6.3 | Cambios planificados con su origen, las consideraciones a) a d), la comunicación, los procesos y documentos afectados, tareas, aprobación por un administrador, implantación, revisión de la eficacia, avisos en el panel, PDF del registro y del plan, y entrada de la revisión por la dirección |
 | Proveedores externos | 8.4, 9.1.3 | Criterios de selección, procesos afectados, aprobación por un administrador, evaluaciones puntuadas con la próxima evaluación, no conformidades vinculadas y PDF de proveedores aprobados |
 | Revisión por la dirección | 9.3 | Entradas tomadas de los registros, conclusiones, acciones y acta en PDF |
 | Informes y notificaciones | 9.1 | PDF de los registros, informe mensual de calidad y avisos programados por correo electrónico |

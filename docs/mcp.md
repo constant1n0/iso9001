@@ -34,7 +34,7 @@ nunca puede eliminar.
 
   | Herramienta | Finalidad |
   |---|---|
-  | `qms_modules` | Los 28 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
+  | `qms_modules` | Los 30 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
   | `qms_list` | Una página acotada de un módulo, con los filtros que enumera `qms_modules` |
   | `qms_get` | Un registro por su `id` |
   | `qms_create` | Crea un registro |
@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 28 módulos: `no_conformidades`, `auditorias`,
+`qms_modules` enumera 30 módulos: `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -67,9 +67,10 @@ nunca puede eliminar.
 `competencias_acreditadas`, `acciones_correctivas`, `objetivos_calidad`,
 `mediciones_objetivo`, `revisiones_direccion`, `acciones_revision`,
 `riesgos`, `oportunidades`, `acciones_riesgo`, `proveedores`,
-`evaluaciones_proveedor`, `cuestiones_contexto` y `alcances_sgc`. Cada
-campo tiene un `type`, un indicador `required`, los valores `allowed` de los
-enumerados y, cuando los indicadores no bastan, una breve `note`.
+`evaluaciones_proveedor`, `cuestiones_contexto`, `alcances_sgc`,
+`cambios_sgc` y `tareas_cambio`. Cada campo tiene un `type`, un indicador
+`required`, los valores `allowed` de los enumerados y, cuando los indicadores
+no bastan, una breve `note`.
 
 No conformidades y acciones correctivas (cláusula 10.2 de ISO 9001):
 
@@ -477,6 +478,57 @@ y actualizan. Ningún token elimina ni aprueba.
 - «Hoy» es la fecha local del servidor (`APP_TIMEZONE`).
 - Solo en la web: aprobar el alcance (administradores), eliminar un borrador
   del alcance, una cuestión o una parte interesada, y el PDF del alcance.
+
+Cambios en el SGC (cláusula 6.3 de ISO 9001:2026). `cambios_sgc` y
+`tareas_cambio` comparten un mismo permiso: todos los roles leen, y solo los
+tokens de ADMIN o AUDITOR (con el ámbito `write`) crean y actualizan. Ningún
+token elimina ni cambia el estado de un cambio.
+
+- Los enumerados se devuelven con su etiqueta en español; las escrituras y
+  los filtros usan el nombre del miembro.
+- `cambios_sgc`: `titulo`, `descripcion`, `origen`, `proposito`,
+  `responsable_id` (una persona) y `fecha_propuesta` (nunca futura) son
+  obligatorios.
+  - `origen` es `revision_direccion`, `no_conformidad`, `auditoria`,
+    `riesgo`, `oportunidad`, `cuestion_contexto` u `otro`. Cada origen salvo
+    `otro` admite el vínculo con el registro del que nace, y solo ese:
+    `accion_revision_id` (una acción de `acciones_revision` del tipo
+    `cambio_sgc`), `no_conformidad_id`, `auditoria_id`, `riesgo_id`,
+    `oportunidad_id` o `cuestion_id` (una cuestión `vigente` cuando se
+    vincula). Para cambiar el origen hay que quitar antes el vínculo.
+  - Las consideraciones del apartado 6.3: `proposito` (a), `consecuencias`
+    (a), `integridad` (b), `recursos` (c) y `responsabilidades` (d), además de
+    `comunicacion` (a quién y cómo). Aprobar el cambio exige las cuatro
+    últimas, `fecha_prevista` (la implantación prevista, nunca anterior a la
+    propuesta) y al menos una tarea que no esté cancelada.
+  - `procesos` y `documentos` son listas de ids (`procesos`, `documentos`;
+    también documentos retirados) que sustituyen a las anteriores.
+  - Lo que se puede escribir depende del estado: un cambio `propuesto` admite
+    todos los campos; uno `aprobado`, solo `responsable_id`, `fecha_prevista`
+    (que se puede mover pero no quitar), `comunicacion`, `procesos` y
+    `documentos`; uno `implantado`, `eficacia_revisada` o `cancelado`, nada.
+  - `estado` (`propuesto` al empezar) y los campos de cada etapa
+    (`aprobado_por_id`, `fecha_aprobacion`, `fecha_implantacion`, `eficacia`,
+    `fecha_eficacia`, `revisor_eficacia_id`, `comentario_eficacia`,
+    `motivo_cancelacion`, `fecha_cancelacion`) nunca se escriben. Los
+    registros añaden `procesos`, `documentos` y `fuera_de_plazo` (`aprobado`,
+    con `fecha_prevista` anterior a hoy).
+  - Filtros: `estado`, `origen`, `responsable_id`, `proceso_id`,
+    `documento_id`, `fuera_de_plazo` y `texto` (en el título o la
+    descripción).
+- `tareas_cambio`: `cambio_id` (nunca cambia), `descripcion`,
+  `responsable_id` (una persona) y `fecha_limite` son obligatorios; `estado`
+  (`pendiente` al empezar, `en_curso`, `completada`, `cancelada`),
+  `fecha_completada` (exactamente cuando la tarea está `completada`; nunca
+  futura) y `resultado`. Las tareas se crean y actualizan mientras su cambio
+  está `propuesto` o `aprobado`. Los registros añaden `vencida` (`pendiente` o
+  `en_curso` después de `fecha_limite`, en un cambio `propuesto` o
+  `aprobado`). Filtros: `cambio_id`, `estado`, `responsable_id` y `vencida`.
+- «Hoy» es la fecha local del servidor (`APP_TIMEZONE`).
+- Solo en la web: aprobar y cancelar un cambio (administradores), registrar
+  su implantación y revisar su eficacia (administradores y auditores),
+  eliminar un cambio propuesto o una tarea, y los dos PDF (el registro de
+  cambios y el plan de cada cambio).
 
 ## Emisión de un token
 
