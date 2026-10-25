@@ -24,9 +24,10 @@ under ``/cambios`` (blueprint ``changes``):
   state, origin, owner, process, ``fuera_de_plazo`` (approved and past its
   planned date), ``tareas_vencidas`` (with an overdue task) and a text in the
   title or the description; a value that names nothing is ignored, so it
-  neither filters nor counts, and the page links keep the filters. Each change
-  shows its origin with the record behind it, its owner, its state, its planned
-  date with an overdue badge and its open tasks.
+  neither filters nor counts, and the page links keep the filters; a page
+  beyond the last one shows the last one. Each change shows its origin with the
+  record behind it, its owner, its state, its planned date with an overdue
+  badge and its open tasks.
 - A change's page shows its plan (description, origin and the record behind it,
   linked for the roles that read that record, owner, dates and communication),
   the 6.3 considerations a) to d), its processes, the documents the role may
@@ -48,6 +49,12 @@ under ``/cambios`` (blueprint ``changes``):
 - Tasks live under their change (one of another change is a 404) and are
   written only while it is proposed or approved.
 - ``citing_changes`` gives the origin pages the changes a record gives rise to.
+- Every role exports two PDFs (decision CP7, task CP-4): the register
+  (``/pdf``, ``cambios_sgc_<date>.pdf``), its changes counted by state with the
+  approved ones past their planned date, then grouped by state, open ones first;
+  and a change's plan (``/<id>/pdf``, ``plan_cambio_<id>.pdf``) with the page's
+  content. A PDF that cannot be rendered is logged and flashed on the page it
+  came from.
 
 A service ``ValidationError`` or ``Conflict`` is rolled back: on a form it shows
 on its field or is flashed, with the input kept; on a one-button action it is
@@ -59,7 +66,7 @@ from dataclasses import dataclass
 from math import ceil
 from typing import Any, TypeVar
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from flask_login import login_required
 
@@ -70,8 +77,8 @@ from ..forms import (
     ImplantacionCambioForm, TareaCambioForm, person_choices,
 )
 from ..models import (
-    CHANGE_LINKS, CambioSGC, EstadoCambio, EstadoCuestion, OrigenCambio, ProcesoOperacion,
-    TareaCambio,
+    CHANGE_LINKS, CambioSGC, EstadoCambio, EstadoCuestion, EstadoTareaCambio, OrigenCambio,
+    ProcesoOperacion, TareaCambio,
 )
 from ..services import (
     audits, context_issues, crud, documents, nonconformities, people, process_operations,
@@ -81,6 +88,7 @@ from ..services import management_reviews as mr
 from ..services import qms_changes as qc
 from ..services.actor import Actor
 from ..services.errors import Conflict, NotFound, PermissionDenied, ValidationError
+from ..utils.pdf import pdf_response, render_pdf
 from ..utils.permissions import can, require_permission
 from ..utils.web_actor import current_actor
 from .auditoria_routes import committed
@@ -100,6 +108,8 @@ LINK_FIELD = 'registro_origen'  # ``<link column>:<id>``, or empty
 FLAGS = {'1': True, '0': False}
 YES_NO = [('1', 'Sí'), ('0', 'No')]
 LABEL_MAX = 90
+REGISTER_PDF_ERROR = 'Error al generar el PDF del registro de cambios.'
+PLAN_PDF_ERROR = 'Error al generar el PDF del plan del cambio.'
 # The service refusals shown on their field instead of flashed.
 CHANGE_FIELD_ERRORS = {
     qc.PROPOSED_IN_FUTURE: 'fecha_propuesta',
@@ -307,6 +317,10 @@ def list_changes() -> ResponseReturnValue:
     page = max(request.args.get('page', 1, type=int), 1)
     found, total = qc.changes.list_page(db.session, actor, page=page, per_page=PER_PAGE,
                                         today=today, **chosen)
+    if not found and total:  # beyond the last page: show the last one
+        page = ceil(total / PER_PAGE)
+        found, total = qc.changes.list_page(db.session, actor, page=page, per_page=PER_PAGE,
+                                            today=today, **chosen)
     return render_template(
         'cambios/list.html', cambios=found, personas=owners,
         origenes={change.id: origin_of(change) for change in found},
@@ -328,6 +342,27 @@ def _visible_documents(actor: Actor) -> set[int]:
     return {document.id for document in documents.list_(db.session, actor)}
 
 
+def _change_context(actor: Actor, change_id: int) -> dict[str, Any]:
+    """What a change's page and its plan PDF show, judged on ``local_today``.
+
+    The change, the record behind it, the documents ``actor`` may read, its tasks
+    with the overdue ones, whether it is past its planned date and the names of
+    its owner, approver, reviewer and task owners.
+    """
+    today = local_today()
+    cambio = qc.changes.get(db.session, actor, change_id)
+    visible = _visible_documents(actor)
+    return dict(
+        cambio=cambio, origen=origin_of(cambio),
+        documentos=[document for document in cambio.documentos if document.id in visible],
+        tareas=cambio.tareas,
+        vencidas={task.id for task in cambio.tareas if qc.is_overdue(task, cambio, today=today)},
+        fuera_de_plazo=qc.fuera_de_plazo(cambio, today=today),
+        personas=people.names(db.session, actor, (
+            cambio.responsable_id, cambio.aprobado_por_id, cambio.revisor_eficacia_id,
+            *(task.responsable_id for task in cambio.tareas))))
+
+
 @bp.route('/<int:change_id>', methods=['GET'])
 @login_required
 @require_permission('read', RESOURCE)
@@ -335,25 +370,76 @@ def show_change(change_id: int) -> ResponseReturnValue:
     """A change's page: its plan, considerations, lists, tasks, stages and transitions."""
     actor = current_actor()
     today = local_today()
-    cambio = qc.changes.get(db.session, actor, change_id)
-    visible = _visible_documents(actor)
+    context = _change_context(actor, change_id)
+    cambio = context['cambio']
     may = {name: guard(actor, cambio) for name, guard in (
         ('aprobar', qc.may_approve), ('implantar', qc.may_implement),
         ('eficacia', qc.may_review_effectiveness), ('cancelar', qc.may_cancel))}
     return render_template(
-        'cambios/detail.html', cambio=cambio, origen=origin_of(cambio),
-        documentos=[document for document in cambio.documentos if document.id in visible],
-        tareas=cambio.tareas,
-        vencidas={task.id for task in cambio.tareas if qc.is_overdue(task, cambio, today=today)},
-        fuera_de_plazo=qc.fuera_de_plazo(cambio, today=today),
+        'cambios/detail.html', **context,
         abierto=cambio.estado in qc.OPEN_STATES,
-        personas=people.names(db.session, actor, (
-            cambio.responsable_id, cambio.aprobado_por_id, cambio.revisor_eficacia_id,
-            *(task.responsable_id for task in cambio.tareas))),
         puede=may,
         implantacion=ImplantacionCambioForm(fecha_implantacion=today),
         eficacia=EficaciaCambioForm(fecha_eficacia=today),
         cancelacion=CancelacionCambioForm())
+
+
+# -- the PDFs (decision CP7) -----------------------------------------------------------
+
+
+def _pdf(template: str, filename: str, back: str, failure: str, logged: str,
+         **context: Any) -> ResponseReturnValue:
+    """``template`` as a PDF; one that cannot be rendered returns to ``back`` with
+    ``failure`` and logs ``logged``."""
+    try:
+        pdf = render_pdf(template, **context)
+    except Exception:
+        current_app.logger.exception(logged)
+        flash(failure, 'danger')
+        return redirect(back)
+    return pdf_response(pdf, filename)
+
+
+@bp.route('/pdf', methods=['GET'])
+@login_required
+@require_permission('read', RESOURCE)
+def export_pdf() -> ResponseReturnValue:
+    """The change register as a PDF on ``local_today``.
+
+    Every change counted by state, the approved ones past their planned date,
+    then the changes grouped by state in lifecycle order (``EstadoCambio``), each
+    group in the register's order, with its origin, owner, dates, tasks
+    completed of the total and, once closed, its result.
+    """
+    actor = current_actor()
+    today = local_today()
+    cambios = qc.changes.list_(db.session, actor)
+    grupos = [(estado, [c for c in cambios if c.estado is estado]) for estado in EstadoCambio]
+    done = EstadoTareaCambio.completada
+    return _pdf(
+        'cambios/register_pdf.html', f'cambios_sgc_{today:%Y-%m-%d}.pdf',
+        url_for('changes.list_changes'), REGISTER_PDF_ERROR,
+        'Error generating the QMS changes register PDF',
+        hoy=today, total=len(cambios), grupos=grupos,
+        recuentos=[(f'Estado: {estado.value}', len(found)) for estado, found in grupos],
+        fuera=sorted((c for c in cambios if qc.fuera_de_plazo(c, today=today)),
+                     key=lambda c: (c.fecha_prevista, c.id)),
+        origenes={c.id: origin_of(c) for c in cambios},
+        tareas={c.id: (sum(t.estado is done for t in c.tareas), len(c.tareas))
+                for c in cambios},
+        personas=people.names(db.session, actor, (c.responsable_id for c in cambios)))
+
+
+@bp.route('/<int:change_id>/pdf', methods=['GET'])
+@login_required
+@require_permission('read', RESOURCE)
+def export_change_pdf(change_id: int) -> ResponseReturnValue:
+    """A change's plan as a PDF: the page's content without its controls."""
+    context = _change_context(current_actor(), change_id)
+    return _pdf(
+        'cambios/plan_pdf.html', f'plan_cambio_{change_id}.pdf',
+        url_for('changes.show_change', change_id=change_id), PLAN_PDF_ERROR,
+        f'Error generating the plan PDF of QMS change {change_id}', **context)
 
 
 def _document_label(document: Any) -> str:

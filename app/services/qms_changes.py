@@ -820,29 +820,33 @@ class PeriodChanges:
     eficaces: int  # ... and found effective
     no_eficaces: int  # ... or not
     cancelados: int
-    # Approved by ``hasta``, planned before it and neither implemented nor
-    # cancelled by then, the earliest planned first. The planned date is the
-    # current one: an earlier value is not kept.
+    # Approved by the cut-off (``hasta`` unless given), planned before it and
+    # neither implemented nor cancelled by then, the earliest planned first. The
+    # planned date is the current one: an earlier value is not kept.
     fuera_de_plazo: list[CambioSGC]
     # Implemented or reviewed in the period, the earliest implemented first; each
     # carries its id, title, state, dates and result (``eficacia``).
     implantados_o_revisados: list[CambioSGC]
 
 
-def in_period(session: Session, desde: date, hasta: date) -> PeriodChanges:
+def in_period(session: Session, desde: date, hasta: date, *,
+              cut_off: date | None = None) -> PeriodChanges:
     """The changes proposed, approved, implemented, reviewed and cancelled in a period.
 
     No policy check: for the management review, which checks its own grant and
-    caps the lists it stores. ``hasta`` is the cut-off at which a change counts
-    as late.
+    caps the lists it stores. ``cut_off``, ``hasta`` unless given, is the date
+    at which a change counts as late: the review passes its own cut-off, which
+    is today when the period ends later.
 
     Raises:
-        ValueError: ``desde`` or ``hasta`` is not a ``date``, or ``desde`` comes
-            after ``hasta`` (programming errors; the review validates its period).
+        ValueError: ``desde``, ``hasta`` or a given ``cut_off`` is not a ``date``,
+            or ``desde`` comes after ``hasta`` (programming errors; the review
+            validates its period).
     """
     desde, hasta = _date(desde, "desde"), _date(hasta, "hasta")
     if desde > hasta:
         raise ValueError("desde must not be after hasta")
+    cut_off = hasta if cut_off is None else _date(cut_off, "cut_off")
     change = CambioSGC
 
     def within(column: Any) -> Any:
@@ -856,9 +860,9 @@ def in_period(session: Session, desde: date, hasta: date) -> PeriodChanges:
 
     reviewed = within(change.fecha_eficacia)
     open_at_cut_off = and_(
-        change.fecha_aprobacion <= hasta, change.fecha_prevista < hasta,
-        or_(change.fecha_implantacion.is_(None), change.fecha_implantacion > hasta),
-        or_(change.fecha_cancelacion.is_(None), change.fecha_cancelacion > hasta))
+        change.fecha_aprobacion <= cut_off, change.fecha_prevista < cut_off,
+        or_(change.fecha_implantacion.is_(None), change.fecha_implantacion > cut_off),
+        or_(change.fecha_cancelacion.is_(None), change.fecha_cancelacion > cut_off))
     return PeriodChanges(
         propuestos=count(within(change.fecha_propuesta)),
         aprobados=count(within(change.fecha_aprobacion)),

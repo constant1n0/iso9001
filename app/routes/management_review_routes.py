@@ -65,9 +65,9 @@ from ..forms import (
     RevisionDireccionForm, number_text, person_choices,
 )
 from ..models import (
-    AccionRevision, CategoriaCuestion, EstadoAccionRevision, EstadoCuestion, EstadoObjetivo,
-    EstadoOportunidad, EstadoProveedor, EstadoRevisionDireccion, EstadoRiesgo,
-    GravedadNoConformidad, NivelRiesgo, OrigenNoConformidad, PrioridadOportunidad,
+    AccionRevision, CategoriaCuestion, EficaciaCambio, EstadoAccionRevision, EstadoCambio,
+    EstadoCuestion, EstadoObjetivo, EstadoOportunidad, EstadoProveedor, EstadoRevisionDireccion,
+    EstadoRiesgo, GravedadNoConformidad, NivelRiesgo, OrigenNoConformidad, PrioridadOportunidad,
     ResultadoEvaluacion, RevisionDireccion, TipoAccionRevision, TipoContexto, TipoHallazgo,
 )
 from ..services import management_reviews as mr
@@ -164,8 +164,19 @@ def _member(enum_cls: Any, name: Any) -> str:
     return enum_cls[name].value if name in enum_cls.__members__ else str(name or '—')
 
 
-def _block(titulo: str, cifras: list, columnas: tuple = (), filas: Any = ()) -> dict:
-    return {'titulo': titulo, 'cifras': cifras, 'columnas': columnas, 'filas': list(filas)}
+def _block(titulo: str, cifras: list, columnas: tuple = (), filas: Any = (),
+           nota: str | None = None) -> dict:
+    return {'titulo': titulo, 'cifras': cifras, 'columnas': columnas, 'filas': list(filas),
+            'nota': nota}
+
+
+def _cut(datos: Mapping[str, Any], total: tuple[str, ...], lista: tuple[str, ...],
+         which: str) -> str | None:
+    """Say so when the list at ``lista`` holds fewer items than its count at ``total``."""
+    listed, counted = _at(datos, *lista), _at(datos, *total)
+    if not isinstance(listed, list) or not isinstance(counted, int) or counted <= len(listed):
+        return None
+    return f'Se muestran los {len(listed)} {which} de {counted}.'
 
 
 def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -180,7 +191,9 @@ def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
     ``external-providers``) show only when the inputs hold ``proveedores``: reviews
     held before it froze none. Likewise the context issues and the scope in force
     (input b, OC5 of ``organization-context``) show only when ``contexto`` holds
-    ``cuestiones`` and ``alcance``.
+    ``cuestiones`` and ``alcance``, and the changes to the QMS (input c, CP6 of
+    ``change-planning``) only when the inputs hold ``cambios``. A block's ``nota``
+    says when its list was cut at ``LIST_LIMIT``.
     """
     def n(*path: str) -> str:
         return _number(_at(datos, *path))
@@ -329,6 +342,32 @@ def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
             (p.get('nombre'), _number(p.get('total')))
             for p in rows('proveedores', 'no_conformidades', 'por_proveedor')))
     ] if isinstance(_at(datos, 'proveedores'), Mapping) else []
+    cambios = [_block('Cambios en el SGC', [
+        ('Cambios propuestos en el periodo', n('cambios', 'propuestos')),
+        ('Cambios aprobados en el periodo', n('cambios', 'aprobados')),
+        ('Cambios implantados en el periodo', n('cambios', 'implantados')),
+        ('Con la eficacia revisada en el periodo', n('cambios', 'revisados')),
+        ('Revisados como eficaces', n('cambios', 'eficaces')),
+        ('Revisados como no eficaces', n('cambios', 'no_eficaces')),
+        ('Cambios cancelados en el periodo', n('cambios', 'cancelados')),
+        ('Implantados o revisados en el periodo', n('cambios', 'implantados_o_revisados')),
+    ], ('Cambio implantado o revisado', 'Estado', 'Implantación', 'Revisión de la eficacia',
+        'Resultado'), (
+        (c.get('titulo'), _member(EstadoCambio, c.get('estado')),
+         _day(c.get('fecha_implantacion')), _day(c.get('fecha_eficacia')),
+         _member(EficaciaCambio, c.get('eficacia')))
+        for c in rows('cambios', 'implantados_o_revisados_lista')),
+        _cut(datos, ('cambios', 'implantados_o_revisados'),
+             ('cambios', 'implantados_o_revisados_lista'), 'más recientes')),
+        _block('Cambios aprobados fuera de plazo al cierre', [
+            ('Aprobados fuera de plazo al cierre', n('cambios', 'fuera_de_plazo')),
+        ], ('Cambio', 'Responsable', 'Aprobado', 'Implantación prevista', 'Estado actual'), (
+            (c.get('titulo'), c.get('responsable'), _day(c.get('fecha_aprobacion')),
+             _day(c.get('fecha_prevista')), _member(EstadoCambio, c.get('estado')))
+            for c in rows('cambios', 'fuera_de_plazo_lista')),
+            _cut(datos, ('cambios', 'fuera_de_plazo'), ('cambios', 'fuera_de_plazo_lista'),
+                 'más atrasados')),
+    ] if isinstance(_at(datos, 'cambios'), Mapping) else []
     mejoras = _block('Mejoras', [
         ('Mejoras implantadas en el periodo', n('mejoras', 'total')),
     ], ('Mejora', 'Fecha'), ((m.get('descripcion'), _day(m.get('fecha')))
@@ -337,7 +376,7 @@ def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
         'comentario_acciones_previas': [previas],
         'comentario_contexto': contexto,
         'comentario_desempeno': [satisfaccion, objetivos, indicadores, no_conformidades,
-                                 auditorias, *proveedores],
+                                 auditorias, *proveedores, *cambios],
         'comentario_recursos': [capacitaciones],
         'comentario_riesgos': [],  # no register: the comment covers it
         'comentario_mejora': [mejoras],

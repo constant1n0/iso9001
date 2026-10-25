@@ -72,6 +72,7 @@
         </tbody>
     </table>
     {% endif %}
+    {% if bloque.nota %}<p class="texto muted">{{ bloque.nota }}</p>{% endif %}
     {% else %}
     <p class="texto muted">Sin datos de los registros: se valora en el comentario.</p>
     {% endfor %}
@@ -93,7 +94,7 @@
     </thead>
     <tbody>
         {% for accion in acciones %}
-        <tr class="accion"><td>{{ accion.tipo.value }}</td><td>{{ accion.descripcion }}</td><td>{{ personas.get(accion.responsable_id, '—') }}</td><td>{{ dia(accion.fecha_limite) }}{% if accion.id in vencidas %} · vencida{% endif %}</td><td>{{ accion.estado.value }}</td><td>{{ dia(accion.fecha_completada) }}</td><td>{{ accion.resultado or '—' }}</td></tr>
+        <tr class="accion"><td>{{ accion.tipo.value }}</td><td>{{ accion.descripcion }}{% if cambios.get(accion.id) %} · Cambios: {% for cambio in cambios[accion.id] %}{{ cambio.titulo }} ({{ cambio.estado.value }}){{ ', ' if not loop.last }}{% endfor %}{% endif %}</td><td>{{ personas.get(accion.responsable_id, '—') }}</td><td>{{ dia(accion.fecha_limite) }}{% if accion.id in vencidas %} · vencida{% endif %}</td><td>{{ accion.estado.value }}</td><td>{{ dia(accion.fecha_completada) }}</td><td>{{ accion.resultado or '—' }}</td></tr>
         {% endfor %}
     </tbody>
 </table>

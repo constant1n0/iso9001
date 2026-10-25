@@ -83,7 +83,8 @@ from ..models import (
     SatisfaccionCliente, TipoAccionRevision, TipoHallazgo,
 )
 from . import (
-    audit, context_issues, crud, fields, people, policy, providers, quality_objectives, risks,
+    audit, context_issues, crud, fields, people, policy, providers, qms_changes,
+    quality_objectives, risks,
 )
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
@@ -677,6 +678,20 @@ def inputs(session: Session, actor: Actor, desde: date, hasta: date, *, today: d
       ``proveedor`` origin detected in the period, those naming no provider
       (``sin_proveedor``) and, in ``por_proveedor``, the most cited providers
       first, then by name. Reviews held before EP-3 froze no such section.
+    - ``cambios`` (9.3.2 c, decision CP6 of ``change-planning``,
+      ``qms_changes.in_period``): the changes to the QMS proposed
+      (``propuestos``), approved (``aprobados``), implemented (``implantados``),
+      reviewed for effectiveness (``revisados``, of them ``eficaces`` and
+      ``no_eficaces``) and cancelled (``cancelados``) in the period, each counted
+      by the date of that stage. ``fuera_de_plazo`` counts the changes approved
+      and past their planned date at the cut-off, neither implemented nor
+      cancelled by then, listed in ``fuera_de_plazo_lista`` with their owner, the
+      most overdue first. ``implantados_o_revisados`` counts the changes
+      implemented or reviewed in the period, listed in
+      ``implantados_o_revisados_lista`` with their current state, dates and
+      result (``eficacia``), the latest implemented or reviewed first. Each count
+      next to its list tells when the list was cut. Reviews held before CP-4
+      froze no such section.
 
     Read grant of ``MANAGEMENT_REVIEW``; ``today`` is the adapter's date.
     """
@@ -729,6 +744,7 @@ def _inputs(session: Session, desde: date, hasta: date, *, today: date,
         "mejoras": _improvements(session, desde, hasta),
         "capacitaciones": _training(session, desde, hasta),
         "proveedores": _providers(session, desde, hasta, cut_off),
+        "cambios": _qms_changes(session, desde, hasta, cut_off),
     })
 
 
@@ -1010,6 +1026,36 @@ def _providers(session: Session, desde: date, hasta: date, cut_off: date) -> dic
             "por_proveedor": [{"id": provider_id, "nombre": _short(nombre), "total": total}
                               for provider_id, nombre, total in most_cited],
         },
+    }
+
+
+def _qms_changes(session: Session, desde: date, hasta: date, cut_off: date) -> dict[str, Any]:
+    found = qms_changes.in_period(session, desde, hasta, cut_off=cut_off)
+    # The latest stage first: a change reviewed in the period was implemented before.
+    done = sorted(found.implantados_o_revisados, reverse=True,
+                  key=lambda change: (change.fecha_eficacia or change.fecha_implantacion,
+                                      change.id))
+    return {
+        "propuestos": found.propuestos,
+        "aprobados": found.aprobados,
+        "implantados": found.implantados,
+        "revisados": found.revisados,
+        "eficaces": found.eficaces,
+        "no_eficaces": found.no_eficaces,
+        "cancelados": found.cancelados,
+        "fuera_de_plazo": len(found.fuera_de_plazo),
+        "fuera_de_plazo_lista": [{
+            "id": change.id, "titulo": _short(change.titulo),
+            "responsable": change.responsable.nombre, "fecha_aprobacion": change.fecha_aprobacion,
+            "fecha_prevista": change.fecha_prevista, "estado": change.estado.name,
+        } for change in found.fuera_de_plazo[:LIST_LIMIT]],
+        "implantados_o_revisados": len(done),
+        "implantados_o_revisados_lista": [{
+            "id": change.id, "titulo": _short(change.titulo), "estado": change.estado.name,
+            "fecha_implantacion": change.fecha_implantacion,
+            "fecha_eficacia": change.fecha_eficacia,
+            "eficacia": change.eficacia.name if change.eficacia else None,
+        } for change in done[:LIST_LIMIT]],
     }
 
 

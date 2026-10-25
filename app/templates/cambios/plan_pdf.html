@@ -1,0 +1,86 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "cambios/pdf_template.html" %}
+{% from "_partials/pdf.html" import fields, section %}
+{% from "cambios/_macros.html" import dia %}
+{# One change's plan (CP7 of change-planning): the change page's content without its
+   controls; every cell is plain text. #}
+{% set c = cambio %}
+{% block title %}Plan del cambio{% endblock %}
+{% block subtitle %}{{ c.titulo }} · {{ c.estado.value }}{% endblock %}
+{% block pdf %}
+{{ fields([
+    ('Título', c.titulo),
+    ('Estado', c.estado.value),
+    ('Origen', c.origen.value),
+    ('Registro de origen', origen.label if origen else '—'),
+    ('Responsable', personas.get(c.responsable_id, '—')),
+    ('Fecha de propuesta', dia(c.fecha_propuesta)),
+    ('Implantación prevista', dia(c.fecha_prevista) ~ (' · fuera de plazo' if fuera_de_plazo else '')),
+]) }}
+{{ section('Descripción', c.descripcion) }}
+<h2 class="grupo" id="consideraciones">Consideraciones del apartado 6.3</h2>
+<div class="section">
+    <h2>a) Propósito y consecuencias potenciales</h2>
+    <p>{{ c.proposito }}</p>
+    <p>{{ c.consecuencias or 'Consecuencias sin indicar.' }}</p>
+</div>
+{{ section('b) Integridad del SGC', c.integridad, 'Sin indicar.') }}
+{{ section('c) Disponibilidad de recursos', c.recursos, 'Sin indicar.') }}
+{{ section('d) Responsabilidades y autoridades', c.responsabilidades, 'Sin indicar.') }}
+{{ section('Comunicación (a quién y cómo)', c.comunicacion, 'Sin indicar.') }}
+<h2 class="grupo" id="procesos">Procesos afectados</h2>
+{% if c.procesos %}
+<p>{{ c.procesos | map(attribute='proceso') | join(', ') }}</p>
+{% else %}
+<p class="muted">No afecta a ningún proceso.</p>
+{% endif %}
+<h2 class="grupo" id="documentos">Documentos afectados</h2>
+{% if documentos %}
+<p>{% for d in documentos %}{{ d.code }} · {{ d.title }}{% if d.withdrawn_at %} (retirado){% endif %}{{ '; ' if not loop.last }}{% endfor %}</p>
+{% else %}
+<p class="muted">No afecta a ningún documento que puedas consultar.</p>
+{% endif %}
+<h2 class="grupo" id="tareas">Tareas</h2>
+{% if tareas %}
+<table class="tabla">
+    <thead>
+        <tr><th>Descripción</th><th>Responsable</th><th>Fecha límite</th><th>Estado</th><th>Finalizada</th><th>Resultado</th></tr>
+    </thead>
+    <tbody>
+        {% for t in tareas %}
+        <tr id="tarea-{{ t.id }}"><td>{{ t.descripcion }}</td><td>{{ personas.get(t.responsable_id, '—') }}</td><td>{{ dia(t.fecha_limite) }}{% if t.id in vencidas %} · vencida{% endif %}</td><td>{{ t.estado.value }}</td><td>{{ dia(t.fecha_completada) }}</td><td>{{ t.resultado or '—' }}</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="muted">Sin tareas.</p>
+{% endif %}
+<h2 class="grupo" id="ciclo">Aprobación, implantación y eficacia</h2>
+{{ fields([
+    ('Aprobado por', personas.get(c.aprobado_por_id, '—')),
+    ('Fecha de aprobación', dia(c.fecha_aprobacion)),
+    ('Fecha de implantación', dia(c.fecha_implantacion)),
+    ('Resultado de la eficacia', c.eficacia.value if c.eficacia else '—'),
+    ('Revisada por', personas.get(c.revisor_eficacia_id, '—')),
+    ('Fecha de la revisión', dia(c.fecha_eficacia)),
+    ('Comentario de la revisión', c.comentario_eficacia or '—'),
+] + ([
+    ('Cancelado el', dia(c.fecha_cancelacion)),
+    ('Motivo de la cancelación', c.motivo_cancelacion),
+] if c.estado.name == 'cancelado' else [])) }}
+{% endblock %}

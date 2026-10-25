@@ -18,11 +18,12 @@ from unittest.mock import patch
 
 from test_audit_screens import ADMIN, AUDITOR, OPERATIVO, SYSTEM
 from test_audit_screens import TODAY as GENERATED  # the date ``pdf_html`` renders with
-from test_management_review_screens import BASE, OLD_FROZEN, ROUTES, ReviewScreensBase
+from test_management_review_screens import BASE, OLD_FROZEN, ROUTES, TODAY, ReviewScreensBase
 
 from app.extensions import db
 from app.forms import REVIEW_INPUTS
 from app.services import management_reviews as mr
+from app.services import qms_changes
 
 DRAFT_MARK = "BORRADOR — datos provisionales"
 FROZEN_NOTE = "Datos congelados al celebrar la revisión"
@@ -173,6 +174,48 @@ class MinutesPdfTestCase(ReviewScreensBase):
         self.assertIn("Riesgos registrados", self.pdf_fields(sections[CONTEXT]))
         for text in ("Cuestiones vigentes", "Versión vigente del alcance", "Normativa derogada"):
             self.assertNotIn(text, html)
+
+    def test_the_minutes_carry_the_changes_unless_held_before_them(self) -> None:
+        self.qms_changes()
+        draft = self.review([self.ana])
+        old = self.held_with(self.before_changes())
+        self.login(AUDITOR)
+        _, sections, _ = self.minutes(draft)
+        figures = self.pdf_fields(sections[PERFORMANCE])
+        self.assertEqual(("15", "13", "12", "1", "1", "1", "12", "1"), tuple(
+            figures[label] for label in (
+                "Cambios propuestos en el periodo", "Cambios aprobados en el periodo",
+                "Cambios implantados en el periodo", "Con la eficacia revisada en el periodo",
+                "Revisados como no eficaces", "Cambios cancelados en el periodo",
+                "Implantados o revisados en el periodo", "Aprobados fuera de plazo al cierre")))
+        self.assertIn("<td>Portal de clientes</td><td>Eficacia revisada</td><td>30/04/2026</td>"
+                      "<td>20/06/2026</td><td>No eficaz</td>", sections[PERFORMANCE])
+        self.assertIn("<td>ERP con retraso</td><td>Eva Ruiz</td><td>03/04/2026</td>"
+                      "<td>15/06/2026</td><td>Aprobado</td>", sections[PERFORMANCE])
+        self.assertIn(f"Se muestran los {mr.LIST_LIMIT} más recientes de 12.",
+                      sections[PERFORMANCE])
+        _, sections, html = self.minutes(old)
+        self.assertIn("Detectadas en el periodo", self.pdf_fields(sections[PERFORMANCE]))
+        for text in ("Cambios en el SGC", "Cambios propuestos en el periodo", "ERP con retraso"):
+            self.assertNotIn(text, html)
+
+    def test_the_minutes_name_the_changes_each_action_gives_rise_to(self) -> None:
+        rid = self.review([self.ana])
+        action = self.action(rid, tipo="cambio_sgc", descripcion="Implantar un ERP")
+        self.action(rid, descripcion="Automatizar pedidos")
+        with self.app.app_context():
+            qms_changes.changes.create(db.session, SYSTEM, {
+                "titulo": "Nuevo ERP", "descripcion": "d", "origen": "revision_direccion",
+                "accion_revision_id": action, "proposito": "p", "responsable_id": self.eva,
+                "fecha_propuesta": TODAY}, today=TODAY)
+            db.session.commit()
+        self.login(ADMIN)
+        _, _, html = self.minutes(rid)
+        rows = ACTION_ROW.findall(html)
+        self.assertIn("<td>Implantar un ERP · Cambios: Nuevo ERP (Propuesto)</td>",
+                      next(row for row in rows if "Implantar un ERP" in row))
+        self.assertIn("<td>Automatizar pedidos</td>",
+                      next(row for row in rows if "Automatizar pedidos" in row))
 
     def test_a_minutes_pdf_that_cannot_be_rendered_returns_to_the_review(self) -> None:
         rid = self.review([self.ana])

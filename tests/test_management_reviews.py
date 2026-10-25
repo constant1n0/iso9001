@@ -19,6 +19,7 @@ import os
 import unittest
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from functools import partial
 from unittest.mock import patch
 
 import test_auth_bootstrap as bootstrap
@@ -863,6 +864,119 @@ class InputsTestCase(Helpers, ServiceBase):
                                               cited["por_proveedor"][0]["total"]))
         self.assertEqual(["Proveedor 00", "Proveedor 01", "Proveedor 02", "Proveedor 04"],
                          [row["nombre"] for row in cited["por_proveedor"][1:5]])
+
+    def qms_change(self, titulo: str, estado: str, owner: int, approver: int | None = None,
+                   **values) -> int:
+        """Core insert of a change to the QMS in ``estado``, proposed on 10 January 2026
+        unless ``values`` say otherwise; ``approver`` approved it and reviews it."""
+        module = models()
+        stages = {"aprobado_por_id": approver} if approver is not None else {}
+        if "eficacia" in values:
+            stages["revisor_eficacia_id"] = approver
+            values["eficacia"] = module.EficaciaCambio[values["eficacia"]]
+        return self.insert(module.CambioSGC, **({
+            "titulo": titulo, "descripcion": "d", "origen": module.OrigenCambio.otro,
+            "proposito": "p", "responsable_id": owner, "fecha_propuesta": date(2026, 1, 10),
+            "estado": module.EstadoCambio[estado]} | stages | values))
+
+    def test_changes_to_the_qms_in_the_period_and_the_late_ones_at_the_cut_off(self) -> None:
+        """9.3.2 c (CP6 of ``change-planning``): the changes proposed, approved, implemented,
+        reviewed (by result) and cancelled in the period, those approved and past their
+        planned date at the cut-off, and those implemented or reviewed in the period, the
+        latest first."""
+        owner, approver = self.person("Eva Gil"), self.person("Ana Pérez")
+        approved = partial(self.qms_change, owner=owner, approver=approver)
+        made = {
+            "propuesto": self.qms_change("Propuesto", "propuesto", owner,
+                                         fecha_propuesta=date(2026, 4, 10)),
+            "antes": self.qms_change("Antes", "propuesto", owner),
+            "tarde": approved("Aprobado tarde", "aprobado", fecha_propuesta=date(2026, 4, 2),
+                              fecha_aprobacion=date(2026, 4, 5), fecha_prevista=date(2026, 6, 1)),
+            "en_plazo": approved("Aprobado en plazo", "aprobado",
+                                 fecha_aprobacion=date(2026, 5, 1),
+                                 fecha_prevista=date(2026, 7, 15)),
+            "noviembre": approved("Previsto en noviembre", "aprobado",
+                                  fecha_aprobacion=date(2026, 6, 1),
+                                  fecha_prevista=date(2026, 11, 15)),
+            "implantado": approved("Implantado", "implantado", fecha_aprobacion=date(2026, 2, 1),
+                                   fecha_prevista=date(2026, 5, 30),
+                                   fecha_implantacion=date(2026, 5, 20)),
+            "despues": approved("Implantado después", "implantado",
+                                fecha_aprobacion=date(2026, 3, 1),
+                                fecha_prevista=date(2026, 6, 15),
+                                fecha_implantacion=date(2026, 7, 10)),
+            "eficaz": approved("Eficaz", "eficacia_revisada", fecha_aprobacion=date(2026, 1, 15),
+                               fecha_prevista=date(2026, 3, 1),
+                               fecha_implantacion=date(2026, 3, 1), eficacia="eficaz",
+                               fecha_eficacia=date(2026, 6, 10)),
+            "no_eficaz": approved("No eficaz", "eficacia_revisada",
+                                  fecha_aprobacion=date(2026, 3, 15),
+                                  fecha_prevista=date(2026, 4, 30),
+                                  fecha_implantacion=date(2026, 4, 20), eficacia="no_eficaz",
+                                  comentario_eficacia="Sin mejora",
+                                  fecha_eficacia=date(2026, 6, 20)),
+            "cancelado": self.qms_change("Cancelado", "cancelado", owner,
+                                         fecha_propuesta=date(2026, 4, 3),
+                                         motivo_cancelacion="No",
+                                         fecha_cancelacion=date(2026, 5, 5)),
+        }
+        changes = self.inputs()["cambios"]
+        self.assertEqual({
+            "propuestos": 3, "aprobados": 3, "implantados": 2, "revisados": 2, "eficaces": 1,
+            "no_eficaces": 1, "cancelados": 1,
+            "fuera_de_plazo": 2,
+            "fuera_de_plazo_lista": [
+                {"id": made["tarde"], "titulo": "Aprobado tarde", "responsable": "Eva Gil",
+                 "fecha_aprobacion": "2026-04-05", "fecha_prevista": "2026-06-01",
+                 "estado": "aprobado"},
+                {"id": made["despues"], "titulo": "Implantado después", "responsable": "Eva Gil",
+                 "fecha_aprobacion": "2026-03-01", "fecha_prevista": "2026-06-15",
+                 "estado": "implantado"},
+            ],
+            "implantados_o_revisados": 3,
+            "implantados_o_revisados_lista": [
+                {"id": made["no_eficaz"], "titulo": "No eficaz", "estado": "eficacia_revisada",
+                 "fecha_implantacion": "2026-04-20", "fecha_eficacia": "2026-06-20",
+                 "eficacia": "no_eficaz"},
+                {"id": made["eficaz"], "titulo": "Eficaz", "estado": "eficacia_revisada",
+                 "fecha_implantacion": "2026-03-01", "fecha_eficacia": "2026-06-10",
+                 "eficacia": "eficaz"},
+                {"id": made["implantado"], "titulo": "Implantado", "estado": "implantado",
+                 "fecha_implantacion": "2026-05-20", "fecha_eficacia": None, "eficacia": None},
+            ],
+        }, changes)
+        json.dumps(changes)
+        # A period ending after today is judged late at today, the cut-off: the change
+        # planned for November is not late yet, the one planned for July already is.
+        later = self.inputs(hasta=date(2026, 12, 31))["cambios"]
+        self.assertEqual([made["tarde"], made["en_plazo"]],
+                         [item["id"] for item in later["fuera_de_plazo_lista"]])
+        self.assertEqual(4, later["implantados_o_revisados"])
+        empty = mr().inputs(db.session, CLI, date(2020, 1, 1), date(2020, 1, 31),
+                            today=TODAY)["cambios"]
+        self.assertEqual((0, 0, [], 0, []), tuple(empty[key] for key in (
+            "propuestos", "fuera_de_plazo", "fuera_de_plazo_lista", "implantados_o_revisados",
+            "implantados_o_revisados_lista")))
+
+    def test_the_changes_lists_hold_the_ten_latest_and_the_ten_most_overdue(self) -> None:
+        owner, approver = self.person("Eva Gil"), self.person("Ana Pérez")
+        for day in range(1, mr().LIST_LIMIT + 2):
+            self.qms_change(f"Implantado {day:02d}", "implantado", owner, approver,
+                            fecha_aprobacion=date(2026, 3, 1), fecha_prevista=date(2026, 4, day),
+                            fecha_implantacion=date(2026, 4, day))
+            self.qms_change(f"Tarde {day:02d}", "aprobado", owner, approver,
+                            fecha_aprobacion=date(2026, 3, 1), fecha_prevista=date(2026, 5, day))
+        self.qms_change("x" * 200, "aprobado", owner, approver, fecha_aprobacion=date(2026, 3, 1),
+                        fecha_prevista=date(2026, 3, 31))
+        changes = self.inputs()["cambios"]
+        self.assertEqual((mr().LIST_LIMIT + 1, mr().LIST_LIMIT + 2),
+                         (changes["implantados_o_revisados"], changes["fuera_de_plazo"]))
+        self.assertEqual([f"Implantado {day:02d}" for day in range(mr().LIST_LIMIT + 1, 1, -1)],
+                         [item["titulo"] for item in changes["implantados_o_revisados_lista"]])
+        late = [item["titulo"] for item in changes["fuera_de_plazo_lista"]]
+        self.assertEqual(mr().LIST_LIMIT, len(late))
+        self.assertEqual((mr().SHORT_TEXT, "…"), (len(late[0]), late[0][-1]))  # the most overdue
+        self.assertEqual([f"Tarde {day:02d}" for day in range(1, mr().LIST_LIMIT)], late[1:])
 
     def test_the_period_and_the_caller_are_checked_and_long_texts_are_cut(self) -> None:
         self.insert(Mejora, no_conformidad="x" * 300, fecha_implementacion=datetime(2026, 5, 1))

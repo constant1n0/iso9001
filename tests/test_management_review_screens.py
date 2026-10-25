@@ -25,9 +25,9 @@ from test_delete_forms import _PostForms
 from app.extensions import db
 from app.forms import REVIEW_INPUTS
 from app.models import (
-    AccionRevision, AlcanceSGC, CuestionContexto, EstadoAccionRevision, EstadoAlcance,
-    EstadoRevisionDireccion, GravedadNoConformidad, NoConformidad, Oportunidad,
-    RevisionDireccion, Riesgo,
+    AccionRevision, AlcanceSGC, CambioSGC, CuestionContexto, EficaciaCambio,
+    EstadoAccionRevision, EstadoAlcance, EstadoCambio, EstadoRevisionDireccion,
+    GravedadNoConformidad, NoConformidad, Oportunidad, OrigenCambio, RevisionDireccion, Riesgo,
 )
 from app.routes.management_review_routes import input_sections
 from app.services import management_reviews as mr
@@ -188,6 +188,41 @@ class ReviewScreensBase(ScreensBase):
         live["contexto"] = {key: value for key, value in live["contexto"].items()
                             if key not in ("cuestiones", "alcance")}
         return live
+
+    def qms_changes(self) -> None:
+        """Changes to the QMS in the second quarter (core inserts: source records): eleven
+        implemented on 1 to 11 June, one reviewed as not effective on 20 June, one approved
+        and late since 15 June, one proposed and one cancelled."""
+        table = CambioSGC.__table__
+        base = {"descripcion": "d", "origen": OrigenCambio.otro, "proposito": "p",
+                "responsable_id": self.eva, "fecha_propuesta": date(2026, 4, 2)}
+        approved = {"aprobado_por_id": self.ana, "fecha_aprobacion": date(2026, 4, 3)}
+        rows = [
+            *({"titulo": f"Implantado {day:02d}", "estado": EstadoCambio.implantado,
+               "fecha_prevista": date(2026, 6, day), "fecha_implantacion": date(2026, 6, day),
+               **approved} for day in range(1, mr.LIST_LIMIT + 2)),
+            {"titulo": "Portal de clientes", "estado": EstadoCambio.eficacia_revisada,
+             "fecha_prevista": date(2026, 5, 1), "fecha_implantacion": date(2026, 4, 30),
+             "eficacia": EficaciaCambio.no_eficaz, "comentario_eficacia": "Sin mejora",
+             "fecha_eficacia": date(2026, 6, 20), "revisor_eficacia_id": self.ana, **approved},
+            {"titulo": "ERP con retraso", "estado": EstadoCambio.aprobado,
+             "fecha_prevista": date(2026, 6, 15), **approved},
+            {"titulo": "Firma digital", "estado": EstadoCambio.propuesto},
+            {"titulo": "Sin presupuesto", "estado": EstadoCambio.cancelado,
+             "motivo_cancelacion": "No", "fecha_cancelacion": date(2026, 5, 5)},
+        ]
+        with self.app.app_context():
+            for row in rows:
+                db.session.execute(table.insert().values(**(base | row)))
+            db.session.commit()
+
+    def before_changes(self) -> dict:
+        """The second quarter's live inputs without ``cambios``: the shape frozen before
+        CP-4 of ``change-planning``."""
+        with self.app.app_context():
+            live = mr.inputs(db.session, SYSTEM, date(2026, 4, 1), date(2026, 6, 30),
+                             today=TODAY)
+        return {key: value for key, value in live.items() if key != "cambios"}
 
     def action_id(self, descripcion: str) -> int:
         with self.app.app_context():
@@ -420,6 +455,44 @@ class WebFlowTestCase(ReviewScreensBase):
             titles = [b["titulo"] for s in input_sections(frozen) for b in s["bloques"]]
             self.assertNotIn("Cuestiones externas e internas", titles)
             self.assertNotIn("Alcance del SGC", titles)
+
+    def test_the_inputs_show_the_changes_and_reviews_held_before_them_still_render(
+            self) -> None:
+        """CP6 of ``change-planning``: input 9.3.2 c gains the changes to the QMS of the
+        period; a list cut at ``LIST_LIMIT`` says so; reviews held before froze none."""
+        self.qms_changes()
+        rid = self.review([self.ana])
+        old = self.held_with(self.before_changes())
+        self.login(AUDITOR)
+        inputs = self.inputs(rid)
+        for label, value in (("Cambios propuestos en el periodo", "15"),
+                             ("Cambios aprobados en el periodo", "13"),
+                             ("Cambios implantados en el periodo", "12"),
+                             ("Con la eficacia revisada en el periodo", "1"),
+                             ("Revisados como eficaces", "0"),
+                             ("Revisados como no eficaces", "1"),
+                             ("Cambios cancelados en el periodo", "1"),
+                             ("Implantados o revisados en el periodo", "12"),
+                             ("Aprobados fuera de plazo al cierre", "1")):
+            with self.subTest(label=label):
+                self.assertEqual(value, self.figure(inputs, label))
+        self.assertIn("<td>Portal de clientes</td><td>Eficacia revisada</td><td>30/04/2026</td>"
+                      "<td>20/06/2026</td><td>No eficaz</td>", inputs)
+        self.assertIn("<td>Implantado 11</td><td>Implantado</td><td>11/06/2026</td><td>—</td>"
+                      "<td>—</td>", inputs)
+        self.assertNotIn("Implantado 01", inputs)  # the oldest of twelve: cut
+        self.assertIn(f"Se muestran los {mr.LIST_LIMIT} más recientes de 12.", inputs)
+        self.assertIn("<td>ERP con retraso</td><td>Eva Ruiz</td><td>03/04/2026</td>"
+                      "<td>15/06/2026</td><td>Aprobado</td>", inputs)
+        self.assertNotIn("más atrasados", inputs)  # one late change: nothing cut
+        old_inputs = self.inputs(old)
+        self.assertEqual("0", self.figure(old_inputs, "Riesgos registrados"))
+        for text in ("Cambios en el SGC", "Cambios propuestos en el periodo", "ERP con retraso"):
+            self.assertNotIn(text, old_inputs)
+        for frozen in (OLD_FROZEN, {}):
+            titles = [b["titulo"] for s in input_sections(frozen) for b in s["bloques"]]
+            self.assertNotIn("Cambios en el SGC", titles)
+            self.assertNotIn("Cambios aprobados fuera de plazo al cierre", titles)
 
     def test_the_list_counts_attendees_and_actions_and_filters_by_year_and_state(self) -> None:
         current = self.review([self.ana, self.luis])

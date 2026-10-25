@@ -691,8 +691,10 @@ class UiPermissionsTestCase(unittest.TestCase):
         writers, admins = {ADMIN, AUDITOR}, {ADMIN}
         page = f"/cambios/{change}"
         self._check_controls({
-            "/cambios/": {'href="/cambios/nuevo"': writers, f'href="{page}/editar"': writers},
+            "/cambios/": {'href="/cambios/nuevo"': writers, f'href="{page}/editar"': writers,
+                          'href="/cambios/pdf"': set(RoleEnum)},
             page: {f'href="{page}/editar"': writers, f'action="{page}/eliminar"': admins,
+                   f'href="{page}/pdf"': set(RoleEnum),
                    f'href="{page}/tareas/nueva"': writers, f'action="{page}/aprobar"': admins,
                    f'action="{page}/cancelar"': admins},
         })

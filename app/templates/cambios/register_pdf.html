@@ -1,0 +1,61 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "cambios/pdf_template.html" %}
+{% from "_partials/pdf.html" import fields %}
+{% from "cambios/_macros.html" import dia %}
+{# The change register (CP7 of change-planning); every cell is plain text. #}
+{% block title %}Registro de cambios en el SGC{% endblock %}
+{% block subtitle %}Cambios en el SGC a {{ hoy.strftime('%d/%m/%Y') }}{% endblock %}
+{% block pdf %}
+{% set tarde = fuera | map(attribute='id') | list %}
+{{ fields([('Cambios registrados', total)] + recuentos + [('Aprobados fuera de plazo', fuera | length)]) }}
+<p class="muted">Un cambio aprobado está fuera de plazo cuando su fecha prevista de implantación es anterior a hoy y todavía no se ha implantado.</p>
+<h2 class="grupo" id="fuera-de-plazo">Cambios aprobados fuera de plazo</h2>
+{% if fuera %}
+<table class="tabla">
+    <thead>
+        <tr><th>Cambio</th><th>Responsable</th><th>Implantación prevista</th><th>Aprobado</th></tr>
+    </thead>
+    <tbody>
+        {% for c in fuera %}
+        <tr id="fuera-{{ c.id }}"><td>{{ c.titulo }}</td><td>{{ personas.get(c.responsable_id, '—') }}</td><td>{{ dia(c.fecha_prevista) }}</td><td>{{ dia(c.fecha_aprobacion) }}</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="muted">Ningún cambio aprobado está fuera de plazo.</p>
+{% endif %}
+{% for estado, cambios in grupos %}
+<h2 class="grupo" id="estado-{{ estado.name }}">{{ estado.value }} ({{ cambios | length }})</h2>
+{% if cambios %}
+<table class="tabla">
+    <thead>
+        <tr><th>Cambio</th><th>Origen</th><th>Responsable</th><th>Propuesto</th><th>Implantación prevista</th><th>Aprobado</th><th>Implantado</th><th>Tareas completadas</th><th>Resultado</th></tr>
+    </thead>
+    <tbody>
+        {% for c in cambios %}
+        {% set registro = origenes[c.id] %}
+        {% set completadas, todas = tareas[c.id] %}
+        <tr id="cambio-{{ c.id }}"><td>{{ c.titulo }}</td><td>{{ c.origen.value }}{% if registro %} · {{ registro.label }}{% endif %}</td><td>{{ personas.get(c.responsable_id, '—') }}</td><td>{{ dia(c.fecha_propuesta) }}</td><td>{{ dia(c.fecha_prevista) }}{% if c.id in tarde %} · fuera de plazo{% endif %}</td><td>{{ dia(c.fecha_aprobacion) }}</td><td>{{ dia(c.fecha_implantacion) }}</td><td>{{ completadas }} de {{ todas }}</td><td>{% if c.eficacia %}{{ c.eficacia.value }}{% if c.comentario_eficacia %} · {{ c.comentario_eficacia }}{% endif %}{% elif c.fecha_cancelacion %}Cancelado el {{ dia(c.fecha_cancelacion) }} · {{ c.motivo_cancelacion }}{% else %}—{% endif %}</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="muted">Ningún cambio en este estado.</p>
+{% endif %}
+{% endfor %}
+{% endblock %}
