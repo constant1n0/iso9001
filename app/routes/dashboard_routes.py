@@ -21,7 +21,8 @@ from flask_login import login_required
 from ..audit_notifications import local_today
 from ..extensions import db
 from ..models import (
-    Auditoria, Capacitacion, EstadoNoConformidad, NoConformidad, SatisfaccionCliente,
+    Auditoria, CambioSGC, Capacitacion, EstadoNoConformidad, NoConformidad, SatisfaccionCliente,
+    TareaCambio,
 )
 from ..services import (
     audits, context_issues, documents, management_reviews, people, providers, qms_changes,
@@ -72,15 +73,20 @@ CONTEXT_ALERTS = (
 )
 
 # What ``qms_changes.attention`` flags (CP6 of change-planning), in the card's order: its
-# key, label and the change list filtered to the same changes (for overdue tasks, the
-# changes holding them).
+# key, label and the change list filtered to the same changes. Each alert counts changes,
+# as its list shows them: overdue tasks count the changes holding them.
 CHANGE_ALERTS = (
     ('pendientes_aprobacion', 'Cambios pendientes de aprobación', {'estado': 'propuesto'}),
     ('fuera_de_plazo', 'Cambios aprobados con la implantación vencida', {'fuera_de_plazo': 1}),
-    ('tareas_vencidas', 'Tareas de cambios vencidas', {'tareas_vencidas': 1}),
+    ('tareas_vencidas', 'Cambios con tareas vencidas', {'tareas_vencidas': 1}),
     ('eficacia_pendiente', 'Cambios implantados sin revisar su eficacia',
      {'estado': 'implantado'}),
 )
+
+
+def _change_id(found: CambioSGC | TareaCambio) -> int:
+    """The change a flagged record is or belongs to."""
+    return found.cambio_id if isinstance(found, TareaCambio) else found.id
 
 
 @bp.route('/', methods=['GET'])
@@ -168,7 +174,8 @@ def dashboard():
     avisos_cambios = None
     if can('read', 'qms_changes'):
         flagged = qms_changes.attention(db.session, current_actor(), today=hoy)
-        avisos_cambios = [(label, url_for('changes.list_changes', **query), len(flagged[key]))
+        avisos_cambios = [(label, url_for('changes.list_changes', **query),
+                           len({_change_id(found) for found in flagged[key]}))
                           for key, label, query in CHANGE_ALERTS if flagged[key]]
 
     # Puntuación media de satisfacción por mes

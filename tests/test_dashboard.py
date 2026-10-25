@@ -221,7 +221,7 @@ class ChangeCardTestCase(ChangeScreensBase):
             (f"{CHANGES}/?estado=propuesto", "Cambios pendientes de aprobación", {proposed}),
             (f"{CHANGES}/?fuera_de_plazo=1", "Cambios aprobados con la implantación vencida",
              {late}),
-            (f"{CHANGES}/?tareas_vencidas=1", "Tareas de cambios vencidas", {proposed}),
+            (f"{CHANGES}/?tareas_vencidas=1", "Cambios con tareas vencidas", {proposed}),
             (f"{CHANGES}/?estado=implantado", "Cambios implantados sin revisar su eficacia",
              {implemented}),
         ]
@@ -240,3 +240,20 @@ class ChangeCardTestCase(ChangeScreensBase):
         with patch("app.routes.dashboard_routes.can",
                    side_effect=lambda action, resource: resource != "qms_changes"):
             self.assertIsNone(self.card())
+
+    def test_overdue_tasks_count_the_changes_holding_them_as_the_linked_list_does(self) -> None:
+        """Two overdue tasks in one change count one change: the alert links to the change
+        list filtered by ``tareas_vencidas``, which shows each change once."""
+        change = self.change("Firma digital")
+        for days in (1, 2):
+            self.task(change, fecha_limite=CHANGES_TODAY - timedelta(days=days))
+        other = self.change("Portal de clientes")
+        self.task(other, fecha_limite=CHANGES_TODAY - timedelta(days=1))
+        self.login(OPERATIVO)
+        items = {label: (unescape(href), int(count))
+                 for href, label, count in CARD_ITEM.findall(self.card())}
+        href, count = items["Cambios con tareas vencidas"]
+        self.assertEqual((f"{CHANGES}/?tareas_vencidas=1", 2), (href, count))
+        self.assertEqual({change, other}, set(self.rows(href)))
+        self.assertEqual(count, len(self.rows(href)))
+        self.assertIn('<span class="badge badge--danger">4</span>', self.card())  # 2 + 2

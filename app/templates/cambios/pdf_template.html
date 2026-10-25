@@ -1,0 +1,33 @@
+<!--
+# Este archivo es parte de "ISO9001 QMS".
+#
+# "ISO9001 QMS" es software libre: puede redistribuirlo y/o modificarlo
+# bajo los términos de la Licencia Pública General GNU publicada por la
+# Free Software Foundation, ya sea la versión 3 de la Licencia o (a su
+# elección) cualquier versión posterior.
+#
+# "ISO9001 QMS" se distribuye con la esperanza de que sea útil,
+# pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de
+# COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulte la
+# Licencia Pública General GNU para obtener más detalles.
+#
+# Debería haber recibido una copia de la Licencia Pública General GNU
+# junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
+{% extends "_partials/pdf_base.html" %}
+{# The layout of the change PDFs (CP7 of change-planning): ``register_pdf.html`` and
+   ``plan_pdf.html`` extend it and fill ``pdf``. PDF-only (never served to a browser, so
+   the CSP does not apply): the change and task tables have more columns than the print
+   theme's key/value tables. #}
+{% block clause %}Cláusula 6.3 · Planificación de los cambios{% endblock %}
+{% block content %}
+<style>
+.grupo { margin: 8mm 0 4mm; font: 700 16pt/1.2 "Barlow Condensed"; }
+.section p + p { margin-top: 2mm; }
+.tabla { width: 100%; border-collapse: collapse; margin-bottom: 4mm; font-size: 7.5pt; line-height: 1.35; }
+.tabla th, .tabla td { padding: 1.5mm 1.5mm; border-bottom: 0.3mm solid #d9d4c8; text-align: left; vertical-align: top; }
+.tabla thead th { border-top: 0.6mm solid #0a0a0a; color: #6b675f; font: 500 6pt "IBM Plex Mono"; letter-spacing: 0.06em; text-transform: uppercase; }
+.tabla tr { page-break-inside: avoid; }
+</style>
+{% block pdf %}{% endblock %}
+{% endblock %}

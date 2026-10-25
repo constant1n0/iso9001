@@ -90,6 +90,7 @@
             </table>
         </div>
         {% endif %}
+        {% if bloque.nota %}<p class="muted">{{ bloque.nota }}</p>{% endif %}
         {% else %}
         <p class="empty">Sin datos de los registros: se valora en el comentario.</p>
         {% endfor %}

@@ -13,6 +13,7 @@
 #
 # Debería haber recibido una copia de la Licencia Pública General GNU
 # junto con este programa. En caso contrario, consulte <https://www.gnu.org/licenses/>.
+ -->
 {% extends "base.html" %}
 {% from "_partials/ui.html" import page_header, empty_state %}
 {% from "cambios/_macros.html" import estado_badge, origen_de, dia %}
@@ -20,6 +21,7 @@
 {% block crumb %}Calidad · Cambios{% endblock %}
 {% block content %}
 {% call page_header('Cláusula 6.3 · Planificación de los cambios', 'Cambios en el SGC') %}
+    <a class="btn" href="{{ url_for('changes.export_pdf') }}" target="_blank" rel="noopener">PDF</a>
     {% if can('create', 'qms_changes') %}
     <a class="btn btn--primary" href="{{ url_for('changes.new_change') }}">+ Nuevo cambio</a>
     {% endif %}

@@ -408,6 +408,9 @@ ENDPOINTS = [
     # tests/test_change_screens.py characterizes them.
     *_html("QMS_CHANGES", "/cambios/", ("nuevo", CHANGE), ("1/editar", CHANGE), "2/eliminar"),
     Endpoint("QMS_CHANGES", "read", "GET", "/cambios/1", 200),
+    # The change register and a change's plan as PDFs (CP-4), rendered for real.
+    *[Endpoint("QMS_CHANGES", "read", "GET", url, 200)
+      for url in ("/cambios/pdf", "/cambios/1/pdf")],
     Endpoint("QMS_CHANGES", "create", "POST", "/cambios/1/tareas/nueva", 302, CHANGE_TASK),
     Endpoint("QMS_CHANGES", "update", "POST", "/cambios/1/tareas/1/editar", 302, CHANGE_TASK),
     Endpoint("QMS_CHANGES", "delete", "POST", "/cambios/1/tareas/1/eliminar", 302),

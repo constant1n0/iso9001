@@ -273,6 +273,20 @@ class ChangeListTestCase(ChangeScreensBase):
             self.assertEqual([made[0]], self.listed(f"{BASE}/?page=3"))
         self.assertNotIn("Página", self.html(f"{BASE}/"))
 
+    def test_a_page_beyond_the_last_one_shows_the_last_one(self) -> None:
+        made = [self.change(f"Cambio {n}", fecha_propuesta=date(2026, 10, n))
+                for n in range(1, 4)]
+        self.login(OPERATIVO)
+        with patch("app.routes.change_routes.PER_PAGE", 2):
+            html = self.html(f"{BASE}/?page=9&estado=propuesto")
+            self.assertEqual([made[0]], self.listed(f"{BASE}/?page=9&estado=propuesto"))
+            self.assertIn("Página 2 de 2", html)
+            self.assertNotIn("Ningún cambio coincide con los filtros.", html)
+            self.assertRegex(html, r'href="/cambios/\?[^"]*page=1[^"]*"')
+            # Nothing to show is still the empty state, whatever the page asked for.
+            self.assertIn("Ningún cambio coincide con los filtros.",
+                          self.html(f"{BASE}/?page=9&estado=cancelado"))
+
 
 class ChangePageTestCase(ChangeScreensBase):
     def test_the_page_shows_the_plan_considerations_lists_tasks_and_stages(self) -> None:
@@ -419,6 +433,59 @@ class ChangeFormTestCase(ChangeScreensBase):
         # A record the picker does not offer is not preselected.
         form = self.html(f"{BASE}/nuevo?accion_revision_id={records['improvement']}")
         self.assertIn('<option selected value="">', self.select(form, "registro_origen"))
+
+    def test_a_link_no_longer_eligible_stays_selected_and_the_form_posts_again(self) -> None:
+        """A proposed change keeps the record it names when that record could no longer be
+        chosen: its review action retyped away from ``cambio_sgc``, or its context issue
+        superseded. The picker keeps it selected, marked «(no elegible)», and posting the
+        form unchanged is accepted (a link is checked only when newly set)."""
+        records = self.origin_records()
+        by_action = self.change("Desde la revisión", origen="revision_direccion",
+                                accion_revision_id=records["action"])
+        by_issue = self.change("Desde el contexto", origen="cuestion_contexto",
+                               cuestion_id=records["issue"])
+        with self.app.app_context():
+            management_reviews.actions.update(db.session, SYSTEM, records["action"],
+                                              {"tipo": "mejora"}, today=TODAY)
+            context_issues.issues.update(db.session, SYSTEM, records["issue"],
+                                         {"estado": "superada"}, today=TODAY)
+            db.session.commit()
+        self.login(AUDITOR)
+        for change, titulo, origen, link, label in (
+                (by_action, "Desde la revisión", "revision_direccion",
+                 f"accion_revision_id:{records['action']}", "Implantar un ERP"),
+                (by_issue, "Desde el contexto", "cuestion_contexto",
+                 f"cuestion_id:{records['issue']}", "Saber disperso")):
+            with self.subTest(link=link):
+                picker = self.select(self.html(f"{BASE}/{change}/editar"), "registro_origen")
+                self.assertIn(f'<option selected value="{link}">{label} (no elegible)</option>',
+                              picker)
+                self.assertEqual(1, picker.count(f'value="{link}"'))
+                self.post(f"{BASE}/{change}/editar", self.form_of(
+                    titulo=titulo, descripcion=CHANGE["descripcion"], origen=origen,
+                    registro_origen=link, proposito=CHANGE["proposito"],
+                    fecha_propuesta="2026-10-01"), expect=f"{BASE}/{change}")
+                self.assertIn(("success", "Cambio actualizado."), self.flashes())
+        with self.app.app_context():
+            self.assertEqual((records["action"], records["issue"]),
+                             (self.stored(by_action).accion_revision_id,
+                              self.stored(by_issue).cuestion_id))
+
+    def test_an_origin_group_the_actor_cannot_read_is_left_out_of_the_picker(self) -> None:
+        records = self.origin_records()
+        self.login(ADMIN)
+        with patch("app.routes.change_routes.can",
+                   side_effect=lambda action, resource: resource != "risks_opportunities"):
+            picker = self.select(self.html(f"{BASE}/nuevo"), "registro_origen")
+        for hidden in ('<optgroup label="Riesgo">', '<optgroup label="Oportunidad">',
+                       f'riesgo_id:{records["risk"]}'):
+            self.assertNotIn(hidden, picker)
+        for shown in ('<optgroup label="Revisión por la dirección">',
+                      '<optgroup label="Cuestión del contexto">',
+                      f'value="accion_revision_id:{records["action"]}"'):
+            self.assertIn(shown, picker)
+        self.assertIn(f'riesgo_id:{records["risk"]}',
+                      self.select(self.html(f"{BASE}/nuevo"), "registro_origen"))
 
     def test_the_form_shows_only_what_the_state_lets_change(self) -> None:
         records = self.origin_records()
