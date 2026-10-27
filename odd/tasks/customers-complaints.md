@@ -127,6 +127,17 @@ Work-unit commits on `feat/customers-complaints` (Conventional Commit):
 - `6e8badd` feat(web): add customer and complaint screens
 - `4a51fd5` feat(mcp): expose customers and complaints and document workflows
 
-Authored change vs `main`: **49 files, 1841 insertions / 109 deletions** (~1,950
-lines), which exceeds the Wave 2 1,500-line PR cap — delivery should be sliced into
-chained PRs. Push and pull-request creation remain the user's decision.
+Authored change vs `main`: **50 files, ~2,082 lines** (1,950 code/docs/tests +
+132-line tracker), which exceeds the Wave 2 1,500-line PR cap.
+
+**Delivery plan (user-selected `chained`; strategy `stacked-to-main`, repo
+precedent external-providers #143–147, change-planning #159–166):**
+
+| PR | Base | Commits | Changed lines | Scope |
+|---|---|---|---|---|
+| #1 | main | `75df05e` + `ab39cb2` | 964 | models, migration backfill, services, policy + data-layer tests |
+| #2 | main (after #1) | `6e8badd` + `4a51fd5` + `977ee65` | 1,118 | screens, forms, templates, nav, MCP modules, docs + their tests |
+
+Each PR stays under the 1,500-line cap and is independently verifiable (PR #1 runs
+the model/service tests; PR #2 builds on #1's merged state). Push and pull-request
+creation remain the user's decision.
