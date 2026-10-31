@@ -130,14 +130,24 @@ Work-unit commits on `feat/customers-complaints` (Conventional Commit):
 Authored change vs `main`: **50 files, ~2,082 lines** (1,950 code/docs/tests +
 132-line tracker), which exceeds the Wave 2 1,500-line PR cap.
 
-**Delivery plan (user-selected `chained`; strategy `stacked-to-main`, repo
-precedent external-providers #143–147, change-planning #159–166):**
+Delivered as a single PR — the two-slice split could not pass CI independently
+(the `cliente → cliente_id` change is entangled with test fixtures across the
+service, web and MCP layers):
 
-| PR | Base | Commits | Changed lines | Scope |
-|---|---|---|---|---|
-| #1 | main | `75df05e` + `ab39cb2` | 964 | models, migration backfill, services, policy + data-layer tests |
-| #2 | main (after #1) | `6e8badd` + `4a51fd5` + `977ee65` | 1,118 | screens, forms, templates, nav, MCP modules, docs + their tests |
+- [#170](https://github.com/constant1n0/iso9001/pull/170) `feat: customers and
+  complaints (8.2, 9.1.2)` — one-off `size:exception` (~2,093 changed lines),
+  merged as `06b66fb`.
 
-Each PR stays under the 1,500-line cap and is independently verifiable (PR #1 runs
-the model/service tests; PR #2 builds on #1's merged state). Push and pull-request
-creation remain the user's decision.
+## Production deployment (2026-10-31)
+
+`main@06b66fb` runs on `vulcano`. The user authorized this deployment over SSH to
+`192.168.101.46` as `dcm`, with no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `63a1596`, clean, migration `29637060aaf0`; the four services active |
+| Backups | `~/work/backups/calidad-2026-10-31-pre-06b66fb.dump` (512 entries via `pg_restore -l`) and `iso9001-code-2026-10-31-pre-06b66fb.tar.gz`, both mode 600 |
+| Code | Incremental git bundle `63a1596..main`, fast-forward to `06b66fb`; no dependency changes |
+| Database | `flask db upgrade` `29637060aaf0` → `7c4e9a2b6d10`; `flask db check` clean; 0 clientes / 0 reclamaciones / 0 satisfaction rows (no backfill data; no orphans) |
+| Restart (user, with sudo) | All four services |
+| Smoke tests | Services active, no error entries in the journal; `/login` 200; `/clientes/`, `/reclamaciones/`, `/satisfaccion_cliente/` and `/no_conformidades/` redirect to the login; `/mcp` 401 with `WWW-Authenticate: Bearer`; 32 MCP modules including `clientes` and `reclamaciones` |
