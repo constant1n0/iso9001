@@ -35,9 +35,11 @@ link and its display on the process page. Out of scope: product/lot identificati
   fields `concesion_autorizada_por_id` (person link, RESTRICT, nullable),
   `fecha_concesion` (date), `justificacion_concesion` (text).
 - **DC-3** CHECK `ck_no_conformidades_concesion` (cross-DB, so SQLite tests also
-  create it): `(tratamiento = 'concesion' AND concesion_autorizada_por_id IS NOT
-  NULL AND fecha_concesion IS NOT NULL) OR ((tratamiento IS NULL OR tratamiento
-  <> 'concesion') AND concesion_autorizada_por_id IS NULL AND fecha_concesion IS
+  create it; corrected during implementation — the first draft accepted a NULL
+  treatment with populated concession fields): `(tratamiento IS NOT NULL AND
+  tratamiento = 'concesion' AND concesion_autorizada_por_id IS NOT NULL AND
+  fecha_concesion IS NOT NULL) OR ((tratamiento IS NULL OR tratamiento <>
+  'concesion') AND concesion_autorizada_por_id IS NULL AND fecha_concesion IS
   NULL)`.
 - **DC-4** Service: add the five fields to `WRITABLE_FIELDS` and `_clean`; a
   friendly `_check_concesion` rule (mirror `_check_provider`); validate `proceso_id`
@@ -57,10 +59,10 @@ link and its display on the process page. Out of scope: product/lot identificati
 
 ## Task checklist
 
-- [ ] **T1 — Model and migration.** Enum + columns + FK/CHECK in `app/models.py`; one Alembic migration. Tests for the constraint.
-- [ ] **T2 — Service.** `app/services/nonconformities.py` writable fields, `_clean`, `_check_concesion`, process reference; `cited_by` includes nonconformities. Tests.
-- [ ] **T3 — Web.** form/routes/templates for the process picker, treatment and concession fields; detail + process pages. Tests.
-- [ ] **T4 — MCP and docs.** registry `no_conformidades` fields; README/guia/analisis (row 8.7 → C, cross-cutting link). Tests.
+- [x] **T1 — Model and migration.** Enum + columns + FK/CHECK in `app/models.py`; one Alembic migration. Tests for the constraint.
+- [x] **T2 — Service.** `app/services/nonconformities.py` writable fields, `_clean`, `_check_concesion`, process reference; `cited_by` includes nonconformities. Tests.
+- [x] **T3 — Web.** form/routes/templates for the process picker, treatment and concession fields; detail + process pages. Tests.
+- [x] **T4 — MCP and docs.** registry `no_conformidades` fields; README/guia/analisis (row 8.7 → C, cross-cutting link). Tests.
 
 ## Acceptance criteria
 
@@ -76,5 +78,13 @@ link and its display on the process page. Out of scope: product/lot identificati
 
 ## Delivery
 
-- Route: **delegated direct** (one `gentle-ai-worker`). Forecast well under the
-  1,500-line Wave 2 cap → single PR. Work-unit commits on `feat/nonconforming-outputs`.
+Work-unit commits on `feat/nonconforming-outputs` (Conventional Commit):
+- `2278a98` feat(qms): persist nonconforming output dispositions
+- `1f8234d` feat(qms): validate concessions and process references
+- `dd4180d` feat(web): expose output dispositions and process traceability
+- `2aaf352` docs(odd): track nonconforming-outputs
+
+Also: `app/services/people.py` `REFERENCES` gained the concession-authority link
+(scope expansion approved by the parent). Verification: 1,829 tests, 1,736 passed,
+0 failed, 93 skipped (local); PostgreSQL cases and migration parity run in CI.
+Single PR (well under the 1,500-line cap); push/PR are the user's decision.
