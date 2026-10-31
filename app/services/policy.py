@@ -114,6 +114,7 @@ class Resource(StrEnum):
     EXTERNAL_PROVIDERS = "external_providers"
     ORGANIZATION_CONTEXT = "organization_context"
     QMS_CHANGES = "qms_changes"
+    READ_CONFIRMATIONS = "read_confirmations"
 
 
 _ALL = frozenset(RoleEnum)
@@ -145,6 +146,7 @@ _MATRIX: dict[Resource, Grant] = {
     Resource.CUSTOMERS: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
     Resource.COMPLAINTS: _OPEN_REGISTER,
     Resource.TRAINING: _OPEN_REGISTER,
+    Resource.READ_CONFIRMATIONS: _OPEN_REGISTER,
     Resource.INTERESTED_PARTIES: _OPEN_REGISTER,
     Resource.AUDITS: Grant(_ADMIN_AUDITOR, _ADMIN_AUDITOR, _ADMIN),
     Resource.DOCUMENTS: Grant(_ALL, _ADMIN_AUDITOR, _NOBODY),
