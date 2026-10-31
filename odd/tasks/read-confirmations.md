@@ -27,7 +27,7 @@ Out of scope: publishing the policy to external interested parties (5.2 residual
 ## Design decisions
 
 - **DC-1** `DocumentCategory` gains `POLITICA_CALIDAD = 'Política de Calidad'`.
-- **DC-2** Reconcile `documentcategory` native enum: add the six members the model
+- **DC-2** Reconcile `documentcategory` native enum: add the seven members the model
   declares but the migration never added (`PLAN_ACCION_CORRECTIVA`,
   `PLAN_ACCION_PREVENTIVA`, `REGISTRO_CALIDAD`, `INFORME_REVISION`,
   `POLITICA_SEGURIDAD`, `INDICADOR_DESEMPENO`, `PLAN_CAPACITACION`) plus
@@ -62,10 +62,10 @@ Out of scope: publishing the policy to external interested parties (5.2 residual
 
 ## Task checklist
 
-- [ ] **T1 — Model, enum and migration.** Category + enum + `ConfirmacionLectura` + CHECKs; one migration (enum ALTER + new table). Tests.
-- [ ] **T2 — Service and policy.** `read_confirmations.py` + `READ_CONFIRMATIONS` grant + person-page integration. Tests.
-- [ ] **T3 — Web.** routes/forms/templates for the register + person page. Tests.
-- [ ] **T4 — MCP and docs.** `confirmaciones_lectura` module + docs. Tests.
+- [x] **T1 — Model, enum and migration.** Category + enum + `ConfirmacionLectura` + CHECKs; one migration (enum ALTER + new table). Tests.
+- [x] **T2 — Service and policy.** `read_confirmations.py` + `READ_CONFIRMATIONS` grant + person-page integration. Tests.
+- [x] **T3 — Web.** routes/forms/templates for the register + person page. Tests.
+- [x] **T4 — MCP and docs.** `confirmaciones_lectura` module + docs. Tests.
 
 ## Acceptance criteria
 
@@ -81,5 +81,14 @@ Out of scope: publishing the policy to external interested parties (5.2 residual
 
 ## Delivery
 
-- Route: **delegated direct** (one `gentle-ai-worker`). Single PR (well under the
-  1,500-line cap). Work-unit commits on `feat/read-confirmations`.
+Work-unit commits on `feat/read-confirmations` (Conventional Commit):
+- `47449dd` feat(qms): add read confirmation schema and quality policy category
+- `af5bc7c` feat(qms): validate and audit read confirmations
+- `3a75124` feat(qms): expose read confirmations through web and MCP
+- `b6ecd9d` docs(odd): track read-confirmations
+
+The document-revision FK name was shortened to 63 chars for PostgreSQL
+(`fk_confirmaciones_lectura_document_revision_id`). The migration also adds the
+seven missing `documentcategory` members plus `POLITICA_CALIDAD`. Verification:
+1,847 tests, 1,752 passed, 0 failed, 95 skipped (local); PostgreSQL enum/migration
+verification runs in CI. Single PR.
