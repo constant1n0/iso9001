@@ -99,7 +99,7 @@ Clientes, reclamaciones y satisfacción (cláusulas 8.2 y 9.1.2):
   los registros devuelven las etiquetas en español, por ejemplo `"Teléfono"`
   o `"Respondida"`. Ningún token elimina clientes, reclamaciones o encuestas.
 
-No conformidades y acciones correctivas (cláusula 10.2 de ISO 9001):
+No conformidades y acciones correctivas (cláusulas 8.7 y 10.2 de ISO 9001):
 
 - `no_conformidades`: `descripcion` y `fecha_detectada` son obligatorios;
   `origen` es `auditoria`, `cliente`, `proceso`, `proveedor` u `otro`;
@@ -108,7 +108,15 @@ No conformidades y acciones correctivas (cláusula 10.2 de ISO 9001):
   y `accion_correctiva` son texto libre heredado. `proveedor_id` cita al
   proveedor externo (`proveedores`) que la causó, solo con el origen
   `proveedor`: con otro origen se rechaza, y hay que quitarlo antes de cambiar
-  el origen. `estado` nunca se escribe:
+  el origen. Los cinco campos opcionales de las salidas no conformes son:
+  `proceso_id` (proceso afectado), `tratamiento` (`correccion`, `separacion`,
+  `devolucion`, `concesion`, `reproceso` o `desecho`),
+  `concesion_autorizada_por_id` (persona), `fecha_concesion` (YYYY-MM-DD) y
+  `justificacion_concesion` (texto). Con `concesion` son obligatorias la persona
+  y la fecha; con otro tratamiento o `null`, ambas deben ser `null`. Para
+  cambiar desde `concesion`, límpialas en la misma actualización. Los registros
+  devuelven la etiqueta del tratamiento en español, por ejemplo `"Concesión"`.
+  `estado` nunca se escribe:
   un registro empieza en `abierta` y después sigue a sus acciones correctivas.
   Los registros muestran las etiquetas en español (`"Acción planificada"`,
   `"Cliente"`) además de `fecha_cierre` y `motivo_cancelacion`. Filtros:

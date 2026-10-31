@@ -253,6 +253,27 @@ class ProcessRelationsTestCase(Helpers, ServiceBase):
 
 
 class CitationsAndHoldersTestCase(Helpers, ServiceBase):
+    def test_process_citations_counts_and_delete_gate_include_nonconformities(self):
+        from app.services import nonconformities
+        compras, other = self.process("Compras"), self.process("Other")
+        nc = nonconformities.create(db.session, CLI, {
+            "descripcion": "Output", "fecha_detectada": date(2026, 10, 1),
+            "proceso_id": compras})
+        db.session.commit()
+        self.assertEqual([nc], po().cited_by(db.session, CLI, compras).no_conformidades)
+        self.assertEqual([], po().cited_by(db.session, CLI, other).no_conformidades)
+        self.assertEqual((1, 0), tuple(po().counts(db.session, CLI).no_conformidades[p]
+                                      for p in (compras, other)))
+        before = len(self.audit_rows())
+        self.assertEqual(po().CITED_BY_NONCONFORMITIES,
+                         self.refused(errors().Conflict, po().delete, CLI, compras))
+        self.assertEqual(before, len(self.audit_rows()))
+        self.assertIsNotNone(db.session.get(ProcesoOperacion, compras))
+        nonconformities.update(db.session, CLI, nc.id, {"proceso_id": None})
+        po().delete(db.session, CLI, compras)
+        db.session.commit()
+        self.assertIsNone(db.session.get(ProcesoOperacion, compras))
+
     def test_cited_by_gathers_the_objectives_risks_and_opportunities_of_a_process(self) -> None:
         ana = self.person()
         compras, ventas = self.process("Compras"), self.process("Ventas")

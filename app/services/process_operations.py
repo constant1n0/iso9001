@@ -28,8 +28,8 @@ pair is stored once in ``proceso_relaciones``, lower id first, and
 ``related_ids`` and ``related`` read it both ways. The table has no audit row
 of its own, so the create and update rows of a process carry ``relacionados``
 next to the columns. ``list_`` and ``list_page`` filter by ``tipo`` and
-``responsable_id``; ``cited_by`` gathers the quality objectives, risks and
-opportunities citing a process (PR2), and ``counts`` how many of them and of
+``responsable_id``; ``cited_by`` gathers the quality objectives, risks,
+opportunities and nonconformities citing a process (PR2 and clause 8.7), and ``counts`` how many of them and of
 related processes each process has, for the list. Writes flush and never
 commit, and an update that changes nothing writes nothing.
 
@@ -38,7 +38,8 @@ A process that quality objectives cite cannot be deleted (``Conflict`` with
 (``CITED_BY_RISKS``), nor one related to other processes (``HAS_RELATIONS``),
 nor one linked to external providers (``LINKED_TO_PROVIDERS``), nor one that
 changes to the QMS affect (``LINKED_TO_CHANGES``, CP1 of ``change-planning``):
-``delete`` checks all five, and the ``ON DELETE RESTRICT`` foreign keys, which
+nor one cited by nonconformities (``CITED_BY_NONCONFORMITIES``, 8.7).
+``delete`` checks all six, and the ``ON DELETE RESTRICT`` foreign keys, which
 SQLite only enforces on request, refuse a citation, relation or link added
 after the check. Any other conflict keeps its own message.
 """
@@ -56,10 +57,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
-    ObjetivoCalidad, Oportunidad, ProcesoOperacion, Riesgo, TipoProceso, cambio_procesos,
+    NoConformidad, ObjetivoCalidad, Oportunidad, ProcesoOperacion, Riesgo, TipoProceso, cambio_procesos,
     proceso_relaciones, proveedor_procesos,
 )
-from . import audit, crud, fields, people, policy, quality_objectives, risks
+from . import audit, crud, fields, nonconformities, people, policy, quality_objectives, risks
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
 from .errors import Conflict, NotFound, ValidationError
@@ -122,6 +123,10 @@ LINKED_TO_PROVIDERS = (
     "quítalo antes de esos proveedores."
 )
 LINKED_TO_CHANGES = "No se puede eliminar un proceso afectado por cambios en el SGC."
+CITED_BY_NONCONFORMITIES = (
+    "No se puede eliminar un proceso al que se refieren no conformidades; "
+    "quítalo antes de esos registros."
+)
 
 get = partial(crud.get, SPEC)
 
@@ -133,6 +138,7 @@ class Citations:
     objetivos: list[ObjetivoCalidad]
     riesgos: list[Riesgo]
     oportunidades: list[Oportunidad]
+    no_conformidades: list[NoConformidad]
 
 
 def _conditions(tipo: TipoProceso | str | None = None,
@@ -187,10 +193,10 @@ def related(session: Session, actor: Actor, process_id: int) -> list[ProcesoOper
 
 
 def cited_by(session: Session, actor: Actor, process_id: int) -> Citations:
-    """The quality objectives, risks and opportunities citing a process (PR2).
+    """The quality objectives, risks, opportunities and nonconformities citing a process.
 
     ``NotFound`` for an unknown process; needs the read grant of processes,
-    quality objectives and risks and opportunities.
+    quality objectives, risks and opportunities, and nonconformities.
     """
     found = get(session, actor, process_id)
     own = found.id_proceso
@@ -200,6 +206,7 @@ def cited_by(session: Session, actor: Actor, process_id: int) -> Citations:
         riesgos=crud.list_(risks.RISK_SPEC, session, actor, [Riesgo.proceso_id == own]),
         oportunidades=crud.list_(risks.OPPORTUNITY_SPEC, session, actor,
                                  [Oportunidad.proceso_id == own]),
+        no_conformidades=nonconformities.list_(session, actor, proceso_id=own),
     )
 
 
@@ -210,15 +217,17 @@ class Counts:
     relacionados: Counter[int]
     objetivos: Counter[int]
     riesgos: Counter[int]  # risks and opportunities together
+    no_conformidades: Counter[int]
 
 
 def counts(session: Session, actor: Actor) -> Counts:
-    """The list's counts for every process, in five grouped queries.
+    """The list's counts for every process, in six grouped queries.
 
     Needs the read grant of processes, quality objectives and risks and
-    opportunities, like ``cited_by``.
+    opportunities and nonconformities, like ``cited_by``.
     """
-    for resource in (SPEC.resource, Resource.QUALITY_OBJECTIVES, Resource.RISKS_OPPORTUNITIES):
+    for resource in (SPEC.resource, Resource.QUALITY_OBJECTIVES, Resource.RISKS_OPPORTUNITIES,
+                     Resource.NONCONFORMITIES):
         policy.require(actor, Action.READ, resource)
 
     def by(column: Any) -> Counter[int]:
@@ -230,6 +239,7 @@ def counts(session: Session, actor: Actor) -> Counts:
         relacionados=by(pairs.proceso_id) + by(pairs.relacionado_id),
         objetivos=by(ObjetivoCalidad.proceso_id),
         riesgos=by(Riesgo.proceso_id) + by(Oportunidad.proceso_id),
+        no_conformidades=by(NoConformidad.proceso_id),
     )
 
 
@@ -286,7 +296,8 @@ def delete(session: Session, actor: Actor, record_id: int) -> None:
     (``CITED_BY_OBJECTIVES``), one cited by risks or opportunities
     ``CITED_BY_RISKS``, one with relations ``HAS_RELATIONS``, one linked to
     external providers ``LINKED_TO_PROVIDERS`` and one that changes to the QMS
-    affect ``LINKED_TO_CHANGES``; so does one cited, related or
+    affect ``LINKED_TO_CHANGES``, or one cited by nonconformities
+    ``CITED_BY_NONCONFORMITIES``; so does one cited, related or
     linked after the check, when the flush breaks one of those
     foreign keys and the database names it (PostgreSQL). A failed flush leaves
     the session unusable until rolled back, so nothing can be checked again:
@@ -305,6 +316,8 @@ def delete(session: Session, actor: Actor, record_id: int) -> None:
         raise Conflict(LINKED_TO_PROVIDERS)
     if _linked_to_changes(session, found.id_proceso):
         raise Conflict(LINKED_TO_CHANGES)
+    if _cited_by_nonconformities(session, found.id_proceso):
+        raise Conflict(CITED_BY_NONCONFORMITIES)
     try:
         crud.delete(SPEC, session, actor, found.id_proceso)
     except Conflict as exc:
@@ -396,6 +409,10 @@ def _cited_by_risks(session: Session, process_id: int) -> bool:
                for column in (Riesgo.proceso_id, Oportunidad.proceso_id))
 
 
+def _cited_by_nonconformities(session: Session, process_id: int) -> bool:
+    return bool(session.scalar(select(exists().where(NoConformidad.proceso_id == process_id))))
+
+
 def _has_relations(session: Session, process_id: int) -> bool:
     pairs = proceso_relaciones.c
     return bool(session.scalar(select(exists().where(
@@ -419,6 +436,7 @@ def _foreign_key(model: type) -> str:
     return name
 
 
+NONCONFORMITIES_FK = _foreign_key(NoConformidad)
 OBJECTIVES_FK = _foreign_key(ObjetivoCalidad)
 RISKS_FKS = frozenset({_foreign_key(Riesgo), _foreign_key(Oportunidad)})
 RELATIONS_FKS = frozenset(fk.constraint.name for fk in proceso_relaciones.foreign_keys)
@@ -430,7 +448,7 @@ RELATIONS_FKS = frozenset(fk.constraint.name for fk in proceso_relaciones.foreig
 # related" or "still linked".
 _CITED_BY = {OBJECTIVES_FK: CITED_BY_OBJECTIVES, **dict.fromkeys(RISKS_FKS, CITED_BY_RISKS),
              **dict.fromkeys(RELATIONS_FKS, HAS_RELATIONS), PROVIDERS_FK: LINKED_TO_PROVIDERS,
-             CHANGES_FK: LINKED_TO_CHANGES}
+             CHANGES_FK: LINKED_TO_CHANGES, NONCONFORMITIES_FK: CITED_BY_NONCONFORMITIES}
 
 
 def _violated_constraint(exc: BaseException | None) -> str | None:

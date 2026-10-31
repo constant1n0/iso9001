@@ -95,7 +95,8 @@ STILL_REFERENCED = (
 # Columns that cite a person. Their foreign keys are ``ON DELETE RESTRICT``,
 # which SQLite only enforces on request, so ``delete`` also checks them.
 REFERENCES = (
-    Capacitacion.persona_id, NoConformidad.responsable_id, Auditoria.auditor_id,
+    Capacitacion.persona_id, NoConformidad.responsable_id,
+    NoConformidad.concesion_autorizada_por_id, Auditoria.auditor_id,
     CompetenceRecord.persona_id, CompetenceRecord.evaluador_id,
     AccionCorrectiva.responsable_id, AccionCorrectiva.verificador_id,
     Document.owner_id, Document.withdrawn_by_id,

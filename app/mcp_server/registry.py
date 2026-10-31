@@ -25,6 +25,7 @@ from ..models import (
     EstadoTareaCambio, FrecuenciaMedicion, GravedadNoConformidad, NivelRiesgo, OrigenCambio,
     OrigenNoConformidad, OrigenRiesgo, PrioridadOportunidad, ResultadoEvaluacion, SentidoObjetivo,
     TipoAccionRevision, TipoContexto, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
+    TratamientoSalidaNoConforme,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
@@ -587,6 +588,12 @@ _MODULES = (
         _legacy_name("responsable", "responsable_id"), _f("responsable_id", "integer"),
         _f("contencion"), _f("causa_raiz"),
         _f("accion_correctiva", note="Legacy free-text corrective action."),
+        _f("proceso_id", "integer", note="Process (procesos) the nonconformity concerns"),
+        _f("tratamiento", "enum", members=TratamientoSalidaNoConforme, note=(
+            "concesion requires authority and date; other or null treatments forbid both.")),
+        _f("concesion_autorizada_por_id", "integer", note=(
+            "Person (personas) who authorizes the concession")),
+        _f("fecha_concesion", "date"), _f("justificacion_concesion"),
         _f("proveedor_id", "integer", note=(
             "External provider (proveedores) that caused it; only with origen proveedor. "
             "Clear it before changing the origin.")),
