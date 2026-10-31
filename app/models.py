@@ -612,9 +612,29 @@ class GravedadNoConformidad(enum.Enum):
     observacion = 'Observación'
 
 
+class TratamientoSalidaNoConforme(enum.Enum):
+    """Disposition of a nonconforming output (ISO 9001 clause 8.7)."""
+
+    correccion = 'Corrección'
+    separacion = 'Separación'
+    devolucion = 'Devolución'
+    concesion = 'Concesión'
+    reproceso = 'Reproceso'
+    desecho = 'Desecho'
+
+
+# A CHECK must reject NULL treatment with concession data, not evaluate UNKNOWN.
+_OUTPUT_CONCESSION = (
+    "(tratamiento IS NOT NULL AND tratamiento = 'concesion' "
+    "AND concesion_autorizada_por_id IS NOT NULL AND fecha_concesion IS NOT NULL) OR "
+    "((tratamiento IS NULL OR tratamiento <> 'concesion') "
+    "AND concesion_autorizada_por_id IS NULL AND fecha_concesion IS NULL)"
+)
+
+
 # Modelo para registrar No Conformidades dentro del SGC
 class NoConformidad(RecordMetadataMixin, db.Model):
-    """A nonconformity (ISO 9001 clause 10.2).
+    """A nonconformity and its output disposition (ISO 9001 clauses 8.7 and 10.2).
 
     One whose origin is ``proveedor`` may name the external provider that caused
     it (``proveedor_id``, decision EP4 of ``external-providers``); the CHECK refuses
@@ -625,6 +645,12 @@ class NoConformidad(RecordMetadataMixin, db.Model):
     __table_args__ = (
         db.CheckConstraint("proveedor_id IS NULL OR origen = 'proveedor'",
                            name='ck_no_conformidades_proveedor'),
+        db.CheckConstraint(_OUTPUT_CONCESSION, name='ck_no_conformidades_concesion'),
+        db.ForeignKeyConstraint(
+            ['proceso_id'], ['procesos_operacion.id_proceso'],
+            name='fk_no_conformidades_proceso_id_procesos_operacion', ondelete='RESTRICT',
+        ),
+        db.Index('ix_no_conformidades_proceso_id', 'proceso_id'),
     )
 
     id = db.Column(db.Integer, primary_key=True)
@@ -632,6 +658,11 @@ class NoConformidad(RecordMetadataMixin, db.Model):
     fecha_detectada = db.Column(db.Date, nullable=False, default=datetime.utcnow)
     responsable = db.Column(db.String(50))  # legacy free text, kept as written
     responsable_id = person_link('no_conformidades', 'responsable_id')
+    proceso_id = db.Column(db.Integer, nullable=True)
+    tratamiento = db.Column(text_enum(TratamientoSalidaNoConforme, 'ck_no_conformidades_tratamiento'))
+    concesion_autorizada_por_id = person_link('no_conformidades', 'concesion_autorizada_por_id')
+    fecha_concesion = db.Column(db.Date)
+    justificacion_concesion = db.Column(db.Text)
     estado = db.Column(
         text_enum(EstadoNoConformidad, 'ck_no_conformidades_estado'),
         nullable=False,
