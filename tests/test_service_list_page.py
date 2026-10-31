@@ -21,6 +21,7 @@ from app.models import (
     NoConformidad, OrigenNoConformidad, ParteInteresada, RoleEnum, SatisfaccionCliente,
 )
 from app.services import crud
+from mcp_support import survey_values
 
 ADMIN = RoleEnum.ADMINISTRADOR
 OCT, SEP, AUG = date(2026, 10, 1), date(2026, 9, 1), date(2026, 8, 1)
@@ -205,7 +206,7 @@ class TrainingListPageTestCase(FilteredListPageContract, ServiceBase):
 
 class SatisfactionListPageTestCase(FilteredListPageContract, ServiceBase):
     model = SatisfaccionCliente
-    filters = {"cliente": "acme", "puntuacion_minima": 7}
+    filters = {"cliente_id": 1, "puntuacion_minima": 7}
 
     def service(self):
         from app.services import satisfaction
@@ -213,14 +214,15 @@ class SatisfactionListPageTestCase(FilteredListPageContract, ServiceBase):
         return satisfaction
 
     def seed_ordered(self) -> list[int]:
-        def survey(cliente, fecha, puntuacion):
-            return self.insert(cliente=cliente, fecha_encuesta=fecha, puntuacion=puntuacion)
+        def survey(customer_name, fecha, puntuacion):
+            return self.insert(**survey_values(customer_name), fecha_encuesta=fecha,
+                               puntuacion=puntuacion)
 
         old = survey("ACME", SEP, 9)
-        first = survey("Acme Iberia", OCT, 7)
+        first = survey("ACME", OCT, 7)
         other = survey("Beta", OCT, 10)
         low = survey("ACME", AUG, 3)
-        last = survey("acme", OCT, 8)
+        last = survey("ACME", OCT, 8)
         self.expected_matches = [last, first, old]
         return [last, other, first, old, low]
 

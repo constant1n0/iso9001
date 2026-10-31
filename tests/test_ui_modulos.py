@@ -7,6 +7,7 @@ import unittest
 from datetime import date
 
 import test_auth_bootstrap as bootstrap
+from mcp_support import survey_values
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db
@@ -37,7 +38,7 @@ class ModuleScreensTestCase(unittest.TestCase):
             db.session.add_all([
                 User(username="admin", email="admin@example.com",
                      password=generate_password_hash(PASSWORD), role=RoleEnum.ADMINISTRADOR),
-                SatisfaccionCliente(fecha_encuesta=DAY, cliente="Farmacia Sol", puntuacion=8),
+                SatisfaccionCliente(fecha_encuesta=DAY, **survey_values("Farmacia Sol"), puntuacion=8),
                 ParteInteresada(nombre="Proveedores"),
                 Capacitacion(tema="ISO", fecha=DAY, personal="Equipo", duracion_horas=4),
                 Document(title="Control de registros", code="PO-04",

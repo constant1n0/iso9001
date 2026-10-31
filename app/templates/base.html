@@ -39,6 +39,8 @@
     ('mejora', 'mejora.listar_mejoras', 'Mejoras', '10.3', True),
   ]),
   ('Clientes', [
+    ('cliente', 'cliente.list_clientes', 'Cliente', '8.2', can('read', 'customers')),
+    ('reclamacion', 'reclamacion.listar_reclamaciones', 'Reclamaciones', '9.1.2', can('read', 'complaints')),
     ('satisfaccion_cliente', 'satisfaccion_cliente.listar_encuestas', 'Satisfacción', '9.1.2', True),
   ]),
   ('Personas y competencia', [

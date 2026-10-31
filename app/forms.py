@@ -19,13 +19,13 @@ from decimal import Decimal
 from markupsafe import Markup
 
 from .models import (
-    CATEGORIAS_POR_TIPO, CHANGE_LINKS, ESCALA_MAX, ESCALA_MIN, CompetenceEvaluation,
+    CATEGORIAS_POR_TIPO, CHANGE_LINKS, ESCALA_MAX, ESCALA_MIN, CanalContacto, CompetenceEvaluation,
     CompetenceType, DecisionOportunidad, DocumentCategory, EfectoCuestion, EficaciaAccion,
     EficaciaCambio, EstadoAccionRevision, EstadoAccionRiesgo, EstadoAuditoriaEnum,
     EstadoCuestion, EstadoOportunidad, EstadoRiesgo, EstadoTareaCambio, FrecuenciaMedicion,
     GravedadNoConformidad, OrigenCambio, OrigenNoConformidad, OrigenRiesgo,
     ResultadoVerificacion, RoleEnum, SentidoObjetivo, TipoAccionRevision, TipoContexto,
-    TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
+    TipoEncuesta, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -189,7 +189,13 @@ class MejoraForm(BaseForm):
 
 # Formulario para encuestas de Satisfacción del Cliente
 class SatisfaccionClienteForm(BaseForm):
-    cliente = StringField('Cliente', validators=[DataRequired(), Length(max=100)])
+    cliente_id = SelectField('Cliente', coerce=optional_id, choices=[], validators=[DataRequired()])
+    tipo_encuesta = SelectField('Tipo de encuesta', coerce=member_name,
+                                choices=[(m.name, m.value) for m in TipoEncuesta],
+                                validators=[DataRequired()])
+    canal = SelectField('Canal', coerce=member_name,
+                        choices=[(m.name, m.value) for m in CanalContacto],
+                        validators=[DataRequired()])
     fecha_encuesta = DateField('Fecha de Encuesta', validators=[DataRequired()])
     puntuacion = IntegerField('Puntuación (1-10)', validators=[DataRequired(), NumberRange(min=1, max=10)])
     comentarios = TextAreaField('Comentarios')
@@ -716,6 +722,27 @@ class ProveedorForm(BaseForm):
     criterios_seleccion = TextAreaField('Criterios de selección')
     fecha_proxima_evaluacion = DateField('Próxima evaluación', validators=[Optional()])
     notas = TextAreaField('Notas')
+
+
+class ClienteForm(BaseForm):
+    """Customer master data; service validators normalize the NIF and email."""
+
+    nombre = StringField('Nombre', validators=[DataRequired(), Length(max=200)])
+    nif = StringField('NIF')
+    contacto = StringField('Persona de contacto', validators=[Length(max=150)])
+    email = StringField('Correo electrónico')
+    telefono = StringField('Teléfono', validators=[Length(max=30)])
+    notas = TextAreaField('Notas')
+
+
+class ReclamacionForm(BaseForm):
+    """Lifecycle columns are deliberately absent: only transition routes write them."""
+
+    cliente_id = SelectField('Cliente', coerce=optional_id, choices=[], validators=[DataRequired()])
+    fecha_recepcion = DateField('Fecha de recepción', validators=[DataRequired()])
+    descripcion = TextAreaField('Descripción', validators=[DataRequired()])
+    canal = _choice('Canal', CanalContacto, empty='— Sin indicar —')
+    no_conformidad_id = SelectField('No conformidad relacionada', coerce=optional_id, choices=[])
 
 
 class EvaluacionProveedorForm(BaseForm):

@@ -44,7 +44,8 @@ No enlazar imágenes hasta que existan en el repositorio. -->
   registro de auditoría con el nombre de ese usuario. Un agente nunca elimina,
   nunca escribe documentos y nunca gestiona tokens; verificar acciones
   correctivas, cerrar no conformidades, aprobar programas de auditoría y
-  celebrar revisiones por la dirección solo se hace desde la web.
+  celebrar revisiones por la dirección y responder, cerrar, cancelar o reabrir
+  reclamaciones solo se hace desde la web.
 - **Evidencia en PDF y avisos por correo electrónico.** Informes en PDF de las
   no conformidades, las auditorías y sus programas, los objetivos de la
   calidad, las capacitaciones, las encuestas de satisfacción y las actas de la
@@ -71,12 +72,13 @@ No enlazar imágenes hasta que existan en el repositorio. -->
 | Objetivos de la calidad | 6.2 | Indicador, meta, responsable, mediciones, tendencia y mediciones vencidas |
 | Cambios en el SGC | 6.3 | Cambios planificados con su origen, las consideraciones a) a d), la comunicación, los procesos y documentos afectados, tareas, aprobación por un administrador, implantación, revisión de la eficacia, avisos en el panel, PDF del registro y del plan, y entrada de la revisión por la dirección |
 | Proveedores externos | 8.4, 9.1.3 | Criterios de selección, procesos afectados, aprobación por un administrador, evaluaciones puntuadas con la próxima evaluación, no conformidades vinculadas y PDF de proveedores aprobados |
+| Clientes, reclamaciones y satisfacción | 8.2, 9.1.2 | Registro de clientes con NIF y contacto; reclamaciones con respuesta, cierre, cancelación y reapertura, vínculo opcional a una no conformidad; encuestas vinculadas al cliente, con tipo y canal |
 | Revisión por la dirección | 9.3 | Entradas tomadas de los registros, conclusiones, acciones y acta en PDF |
 | Informes y notificaciones | 9.1 | PDF de los registros, informe mensual de calidad y avisos programados por correo electrónico |
 
 **Otros registros**, anteriores a los módulos de la tabla: recursos de
-capacitación (7.1), capacitaciones (7.2), indicadores de auditoría (9.1),
-satisfacción del cliente (9.1.2) y mejoras (10.3). Todos tienen pantallas.
+capacitación (7.1), capacitaciones (7.2), indicadores de auditoría (9.1)
+y mejoras (10.3). Todos tienen pantallas.
 
 La [guía de usuario](docs/guia-de-usuario.md) explica cada pantalla, los
 permisos de cada rol y las reglas de cada módulo.

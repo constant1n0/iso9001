@@ -14,7 +14,8 @@ from app.mcp_server import context
 from app.mcp_server.server import build_server
 from app.mcp_server.registry import MODULES
 from app.models import (
-    CambioSGC, EstadoNoConformidad, NoConformidad, ObjetivoCalidad, Person, Proveedor,
+    CambioSGC, CanalContacto, Cliente, EstadoNoConformidad, NoConformidad, ObjetivoCalidad, Person, Proveedor,
+    TipoEncuesta,
     RevisionDireccion, Riesgo, RoleEnum, User,
 )
 from app.services import api_tokens
@@ -33,7 +34,10 @@ SEEDS = {
     "no_conformidades": {"descripcion": "Pieza fuera de tolerancia", "fecha_detectada": "2026-10-01"},
     "auditorias": {"area_auditada": "Calidad", "fecha": "2026-10-01", "auditor": "Ana", "resultado": "Sin hallazgos"},
     "capacitaciones": {"tema": "Seguridad", "fecha": "2026-10-01", "personal": "Ana"},
-    "satisfaccion_clientes": {"cliente": "ACME", "fecha_encuesta": "2026-10-01", "puntuacion": 8},
+    "clientes": {"nombre": "ACME"},
+    "reclamaciones": {"cliente_id": 1, "descripcion": "Entrega retrasada"},
+    "satisfaccion_clientes": {"cliente_id": 1, "tipo_encuesta": "otra", "canal": "otro",
+                              "fecha_encuesta": "2026-10-01", "puntuacion": 8},
     "partes_interesadas": {"nombre": "Clientes"},
     "mejoras": {"no_conformidad": "NC-1"},
     "roles_responsabilidades": {"rol": "Director"},
@@ -101,6 +105,21 @@ SEEDS = {
 }
 
 
+def survey_values(name="C") -> dict:
+    """Existing or core-inserted customer plus required survey classification.
+
+    Core statements keep read/report fixtures independent of service writes and
+    the audit guard. Do not autoflush unrelated pending fixture rows.
+    """
+    with db.session.no_autoflush:
+        customer_id = db.session.scalar(db.select(Cliente.id).where(Cliente.nombre == name))
+        if customer_id is None:
+            customer_id = db.session.execute(Cliente.__table__.insert().values(
+                nombre=name)).inserted_primary_key[0]
+    return {"cliente_id": customer_id, "tipo_encuesta": TipoEncuesta.otra,
+            "canal": CanalContacto.otro}
+
+
 class McpDbCase(unittest.IsolatedAsyncioTestCase):
     """In-memory app plus ``call``, which talks to a fresh in-memory MCP server."""
 
@@ -151,6 +170,8 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
                 self.seed("personas")
             if db.session.get(Proveedor, 1) is None:
                 self.seed("proveedores")
+        if slug in ("satisfaccion_clientes", "reclamaciones") and db.session.get(Cliente, 1) is None:
+            self.seed("clientes")
         data = SEEDS[slug] | overrides
         for field in module.fields:
             if field.type == "date" and field.name in data:

@@ -7,6 +7,7 @@ from datetime import date
 from html.parser import HTMLParser
 
 import test_auth_bootstrap as bootstrap
+from mcp_support import survey_values
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db
@@ -34,7 +35,7 @@ MODULES = (
     ("/capacitaciones/", Capacitacion,
      lambda: Capacitacion(tema="ISO", fecha=DAY, personal="Equipo")),
     ("/satisfaccion_cliente/", SatisfaccionCliente,
-     lambda: SatisfaccionCliente(fecha_encuesta=DAY, cliente="C", puntuacion=8)),
+     lambda: SatisfaccionCliente(fecha_encuesta=DAY, **survey_values("C"), puntuacion=8)),
     ("/mejoras/", Mejora, lambda: Mejora(no_conformidad="NC")),
     ("/partes_interesadas/", ParteInteresada, lambda: ParteInteresada(nombre="Cliente")),
 )  # documents are withdrawn, never deleted (DC6 of document-control)

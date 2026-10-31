@@ -16,7 +16,8 @@ from sqlalchemy.orm import object_session
 
 from ..audit_notifications import local_today
 from ..models import (
-    CATEGORIAS_POR_TIPO, CambioSGC, CategoriaCuestion, CompetenceEvaluation, CompetenceType,
+    CATEGORIAS_POR_TIPO, CambioSGC, CanalContacto, CategoriaCuestion, CompetenceEvaluation, CompetenceType,
+    EstadoReclamacion, TipoEncuesta,
     DecisionOportunidad, DocumentCategory, EfectoCuestion, EficaciaAccion, EstadoAccionCorrectiva,
     EstadoAccionRevision, EstadoAccionRiesgo, EstadoAlcance, EstadoAuditoriaEnum, EstadoCambio,
     EstadoCuestion, EstadoNoConformidad, EstadoObjetivo, EstadoOportunidad,
@@ -26,7 +27,8 @@ from ..models import (
     TipoAccionRevision, TipoContexto, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
 )
 from ..services import (
-    audit_findings, audit_indicators, audit_programmes, audits, competence, context_issues,
+    audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
+    reclamaciones,
     corrective_actions, document_revisions, documents, improvements, management_reviews,
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
@@ -404,6 +406,29 @@ def _provider_modules() -> tuple[Module, ...]:
     )
 
 
+def _customer_modules() -> tuple[Module, ...]:
+    """Customer master data (8.2) and complaints (9.1.2).
+
+    Records show Spanish enum labels; filters take member names. Complaint
+    lifecycle columns, including estado, are read-only: all transitions are web-only.
+    """
+    return (
+        Module("clientes", "Customers", Resource.CUSTOMERS, clientes, (
+            _f("nombre", required=True, note="Unique customer name."),
+            _f("nif", note="Unique when given; 8–10 letters/digits, upper case, no spaces/hyphens."),
+            _f("contacto"), _f("email"), _f("telefono"), _f("notas"),
+        ), (_f("nombre"),)),
+        Module("reclamaciones", "Complaints", Resource.COMPLAINTS, _DatedWrites(reclamaciones), (
+            _f("cliente_id", "integer", True, note="Customer (clientes)."),
+            _f("fecha_recepcion", "date", note="Defaults to today; never in the future."),
+            _f("descripcion", required=True),
+            _f("canal", "enum", members=CanalContacto),
+            _f("no_conformidad_id", "integer", note="Optional linked non-conformity."),
+        ), (_f("cliente_id", "integer"), _f("estado", "enum", members=EstadoReclamacion),
+            _f("canal", "enum", members=CanalContacto))),
+    )
+
+
 def _context_modules() -> tuple[Module, ...]:
     """Context issues (4.1) and the QMS scope (4.3), sharing ``ORGANIZATION_CONTEXT`` (OC4).
 
@@ -625,11 +650,17 @@ _MODULES = (
         _legacy_name("personal", "persona_id"),
         _f("duracion_horas", "integer"), _f("evaluacion_final"), _f("persona_id", "integer"),
     ), (_f("tema"), _f("fecha", "date"), _f("personal"))),
+    *_customer_modules(),
     Module("satisfaccion_clientes", "Customer satisfaction", Resource.CUSTOMER_SATISFACTION,
            satisfaction, (
-        _f("cliente", required=True), _f("fecha_encuesta", "date", True),
+        _f("cliente_id", "integer", True, note="Customer (clientes)."),
+        _f("tipo_encuesta", "enum", True, members=TipoEncuesta),
+        _f("canal", "enum", True, members=CanalContacto),
+        _f("fecha_encuesta", "date", True),
         _f("puntuacion", "integer", True), _f("comentarios"),
-    ), (_f("cliente"), _f("puntuacion_minima", "integer"))),
+    ), (_f("cliente_id", "integer"), _f("puntuacion_minima", "integer"),
+        _f("tipo_encuesta", "enum", members=TipoEncuesta),
+        _f("canal", "enum", members=CanalContacto))),
     # Their writes take the adapter's date: a new fecha_revision is never before it (OC2).
     Module("partes_interesadas", "Interested parties", Resource.INTERESTED_PARTIES,
            _DatedWrites(stakeholders), (

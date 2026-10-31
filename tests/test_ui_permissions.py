@@ -7,6 +7,7 @@ import unittest
 from datetime import date
 
 import test_auth_bootstrap as bootstrap
+from mcp_support import survey_values
 from werkzeug.security import generate_password_hash
 
 from app import session_lifetime
@@ -67,7 +68,7 @@ class UiPermissionsTestCase(unittest.TestCase):
             db.session.add_all([
                 NoConformidad(descripcion="NC", fecha_detectada=DAY),
                 Mejora(no_conformidad="Mejora"),
-                SatisfaccionCliente(cliente="C", fecha_encuesta=DAY, puntuacion=5),
+                SatisfaccionCliente(**survey_values("C"), fecha_encuesta=DAY, puntuacion=5),
                 Capacitacion(tema="T", fecha=DAY, personal="P"),
                 ParteInteresada(nombre="Parte"),
                 Auditoria(area_auditada="A", fecha=DAY, auditor="x", resultado="r"),

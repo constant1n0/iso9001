@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% block title %}Clientes{% endblock %}
+{% block crumb %}Clientes · Registro{% endblock %}
+{% block content %}
+{% call page_header('Cláusula 8.2 · Clientes', 'Clientes') %}
+    {% if can('create', 'customers') %}<a class="btn btn--primary" href="{{ url_for('cliente.new_cliente') }}">+ Nuevo cliente</a>{% endif %}
+{% endcall %}
+<details class="filters"{% if nombre %} open{% endif %}>
+    <summary>Filtros</summary>
+    <form method="get" action="{{ url_for('cliente.list_clientes') }}" class="filters__body">
+        <div class="field"><label for="nombre">Nombre</label><input id="nombre" name="nombre" value="{{ nombre }}"></div>
+        <div class="filters__actions"><button class="btn btn--primary" type="submit">Buscar</button><a class="btn btn--ghost" href="{{ url_for('cliente.list_clientes') }}">Limpiar</a></div>
+    </form>
+</details>
+{% if clientes %}
+<div class="table-wrap"><table>
+    <thead><tr><th scope="col">Cliente</th><th scope="col">NIF</th><th scope="col">Contacto</th><th scope="col">Correo electrónico</th><th scope="col">Teléfono</th></tr></thead>
+    <tbody>{% for c in clientes %}<tr><td><a href="{{ url_for('cliente.show_cliente', customer_id=c.id) }}">{{ c.nombre }}</a></td><td>{{ c.nif or '—' }}</td><td>{{ c.contacto or '—' }}</td><td>{{ c.email or '—' }}</td><td>{{ c.telefono or '—' }}</td></tr>{% endfor %}</tbody>
+</table></div>
+<nav class="pagination" aria-label="Páginas de clientes">
+    {% if page > 1 %}<a class="btn" href="{{ url_for('cliente.list_clientes', nombre=nombre, page=page-1, per_page=per_page) }}">Anterior</a>{% endif %}
+    <span>Página {{ page }} · {{ total }} registros</span>
+    {% if page * per_page < total %}<a class="btn" href="{{ url_for('cliente.list_clientes', nombre=nombre, page=page+1, per_page=per_page) }}">Siguiente</a>{% endif %}
+</nav>
+{% else %}{{ empty_state('Ningún cliente coincide con los filtros.' if nombre else 'Todavía no hay clientes registrados.') }}{% endif %}
+{% endblock %}

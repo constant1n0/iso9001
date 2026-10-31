@@ -32,7 +32,7 @@ LATER_AUDITED_TABLES = frozenset(
      "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo",
      "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades",
      "acciones_riesgo", "proveedores", "evaluaciones_proveedor", "cuestiones_contexto",
-     "alcances_sgc", "cambios_sgc", "tareas_cambio"}
+     "alcances_sgc", "clientes", "reclamaciones", "cambios_sgc", "tareas_cambio"}
 )
 
 

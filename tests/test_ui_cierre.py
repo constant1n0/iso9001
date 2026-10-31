@@ -7,6 +7,7 @@ import unittest
 from datetime import date
 
 import test_auth_bootstrap as bootstrap
+from mcp_support import survey_values
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db
@@ -50,7 +51,7 @@ class UiClosingTestCase(unittest.TestCase):
             for day in (date(2026, 3, 1), date(2026, 9, 1), date(2026, 6, 1)):
                 db.session.add(NoConformidad(descripcion=f"NC {day}", fecha_detectada=day))
                 db.session.add(Capacitacion(tema=f"Tema {day}", fecha=day, personal="P"))
-                db.session.add(SatisfaccionCliente(fecha_encuesta=day, cliente=f"C {day}",
+                db.session.add(SatisfaccionCliente(fecha_encuesta=day, **survey_values(f"C {day}"),
                                                    puntuacion=8))
             db.session.commit()
         self.client.post("/login", data={"username": "admin", "password": PASSWORD})
@@ -88,7 +89,12 @@ class UiClosingTestCase(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 html = self.client.get(path).get_data(as_text=True)
-                cells = re.findall(r"<td>" + re.escape(prefix) + r"(\d{4}-\d{2}-\d{2})", html)
+                if path == "/satisfaccion_cliente/":
+                    # Require customer-page links in result cells, not names in the filter picker.
+                    cells = re.findall(r'<td><a href="/clientes/\d+">' + re.escape(prefix)
+                                       + r'(\d{4}-\d{2}-\d{2})</a></td>', html)
+                else:
+                    cells = re.findall(r"<td>" + re.escape(prefix) + r"(\d{4}-\d{2}-\d{2})", html)
                 self.assertEqual(expected, cells)
 
 

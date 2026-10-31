@@ -7,6 +7,7 @@ from datetime import date
 from unittest.mock import patch
 
 import test_auth_bootstrap as bootstrap
+from mcp_support import survey_values
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db
@@ -37,7 +38,7 @@ class MonthlyReportPeriodTestCase(unittest.TestCase):
             area_auditada="A", fecha=day, auditor="X", resultado="",
             estado=EstadoAuditoriaEnum.PENDIENTE))
         db.session.add(NoConformidad(descripcion="NC", fecha_detectada=day))
-        db.session.add(SatisfaccionCliente(fecha_encuesta=day, cliente="C", puntuacion=score))
+        db.session.add(SatisfaccionCliente(fecha_encuesta=day, **survey_values("C"), puntuacion=score))
         db.session.add(Capacitacion(tema="T", fecha=day, personal="P"))
 
     def test_only_records_of_the_requested_month_are_counted(self) -> None:

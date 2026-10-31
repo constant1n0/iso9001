@@ -9,8 +9,10 @@ from test_nonconformity_service import ServiceBase, actor, errors
 
 from app.extensions import db
 from app.models import SatisfaccionCliente
+from mcp_support import survey_values
 
-VALID = {"cliente": "Farmacia Sol", "fecha_encuesta": date(2026, 10, 1), "puntuacion": 9,
+VALID = {"cliente_id": 1, "tipo_encuesta": "otra", "canal": "otro",
+         "fecha_encuesta": date(2026, 10, 1), "puntuacion": 9,
          "comentarios": "Muy bien"}
 
 
@@ -21,6 +23,11 @@ def service():
 
 
 class SurveyServiceTestCase(ServiceBase):
+    def setUp(self):
+        super().setUp()
+        survey_values("Farmacia Sol")
+        db.session.commit()
+
     def seed(self, **overrides) -> SatisfaccionCliente:
         result = db.session.execute(SatisfaccionCliente.__table__.insert().values(**(VALID | overrides)))
         db.session.commit()
@@ -37,17 +44,19 @@ class SurveyServiceTestCase(ServiceBase):
             self.assertEqual(good, record.puntuacion)
 
     def test_required_fields_and_lengths_mirror_the_form(self) -> None:
-        for key in ("cliente", "fecha_encuesta", "puntuacion"):
+        for key in ("cliente_id", "tipo_encuesta", "canal", "fecha_encuesta", "puntuacion"):
             with self.subTest(missing=key):
                 with self.assertRaises(errors().ValidationError):
                     service().create(db.session, actor(), {k: v for k, v in VALID.items() if k != key})
-        with self.assertRaises(errors().ValidationError):
-            service().create(db.session, actor(), VALID | {"cliente": "x" * 101})
+        for invalid in ({"cliente_id": 999}, {"cliente_id": True}, {"tipo_encuesta": "Otra"},
+                        {"canal": "Web"}, {"cliente_id": None}):
+            with self.subTest(invalid=invalid), self.assertRaises(errors().ValidationError):
+                service().create(db.session, actor(), VALID | invalid)
         record = service().create(db.session, actor(), VALID | {"comentarios": "  "})
         self.assertIsNone(record.comentarios)
 
     def test_list_orders_newest_first_and_filters_by_client_and_minimum_score(self) -> None:
-        old = self.seed(cliente="Bar Luna", fecha_encuesta=date(2026, 9, 1), puntuacion=4)
+        old = self.seed(**survey_values("Bar Luna"), fecha_encuesta=date(2026, 9, 1), puntuacion=4)
         new = self.seed()
         who = actor()
 
@@ -55,10 +64,20 @@ class SurveyServiceTestCase(ServiceBase):
             return [x.id for x in service().list_(db.session, who, **filters)]
 
         self.assertEqual([new.id, old.id], ids())
-        self.assertEqual([old.id], ids(cliente="LUNA"))
+        self.assertEqual([old.id], ids(cliente_id=old.cliente_id))
         self.assertEqual([new.id], ids(puntuacion_minima=5))
         self.assertEqual([new.id, old.id], ids(puntuacion_minima=4))
-        self.assertEqual([], ids(cliente="luna", puntuacion_minima=5))
+        self.assertEqual([], ids(cliente_id=old.cliente_id, puntuacion_minima=5))
+
+    def test_type_and_channel_filters_accept_members_and_names(self):
+        old = self.seed(tipo_encuesta="postventa", canal="web")
+        self.seed()
+        self.assertEqual([old], service().list_(db.session, actor(),
+                         tipo_encuesta="postventa", canal="web"))
+        self.assertEqual(([old], 1), service().list_page(db.session, actor(),
+                         tipo_encuesta="postventa", canal="web"))
+        with self.assertRaises(errors().ValidationError):
+            service().list_(db.session, actor(), canal="Web")
 
     def test_the_resource_is_open_to_every_role_for_now(self) -> None:
         from app.models import RoleEnum

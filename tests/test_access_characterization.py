@@ -26,6 +26,8 @@ from app.models import (
     AuditoriaIndicador,
     CambioSGC,
     Capacitacion,
+    Cliente,
+    Reclamacion,
     CategoriaCuestion,
     CompetenceRecord,
     CompetenceRequirement,
@@ -69,6 +71,7 @@ from app.models import (
     User,
 )
 from app.services.qms_scope import CATALOGUE
+from mcp_support import survey_values
 
 PASSWORD_HASH = generate_password_hash("StrongPassword123!")  # hashed once: scrypt is slow
 DASHBOARD = "/dashboard/"
@@ -119,8 +122,12 @@ DOC = dict(
 DOC_EDIT = DOC | {"code": "DOC-1"}
 DRAFT = dict(content="Texto nuevo", change_summary="Cambio", author_id="1")
 IMPROVEMENT = dict(no_conformidad="NC", accion_correctiva="a", accion_preventiva="b")
+CUSTOMER = dict(nombre="Cliente nuevo", nif="", contacto="", email="", telefono="", notas="")
+COMPLAINT = dict(cliente_id="1", fecha_recepcion="2026-02-01", descripcion="Retraso",
+                 canal="web", no_conformidad_id="")
 SURVEY = dict(
-    cliente="ACME", fecha_encuesta="2026-10-05", puntuacion="8", comentarios=""
+    cliente_id="1", tipo_encuesta="otra", canal="otro",
+    fecha_encuesta="2026-10-05", puntuacion="8", comentarios=""
 )
 TRAINING = dict(
     tema="Calidad",
@@ -296,6 +303,16 @@ ENDPOINTS = [
     Endpoint("DOCUMENTS", "update", "POST", "/documents/1/revisions/2/publish", 302),
     *_html("IMPROVEMENTS", "/mejoras/", ("nueva", IMPROVEMENT),
            ("editar/1", IMPROVEMENT), "eliminar/1"),
+    # Customer 1 holds survey 1 and complaint 1; customer 2 is deletable.
+    *_html("CUSTOMERS", "/clientes/", ("nuevo", CUSTOMER), ("1/editar", CUSTOMER), "2/eliminar"),
+    Endpoint("CUSTOMERS", "read", "GET", "/clientes/1", 200),
+    *_html("COMPLAINTS", "/reclamaciones/", ("nueva", COMPLAINT),
+           ("1/editar", COMPLAINT), None),
+    Endpoint("COMPLAINTS", "read", "GET", "/reclamaciones/1", 200),
+    Endpoint("COMPLAINTS", "update", "POST", "/reclamaciones/1/responder", 302,
+             dict(respuesta="Enviado")),
+    Endpoint("COMPLAINTS", "update", "POST", "/reclamaciones/1/cancelar", 302,
+             dict(motivo_cancelacion="Duplicada")),
     *_html("CUSTOMER_SATISFACTION", "/satisfaccion_cliente/", ("nueva", SURVEY),
            ("editar/1", SURVEY), "eliminar/1"),
     *_html("TRAINING", "/capacitaciones/", ("nueva", TRAINING),
@@ -441,6 +458,8 @@ ALLOWED = {
     "NONCONFORMITIES": (ALL, ALL, {ADMIN}),
     "IMPROVEMENTS": (ALL, ALL, {ADMIN}),
     "CUSTOMER_SATISFACTION": (ALL, ALL, {ADMIN}),
+    "CUSTOMERS": JSON_REGISTER,
+    "COMPLAINTS": (ALL, ALL, {ADMIN}),
     "TRAINING": (ALL, ALL, {ADMIN}),
     "INTERESTED_PARTIES": (ALL, ALL, {ADMIN}),
     "AUDITS": (ADMIN_AUDITOR, ADMIN_AUDITOR, {ADMIN}),
@@ -514,7 +533,7 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                     Document(title="T2", code="DOC-2", category=DocumentCategory.OTRO),
                     Mejora(no_conformidad="NC"),
                     SatisfaccionCliente(
-                        cliente="C", fecha_encuesta=date(2026, 10, 5), puntuacion=5
+                        **survey_values("C"), fecha_encuesta=date(2026, 10, 5), puntuacion=5
                     ),
                     Capacitacion(tema="T", fecha=date(2026, 10, 5), personal="P"),
                     ParteInteresada(nombre="Seed"),
@@ -534,6 +553,9 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                 ]
             )
             db.session.flush()  # the competence rows cite role 2 and person 1
+            db.session.add(Cliente(nombre="Sin referencias"))
+            db.session.add(Reclamacion(cliente_id=1, fecha_recepcion=date(2026, 2, 1),
+                                        descripcion="Pedido incompleto"))
             db.session.add_all(
                 [
                     HallazgoAuditoria(

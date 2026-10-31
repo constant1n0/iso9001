@@ -26,7 +26,7 @@ import test_auth_bootstrap as bootstrap
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 
-from mcp_support import McpDbCase, mcp_actor
+from mcp_support import McpDbCase, mcp_actor, survey_values
 from test_nonconformity_service import ServiceBase, actor, errors
 
 from app.extensions import db
@@ -235,7 +235,7 @@ class HoldAndCloseTestCase(Helpers, ServiceBase):
     def test_hold_freezes_the_inputs_and_later_records_leave_them_unchanged(self) -> None:
         held_by = self.person("Directora", user_id=7)
         found = self.review(asistente_ids=[self.person("Luis")])
-        self.insert(SatisfaccionCliente, fecha_encuesta=date(2026, 5, 1), cliente="ACME",
+        self.insert(SatisfaccionCliente, fecha_encuesta=date(2026, 5, 1), **survey_values("ACME"),
                     puntuacion=8)
         live = mr().inputs(db.session, actor(AUDITOR), REVIEW["periodo_desde"],
                            REVIEW["periodo_hasta"], today=TODAY, review=found)
@@ -251,7 +251,7 @@ class HoldAndCloseTestCase(Helpers, ServiceBase):
                           row.after["celebrada_por_id"]))
         self.assertEqual(1, row.after["datos_entrada"]["satisfaccion"]["encuestas"])
         # Registers change afterwards: the frozen inputs do not.
-        self.insert(SatisfaccionCliente, fecha_encuesta=date(2026, 6, 1), cliente="Beta",
+        self.insert(SatisfaccionCliente, fecha_encuesta=date(2026, 6, 1), **survey_values("Beta"),
                     puntuacion=4)
         self.insert(NoConformidad, descripcion="Tarde", fecha_detectada=date(2026, 6, 2))
         db.session.expire_all()
@@ -534,7 +534,7 @@ class InputsTestCase(Helpers, ServiceBase):
             self.insert(ParteInteresada, nombre=nombre, created_at=created, updated_at=updated)
         for fecha, puntuacion in ((date(2026, 4, 1), 8), (date(2026, 6, 30), 9),
                                   (date(2026, 3, 31), 2), (date(2026, 7, 1), 1)):
-            self.insert(SatisfaccionCliente, fecha_encuesta=fecha, cliente="ACME",
+            self.insert(SatisfaccionCliente, fecha_encuesta=fecha, **survey_values("ACME"),
                         puntuacion=puntuacion)
         for fecha in (datetime(2026, 5, 5, 10), datetime(2026, 7, 1)):
             self.insert(AuditoriaIndicador, area_auditoria="Compras", fecha_auditoria=fecha,

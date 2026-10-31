@@ -9,6 +9,7 @@ from datetime import date
 from unittest.mock import patch
 
 import test_auth_bootstrap as bootstrap
+from mcp_support import survey_values
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db
@@ -42,7 +43,7 @@ class SatisfactionChartTestCase(unittest.TestCase):
         with self.app.app_context():
             for day, score in surveys:
                 db.session.add(SatisfaccionCliente(
-                    fecha_encuesta=day, cliente="C", puntuacion=score))
+                    fecha_encuesta=day, **survey_values("C"), puntuacion=score))
             db.session.commit()
         with patch("app.routes.dashboard_routes.local_today", return_value=today):
             html = self.client.get("/dashboard/").get_data(as_text=True)

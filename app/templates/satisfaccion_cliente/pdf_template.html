@@ -18,10 +18,12 @@
 {% from "_partials/pdf.html" import fields, section %}
 {% block title %}Encuesta de satisfacción{% endblock %}
 {% block clause %}Cláusula 9.1.2 · Satisfacción del cliente{% endblock %}
-{% block subtitle %}Encuesta n.º {{ encuesta.id }} · {{ encuesta.cliente }}{% endblock %}
+{% block subtitle %}Encuesta n.º {{ encuesta.id }} · {{ encuesta.customer.nombre }}{% endblock %}
 {% block content %}
 {{ fields([
-    ('Cliente', encuesta.cliente),
+    ('Cliente', encuesta.customer.nombre),
+    ('Tipo de encuesta', encuesta.tipo_encuesta.value),
+    ('Canal', encuesta.canal.value),
     ('Fecha de la encuesta', encuesta.fecha_encuesta.strftime('%d/%m/%Y')),
     ('Puntuación', encuesta.puntuacion ~ ' / 10'),
 ]) }}
