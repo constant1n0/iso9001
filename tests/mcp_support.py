@@ -102,6 +102,8 @@ SEEDS = {
     # Cites the change and the person seeded above (both id 1).
     "tareas_cambio": {"cambio_id": 1, "descripcion": "Migrar los pedidos abiertos",
                       "responsable_id": 1, "fecha_limite": "2026-12-31"},
+    "confirmaciones_lectura": {"persona_id": 1, "tipo": "objetivos",
+                               "fecha_confirmacion": "2020-01-01"},
 }
 
 
@@ -155,7 +157,7 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
         if (slug in ("documentos", "objetivos_calidad", "acciones_revision", "riesgos",
-                     "oportunidades", "cambios_sgc") and db.session.get(Person, 1) is None):
+                     "oportunidades", "cambios_sgc", "confirmaciones_lectura") and db.session.get(Person, 1) is None):
             self.seed("personas")
         if slug == "tareas_cambio" and db.session.get(CambioSGC, 1) is None:
             self.seed("cambios_sgc")

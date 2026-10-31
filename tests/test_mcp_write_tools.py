@@ -105,6 +105,35 @@ class AuthorizationTestCase(McpDbCase):
         self.assertFalse(auditor.is_error)
 
 
+class ReadConfirmationsToolTestCase(McpDbCase):
+    async def test_operativo_round_trips_confirmations_and_validation_is_atomic(self):
+        from app.models import ConfirmacionLectura
+
+        person_id = self.seed('personas')
+        who = mcp_actor(OPERATIVO)
+        data = SEEDS['confirmaciones_lectura'] | {'persona_id': person_id}
+        created = await self.call(who, 'qms_create', {'module': 'confirmaciones_lectura', 'data': data})
+        self.assertFalse(created.is_error, created.content)
+        record = created.structured_content
+        self.assertEqual(('Objetivos de calidad', person_id, None),
+                         (record['tipo'], record['persona_id'], record['document_revision_id']))
+        updated = await self.call(who, 'qms_update', {
+            'module': 'confirmaciones_lectura', 'id': record['id'], 'data': {'notas': 'Read'}})
+        self.assertFalse(updated.is_error, updated.content)
+        got = await self.call(who, 'qms_get', {'module': 'confirmaciones_lectura', 'id': record['id']})
+        self.assertEqual('Read', got.structured_content['notas'])
+        listed = await self.call(who, 'qms_list', {'module': 'confirmaciones_lectura',
+                                 'filters': {'persona_id': person_id, 'tipo': 'objetivos'}})
+        self.assertEqual(1, listed.structured_content['total'])
+        for changes in ({'tipo': 'documento'}, {'fecha_confirmacion': '2999-01-01'}):
+            refused = await self.call(who, 'qms_update', {
+                'module': 'confirmaciones_lectura', 'id': record['id'], 'data': changes})
+            self.assertTrue(refused.is_error)
+            self.assertNotIn('Traceback', error_text(refused))
+        self.assertEqual(1, db.session.query(ConfirmacionLectura).count())
+        self.assertEqual(['create', 'update'], [r.action for r in audit_rows() if r.channel == 'mcp'])
+
+
 class PeopleTestCase(McpDbCase):
     def user(self) -> User:
         user = User(username="ana.user", password="x", role=OPERATIVO)

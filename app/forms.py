@@ -25,7 +25,7 @@ from .models import (
     EstadoCuestion, EstadoOportunidad, EstadoRiesgo, EstadoTareaCambio, FrecuenciaMedicion,
     GravedadNoConformidad, OrigenCambio, OrigenNoConformidad, OrigenRiesgo,
     ResultadoVerificacion, RoleEnum, SentidoObjetivo, TipoAccionRevision, TipoContexto,
-    TipoEncuesta, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
+    TipoConfirmacion, TipoEncuesta, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
     TratamientoSalidaNoConforme,
 )
 from flask_wtf import FlaskForm
@@ -245,6 +245,17 @@ class NewDocumentForm(DocumentForm):
 def required_person_field(label):
     return SelectField(label, coerce=optional_id, choices=[CHOOSE_PERSON],
                        validators=[DataRequired()])
+
+
+class ConfirmacionLecturaForm(BaseForm):
+    persona_id = required_person_field('Persona')
+    tipo = SelectField('Tipo', coerce=member_name,
+                       choices=[(m.name, m.value) for m in TipoConfirmacion],
+                       validators=[DataRequired()])
+    document_revision_id = SelectField('Revisión del documento (solo con tipo «Documento»)',
+                                       coerce=optional_id, choices=[('', '— Sin revisión —')])
+    fecha_confirmacion = DateField('Fecha de confirmación', validators=[DataRequired()])
+    notas = TextAreaField('Notas')
 
 
 class NewRevisionForm(BaseForm):

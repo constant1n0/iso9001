@@ -34,7 +34,7 @@ nunca puede eliminar.
 
   | Herramienta | Finalidad |
   |---|---|
-  | `qms_modules` | Los 32 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
+  | `qms_modules` | Los 33 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
   | `qms_list` | Una página acotada de un módulo, con los filtros que enumera `qms_modules` |
   | `qms_get` | Un registro por su `id` |
   | `qms_create` | Crea un registro |
@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 32 módulos: `no_conformidades`, `auditorias`,
+`qms_modules` enumera 33 módulos: `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -68,9 +68,24 @@ nunca puede eliminar.
 `mediciones_objetivo`, `revisiones_direccion`, `acciones_revision`,
 `riesgos`, `oportunidades`, `acciones_riesgo`, `proveedores`,
 `evaluaciones_proveedor`, `cuestiones_contexto`, `alcances_sgc`,
-`cambios_sgc`, `tareas_cambio`, `clientes` y `reclamaciones`. Cada campo tiene un `type`, un indicador
+`cambios_sgc`, `tareas_cambio`, `clientes`, `reclamaciones` y `confirmaciones_lectura`. Cada campo tiene un `type`, un indicador
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
+
+Confirmaciones de lectura (cláusulas 5.2 y 7.3):
+
+- `confirmaciones_lectura`: `persona_id` (entero, persona existente y activa al
+  elegirla), `tipo` (`documento` u `objetivos`) y `fecha_confirmacion`
+  (YYYY-MM-DD, nunca futura) son obligatorios. `document_revision_id` es un
+  entero que cita una revisión existente: obligatorio con `documento`, debe ser
+  `null` o ausente con `objetivos`. `notas` es texto opcional. Una actualización
+  parcial valida el resultado completo: para pasar de documento a objetivos,
+  envíe también `document_revision_id: null`.
+- Todos los roles leen y escriben con los ámbitos correspondientes. Ningún
+  token elimina. Filtros: `persona_id`, `tipo` y `document_revision_id`;
+  orden por fecha e id descendentes. El tipo se devuelve como etiqueta en
+  español. Confirmar no cambia el documento ni permite leer su texto si el
+  rol no tiene acceso a esa revisión.
 
 Clientes, reclamaciones y satisfacción (cláusulas 8.2 y 9.1.2):
 

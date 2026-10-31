@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% set title = 'Editar confirmación' if confirmation else 'Nueva confirmación' %}
+{% block title %}{{ title }}{% endblock %}
+{% block crumb %}Personas y competencia · Confirmaciones de lectura{% endblock %}
+{% block content %}
+{{ page_header('Cláusulas 5.2 y 7.3 · Toma de conciencia', title) }}
+<p class="muted">Documento requiere una revisión concreta. Para Objetivos de calidad, deja la revisión vacía. La fecha no puede ser futura.</p>
+{{ form_card(form, url_for('confirmacion_lectura.show_confirmacion', confirmation_id=confirmation.id) if confirmation else url_for('confirmacion_lectura.list_confirmaciones'), 'Guardar cambios' if confirmation else 'Crear') }}
+{% endblock %}
