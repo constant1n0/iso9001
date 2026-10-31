@@ -174,8 +174,18 @@ class ProcessFlowTestCase(RegisterScreensBase):
         objective = self.objective(compras)
         risk = self.cite("risks", compras, "Proveedor único")
         opportunity = self.cite("opportunities", compras, "Compra conjunta")
+        from app.services import nonconformities
+        with self.app.app_context():
+            nc = nonconformities.create(db.session, SYSTEM, {
+                "descripcion": "Nonconforming output", "fecha_detectada": DAY,
+                "proceso_id": compras})
+            db.session.commit()
+            nc_id = nc.id
         self.login(OPERATIVO)
         page = self.html(f"{PROCESSES}/{compras}")
+        self.assertIn(f'href="/no_conformidades/{nc_id}">Nonconforming output</a>',
+                      self.block(page, "no-conformidades"))
+        self.assertEqual("1", self.rows(f"{PROCESSES}/")[compras][6])
         for name, href, titulo in (("objetivos", f"/objetivos-calidad/{objective}",
                                     "Entregas a tiempo"),
                                    ("riesgos", f"/riesgos/{risk}", "Proveedor único"),
@@ -186,7 +196,7 @@ class ProcessFlowTestCase(RegisterScreensBase):
         self.assertEqual(["0", "1", "2"], self.rows(f"{PROCESSES}/")[compras][3:6])
         ventas = self.process("Ventas")
         empty = self.html(f"{PROCESSES}/{ventas}")
-        for name in ("relacionados", "objetivos", "riesgos", "oportunidades"):
+        for name in ("relacionados", "objetivos", "riesgos", "oportunidades", "no-conformidades"):
             self.assertIn('class="empty"', self.block(empty, name))
 
     def test_the_related_picker_leaves_the_process_out_and_an_edit_replaces_relations(

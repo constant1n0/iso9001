@@ -103,6 +103,56 @@ class NonconformityRoutesTestCase(unittest.TestCase):
                 for r in AuditLog.query.order_by(AuditLog.id)
             ]
 
+    def test_output_disposition_fields_render_round_trip_and_clear(self):
+        from app.models import ProcesoOperacion
+        from app.services import process_operations
+        from app.services.actor import Actor
+        authority = self.seed_person("Eva Authority")
+        with self.app.app_context():
+            process = process_operations.create(
+                db.session, Actor(1, "seed", RoleEnum.ADMINISTRADOR, "system"),
+                {"proceso": "Production"})
+            db.session.commit()
+            process_id = process.id_proceso
+        self.login()
+        payload = FORM | {"proceso_id": str(process_id), "tratamiento": "concesion",
+                          "concesion_autorizada_por_id": str(authority),
+                          "fecha_concesion": "2026-10-06",
+                          "justificacion_concesion": "Accepted by customer"}
+        for name in ("proceso_id", "tratamiento", "concesion_autorizada_por_id",
+                     "fecha_concesion", "justificacion_concesion"):
+            self.assertIn(f'name="{name}"', self.client.get(f"{BASE}/nueva").get_data(as_text=True))
+        response = self.client.post(f"{BASE}/nueva", data=payload)
+        self.assertEqual(302, response.status_code)
+        page_url = response.headers["Location"]
+        nc_id = int(page_url.rsplit("/", 1)[1])
+        html = self.client.get(page_url).get_data(as_text=True)
+        for text in ("Concesión", "Eva Authority", "06/10/2026", "Accepted by customer",
+                     f'href="/procesos/{process_id}">Production</a>'):
+            self.assertIn(text, html)
+        pdf = self.pdf_html(nc_id)
+        for text in ("Concesión", "Eva Authority", "06/10/2026", "Accepted by customer", "Production"):
+            self.assertIn(text, pdf)
+        edit_url = f"{BASE}/editar/{nc_id}"
+        edit = self.client.get(edit_url).get_data(as_text=True)
+        self.assertIn('<option selected value="concesion">', edit)
+        self.assertIn(f'<option selected value="{authority}">Eva Authority</option>', edit)
+        self.assertEqual(302, self.client.post(edit_url, data=payload).status_code)
+        before = self.rows()
+        invalid = self.client.post(edit_url, data=payload | {"tratamiento": ""})
+        self.assertEqual(200, invalid.status_code)
+        self.assertIn("concesión", invalid.get_data(as_text=True))
+        self.assertEqual(before, self.rows())
+        cleared = payload | {"tratamiento": "correccion", "proceso_id": "",
+                             "concesion_autorizada_por_id": "", "fecha_concesion": "",
+                             "justificacion_concesion": ""}
+        self.assertEqual(302, self.client.post(edit_url, data=cleared).status_code)
+        with self.app.app_context():
+            nc = db.session.get(NoConformidad, nc_id)
+            self.assertEqual(("correccion", None, None, None, None),
+                             (nc.tratamiento.name, nc.proceso_id, nc.concesion_autorizada_por_id,
+                              nc.fecha_concesion, nc.justificacion_concesion))
+
     # -- writes are audited and stamped ------------------------------------
 
     def test_create_is_audited_stamped_and_redirects_with_the_same_flash(self) -> None:

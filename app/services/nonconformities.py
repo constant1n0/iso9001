@@ -55,7 +55,13 @@ A nonconformity whose origin is ``proveedor`` may name the external provider
 other origin is refused (``PROVIDER_NEEDS_ORIGIN``), and so is moving the
 origin away while a provider is named (``CLEAR_PROVIDER_FIRST``): the same
 write, or an earlier one, must clear it. Records without a provider stay
-valid. ``list_`` and ``list_page`` filter by it.
+valid. ``list_`` and ``list_page`` filter by it and by ``proceso_id``.
+
+Output disposition (8.7) is optional. ``tratamiento=concesion`` requires both
+``concesion_autorizada_por_id`` (an active person when newly linked) and
+``fecha_concesion``; every other treatment, including none, forbids both.
+``_check_concesion`` judges the resulting values on partial updates before any
+mutation; the database CHECK repeats the rule. Justification is optional text.
 """
 
 from __future__ import annotations
@@ -70,7 +76,8 @@ from sqlalchemy.orm import Session
 
 from ..models import (
     AccionCorrectiva, CambioSGC, EstadoNoConformidad, GravedadNoConformidad, HallazgoAuditoria,
-    NoConformidad, OrigenNoConformidad, Proveedor, ResultadoVerificacion, RoleEnum,
+    NoConformidad, OrigenNoConformidad, ProcesoOperacion, Proveedor, ResultadoVerificacion,
+    RoleEnum, TratamientoSalidaNoConforme,
 )
 from . import audit, crud, fields, people, policy
 from .actor import Actor
@@ -105,6 +112,9 @@ CLEAR_PROVIDER_FIRST = (
     "La no conformidad indica un proveedor: quita antes el proveedor para cambiar el origen."
 )
 UNKNOWN_PROVIDER = "El campo «proveedor_id» no corresponde a ningún proveedor."
+UNKNOWN_PROCESS = "El campo «proceso_id» no corresponde a ningún proceso."
+CONCESSION_INCOMPLETE = "La concesión requiere una persona que la autorice y una fecha."
+CONCESSION_ONLY = "Solo una concesión puede indicar la persona que la autoriza y su fecha."
 CITED_BY_CHANGES = (
     "No se puede eliminar una no conformidad a la que se refieren cambios en el SGC."
 )
@@ -167,15 +177,19 @@ def _conditions(
     origen: OrigenNoConformidad | str | None,
     gravedad: GravedadNoConformidad | str | None,
     proveedor_id: int | None = None,
+    proceso_id: int | None = None,
 ) -> list[Any]:
     """The filters shared by ``list_`` and ``list_page``; they combine with AND.
 
-    A ``proveedor_id`` that cannot be a stored id matches nothing.
+    A ``proveedor_id`` or ``proceso_id`` that cannot be a stored id matches nothing.
     """
     where: list[Any] = []
     if proveedor_id is not None:
         where.append(NoConformidad.proveedor_id == proveedor_id
                      if people.is_db_id(proveedor_id) else false())
+    if proceso_id is not None:
+        where.append(NoConformidad.proceso_id == proceso_id
+                     if people.is_db_id(proceso_id) else false())
     if descripcion:
         where.append(NoConformidad.descripcion.ilike(f"%{descripcion}%"))
     for key, value in (("estado", estado), ("origen", origen), ("gravedad", gravedad)):
@@ -196,17 +210,19 @@ def list_(
     origen: OrigenNoConformidad | str | None = None,
     gravedad: GravedadNoConformidad | str | None = None,
     proveedor_id: int | None = None,
+    proceso_id: int | None = None,
 ) -> list[NoConformidad]:
     """List nonconformities, newest first; filters combine with AND.
 
     ``estado``, ``origen`` and ``gravedad`` take the enum member or its name;
-    ``proveedor_id`` keeps those naming that provider.
+    ``proveedor_id`` and ``proceso_id`` keep those naming that provider or process.
 
     Raises:
         ValidationError: An enum filter holds anything else.
     """
     policy.require(actor, Action.READ, Resource.NONCONFORMITIES)
-    where = _conditions(descripcion, estado, fecha_detectada, origen, gravedad, proveedor_id)
+    where = _conditions(descripcion, estado, fecha_detectada, origen, gravedad, proveedor_id,
+                        proceso_id)
     return list(session.scalars(select(NoConformidad).where(*where).order_by(*_ORDER)))
 
 
@@ -220,13 +236,15 @@ def list_page(
     origen: OrigenNoConformidad | str | None = None,
     gravedad: GravedadNoConformidad | str | None = None,
     proveedor_id: int | None = None,
+    proceso_id: int | None = None,
     page: int = 1,
     per_page: int = crud.DEFAULT_PER_PAGE,
 ) -> tuple[list[NoConformidad], int]:
     """One page in the ``list_`` order plus the total matching the same filters."""
     policy.require(actor, Action.READ, Resource.NONCONFORMITIES)
     page, per_page = crud.page_bounds(page, per_page)
-    where = _conditions(descripcion, estado, fecha_detectada, origen, gravedad, proveedor_id)
+    where = _conditions(descripcion, estado, fecha_detectada, origen, gravedad, proveedor_id,
+                        proceso_id)
     total = session.scalar(select(func.count()).select_from(NoConformidad).where(*where))
     query = (
         select(NoConformidad).where(*where).order_by(*_ORDER)
@@ -238,9 +256,12 @@ def list_page(
 WRITABLE_FIELDS = frozenset({
     "descripcion", "fecha_detectada", "responsable", "responsable_id", "origen", "gravedad",
     "contencion", "causa_raiz", "accion_correctiva", "proveedor_id",
+    "proceso_id", "tratamiento", "concesion_autorizada_por_id", "fecha_concesion",
+    "justificacion_concesion",
 })
 RESPONSABLE_MAX = 50  # mirrors NoConformidad.responsable and the web form
-_OPTIONAL_ENUMS = {"origen": OrigenNoConformidad, "gravedad": GravedadNoConformidad}
+_OPTIONAL_ENUMS = {"origen": OrigenNoConformidad, "gravedad": GravedadNoConformidad,
+                   "tratamiento": TratamientoSalidaNoConforme}
 
 
 def _optional_enum(data: Mapping[str, Any], key: str) -> Any:
@@ -270,7 +291,10 @@ def _clean(
         clean["responsable"] = fields.text(data, "responsable", max_length=RESPONSABLE_MAX)
     for key in _OPTIONAL_ENUMS.keys() & data.keys():
         clean[key] = _optional_enum(data, key)
-    for key in ("contencion", "causa_raiz", "accion_correctiva"):
+    if "fecha_concesion" in data:
+        clean["fecha_concesion"] = (None if data["fecha_concesion"] is None
+                                    else fields.required_date(data, "fecha_concesion"))
+    for key in ("contencion", "causa_raiz", "accion_correctiva", "justificacion_concesion"):
         if key in data:
             clean[key] = fields.text(data, key, strip=key != "accion_correctiva")
     if "responsable_id" in data:  # last: these query the database
@@ -281,7 +305,37 @@ def _clean(
     if "proveedor_id" in data:
         clean["proveedor_id"] = _provider_reference(
             session, data, current.proveedor_id if current is not None else None)
+    if "proceso_id" in data:
+        clean["proceso_id"] = _process_reference(
+            session, data, current.proceso_id if current is not None else None)
+    if "concesion_autorizada_por_id" in data:
+        clean["concesion_autorizada_por_id"] = people.reference(
+            session, data, "concesion_autorizada_por_id",
+            current.concesion_autorizada_por_id if current is not None else None)
     return clean
+
+
+def _process_reference(
+    session: Session, data: Mapping[str, Any], current: int | None
+) -> int | None:
+    """An optional process id that exists (or is kept)."""
+    value = fields.integer(data, "proceso_id")
+    if value is not None and value != current and (
+            not people.is_db_id(value) or session.get(ProcesoOperacion, value) is None):
+        raise ValidationError(UNKNOWN_PROCESS)
+    return value
+
+
+def _check_concesion(values: Mapping[str, Any], current: NoConformidad | None = None) -> None:
+    """Authority and date are present iff the resulting treatment is concession."""
+    treatment, authority, on = (
+        values.get(key, getattr(current, key, None))
+        for key in ("tratamiento", "concesion_autorizada_por_id", "fecha_concesion"))
+    if treatment is TratamientoSalidaNoConforme.concesion:
+        if authority is None or on is None:
+            raise ValidationError(CONCESSION_INCOMPLETE)
+    elif authority is not None or on is not None:
+        raise ValidationError(CONCESSION_ONLY)
 
 
 def _provider_reference(
@@ -338,6 +392,7 @@ def create(session: Session, actor: Actor, data: Mapping[str, Any]) -> NoConform
         raise ValidationError(f"Faltan campos obligatorios: {', '.join(sorted(missing))}.")
     values = _clean(session, data)
     _check_provider(values)
+    _check_concesion(values)
     nc = NoConformidad(estado=EstadoNoConformidad.abierta, **values)
     stamp_created(nc, actor)
     session.add(nc)
@@ -364,6 +419,7 @@ def update(
     if all(getattr(nc, key) == value for key, value in values.items()):
         return nc
     _check_provider(values, nc)
+    _check_concesion(values, nc)
     if "fecha_detectada" in values:
         _check_detection_date(session, nc.id, values["fecha_detectada"])
     for key, value in values.items():

@@ -32,8 +32,10 @@ an agent can never delete anything.
 - **People and competence** (5.3, 7.2): people, QMS roles with their
   responsibilities, authorities and reporting line, required and demonstrated
   competence, the competence matrix.
-- **Nonconformities and corrective actions** (10.2): containment, root cause,
-  corrective actions, effectiveness verification, closing and reopening.
+- **Nonconformities and corrective actions** (8.7, 10.2): output disposition,
+  concessions with authority, date and justification, linked processes,
+  containment, root cause, corrective actions, effectiveness verification,
+  closing and reopening.
 - **Document control** (7.5): numbered revisions reviewed, approved and
   published, attachments, withdrawal and periodic review.
 - **Internal audits** (9.2): yearly audit programme, audits with independence

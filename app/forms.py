@@ -26,6 +26,7 @@ from .models import (
     GravedadNoConformidad, OrigenCambio, OrigenNoConformidad, OrigenRiesgo,
     ResultadoVerificacion, RoleEnum, SentidoObjetivo, TipoAccionRevision, TipoContexto,
     TipoEncuesta, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
+    TratamientoSalidaNoConforme,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -59,6 +60,7 @@ def person_field(label):
 
 # The external provider a nonconformity names (EP4 of ``external-providers``).
 NO_PROVIDER = ('', '— Sin proveedor —')
+NO_PROCESS = ('', '— Sin proceso —')
 
 
 def provider_choices(providers):
@@ -149,6 +151,13 @@ class NoConformidadForm(BaseForm):
     gravedad = optional_enum_field('Gravedad', GravedadNoConformidad, '— Sin indicar —')
     responsable = StringField('Responsable', validators=[Length(max=50)])
     responsable_id = person_field('Responsable (persona)')
+    proceso_id = SelectField('Proceso', coerce=optional_id, choices=[NO_PROCESS])
+    tratamiento = optional_enum_field('Tratamiento de la salida no conforme',
+                                      TratamientoSalidaNoConforme, '— Sin decidir —')
+    concesion_autorizada_por_id = person_field('Concesión autorizada por')
+    fecha_concesion = DateField('Fecha de la concesión (solo con tratamiento «Concesión»)',
+                                validators=[Optional()])
+    justificacion_concesion = TextAreaField('Justificación de la concesión')
     contencion = TextAreaField('Contención')
     causa_raiz = TextAreaField('Causa raíz')
     accion_correctiva = TextAreaField('Acción Correctiva')
@@ -404,7 +413,6 @@ class HallazgoForm(BaseForm):
 # every value (period, target fixed once measured, date never in the future).
 # Numbers are typed with a decimal point or comma and shown without trailing
 # zeros, the way ``number_text`` writes them.
-NO_PROCESS = ('', '— Sin proceso —')
 TARGET_DIRECTIONS = {
     SentidoObjetivo.mayor_igual: 'igual o superior a la meta',
     SentidoObjetivo.menor_igual: 'igual o inferior a la meta',

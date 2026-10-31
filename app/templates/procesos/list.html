@@ -55,6 +55,7 @@
                 <th scope="col" class="num">Procesos relacionados</th>
                 <th scope="col" class="num">Objetivos de calidad</th>
                 <th scope="col" class="num">Riesgos y oportunidades</th>
+                <th scope="col" class="num">No conformidades</th>
                 <th scope="col"><span class="visually-hidden">Acciones</span></th>
             </tr>
         </thead>
@@ -67,6 +68,7 @@
                 <td class="num">{{ cuentas.relacionados[proceso.id_proceso] }}</td>
                 <td class="num">{{ cuentas.objetivos[proceso.id_proceso] }}</td>
                 <td class="num">{{ cuentas.riesgos[proceso.id_proceso] }}</td>
+                <td class="num">{{ cuentas.no_conformidades[proceso.id_proceso] }}</td>
                 <td>
                     <div class="table__actions">
                         {% if can('update', 'process_operations') %}

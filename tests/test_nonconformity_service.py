@@ -13,6 +13,7 @@ from unittest.mock import patch
 from sqlalchemy.exc import IntegrityError
 
 from test_audit import AuditDbBase
+from mcp_support import McpDbCase, mcp_actor
 
 from app.extensions import db
 from app.models import (
@@ -401,6 +402,137 @@ class ProviderLinkTestCase(WriteBase):
         cleared = service().update(db.session, actor(), nc.id, {"proveedor_id": None,
                                                                 "origen": "otro"})
         self.assertEqual(OrigenNoConformidad.otro, cleared.origen)
+
+
+class OutputDispositionTestCase(WriteBase):
+    def setUp(self):
+        super().setUp()
+        from app.models import Person, ProcesoOperacion
+        self.authority = db.session.execute(Person.__table__.insert().values(
+            nombre="Authority")).inserted_primary_key[0]
+        self.process = db.session.execute(ProcesoOperacion.__table__.insert().values(
+            proceso="Production")).inserted_primary_key[0]
+        db.session.commit()
+
+    def test_concession_round_trips_audits_and_partial_updates_keep_its_gate(self):
+        from app.models import TratamientoSalidaNoConforme
+        nc = self.create(proceso_id=self.process, tratamiento="concesion",
+                         concesion_autorizada_por_id=self.authority,
+                         fecha_concesion=date(2026, 10, 2), justificacion_concesion="  Accepted  ")
+        self.assertEqual((TratamientoSalidaNoConforme.concesion, self.process, self.authority,
+                          date(2026, 10, 2), "Accepted"),
+                         (nc.tratamiento, nc.proceso_id, nc.concesion_autorizada_por_id,
+                          nc.fecha_concesion, nc.justificacion_concesion))
+        self.assertEqual("Concesión", self.audit_rows()[-1].after["tratamiento"])
+        service().update(db.session, actor(), nc.id, {"descripcion": "Revised"})
+        db.session.commit()
+        for data in ({"tratamiento": "correccion"}, {"tratamiento": None},
+                     {"concesion_autorizada_por_id": None}, {"fecha_concesion": None}):
+            with self.subTest(data=data):
+                before = self.audit.snapshot(nc)
+                rows = len(self.audit_rows())
+                with self.assertRaises(errors().ValidationError) as caught:
+                    service().update(db.session, actor(), nc.id, data)
+                self.assertIn("concesión", caught.exception.message)
+                self.assertEqual(before, self.audit.snapshot(nc))
+                self.assertEqual(rows, len(self.audit_rows()))
+        service().update(db.session, actor(), nc.id, {
+            "tratamiento": "reproceso", "concesion_autorizada_por_id": None,
+            "fecha_concesion": None, "justificacion_concesion": "", "proceso_id": None})
+        db.session.commit()
+        self.assertEqual(("reproceso", None, None, None, None),
+                         (nc.tratamiento.name, nc.concesion_autorizada_por_id,
+                          nc.fecha_concesion, nc.justificacion_concesion, nc.proceso_id))
+
+    def test_invalid_dispositions_references_and_dates_write_nothing(self):
+        from datetime import datetime
+        from app.models import TratamientoSalidaNoConforme
+        for treatment in (None, "", *TratamientoSalidaNoConforme):
+            for authority, on in ((None, None), (self.authority, None),
+                                  (None, date(2026, 10, 2)),
+                                  (self.authority, date(2026, 10, 2))):
+                valid = ((treatment is TratamientoSalidaNoConforme.concesion)
+                         == (authority is not None and on is not None)
+                         and ((authority is None) == (on is None)))
+                if valid:
+                    continue
+                with self.subTest(treatment=treatment, authority=authority, on=on):
+                    with self.assertRaises(errors().ValidationError):
+                        service().create(db.session, actor(), VALID | {
+                            "tratamiento": treatment, "concesion_autorizada_por_id": authority,
+                            "fecha_concesion": on})
+                    self.assertEqual(0, db.session.query(NoConformidad).count())
+                    self.assertEqual([], self.audit_rows())
+        for data in ({"proceso_id": 999}, {"proceso_id": 2**40}, {"proceso_id": True},
+                     {"proceso_id": "1"}, {"concesion_autorizada_por_id": 999},
+                     {"tratamiento": "Concesión"}, {"fecha_concesion": "2026-10-02"},
+                     {"fecha_concesion": datetime(2026, 10, 2)},
+                     {"justificacion_concesion": 7}):
+            with self.subTest(data=data):
+                with self.assertRaises(errors().ValidationError):
+                    service().create(db.session, actor(), VALID | data)
+                self.assertEqual(0, db.session.query(NoConformidad).count())
+                self.assertEqual([], self.audit_rows())
+
+    def test_process_filter_combines_with_existing_filters_and_pagination(self):
+        linked = self.create(proceso_id=self.process, origen="proceso")
+        self.create(descripcion="Unlinked")
+        for listing in (service().list_, service().list_page):
+            for value in (999, 2**40, "1", True):
+                with self.subTest(listing=listing.__name__, value=value):
+                    result = listing(db.session, actor(), proceso_id=value)
+                    self.assertEqual(([], 0) if listing is service().list_page else [], result)
+        self.assertEqual([linked], service().list_(db.session, actor(),
+                                                  proceso_id=self.process, origen="proceso"))
+        self.assertEqual(([linked], 1), service().list_page(db.session, actor(),
+                                                          proceso_id=self.process))
+        self.assertEqual([], service().list_(db.session, actor(), proceso_id=self.process,
+                                             origen="cliente"))
+        self.assertEqual(2, len(service().list_(db.session, actor())))
+
+    def test_cited_concession_authority_cannot_be_deleted_without_foreign_keys(self):
+        from app.services import people
+        self.create(tratamiento="concesion", concesion_autorizada_por_id=self.authority,
+                    fecha_concesion=date(2026, 10, 2))
+        with self.assertRaises(errors().Conflict) as caught:
+            people.delete(db.session, actor(ADMIN), self.authority)
+        self.assertEqual(people.STILL_REFERENCED, caught.exception.message)
+
+
+class McpDispositionTestCase(McpDbCase):
+    async def test_mcp_writable_fields_and_disposition_round_trip(self):
+        from app.mcp_server.registry import MODULES
+        from app.services import nonconformities
+        self.assertEqual(nonconformities.WRITABLE_FIELDS,
+                         {field.name for field in MODULES["no_conformidades"].fields})
+        authority, process = self.seed("personas"), self.seed("procesos")
+        result = await self.call(mcp_actor(), "qms_create", {
+            "module": "no_conformidades", "data": {
+                "descripcion": "Output", "fecha_detectada": "2026-10-01",
+                "proceso_id": process, "tratamiento": "concesion",
+                "concesion_autorizada_por_id": authority, "fecha_concesion": "2026-10-02",
+                "justificacion_concesion": "Accepted"}})
+        self.assertFalse(result.is_error, result.content)
+        record = result.structured_content
+        self.assertEqual((process, "Concesión", authority, "2026-10-02", "Accepted"),
+                         tuple(record[key] for key in (
+                             "proceso_id", "tratamiento", "concesion_autorizada_por_id",
+                             "fecha_concesion", "justificacion_concesion")))
+        before = await self.call(mcp_actor(), "qms_get", {
+            "module": "no_conformidades", "id": record["id"]})
+        refused = await self.call(mcp_actor(), "qms_update", {
+            "module": "no_conformidades", "id": record["id"], "data": {"tratamiento": None}})
+        self.assertTrue(refused.is_error)
+        kept = await self.call(mcp_actor(), "qms_get", {
+            "module": "no_conformidades", "id": record["id"]})
+        self.assertEqual(before.structured_content, kept.structured_content)
+        cleared = await self.call(mcp_actor(), "qms_update", {
+            "module": "no_conformidades", "id": record["id"], "data": {
+                "tratamiento": "desecho", "concesion_autorizada_por_id": None,
+                "fecha_concesion": None}})
+        self.assertFalse(cleared.is_error, cleared.content)
+        self.assertEqual(("Desecho", None, None), tuple(cleared.structured_content[key]
+                         for key in ("tratamiento", "concesion_autorizada_por_id", "fecha_concesion")))
 
 
 if __name__ == "__main__":
