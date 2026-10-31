@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form %}
+{% block title %}Confirmación n.º {{ confirmation.id }}{% endblock %}
+{% block crumb %}Personas y competencia · Confirmaciones de lectura{% endblock %}
+{% block content %}
+{% call page_header('Cláusulas 5.2 y 7.3 · Toma de conciencia', 'Confirmación n.º ' ~ confirmation.id) %}
+    {% if can('update', 'read_confirmations') %}<a class="btn" href="{{ url_for('confirmacion_lectura.edit_confirmacion', confirmation_id=confirmation.id) }}">Editar</a>{% endif %}
+    {% if can('delete', 'read_confirmations') %}{{ delete_form(url_for('confirmacion_lectura.delete_confirmacion', confirmation_id=confirmation.id), '¿Eliminar esta confirmación de lectura?') }}{% endif %}
+{% endcall %}
+<article class="card">
+    <header class="card__header"><h2 class="card__title">Confirmación de lectura</h2></header>
+    <ul class="list">
+        <li class="list__item"><span class="list__primary">Persona</span><a href="{{ url_for('people.show_person', person_id=confirmation.persona_id) }}">{{ names.get(confirmation.persona_id, '—') }}</a></li>
+        {% for label, value in [('Fecha de confirmación', confirmation.fecha_confirmacion.strftime('%d/%m/%Y')), ('Tipo', confirmation.tipo.value), ('Revisión del documento (id)', confirmation.document_revision_id), ('Notas', confirmation.notas)] %}
+        <li class="list__item"><span class="list__primary">{{ label }}</span><span class="list__secondary">{{ value or '—' }}</span></li>
+        {% endfor %}
+    </ul>
+</article>
+<p><a href="{{ url_for('confirmacion_lectura.list_confirmaciones') }}">Volver a confirmaciones de lectura</a></p>
+{% endblock %}

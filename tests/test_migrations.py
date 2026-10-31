@@ -32,7 +32,8 @@ LATER_AUDITED_TABLES = frozenset(
      "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo",
      "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades",
      "acciones_riesgo", "proveedores", "evaluaciones_proveedor", "cuestiones_contexto",
-     "alcances_sgc", "clientes", "reclamaciones", "cambios_sgc", "tareas_cambio"}
+     "alcances_sgc", "clientes", "reclamaciones", "cambios_sgc", "tareas_cambio",
+     "confirmaciones_lectura"}
 )
 
 
@@ -71,6 +72,34 @@ class MigrationsTestCase(unittest.TestCase):
 
     def test_migrations_at_head_match_the_models(self) -> None:
         with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+    def test_read_confirmations_and_category_reconciliation_downgrade(self) -> None:
+        from app.models import DocumentCategory
+
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            table = 'confirmaciones_lectura'
+            foreign_keys = {fk['name']: (fk['referred_table'], fk['options'].get('ondelete'))
+                            for fk in inspector.get_foreign_keys(table)}
+            self.assertEqual(('personas', 'RESTRICT'),
+                             foreign_keys['fk_confirmaciones_lectura_persona_id_personas'])
+            self.assertEqual(('document_revisions', 'RESTRICT'),
+                             foreign_keys['fk_confirmaciones_lectura_document_revision_id'])
+            self.assertEqual({'ix_confirmaciones_lectura_persona_id',
+                              'ix_confirmaciones_lectura_document_revision_id'},
+                             {index['name'] for index in inspector.get_indexes(table)})
+            with db.engine.begin() as connection:
+                values = {row[0] for row in connection.execute(text(
+                    "SELECT unnest(enum_range(NULL::documentcategory))::text"))}
+                self.assertEqual(set(DocumentCategory.__members__) | {'PLAN_ACCION'}, values)
+                for category in DocumentCategory:
+                    connection.execute(text('INSERT INTO documents (title, code, category) '
+                                            'VALUES (:name, :name, :name)'), {'name': category.name})
+            downgrade(directory=MIGRATIONS_DIR, revision='9a2c4e6f8b10')
+            self.assertNotIn(table, inspect(db.engine).get_table_names())
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 

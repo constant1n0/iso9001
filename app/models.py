@@ -2049,6 +2049,7 @@ class DocumentCategory(enum.Enum):
     POLITICA_SEGURIDAD = 'Política de Seguridad y Salud Ocupacional'
     INDICADOR_DESEMPENO = 'Indicador de Desempeño'
     PLAN_CAPACITACION = 'Plan de Capacitación'
+    POLITICA_CALIDAD = 'Política de Calidad'
     OTRO = 'Otro'
 
 class Document(RecordMetadataMixin, db.Model):
@@ -2166,6 +2167,43 @@ class DocumentRevision(RecordMetadataMixin, db.Model):
 
     def __repr__(self):
         return f'<DocumentRevision {self.document_id}#{self.numero}>'
+
+
+class TipoConfirmacion(enum.Enum):
+    """What a person confirms having read (ISO 9001 clauses 5.2 and 7.3)."""
+
+    documento = 'Documento'
+    objetivos = 'Objetivos de calidad'
+
+
+class ConfirmacionLectura(RecordMetadataMixin, db.Model):
+    """Dated evidence of reading a specific revision or the quality objectives."""
+
+    __tablename__ = 'confirmaciones_lectura'
+    __table_args__ = (
+        db.CheckConstraint(
+            "(tipo = 'documento' AND document_revision_id IS NOT NULL) OR "
+            "(tipo = 'objetivos' AND document_revision_id IS NULL)",
+            name='ck_confirmaciones_lectura_objeto',
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    persona_id = db.Column(
+        db.Integer,
+        db.ForeignKey('personas.id', name='fk_confirmaciones_lectura_persona_id_personas',
+                      ondelete='RESTRICT'),
+        nullable=False, index=True,
+    )
+    fecha_confirmacion = db.Column(db.Date, nullable=False)
+    tipo = db.Column(text_enum(TipoConfirmacion, 'ck_confirmaciones_lectura_tipo'), nullable=False)
+    document_revision_id = db.Column(
+        db.Integer,
+        db.ForeignKey('document_revisions.id',
+                      name='fk_confirmaciones_lectura_document_revision_id', ondelete='RESTRICT'),
+        nullable=True, index=True,
+    )
+    notas = db.Column(db.Text)
 
 
 class OrigenCambio(enum.Enum):

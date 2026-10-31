@@ -17,7 +17,7 @@ from sqlalchemy.orm import object_session
 from ..audit_notifications import local_today
 from ..models import (
     CATEGORIAS_POR_TIPO, CambioSGC, CanalContacto, CategoriaCuestion, CompetenceEvaluation, CompetenceType,
-    EstadoReclamacion, TipoEncuesta,
+    EstadoReclamacion, TipoConfirmacion, TipoEncuesta,
     DecisionOportunidad, DocumentCategory, EfectoCuestion, EficaciaAccion, EstadoAccionCorrectiva,
     EstadoAccionRevision, EstadoAccionRiesgo, EstadoAlcance, EstadoAuditoriaEnum, EstadoCambio,
     EstadoCuestion, EstadoNoConformidad, EstadoObjetivo, EstadoOportunidad,
@@ -29,7 +29,7 @@ from ..models import (
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
-    reclamaciones,
+    reclamaciones, read_confirmations,
     corrective_actions, document_revisions, documents, improvements, management_reviews,
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
@@ -847,6 +847,16 @@ _MODULES = (
     *_provider_modules(),
     *_context_modules(),
     *_change_modules(),
+    Module("confirmaciones_lectura", "Read confirmations", Resource.READ_CONFIRMATIONS,
+           _DatedWrites(read_confirmations), (
+        _f("persona_id", "integer", True, note="Existing person (personas), active when newly chosen."),
+        _f("tipo", "enum", True, members=TipoConfirmacion),
+        _f("fecha_confirmacion", "date", True, note="Not in the future."),
+        _f("document_revision_id", "integer", note=(
+            "Existing document revision; required with documento, forbidden with objetivos.")),
+        _f("notas"),
+    ), (_f("persona_id", "integer"), _f("tipo", "enum", members=TipoConfirmacion),
+        _f("document_revision_id", "integer"))),
 )
 
 MODULES: dict[str, Module] = {module.slug: module for module in _MODULES}

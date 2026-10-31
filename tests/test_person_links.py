@@ -110,6 +110,26 @@ def without(data: dict, key: str) -> dict:
 TEXT_MAX = {"training": 100, "nonconformities": 50, "audits": 50}
 
 
+class ConfirmationReferenceTestCase(LinkHelpers, ServiceBase):
+    def test_confirmations_participate_in_people_deletion_protection(self):
+        from app.models import ConfirmacionLectura
+        from app.services import people, read_confirmations
+
+        self.assertTrue(any(column is ConfirmacionLectura.persona_id for column in people.REFERENCES))
+        person_id = self.person()
+        record = read_confirmations.create(db.session, ADMIN, {
+            'persona_id': person_id, 'tipo': 'objetivos', 'fecha_confirmacion': date(2020, 1, 1),
+        }, today=date(2026, 10, 18))
+        db.session.commit()
+        with self.assertRaises(errors().Conflict):
+            people.delete(db.session, ADMIN, person_id)
+        db.session.rollback()
+        read_confirmations.delete(db.session, ADMIN, record.id)
+        people.delete(db.session, ADMIN, person_id)
+        db.session.commit()
+        self.assertIsNone(db.session.get(person_model(), person_id))
+
+
 class LinkTestCase(LinkHelpers, ServiceBase):
     def test_records_accept_return_and_audit_the_person(self) -> None:
         ana = self.person()

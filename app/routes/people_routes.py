@@ -44,7 +44,7 @@ from flask_wtf import FlaskForm
 from ..extensions import db
 from ..forms import PersonForm, role_choices, user_choices
 from ..models import Person, RolResponsabilidad
-from ..services import competence, crud, people, roles_responsibilities, users
+from ..services import competence, crud, people, read_confirmations, roles_responsibilities, users
 from ..services.actor import Actor
 from ..services.errors import Conflict, ValidationError
 from ..utils.permissions import can, require_permission
@@ -147,8 +147,9 @@ def show_person(person_id: int) -> ResponseReturnValue:
     actor = current_actor()
     person = people.get(db.session, actor, person_id)
     records = competence.records.list_(db.session, actor, persona_id=person.id)
+    confirmaciones = read_confirmations.list_(db.session, actor, persona_id=person.id)
     return render_template('people/detail.html', person=person, records=records,
-                           requirements=requirement_labels(actor),
+                           confirmaciones=confirmaciones, requirements=requirement_labels(actor),
                            usernames=_usernames(actor))
 
 

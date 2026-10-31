@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% block title %}Confirmaciones de lectura{% endblock %}
+{% block crumb %}Personas y competencia · Confirmaciones de lectura{% endblock %}
+{% block content %}
+{% call page_header('Cláusulas 5.2 y 7.3 · Toma de conciencia', 'Confirmaciones de lectura') %}
+    {% if can('create', 'read_confirmations') %}<a class="btn btn--primary" href="{{ url_for('confirmacion_lectura.new_confirmacion') }}">+ Nueva confirmación</a>{% endif %}
+{% endcall %}
+<details class="filters">
+    <summary>Filtros</summary>
+    <form method="get" action="{{ url_for('confirmacion_lectura.list_confirmaciones') }}" class="filters__body">
+        <div class="field"><label for="persona_id">Persona</label><select id="persona_id" name="persona_id"><option value="">Todas</option>{% for person in people %}<option value="{{ person.id }}"{% if filters.persona_id == person.id %} selected{% endif %}>{{ person.nombre }}</option>{% endfor %}</select></div>
+        <div class="field"><label for="tipo">Tipo</label><select id="tipo" name="tipo"><option value="">Todos</option>{% for tipo in tipos %}<option value="{{ tipo.name }}"{% if filters.tipo == tipo.name %} selected{% endif %}>{{ tipo.value }}</option>{% endfor %}</select></div>
+        <div class="field"><label for="document_revision_id">Revisión del documento</label><select id="document_revision_id" name="document_revision_id"><option value="">Todas</option>{% for revision in revisions %}<option value="{{ revision.id }}"{% if filters.document_revision_id == revision.id %} selected{% endif %}>Documento n.º {{ revision.document_id }} · Revisión {{ revision.numero }} (id {{ revision.id }})</option>{% endfor %}</select></div>
+        <div class="filters__actions"><button class="btn btn--primary" type="submit">Buscar</button><a class="btn btn--ghost" href="{{ url_for('confirmacion_lectura.list_confirmaciones') }}">Limpiar</a></div>
+    </form>
+</details>
+{% if confirmaciones %}
+<div class="table-wrap"><table>
+    <thead><tr><th scope="col">Fecha</th><th scope="col">Persona</th><th scope="col">Tipo</th><th scope="col">Revisión (id)</th></tr></thead>
+    <tbody>{% for record in confirmaciones %}<tr>
+        <td><a href="{{ url_for('confirmacion_lectura.show_confirmacion', confirmation_id=record.id) }}">{{ record.fecha_confirmacion.strftime('%d/%m/%Y') }}</a></td>
+        <td>{{ names.get(record.persona_id, '—') }}</td><td>{{ record.tipo.value }}</td><td>{{ record.document_revision_id or '—' }}</td>
+    </tr>{% endfor %}</tbody>
+</table></div>
+<nav class="pagination" aria-label="Páginas de confirmaciones">
+    {% if page > 1 %}<a class="btn" href="{{ url_for('confirmacion_lectura.list_confirmaciones', page=page-1, per_page=per_page, **filters) }}">Anterior</a>{% endif %}
+    <span>Página {{ page }} · {{ total }} registros</span>
+    {% if page * per_page < total %}<a class="btn" href="{{ url_for('confirmacion_lectura.list_confirmaciones', page=page+1, per_page=per_page, **filters) }}">Siguiente</a>{% endif %}
+</nav>
+{% else %}{{ empty_state('No hay confirmaciones de lectura que mostrar.') }}{% endif %}
+{% endblock %}

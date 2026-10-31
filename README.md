@@ -66,6 +66,7 @@ No enlazar imágenes hasta que existan en el repositorio. -->
 | Procesos | 4.4, 8.1 | Tipo, responsable, entradas, salidas, recursos, criterios de operación y de aceptación, procesos relacionados y los registros que citan cada proceso |
 | Personas y competencia | 5.3, 7.2 | Personas, roles del SGC con sus responsabilidades, autoridades y línea de reporte, competencias requeridas y acreditadas, y la matriz de competencias |
 | No conformidades y acciones correctivas | 8.7, 10.2 | Tratamiento de las salidas no conformes, concesión con autoridad y fecha, proceso vinculado, contención, causa raíz, acciones correctivas, verificación de la eficacia, cierre y reapertura |
+| Confirmaciones de lectura | 5.2, 7.3 | Persona, fecha no futura y revisión concreta de un documento o confirmación de los objetivos; historial en la ficha de la persona, pantallas y MCP |
 | Control de documentos | 7.5 | Revisiones numeradas que se revisan, aprueban y publican, ficheros adjuntos, baja y revisión periódica |
 | Auditorías internas | 9.2 | Programa anual de auditoría, auditorías con alcance, equipo y comprobación de independencia, y hallazgos clasificados que abren no conformidades |
 | Riesgos y oportunidades | 6.1 | Registros separados de riesgos y de oportunidades con valoración, valoración residual, mapa de calor, acciones con la evaluación de su eficacia, revisiones vencidas y PDF |

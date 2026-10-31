@@ -31,6 +31,8 @@ from app.models import (
     CategoriaCuestion,
     CompetenceRecord,
     CompetenceRequirement,
+    ConfirmacionLectura,
+    TipoConfirmacion,
     CompetenceType,
     CuestionContexto,
     Document,
@@ -259,7 +261,13 @@ def _json(resource, base, create, update):
     ]
 
 
+CONFIRMATION = dict(persona_id='1', tipo='objetivos', document_revision_id='',
+                    fecha_confirmacion='2020-01-01', notas='Evidence')
+
 ENDPOINTS = [
+    *_html('READ_CONFIRMATIONS', '/confirmaciones/', ('nueva', CONFIRMATION),
+           ('1/editar', CONFIRMATION), '1/eliminar'),
+    Endpoint('READ_CONFIRMATIONS', 'read', 'GET', '/confirmaciones/1', 200),
     *_html("NONCONFORMITIES", "/no_conformidades/", ("nueva", NC),
            ("editar/1", NC), "eliminar/1"),
     # Corrective actions live under their nonconformity (NC-3 of nc-capa-loop);
@@ -461,6 +469,7 @@ ALLOWED = {
     "CUSTOMERS": JSON_REGISTER,
     "COMPLAINTS": (ALL, ALL, {ADMIN}),
     "TRAINING": (ALL, ALL, {ADMIN}),
+    "READ_CONFIRMATIONS": (ALL, ALL, {ADMIN}),
     "INTERESTED_PARTIES": (ALL, ALL, {ADMIN}),
     "AUDITS": (ADMIN_AUDITOR, ADMIN_AUDITOR, {ADMIN}),
     "DOCUMENTS": (ALL, ADMIN_AUDITOR, set()),  # DC4 and DC6 of document-control
@@ -558,6 +567,8 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                                         descripcion="Pedido incompleto"))
             db.session.add_all(
                 [
+                    ConfirmacionLectura(persona_id=1, tipo=TipoConfirmacion.objetivos,
+                                        fecha_confirmacion=date(2020, 1, 1)),
                     HallazgoAuditoria(
                         auditoria_id=2, tipo=TipoHallazgo.observacion, descripcion="Seed"
                     ),

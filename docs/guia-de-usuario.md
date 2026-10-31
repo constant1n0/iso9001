@@ -30,6 +30,7 @@ Documentación técnica:
 - [Usuarios](#usuarios)
 - [Personas y competencia](#personas-y-competencia)
 - [No conformidades y acciones correctivas](#no-conformidades-y-acciones-correctivas)
+- [Confirmaciones de lectura](#confirmaciones-de-lectura)
 - [Control de documentos](#control-de-documentos)
 - [Programa de auditoría, auditorías y hallazgos](#programa-de-auditoría-auditorías-y-hallazgos)
 - [Contexto de la organización](#contexto-de-la-organización)
@@ -121,7 +122,7 @@ puede consultar.
 | **Contexto** | **Contexto** 4.1, **Partes interesadas** 4.2, **Alcance del SGC** 4.3 |
 | **Calidad** | **Procesos** 4.4, **Riesgos** 6.1, **Oportunidades** 6.1, **Objetivos de calidad** 6.2, **Indicadores de auditoría** 9.1, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
 | **Clientes** | **Cliente** 8.2, **Reclamaciones** 9.1.2, **Satisfacción** 9.1.2 |
-| **Personas y competencia** | **Roles y responsabilidades** 5.3, **Personas** 7.2, **Competencias requeridas** 7.2, **Matriz de competencias** 7.2, **Capacitaciones** 7.2, **Recursos de capacitación** 7.1 |
+| **Personas y competencia** | **Roles y responsabilidades** 5.3, **Personas** 7.2, **Competencias requeridas** 7.2, **Matriz de competencias** 7.2, **Capacitaciones** 7.2, **Confirmaciones de lectura** 7.3, **Recursos de capacitación** 7.1 |
 | **Documentación** | **Documentos** 7.5 |
 | **Administración** | **Usuarios** 5.3 |
 | **Cuenta** | **Mi perfil** |
@@ -177,6 +178,7 @@ aprobar en cada módulo.
 | Personas | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
 | Competencia (requisitos, competencias acreditadas, matriz) | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
 | Capacitaciones | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar, crear, editar |
+| Confirmaciones de lectura | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar, crear, editar |
 | No conformidades | Consultar, crear, editar, eliminar; cancelar, cerrar, reabrir | Consultar, crear, editar; cancelar, cerrar | Consultar, crear, editar |
 | Acciones correctivas | Consultar, crear, editar, eliminar; verificar | Consultar, crear, editar; verificar | Consultar, crear, editar |
 | Documentos | Consultar todas las revisiones, crear, editar, enviar a revisión, rechazar, publicar, adjuntar ficheros; aprobar, dar de baja | Consultar todas las revisiones, crear, editar, enviar a revisión, rechazar, publicar, adjuntar ficheros | Consultar la revisión vigente |
@@ -408,7 +410,7 @@ cuenta.
 - **Filtros de la lista**: **Nombre**, **Estado** (**Todas**, **Activas**,
   **Inactivas**) y **Rol**.
 - **La página de una persona** muestra sus datos, sus roles y las
-  **Competencias acreditadas**.
+  **Competencias acreditadas** y sus **Confirmaciones de lectura**.
 - **Eliminación**: no se puede eliminar una persona que citan otros registros
   (una no conformidad, una acción, una auditoría, un documento, una revisión,
   un proceso del que es responsable, etc.): **No se puede eliminar una persona
@@ -591,6 +593,35 @@ fecha de cierre o de cancelación (con el motivo), y una tabla de sus acciones
 correctivas con sus fechas, su estado y su verificación (resultado, fecha,
 verificador y evidencia).
 
+## Confirmaciones de lectura
+
+**Confirmaciones de lectura** (`/confirmaciones/`), en **Personas y competencia**,
+conserva evidencia de lectura para los apartados 5.2 y 7.3. Todos los roles
+consultan, crean y editan; solo los administradores eliminan desde la web.
+Cada cambio conserva autoría e historial de auditoría.
+
+1. Pulse **+ Nueva confirmación** y elija **Persona**, activa al seleccionarla.
+2. Elija **Tipo**: **Documento** exige una **Revisión del documento** concreta;
+   **Objetivos de calidad** exige dejar la revisión vacía. No se congela una
+   lista de objetivos: puede explicar lo comunicado en **Notas**.
+3. Indique **Fecha de confirmación** (hoy por defecto, nunca futura) y las
+   **Notas** opcionales; pulse **Crear**.
+
+La lista se filtra por persona, tipo y revisión; muestra primero las fechas
+más recientes y, en empates, la última entrada registrada. La ficha permite
+**Editar** y, para administradores, **Eliminar**. La página de una persona
+enumera sus confirmaciones. No se puede eliminar una persona citada; las claves
+foráneas RESTRICT conservan también la revisión citada.
+
+Una política se registra como documento de categoría **Política de Calidad**.
+La confirmación admite cualquier revisión existente: quien la registra debe
+comprobar que es la que se comunicó. No es una firma electrónica ni una prueba
+automática de comprensión, y no cambia la visibilidad del texto documental.
+
+Al actualizar PostgreSQL, la migración completa las categorías documentales
+que faltaban. Deshacerla elimina las confirmaciones, pero conserva los valores
+añadidos al enumerado nativo para no arriesgar los documentos existentes.
+
 ## Control de documentos
 
 **Documentos** (`/documents/`, apartado 7.5 de ISO 9001:2026) controla la
@@ -632,7 +663,7 @@ Pulse **+ Nuevo documento** y rellene:
   **Instrucción de Trabajo**, **Plan de Acción Correctiva**, **Plan de Acción
   Preventiva**, **Registro de Calidad**, **Informe de Revisión por la
   Dirección**, **Política de Seguridad y Salud Ocupacional**, **Indicador de
-  Desempeño**, **Plan de Capacitación** u **Otro**;
+  Desempeño**, **Plan de Capacitación**, **Política de Calidad** u **Otro**;
 - **Propietario** (una persona; obligatorio);
 - **Próxima revisión** (fecha de la siguiente revisión periódica; opcional);
 - **Autor de la revisión 1** y **Contenido** (el texto de la revisión 1).

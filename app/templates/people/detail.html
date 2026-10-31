@@ -114,4 +114,22 @@
         {{ empty_state('Sin competencias acreditadas.') }}
     {% endif %}
 </section>
+<section aria-labelledby="confirmaciones">
+    <div class="section-header">
+        <h2 id="confirmaciones">Confirmaciones de lectura</h2>
+        {% if can('create', 'read_confirmations') %}
+        <a class="btn btn--primary btn--sm" href="{{ url_for('confirmacion_lectura.new_confirmacion', persona_id=person.id) }}">+ Nueva confirmación</a>
+        {% endif %}
+    </div>
+    {% if confirmaciones %}
+    <ul class="list">
+        {% for record in confirmaciones %}
+        <li class="list__item">
+            <a class="list__primary" href="{{ url_for('confirmacion_lectura.show_confirmacion', confirmation_id=record.id) }}">{{ record.tipo.value }}{% if record.document_revision_id %} · Revisión n.º {{ record.document_revision_id }}{% endif %}</a>
+            <span class="list__secondary">{{ record.fecha_confirmacion.strftime('%d/%m/%Y') }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}{{ empty_state('Sin confirmaciones de lectura.') }}{% endif %}
+</section>
 {% endblock %}
