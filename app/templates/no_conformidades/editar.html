@@ -21,7 +21,7 @@
 {% block title %}{{ 'No conformidad' if solo_lectura else 'Editar no conformidad' }}{% endblock %}
 {% block crumb %}Calidad · No conformidades{% endblock %}
 {% block content %}
-{% call page_header('Cláusula 10.2 · No conformidad y acción correctiva', 'No conformidad' if solo_lectura else 'Editar no conformidad') %}
+{% call page_header('Cláusulas 8.7 y 10.2 · Salidas no conformes y acción correctiva', 'No conformidad' if solo_lectura else 'Editar no conformidad') %}
     <a class="btn" href="{{ url_for('no_conformidad.exportar_pdf', id=nc.id) }}" target="_blank" rel="noopener">PDF</a>
     {% if puede_reabrir %}
         {{ action_form(url_for('no_conformidad.reabrir_no_conformidad', id=nc.id), 'Reabrir', '¿Reabrir esta no conformidad?') }}

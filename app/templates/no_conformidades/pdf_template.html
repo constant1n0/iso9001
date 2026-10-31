@@ -20,7 +20,7 @@
 {% set cancelada = nc.estado.name == 'cancelada' %}
 {% macro fecha(valor) %}{{ valor.strftime('%d/%m/%Y') if valor else '—' }}{% endmacro %}
 {% block title %}Informe de no conformidad{% endblock %}
-{% block clause %}Cláusula 10.2 · No conformidad y acción correctiva{% endblock %}
+{% block clause %}Cláusulas 8.7 y 10.2 · Salidas no conformes y acción correctiva{% endblock %}
 {% block subtitle %}No conformidad n.º {{ nc.id }}{% endblock %}
 {% block content %}
 {# PDF-only template (never served to a browser, so the CSP does not apply):
@@ -35,6 +35,10 @@
     ('Fecha detectada', fecha(nc.fecha_detectada)),
     ('Origen', nc.origen.value if nc.origen else '—'),
     ('Gravedad', nc.gravedad.value if nc.gravedad else '—'),
+    ('Proceso', proceso.proceso if proceso else '—'),
+    ('Tratamiento', nc.tratamiento.value if nc.tratamiento else '—'),
+    ('Concesión autorizada por', personas.get(nc.concesion_autorizada_por_id, '—')),
+    ('Fecha de la concesión', fecha(nc.fecha_concesion)),
     ('Responsable', nc.responsable or 'Sin asignar'),
     ('Persona responsable', personas.get(nc.responsable_id, '—')),
     ('Estado', nc.estado.value),
@@ -42,6 +46,7 @@
 ]) }}
 {% if cancelada %}{{ section('Motivo de la cancelación', nc.motivo_cancelacion) }}{% endif %}
 {{ section('Descripción', nc.descripcion) }}
+{{ section('Justificación de la concesión', nc.justificacion_concesion) }}
 {{ section('Contención', nc.contencion) }}
 {{ section('Causa raíz', nc.causa_raiz) }}
 <div class="section">

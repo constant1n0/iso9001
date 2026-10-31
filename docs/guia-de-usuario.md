@@ -466,8 +466,8 @@ celda enlaza con la página de la persona y muestra uno de estos estados:
 
 ## No conformidades y acciones correctivas
 
-**No conformidades** (`/no_conformidades/`, apartado 10.2 de ISO 9001:2026)
-registra lo que ha fallado, cómo se contuvo, su causa raíz, las acciones
+**No conformidades** (`/no_conformidades/`, apartados 8.7 y 10.2 de ISO 9001:2026)
+registra lo que ha fallado, el tratamiento de la salida no conforme, cómo se contuvo, su causa raíz, las acciones
 correctivas emprendidas y si fueron eficaces. Todos los roles registran no
 conformidades y acciones correctivas.
 
@@ -492,11 +492,24 @@ conformidades y acciones correctivas.
   causó (véase [Proveedores externos](#proveedores-externos));
 - **Gravedad**: **Mayor**, **Menor** u **Observación**;
 - **Responsable** (texto libre heredado) y **Responsable (persona)**;
+- **Proceso**: opcional; enlaza con el proceso afectado. Su página muestra las
+  no conformidades que lo citan y la lista de procesos las cuenta;
+- **Tratamiento de la salida no conforme**: opcional; **Corrección**,
+  **Separación**, **Devolución**, **Concesión**, **Reproceso** o **Desecho**;
+- **Concesión autorizada por** (una persona) y **Fecha de la concesión**:
+  ambos obligatorios solo si el tratamiento es **Concesión**. Con otro
+  tratamiento, o sin tratamiento, ambos deben quedar vacíos; para cambiar
+  desde **Concesión**, quítalos en el mismo guardado;
+- **Justificación de la concesión**: texto opcional;
 - **Contención** y **Causa raíz**;
 - **Acción Correctiva**: un campo de texto libre que se conserva de versiones
   anteriores. Las acciones correctivas estructuradas que se describen más
   abajo lo sustituyen; cuando tiene texto, la página lo muestra como **Acción
   correctiva (texto anterior)**.
+
+La ficha y el PDF muestran también el tratamiento, el proceso y los datos de la
+concesión. El tratamiento no sustituye a las acciones correctivas ni cambia las
+reglas de cierre. La identificación de productos o lotes sigue fuera del registro.
 
 ### Estados
 

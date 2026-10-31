@@ -17,10 +17,10 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required
 from ..audit_notifications import local_today
-from ..forms import NoConformidadForm, person_choices, provider_choices
+from ..forms import NoConformidadForm, person_choices, process_choices, provider_choices
 from ..extensions import db
 from ..models import EstadoNoConformidad, GravedadNoConformidad, OrigenNoConformidad
-from ..services import corrective_actions, nonconformities, people, providers
+from ..services import corrective_actions, nonconformities, people, process_operations, providers
 from ..services.errors import ValidationError
 from ..utils.permissions import require_permission
 from ..utils.pdf import pdf_response, render_pdf
@@ -36,7 +36,8 @@ bp = Blueprint('no_conformidad', __name__, url_prefix='/no_conformidades')
 # ``proveedor_id`` is kept only with the ``proveedor`` origin (EP4 of external-providers).
 FORM_FIELDS = ('descripcion', 'fecha_detectada', 'origen', 'gravedad', 'responsable',
                'responsable_id', 'contencion', 'causa_raiz', 'accion_correctiva',
-               'proveedor_id')
+               'proveedor_id', 'proceso_id', 'tratamiento', 'concesion_autorizada_por_id',
+               'fecha_concesion', 'justificacion_concesion')
 
 
 def _form_data(form):
@@ -69,9 +70,17 @@ def _page(id):
 
 def _people_of(actor, no_conformidad, acciones):
     """Names of the people a nonconformity and its actions cite (owner, verifiers)."""
-    person_ids = [no_conformidad.responsable_id, *(a.responsable_id for a in acciones),
+    person_ids = [no_conformidad.responsable_id, no_conformidad.concesion_autorizada_por_id,
+                  *(a.responsable_id for a in acciones),
                   *(a.verificador_id for a in acciones)]
     return people.names(db.session, actor, person_ids)
+
+
+def _output_choices(form, actor, current=None):
+    """Process and concession-authority pickers; keep an inactive authority already cited."""
+    form.proceso_id.choices = process_choices(process_operations.list_(db.session, actor))
+    form.concesion_autorizada_por_id.choices = person_choices(people.choices(
+        db.session, actor, include=getattr(current, 'concesion_autorizada_por_id', None)))
 
 
 def _providers(actor):
@@ -123,6 +132,7 @@ def listar_no_conformidades():
 def nueva_no_conformidad():
     actor = current_actor()
     form = NoConformidadForm()
+    _output_choices(form, actor)
     form.responsable_id.choices = person_choices(people.choices(db.session, actor))
     form.proveedor_id.choices = provider_choices(_providers(actor))
     created = form.validate_on_submit() and _saved(
@@ -148,6 +158,8 @@ def ver_no_conformidad(id):
         personas=_people_of(actor, no_conformidad, acciones),
         proveedor=None if no_conformidad.proveedor_id is None else providers.providers.get(
             db.session, actor, no_conformidad.proveedor_id),
+        proceso=None if no_conformidad.proceso_id is None else process_operations.get(
+            db.session, actor, no_conformidad.proceso_id),
         abierta=no_conformidad.estado not in nonconformities.TERMINAL_STATES,
         puede_verificar=may_verify(),
         puede_cerrar=nonconformities.may_close(actor, no_conformidad),
@@ -165,6 +177,7 @@ def editar_no_conformidad(id):
     actor = current_actor()
     no_conformidad = nonconformities.get(db.session, actor, id)
     form = NoConformidadForm(obj=no_conformidad)
+    _output_choices(form, actor, no_conformidad)
     form.responsable_id.choices = person_choices(
         people.choices(db.session, actor, include=no_conformidad.responsable_id))
     form.proveedor_id.choices = provider_choices(_providers(actor))
@@ -234,5 +247,7 @@ def exportar_pdf(id):
     no_conformidad = nonconformities.get(db.session, actor, id)
     acciones = corrective_actions.list_(db.session, actor, no_conformidad_id=id)
     pdf = render_pdf('no_conformidades/pdf_template.html', no_conformidad=no_conformidad,
-                     acciones=acciones, personas=_people_of(actor, no_conformidad, acciones))
+                     acciones=acciones, personas=_people_of(actor, no_conformidad, acciones),
+                     proceso=None if no_conformidad.proceso_id is None else process_operations.get(
+                         db.session, actor, no_conformidad.proceso_id))
     return pdf_response(pdf, f'no_conformidad_{id}.pdf')

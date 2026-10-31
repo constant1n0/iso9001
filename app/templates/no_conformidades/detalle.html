@@ -22,7 +22,7 @@
 {% block title %}No conformidad n.º {{ nc.id }}{% endblock %}
 {% block crumb %}Calidad · No conformidades{% endblock %}
 {% block content %}
-{% call page_header('Cláusula 10.2 · No conformidad y acción correctiva', 'No conformidad n.º ' ~ nc.id) %}
+{% call page_header('Cláusulas 8.7 y 10.2 · Salidas no conformes y acción correctiva', 'No conformidad n.º ' ~ nc.id) %}
     {% if abierta and can('update', 'nonconformities') %}
     <a class="btn" href="{{ url_for('no_conformidad.editar_no_conformidad', id=nc.id) }}">Editar</a>
     {% endif %}
@@ -66,6 +66,11 @@
         {% if proveedor %}
         <li class="list__item"><span class="list__primary">Proveedor</span><span class="list__secondary"><a href="{{ url_for('proveedor.show_provider', provider_id=proveedor.id) }}">{{ proveedor.nombre }}</a></span></li>
         {% endif %}
+        <li class="list__item"><span class="list__primary">Proceso</span><span class="list__secondary">{% if proceso %}<a href="{{ url_for('proceso.show_process', process_id=proceso.id_proceso) }}">{{ proceso.proceso }}</a>{% else %}—{% endif %}</span></li>
+        <li class="list__item"><span class="list__primary">Tratamiento de la salida no conforme</span><span class="list__secondary">{{ nc.tratamiento.value if nc.tratamiento else '—' }}</span></li>
+        <li class="list__item"><span class="list__primary">Concesión autorizada por</span><span class="list__secondary">{{ personas.get(nc.concesion_autorizada_por_id, '—') }}</span></li>
+        <li class="list__item"><span class="list__primary">Fecha de la concesión</span><span class="list__secondary">{{ nc.fecha_concesion.strftime('%d/%m/%Y') if nc.fecha_concesion else '—' }}</span></li>
+        <li class="list__item"><span class="list__primary">Justificación de la concesión</span><span class="list__secondary">{{ nc.justificacion_concesion or '—' }}</span></li>
         <li class="list__item"><span class="list__primary">Gravedad</span><span class="list__secondary">{{ nc.gravedad.value if nc.gravedad else '—' }}</span></li>
         {% set persona = personas.get(nc.responsable_id) %}
         <li class="list__item"><span class="list__primary">Responsable</span><span class="list__secondary">{{ nc.responsable or '—' }}{% if persona %} · Persona: {{ persona }}{% endif %}</span></li>

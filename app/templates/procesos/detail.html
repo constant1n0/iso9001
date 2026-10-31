@@ -35,7 +35,7 @@
     {% if can('update', 'process_operations') %}
     <a class="btn" href="{{ url_for('proceso.edit_process', process_id=proceso.id_proceso) }}">Editar</a>
     {% endif %}
-    {% if eliminable and can('delete', 'process_operations') %}
+    {% if eliminable and not citas.no_conformidades and can('delete', 'process_operations') %}
     {{ delete_form(url_for('proceso.delete_process', process_id=proceso.id_proceso), '¿Eliminar el proceso «' ~ proceso.proceso ~ '»?') }}
     {% endif %}
 {% endcall %}
@@ -78,6 +78,7 @@
         {% call(objetivo) registros_card('objetivos', 'Objetivos de calidad', citas.objetivos, 'Ningún objetivo de calidad cita este proceso.') %}<a class="list__primary" href="{{ url_for('objetivo_calidad.show_objective', objective_id=objetivo.id) }}">{{ objetivo.titulo }}</a><span class="list__secondary">{{ objetivo.anio }} · {{ objetivo.estado.value }}</span>{% endcall %}
         {% call(riesgo) registros_card('riesgos', 'Riesgos', citas.riesgos, 'Ningún riesgo cita este proceso.') %}<a class="list__primary" href="{{ url_for('riesgo.show_record', record_id=riesgo.id) }}">{{ riesgo.titulo }}</a><span class="list__secondary">{{ riesgo.estado.value }}</span>{% endcall %}
         {% call(oportunidad) registros_card('oportunidades', 'Oportunidades', citas.oportunidades, 'Ninguna oportunidad cita este proceso.') %}<a class="list__primary" href="{{ url_for('oportunidad.show_record', record_id=oportunidad.id) }}">{{ oportunidad.titulo }}</a><span class="list__secondary">{{ oportunidad.estado.value }}</span>{% endcall %}
+        {% call(nc) registros_card('no-conformidades', 'No conformidades', citas.no_conformidades, 'Ninguna no conformidad cita este proceso.') %}<a class="list__primary" href="{{ url_for('no_conformidad.ver_no_conformidad', id=nc.id) }}">{{ nc.descripcion }}</a><span class="list__secondary">{{ nc.estado.value }}</span>{% endcall %}
     </div>
 </section>
 {% endblock %}
