@@ -88,3 +88,16 @@ Also: `app/services/people.py` `REFERENCES` gained the concession-authority link
 (scope expansion approved by the parent). Verification: 1,829 tests, 1,736 passed,
 0 failed, 93 skipped (local); PostgreSQL cases and migration parity run in CI.
 Single PR (well under the 1,500-line cap); push/PR are the user's decision.
+
+## Production deployment (2026-10-31)
+
+`main@51efca2` runs on `vulcano`. Authorized over SSH to `192.168.101.46` as `dcm`, no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `06b66fb`, clean, migration `7c4e9a2b6d10`; four services active |
+| Backups | `~/work/backups/calidad-2026-10-31-pre-51efca2.dump` (538 entries) and `iso9001-code-2026-10-31-pre-51efca2.tar.gz`, mode 600 |
+| Code | Incremental git bundle `06b66fb..main`, fast-forward to `51efca2`; no dependency changes |
+| Database | `flask db upgrade` `7c4e9a2b6d10` → `9a2c4e6f8b10`; `flask db check` clean |
+| Restart (user, with sudo) | All four services |
+| Smoke tests | Services active, no journal errors; `/login` 200; `/no_conformidades/`, `/clientes/`, `/reclamaciones/`, `/procesos/` redirect to login; `/mcp` 401 Bearer |
