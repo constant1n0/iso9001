@@ -243,15 +243,6 @@ class AuditoriaIndicador(RecordMetadataMixin, db.Model):
     accion_correctiva = db.Column(db.Text)
     indicador_desempeno = db.Column(db.Text)
 
-# Modelo para Mejoras Continuas dentro del SGC
-class Mejora(RecordMetadataMixin, db.Model):
-    __tablename__ = 'mejoras'
-    id_mejora = db.Column(db.Integer, primary_key=True)
-    no_conformidad = db.Column(db.Text, nullable=False)
-    accion_correctiva = db.Column(db.Text)
-    accion_preventiva = db.Column(db.Text)
-    fecha_implementacion = db.Column(db.DateTime, default=datetime.utcnow)
-
 # Modelo para Usuarios (para autenticación y gestión de accesos)
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -2311,6 +2302,124 @@ def _change_links() -> tuple:
                                name=f'ck_{table}_{column.removesuffix("_id")}'),
         ]
     return tuple(constraints)
+
+
+class OrigenMejora(enum.Enum):
+    """Origin of an improvement (ISO 9001 clauses 10.1 and 10.3)."""
+
+    no_conformidad = 'No conformidad'
+    auditoria = 'Auditoría'
+    revision_direccion = 'Revisión por la dirección'
+    oportunidad = 'Oportunidad'
+    objetivo = 'Objetivo de calidad'
+    otro = 'Otro'
+
+
+class EstadoMejora(enum.Enum):
+    """Lifecycle controlled exclusively by the improvements service."""
+
+    propuesta = 'Propuesta'
+    aprobada = 'Aprobada'
+    implantada = 'Implantada'
+    eficacia_revisada = 'Eficacia revisada'
+    cancelada = 'Cancelada'
+
+
+class EficaciaMejora(enum.Enum):
+    eficaz = 'Eficaz'
+    no_eficaz = 'No eficaz'
+
+
+MEJORA_LINKS: dict[str, tuple[OrigenMejora, str]] = {
+    'no_conformidad_id': (OrigenMejora.no_conformidad, 'no_conformidades.id'),
+    'hallazgo_id': (OrigenMejora.auditoria, 'hallazgos_auditoria.id'),
+    'accion_revision_id': (OrigenMejora.revision_direccion, 'acciones_revision.id'),
+    'oportunidad_id': (OrigenMejora.oportunidad, 'oportunidades.id'),
+    'objetivo_id': (OrigenMejora.objetivo, 'objetivos_calidad.id'),
+}
+
+_MEJORA_APPROVAL = (
+    "(aprobado_por_id IS NULL AND fecha_aprobacion IS NULL "
+    "AND estado IN ('propuesta', 'cancelada')) OR "
+    "(aprobado_por_id IS NOT NULL AND fecha_aprobacion IS NOT NULL AND estado <> 'propuesta')"
+)
+_MEJORA_IMPLEMENTATION = (
+    "(fecha_implementacion IS NOT NULL AND estado IN ('implantada', 'eficacia_revisada')) OR "
+    "(fecha_implementacion IS NULL AND estado NOT IN ('implantada', 'eficacia_revisada'))"
+)
+_MEJORA_EFFECTIVENESS = (
+    "(eficacia IS NOT NULL AND fecha_eficacia IS NOT NULL AND revisor_eficacia_id IS NOT NULL "
+    "AND estado = 'eficacia_revisada') OR "
+    "(eficacia IS NULL AND fecha_eficacia IS NULL AND revisor_eficacia_id IS NULL "
+    "AND estado <> 'eficacia_revisada')"
+)
+_MEJORA_INEFFECTIVE_EXPLAINED = (
+    "eficacia IS NULL OR eficacia = 'eficaz' OR comentario_eficacia IS NOT NULL"
+)
+_MEJORA_INDEPENDENT_REVIEWER = (
+    "revisor_eficacia_id IS NULL OR revisor_eficacia_id <> responsable_id"
+)
+_MEJORA_CANCELLATION = (
+    "(motivo_cancelacion IS NOT NULL AND fecha_cancelacion IS NOT NULL "
+    "AND estado = 'cancelada') OR "
+    "(motivo_cancelacion IS NULL AND fecha_cancelacion IS NULL AND estado <> 'cancelada')"
+)
+
+
+def _mejora_links() -> tuple:
+    """Foreign key, index and origin CHECK of every optional origin link."""
+    table = 'mejoras'
+    constraints: list = []
+    for column, (origin, target) in MEJORA_LINKS.items():
+        constraints += [
+            db.ForeignKeyConstraint(
+                [column], [target],
+                name=f"fk_{table}_{column}_{target.split('.')[0]}", ondelete='RESTRICT',
+            ),
+            db.Index(f'ix_{table}_{column}', column),
+            db.CheckConstraint(f"{column} IS NULL OR origen = '{origin.name}'",
+                               name=f'ck_{table}_{column.removesuffix("_id")}'),
+        ]
+    return tuple(constraints)
+
+
+class Mejora(RecordMetadataMixin, db.Model):
+    """An improvement, its origin and evidence of treatment (ISO 9001 10.1/10.3)."""
+
+    __tablename__ = 'mejoras'
+    __table_args__ = (
+        *_mejora_links(),
+        db.CheckConstraint(_MEJORA_APPROVAL, name='ck_mejoras_aprobacion'),
+        db.CheckConstraint(_MEJORA_IMPLEMENTATION, name='ck_mejoras_implantacion'),
+        db.CheckConstraint(_MEJORA_EFFECTIVENESS, name='ck_mejoras_revision_eficacia'),
+        db.CheckConstraint(_MEJORA_INEFFECTIVE_EXPLAINED, name='ck_mejoras_comentario_eficacia'),
+        db.CheckConstraint(_MEJORA_INDEPENDENT_REVIEWER, name='ck_mejoras_revisor_eficacia'),
+        db.CheckConstraint(_MEJORA_CANCELLATION, name='ck_mejoras_cancelacion'),
+    )
+
+    id_mejora = db.Column(db.Integer, primary_key=True)
+    descripcion = db.Column(db.Text, nullable=False)
+    responsable_id = person_link('mejoras', 'responsable_id')
+    origen = db.Column(text_enum(OrigenMejora, 'ck_mejoras_origen'), nullable=False,
+                       default=OrigenMejora.otro, server_default='otro')
+    no_conformidad_id = db.Column(db.Integer)
+    hallazgo_id = db.Column(db.Integer)
+    accion_revision_id = db.Column(db.Integer)
+    oportunidad_id = db.Column(db.Integer)
+    objetivo_id = db.Column(db.Integer)
+    fecha_identificacion = db.Column(db.Date, nullable=False)
+    beneficio = db.Column(db.Text)
+    estado = db.Column(text_enum(EstadoMejora, 'ck_mejoras_estado'), nullable=False,
+                       default=EstadoMejora.propuesta, server_default='propuesta')
+    fecha_implementacion = db.Column(db.Date)
+    aprobado_por_id = person_link('mejoras', 'aprobado_por_id')
+    fecha_aprobacion = db.Column(db.Date)
+    eficacia = db.Column(text_enum(EficaciaMejora, 'ck_mejoras_eficacia'))
+    fecha_eficacia = db.Column(db.Date)
+    revisor_eficacia_id = person_link('mejoras', 'revisor_eficacia_id')
+    comentario_eficacia = db.Column(db.Text)
+    motivo_cancelacion = db.Column(db.Text)
+    fecha_cancelacion = db.Column(db.Date)
 
 
 # The processes and documents a change affects (decision CP1); plain tables,
