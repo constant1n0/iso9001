@@ -92,3 +92,16 @@ The document-revision FK name was shortened to 63 chars for PostgreSQL
 seven missing `documentcategory` members plus `POLITICA_CALIDAD`. Verification:
 1,847 tests, 1,752 passed, 0 failed, 95 skipped (local); PostgreSQL enum/migration
 verification runs in CI. Single PR.
+
+## Production deployment (2026-10-31)
+
+`main@885012c` runs on `vulcano`. Authorized over SSH to `192.168.101.46` as `dcm`, no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `51efca2`, clean, migration `9a2c4e6f8b10`; four services active |
+| Backups | `~/work/backups/calidad-2026-10-31-pre-885012c.dump` (542 entries) and `iso9001-code-2026-10-31-pre-885012c.tar.gz`, mode 600 |
+| Code | Incremental git bundle `51efca2..main`, fast-forward to `885012c`; no dependency changes |
+| Database | `flask db upgrade` `9a2c4e6f8b10` → `ab4c6e8f0a12` (documentcategory enum reconciled to 13 values); `flask db check` clean |
+| Restart (user, with sudo) | All four services |
+| Smoke tests | Services active, no journal errors; `/login` 200; `/confirmaciones/`, `/clientes/`, `/no_conformidades/`, `/procesos/` redirect to login; `/mcp` 401 Bearer; 33 MCP modules including `confirmaciones_lectura` |
