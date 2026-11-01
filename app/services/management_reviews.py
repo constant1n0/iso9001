@@ -960,14 +960,13 @@ def _audits(session: Session, desde: date, hasta: date) -> dict[str, Any]:
 
 
 def _improvements(session: Session, desde: date, hasta: date) -> dict[str, Any]:
-    start, end = _moments(desde, hasta, aware=False)
-    dated = and_(Mejora.fecha_implementacion >= start, Mejora.fecha_implementacion < end)
+    dated = Mejora.fecha_implementacion.between(desde, hasta)
     listed = session.scalars(select(Mejora).where(dated).order_by(
         Mejora.fecha_implementacion, Mejora.id_mejora).limit(LIST_LIMIT))
     return {
         "total": _count(session, Mejora, dated),
-        "lista": [{"id": found.id_mejora, "descripcion": _short(found.no_conformidad),
-                   "fecha": found.fecha_implementacion.date()} for found in listed],
+        "lista": [{"id": found.id_mejora, "descripcion": _short(found.descripcion),
+                   "fecha": found.fecha_implementacion} for found in listed],
     }
 
 

@@ -123,7 +123,7 @@ DOC = dict(
 # Document 1 has a revision in force, so its code is locked (DC-4): the edit keeps it.
 DOC_EDIT = DOC | {"code": "DOC-1"}
 DRAFT = dict(content="Texto nuevo", change_summary="Cambio", author_id="1")
-IMPROVEMENT = dict(no_conformidad="NC", accion_correctiva="a", accion_preventiva="b")
+IMPROVEMENT = dict(descripcion="NC", origen="otro", fecha_identificacion="2026-10-05", beneficio="b")
 CUSTOMER = dict(nombre="Cliente nuevo", nif="", contacto="", email="", telefono="", notas="")
 COMPLAINT = dict(cliente_id="1", fecha_recepcion="2026-02-01", descripcion="Retraso",
                  canal="web", no_conformidad_id="")
@@ -439,8 +439,9 @@ ENDPOINTS = [
     Endpoint("QMS_CHANGES", "create", "POST", "/cambios/1/tareas/nueva", 302, CHANGE_TASK),
     Endpoint("QMS_CHANGES", "update", "POST", "/cambios/1/tareas/1/editar", 302, CHANGE_TASK),
     Endpoint("QMS_CHANGES", "delete", "POST", "/cambios/1/tareas/1/eliminar", 302),
-    *_json("IMPROVEMENTS", "/mejoras/api/", {"no_conformidad": "NC"},
-           {"accion_correctiva": "x"}),
+    *_json("IMPROVEMENTS", "/mejoras/api/",
+           {"descripcion": "NC", "fecha_identificacion": "2026-10-05"}, {"beneficio": "x"}),
+    Endpoint("IMPROVEMENTS", "read", "GET", "/mejoras/1", 200),
     *_json("AUDIT_INDICATORS", "/auditoria_indicador/",
            {"area_auditoria": "Ventas"}, {"resultado": "ok"}),
     *_json("ROLES_RESPONSIBILITIES", "/rol_responsabilidad/", {"rol": "Nuevo"},
@@ -540,7 +541,7 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                     ProgramaAuditoria(anio=2026, objetivos="O", alcance="A"),
                     Document(title="T", code="DOC-1", category=DocumentCategory.OTRO),
                     Document(title="T2", code="DOC-2", category=DocumentCategory.OTRO),
-                    Mejora(no_conformidad="NC"),
+                    Mejora(descripcion="NC", fecha_identificacion=date(2026, 10, 5)),
                     SatisfaccionCliente(
                         **survey_values("C"), fecha_encuesta=date(2026, 10, 5), puntuacion=5
                     ),

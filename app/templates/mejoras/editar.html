@@ -20,5 +20,5 @@
 {% block crumb %}Calidad · Mejoras{% endblock %}
 {% block content %}
 {{ page_header('Cláusula 10.3 · Mejora continua', 'Editar mejora') }}
-{{ form_card(form, url_for('mejora.listar_mejoras'), 'Guardar cambios') }}
+{% include 'mejoras/_form.html' %}
 {% endblock %}

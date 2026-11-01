@@ -1,0 +1,21 @@
+{% from '_partials/forms.html' import field %}
+<form method="post" class="form-card" novalidate>
+    {{ form.hidden_tag() }}
+    <div class="form-grid">
+        {% for f in form if f.type not in ('CSRFTokenField', 'HiddenField', 'SubmitField') %}
+            {% if f.name not in links or form.origen.data == links[f.name][0].name %}
+                {{ field(f, class_='field--wide' if f.type == 'TextAreaField' else '') }}
+            {% endif %}
+            {% if f.name == 'origen' %}
+            <div class="field field--wide">
+                <p>Para cambiar el registro vinculado, elige el origen y pulsa «Actualizar origen».</p>
+                <button class="btn btn--sm" type="submit" name="elegir_origen" value="1" formnovalidate>Actualizar origen</button>
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn--primary">Guardar</button>
+        <a class="btn btn--ghost" href="{{ url_for('mejora.listar_mejoras') }}">Cancelar</a>
+    </div>
+</form>

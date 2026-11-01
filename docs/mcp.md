@@ -72,6 +72,27 @@ nunca puede eliminar.
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
 
+Mejoras (cláusulas 10.1 y 10.3):
+
+- `mejoras`: `descripcion` y `fecha_identificacion` (YYYY-MM-DD, no futura)
+  son obligatorias. `beneficio` es texto opcional y `responsable_id` cita a una
+  persona activa al elegirla. `origen` admite `no_conformidad`, `auditoria`,
+  `revision_direccion`, `oportunidad`, `objetivo` u `otro` (por defecto).
+- Cada origen permite un vínculo opcional: `no_conformidad_id`, `hallazgo_id`,
+  `accion_revision_id`, `oportunidad_id` u `objetivo_id`, respectivamente.
+  `otro` no admite ninguno. Para cambiar el origen, limpia el vínculo anterior
+  con `null` en la misma actualización. El registro citado debe existir.
+- Todos los roles leen y escriben con sus ámbitos correspondientes. Filtros:
+  `estado`, `origen` y `responsable_id`; orden por identificador ascendente.
+  `estado` es de solo lectura: `propuesta`, `aprobada`, `implantada`,
+  `eficacia_revisada`, `cancelada`. Los registros MCP devuelven etiquetas en
+  español (por ejemplo, `"Propuesta"`); los filtros toman nombres de miembro.
+- Aprobar, implantar, revisar la eficacia y cancelar se hacen solo en la web.
+  Ninguna herramienta escribe fechas del ciclo, personas aprobadora o revisora,
+  resultado de eficacia ni motivo de cancelación. La fecha de implantación es
+  `null` hasta registrar la implantación real. No se admiten los antiguos
+  campos `no_conformidad`, `accion_correctiva` ni `accion_preventiva`.
+
 Confirmaciones de lectura (cláusulas 5.2 y 7.3):
 
 - `confirmaciones_lectura`: `persona_id` (entero, persona existente y activa al

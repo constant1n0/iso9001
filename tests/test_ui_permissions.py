@@ -67,7 +67,7 @@ class UiPermissionsTestCase(unittest.TestCase):
                                     password=generate_password_hash("StrongPassword123!"), role=role))
             db.session.add_all([
                 NoConformidad(descripcion="NC", fecha_detectada=DAY),
-                Mejora(no_conformidad="Mejora"),
+                Mejora(descripcion="Mejora", fecha_identificacion=DAY),
                 SatisfaccionCliente(**survey_values("C"), fecha_encuesta=DAY, puntuacion=5),
                 Capacitacion(tema="T", fecha=DAY, personal="P"),
                 ParteInteresada(nombre="Parte"),

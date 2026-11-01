@@ -36,7 +36,7 @@ MODULES = (
      lambda: Capacitacion(tema="ISO", fecha=DAY, personal="Equipo")),
     ("/satisfaccion_cliente/", SatisfaccionCliente,
      lambda: SatisfaccionCliente(fecha_encuesta=DAY, **survey_values("C"), puntuacion=8)),
-    ("/mejoras/", Mejora, lambda: Mejora(no_conformidad="NC")),
+    ("/mejoras/", Mejora, lambda: Mejora(descripcion="NC", fecha_identificacion=DAY)),
     ("/partes_interesadas/", ParteInteresada, lambda: ParteInteresada(nombre="Cliente")),
 )  # documents are withdrawn, never deleted (DC6 of document-control)
 

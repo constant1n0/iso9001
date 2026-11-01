@@ -20,7 +20,7 @@ from ..models import (
     EstadoReclamacion, TipoConfirmacion, TipoEncuesta,
     DecisionOportunidad, DocumentCategory, EfectoCuestion, EficaciaAccion, EstadoAccionCorrectiva,
     EstadoAccionRevision, EstadoAccionRiesgo, EstadoAlcance, EstadoAuditoriaEnum, EstadoCambio,
-    EstadoCuestion, EstadoNoConformidad, EstadoObjetivo, EstadoOportunidad,
+    EstadoCuestion, EstadoMejora, OrigenMejora, EstadoNoConformidad, EstadoObjetivo, EstadoOportunidad,
     EstadoProgramaAuditoria, EstadoProveedor, EstadoRevisionDireccion, EstadoRiesgo,
     EstadoTareaCambio, FrecuenciaMedicion, GravedadNoConformidad, NivelRiesgo, OrigenCambio,
     OrigenNoConformidad, OrigenRiesgo, PrioridadOportunidad, ResultadoEvaluacion, SentidoObjetivo,
@@ -680,8 +680,19 @@ _MODULES = (
         _f("requisitos_climaticos", "boolean", note=(
             "Has climate-related requirements; false by default.")),
     )),
-    Module("mejoras", "Improvements", Resource.IMPROVEMENTS, improvements, (
-        _f("no_conformidad", required=True), _f("accion_correctiva"), _f("accion_preventiva"),
+    Module("mejoras", "Improvements", Resource.IMPROVEMENTS, _DatedWrites(improvements), (
+        _f("descripcion", required=True),
+        _f("origen", "enum", members=OrigenMejora, note="Defaults to otro."),
+        _f("responsable_id", "integer", note="Active person who owns the improvement."),
+        _f("fecha_identificacion", "date", required=True, note="Not after today."),
+        _f("beneficio"),
+        *(_f(column, "integer", note=f"Optional origin link; requires origen={origin.name}.")
+          for column, (origin, _) in improvements.MEJORA_LINKS.items()),
+    ), filters=(
+        _f("estado", "enum", members=EstadoMejora, note=(
+            "Read-only lifecycle state; transitions are web-only.")),
+        _f("origen", "enum", members=OrigenMejora),
+        _f("responsable_id", "integer"),
     )),
     Module("roles_responsabilidades", "Roles and responsibilities",
            Resource.ROLES_RESPONSIBILITIES, roles_responsibilities, (

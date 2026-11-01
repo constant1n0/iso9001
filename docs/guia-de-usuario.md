@@ -1838,6 +1838,40 @@ La migración inversa recupera los nombres, pero elimina los datos de los nuevos
 registros; se rechaza si un nombre usado supera los 100 caracteres del campo
 antiguo, para evitar truncarlo. Haga una copia de seguridad antes de migrar.
 
+## Mejoras
+
+**Mejoras**, en el menú **Calidad** (`/mejoras/`), registra las mejoras de los
+apartados 10.1 y 10.3. Todos los roles las consultan, crean y editan; solo los
+administradores las eliminan. La lista conserva el orden de alta, muestra diez
+registros por página y permite filtrar por estado, origen y responsable.
+
+1. Pulsa **Nueva mejora** e introduce **Descripción** y **Fecha de
+   identificación** (obligatorias; la fecha no puede ser futura).
+2. Elige el **Responsable**, si procede, y el **Origen**. Si cambias el origen,
+   pulsa **Actualizar origen** para mostrar su selector: no conformidad,
+   hallazgo de auditoría, acción de revisión por la dirección, oportunidad u
+   objetivo de calidad. El vínculo es opcional y solo admite registros del
+   origen elegido; **Otro** no lleva vínculo. Añade el **Beneficio esperado**.
+3. Guarda y abre la ficha desde la descripción para registrar el tratamiento.
+
+| Acción en la ficha | Estado necesario | Resultado y evidencia |
+|---|---|---|
+| **Aprobar** | Propuesta | Aprobada; persona vinculada a tu usuario y fecha de aprobación |
+| **Registrar implantación** | Aprobada | Implantada; fecha real, no futura ni anterior a la aprobación |
+| **Revisar eficacia** | Implantada | Eficacia revisada; resultado, fecha y persona revisora distinta de la responsable |
+| **Cancelar mejora** | Propuesta o Aprobada | Cancelada; motivo obligatorio y fecha; conserva la aprobación si existía |
+
+Estas acciones están disponibles para todos los roles, exclusivamente desde
+la web. Para aprobar o revisar la eficacia, tu usuario debe estar vinculado a
+una persona. La revisión no puede ser anterior a la implantación ni futura;
+**No eficaz** exige un comentario. La fecha de implantación queda vacía hasta
+que se registra la implantación real: solo esas mejoras alimentan la entrada
+de la revisión por la dirección correspondiente a su periodo.
+
+MCP y la API JSON permiten crear y editar los datos ordinarios, nunca cambiar
+el estado ni las evidencias del ciclo. Las personas citadas no pueden
+eliminarse; deben desactivarse si dejan de participar.
+
 ## Otros registros
 
 Estos registros son anteriores a los módulos descritos más arriba. Todos
@@ -1848,7 +1882,6 @@ consulta y los escribe con las mismas reglas de rol.
 | Registro | Apartado | Dónde | Campos |
 |---|---|---|---|
 | **Capacitaciones** | 7.2 | Menú **Personas y competencia** | **Tema**, **Fecha**, **Personal** y **Persona**, **Duración en Horas**, **Evaluación Final** |
-| **Mejoras** | 10.3 | Menú **Calidad** | **No conformidad** (obligatoria), **Acción correctiva**, **Acción preventiva**; la fecha **Implantada** se fija al registrar la mejora |
 | **Satisfacción** | 9.1.2 | Menú **Clientes** | **Cliente** (selector), **Tipo de encuesta**, **Canal**, **Fecha de Encuesta**, **Puntuación (1-10)**, **Comentarios** |
 
 Notas:
@@ -1861,7 +1894,6 @@ Notas:
 - **Satisfacción** se filtra por **Cliente**, **Tipo de encuesta**, **Canal** y
   **Puntuación mínima**, y cada
   encuesta tiene un **PDF** (**Encuesta de satisfacción**).
-- **Mejoras** muestra las mejoras de diez en diez.
 - Todos los roles registran capacitaciones, mejoras y encuestas; solo los
   administradores las eliminan.
 

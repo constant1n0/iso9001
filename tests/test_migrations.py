@@ -103,6 +103,30 @@ class MigrationsTestCase(unittest.TestCase):
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 
+    def test_improvements_links_checks_and_downgrade(self):
+        from app.models import MEJORA_LINKS
+
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            columns = {c['name'] for c in inspector.get_columns('mejoras')}
+            self.assertLessEqual({'descripcion', 'fecha_identificacion', 'beneficio', 'estado'}, columns)
+            self.assertFalse({'no_conformidad', 'accion_correctiva', 'accion_preventiva'} & columns)
+            keys = {fk['name']: (fk['referred_table'], fk['options'].get('ondelete'))
+                    for fk in inspector.get_foreign_keys('mejoras')}
+            checks = {check['name'] for check in inspector.get_check_constraints('mejoras')}
+            for column, (_, target) in MEJORA_LINKS.items():
+                table = target.split('.')[0]
+                self.assertEqual((table, 'RESTRICT'), keys[f'fk_mejoras_{column}_{table}'])
+                self.assertIn(f'ck_mejoras_{column.removesuffix("_id")}', checks)
+            self.assertLessEqual({f'ck_mejoras_{name}' for name in (
+                'aprobacion', 'implantacion', 'revision_eficacia', 'comentario_eficacia',
+                'revisor_eficacia', 'cancelacion', 'origen', 'estado', 'eficacia')}, checks)
+            downgrade(directory=MIGRATIONS_DIR, revision='ab4c6e8f0a12')
+            self.assertIn('no_conformidad', {c['name'] for c in inspect(db.engine).get_columns('mejoras')})
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
     def test_password_column_fits_the_model_length(self) -> None:
         with self.app.app_context():
             upgrade(directory=MIGRATIONS_DIR)

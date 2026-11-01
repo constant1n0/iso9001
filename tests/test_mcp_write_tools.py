@@ -105,6 +105,31 @@ class AuthorizationTestCase(McpDbCase):
         self.assertFalse(auditor.is_error)
 
 
+class ImprovementToolsTestCase(McpDbCase):
+    async def test_improvements_round_trip_and_refuse_lifecycle_and_future_dates(self):
+        from app.models import Mejora
+
+        who = mcp_actor(OPERATIVO)
+        created = await self.call(who, 'qms_create', {'module': 'mejoras', 'data': SEEDS['mejoras']})
+        self.assertFalse(created.is_error, created.content)
+        row = created.structured_content
+        self.assertEqual(('Propuesta', 'Otro', None),
+                         (row['estado'], row['origen'], row['fecha_implementacion']))
+        before = len(audit_rows())
+        for data in ({'estado': 'aprobada'}, {'fecha_implementacion': '2026-10-01'},
+                     {'fecha_identificacion': '2999-01-01'}, {'no_conformidad_id': 999}):
+            refused = await self.call(who, 'qms_update', {
+                'module': 'mejoras', 'id': row['id'], 'data': data})
+            self.assertTrue(refused.is_error, refused.content)
+            self.assertEqual(before, len(audit_rows()))
+            self.assertEqual('propuesta', db.session.get(Mejora, row['id']).estado.name)
+        updated = await self.call(who, 'qms_update', {
+            'module': 'mejoras', 'id': row['id'], 'data': {'beneficio': 'Menos errores'}})
+        self.assertFalse(updated.is_error, updated.content)
+        self.assertEqual('Menos errores', updated.structured_content['beneficio'])
+        self.assertEqual(before + 1, len(audit_rows()))
+
+
 class ReadConfirmationsToolTestCase(McpDbCase):
     async def test_operativo_round_trips_confirmations_and_validation_is_atomic(self):
         from app.models import ConfirmacionLectura
