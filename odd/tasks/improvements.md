@@ -54,10 +54,10 @@ Full lifecycle. Out of scope: migrating the other "opportunity" records into
 
 ## Task checklist
 
-- [ ] **T1 — Model and migration.** Enums + links + restructured `Mejora` + migration. Tests.
-- [ ] **T2 — Service.** rewrite `improvements.py` + transitions + filters. Tests.
-- [ ] **T3 — Web.** form/routes/templates + origin/link pickers. Tests.
-- [ ] **T4 — MCP and docs.** `mejoras` module + docs. Tests.
+- [x] **T1 — Model and migration.** Enums + links + restructured `Mejora` + migration. Tests.
+- [x] **T2 — Service.** rewrite `improvements.py` + transitions + filters. Tests.
+- [x] **T3 — Web.** form/routes/templates + origin/link pickers. Tests.
+- [x] **T4 — MCP and docs.** `mejoras` module + docs. Tests.
 
 ## Acceptance criteria
 
@@ -71,4 +71,13 @@ Full lifecycle. Out of scope: migrating the other "opportunity" records into
 
 ## Delivery
 
-- Route: **delegated direct** (one `gentle-ai-worker`). Single PR. Work-unit commits on `feat/improvements`.
+Work-unit commits on `feat/improvements` (Conventional Commit):
+- `883949d` feat(improvements): define origin-linked lifecycle schema
+- `ac92db1` feat(improvements): enforce audited transitions and reporting
+- `ee22ef8` feat(improvements): expose register across web JSON and MCP
+- `be053fe` docs(odd): track improvements
+
+Audited-model count stays 34 (no new table; `mejoras` restructured in place).
+`sql/deployment.sql` exempted (legacy, unused, documented as not matching models).
+Verification: 1,872 tests, zero failures (local); PostgreSQL checks run in CI.
+Single PR.
