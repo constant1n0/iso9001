@@ -126,6 +126,18 @@ class PolicyMatrixTestCase(unittest.TestCase):
         with self.assertRaises(PermissionDenied):
             require(make_actor(OPERATIVO), Action.DELETE, Resource.NONCONFORMITIES)
 
+    def test_improvements_keep_the_existing_open_register_policy(self):
+        from app.services.policy import Action, Resource, can
+
+        for role in RoleEnum:
+            for channel in ('web', 'mcp'):
+                who = make_actor(role, channel=channel)
+                self.assertTrue(can(who, Action.READ, Resource.IMPROVEMENTS))
+                self.assertTrue(can(who, Action.CREATE, Resource.IMPROVEMENTS))
+                self.assertTrue(can(who, Action.UPDATE, Resource.IMPROVEMENTS))
+                self.assertEqual(role is ADMIN and channel == 'web',
+                                 can(who, Action.DELETE, Resource.IMPROVEMENTS))
+
     def test_mcp_channel_is_never_allowed_to_delete(self) -> None:
         from app.services.policy import Action, Resource, can
 

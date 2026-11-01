@@ -744,8 +744,10 @@ class InputsTestCase(Helpers, ServiceBase):
             for tipo in tipos:
                 self.insert(HallazgoAuditoria, auditoria_id=audits[name], tipo=tipo,
                             descripcion="Hallazgo")
-        for fecha in (datetime(2026, 4, 2, 8), datetime(2026, 3, 31, 23)):
-            self.insert(Mejora, no_conformidad="Retrasos en compras", fecha_implementacion=fecha)
+        for fecha in (date(2026, 4, 2), date(2026, 3, 31)):
+            self.insert(Mejora, descripcion="Retrasos en compras", fecha_identificacion=fecha,
+                        estado="implantada", aprobado_por_id=owner, fecha_aprobacion=fecha,
+                        fecha_implementacion=fecha)
         for tema, fecha, horas in (("Seguridad", date(2026, 4, 15), 4),
                                    ("Calidad", date(2026, 6, 1), None),
                                    ("Idiomas", date(2026, 7, 1), 20)):
@@ -979,7 +981,9 @@ class InputsTestCase(Helpers, ServiceBase):
         self.assertEqual([f"Tarde {day:02d}" for day in range(1, mr().LIST_LIMIT)], late[1:])
 
     def test_the_period_and_the_caller_are_checked_and_long_texts_are_cut(self) -> None:
-        self.insert(Mejora, no_conformidad="x" * 300, fecha_implementacion=datetime(2026, 5, 1))
+        self.insert(Mejora, descripcion="x" * 300, fecha_identificacion=date(2026, 5, 1),
+                    estado="implantada", aprobado_por_id=self.person(),
+                    fecha_aprobacion=date(2026, 5, 1), fecha_implementacion=date(2026, 5, 1))
         text_ = self.inputs()["mejoras"]["lista"][0]["descripcion"]
         self.assertEqual((mr().SHORT_TEXT, "…"), (len(text_), text_[-1]))
         self.assertEqual(mr().PERIOD_ORDER, self.refused(

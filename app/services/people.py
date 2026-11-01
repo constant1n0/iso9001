@@ -65,7 +65,7 @@ from sqlalchemy.orm import Session
 from ..models import (
     AccionCorrectiva, AccionRevision, AccionRiesgo, AlcanceSGC, Auditoria, CambioSGC,
     Capacitacion, CompetenceRecord, ConfirmacionLectura, CuestionContexto, Document, DocumentRevision,
-    EvaluacionProveedor, MedicionObjetivo, NoConformidad, ObjetivoCalidad, Oportunidad,
+    EvaluacionProveedor, MedicionObjetivo, Mejora, NoConformidad, ObjetivoCalidad, Oportunidad,
     ParteInteresada, Person, ProcesoOperacion, ProgramaAuditoria, Proveedor, RevisionDireccion,
     Riesgo, RolResponsabilidad, TareaCambio, User, auditoria_equipo, revision_asistentes,
 )
@@ -113,6 +113,7 @@ REFERENCES = (
     AlcanceSGC.aprobado_por_id,
     CambioSGC.responsable_id, CambioSGC.aprobado_por_id, CambioSGC.revisor_eficacia_id,
     TareaCambio.responsable_id, ConfirmacionLectura.persona_id,
+    Mejora.responsable_id, Mejora.aprobado_por_id, Mejora.revisor_eficacia_id,
 )
 
 _READS = crud.Spec(
