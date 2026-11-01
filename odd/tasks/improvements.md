@@ -81,3 +81,16 @@ Audited-model count stays 34 (no new table; `mejoras` restructured in place).
 `sql/deployment.sql` exempted (legacy, unused, documented as not matching models).
 Verification: 1,872 tests, zero failures (local); PostgreSQL checks run in CI.
 Single PR.
+
+## Production deployment (2026-10-31)
+
+`main@1aa6a03` runs on `vulcano`. Authorized over SSH to `192.168.101.46` as `dcm`, no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `885012c`, clean, migration `ab4c6e8f0a12`; four services active |
+| Backups | `~/work/backups/calidad-2026-10-31-pre-1aa6a03.dump` (555 entries) and `iso9001-code-2026-10-31-pre-1aa6a03.tar.gz`, mode 600 |
+| Code | Incremental git bundle `885012c..main`, fast-forward to `1aa6a03`; no dependency changes |
+| Database | `flask db upgrade` `ab4c6e8f0a12` → `c6e8f0a2b4d6` (mejoras restructured); `flask db check` clean |
+| Restart (user, with sudo) | All four services |
+| Smoke tests | Services active, no journal errors; `/login` 200; `/mejoras/`, `/confirmaciones/`, `/clientes/`, `/no_conformidades/` redirect to login; `/mcp` 401 Bearer |
