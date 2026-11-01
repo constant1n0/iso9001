@@ -62,9 +62,11 @@ an agent can never delete anything.
   transitions are web-only; MCP creates and updates ordinary fields.
 - **Management review** (9.3): inputs drawn from the registers, conclusions,
   actions and the minutes PDF.
-- **Earlier registers**: training resources (7.1), training (7.2), audit
-  indicators (9.1) and improvements (10.3), all
-  with screens.
+- **Improvements** (10.1, 10.3): origin links, owner, expected benefit,
+  approval, actual implementation date and independent effectiveness review.
+  Every role can record and edit; lifecycle transitions are web-only.
+- **Earlier registers**: training resources (7.1), training (7.2) and audit
+  indicators (9.1), all with screens.
 - **Reports and notifications** (9.1): PDFs of the records, a monthly quality
   report and scheduled e-mail alerts.
 

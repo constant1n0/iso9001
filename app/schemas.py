@@ -33,7 +33,7 @@ from .models import (
     RecursoCapacitacion,
     ProcesoOperacion,
     AuditoriaIndicador,
-    Mejora,
+    EficaciaMejora, EstadoMejora, Mejora, OrigenMejora,
 )
 from .services import process_operations
 
@@ -78,6 +78,18 @@ class AuditoriaIndicadorSchema(ma.SQLAlchemyAutoSchema):
 
 # Esquema para Mejoras
 class MejoraSchema(ma.SQLAlchemyAutoSchema):
+    responsable_id = ma.auto_field()
+    no_conformidad_id = ma.auto_field()
+    hallazgo_id = ma.auto_field()
+    accion_revision_id = ma.auto_field()
+    oportunidad_id = ma.auto_field()
+    objetivo_id = ma.auto_field()
+    aprobado_por_id = ma.auto_field()
+    revisor_eficacia_id = ma.auto_field()
+    origen = fields.Enum(OrigenMejora)
+    estado = fields.Enum(EstadoMejora, dump_only=True)
+    eficacia = fields.Enum(EficaciaMejora, dump_only=True, allow_none=True)
+
     class Meta:
         model = Mejora
         load_instance = True

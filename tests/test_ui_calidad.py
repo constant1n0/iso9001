@@ -31,7 +31,7 @@ class CalidadScreensTestCase(unittest.TestCase):
                      password=generate_password_hash(PASSWORD), role=RoleEnum.ADMINISTRADOR),
                 Auditoria(area_auditada="Compras", fecha=DAY, auditor="A", resultado="R"),
                 NoConformidad(descripcion="Etiqueta ilegible", fecha_detectada=DAY),
-                Mejora(no_conformidad="Revisar etiquetado"),
+                Mejora(descripcion="Revisar etiquetado", fecha_identificacion=DAY),
             ])
             db.session.commit()
         response = self.client.post("/login", data={"username": "admin", "password": PASSWORD})
@@ -56,7 +56,7 @@ class CalidadScreensTestCase(unittest.TestCase):
                 self.assertFalse('border="1"' in html, "legacy table markup")
 
     def test_empty_improvement_is_rejected_without_server_error(self) -> None:
-        response = self.client.post("/mejoras/nueva", data={"no_conformidad": ""})
+        response = self.client.post("/mejoras/nueva", data={"descripcion": ""})
 
         self.assertEqual(200, response.status_code)
         self.assertTrue("field--invalid" in response.get_data(as_text=True), "no field error")
@@ -65,18 +65,20 @@ class CalidadScreensTestCase(unittest.TestCase):
 
     def test_improvement_is_created_and_edited_through_the_form(self) -> None:
         response = self.client.post("/mejoras/nueva", data={
-            "no_conformidad": "Calibración caducada", "accion_correctiva": "Calibrar",
+            "descripcion": "Calibración caducada", "beneficio": "Calibrar",
+            "origen": "otro", "fecha_identificacion": DAY.isoformat(),
         })
         self.assertEqual(302, response.status_code)
         response = self.client.post("/mejoras/editar/1", data={
-            "no_conformidad": "Etiquetado revisado", "accion_preventiva": "Checklist",
+            "descripcion": "Etiquetado revisado", "beneficio": "Checklist",
+            "origen": "otro", "fecha_identificacion": DAY.isoformat(),
         })
         self.assertEqual(302, response.status_code)
         with self.app.app_context():
             self.assertEqual(2, Mejora.query.count())
             mejora = db.session.get(Mejora, 1)
-            self.assertEqual("Etiquetado revisado", mejora.no_conformidad)
-            self.assertEqual("Checklist", mejora.accion_preventiva)
+            self.assertEqual("Etiquetado revisado", mejora.descripcion)
+            self.assertEqual("Checklist", mejora.beneficio)
 
     def test_nonconformity_state_is_shown_but_never_posted(self) -> None:
         html = self.client.get("/no_conformidades/nueva").get_data(as_text=True)

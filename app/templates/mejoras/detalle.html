@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% from '_partials/ui.html' import page_header, action_form %}
+{% from '_partials/forms.html' import field %}
+{% block title %}Mejora {{ mejora.id_mejora }}{% endblock %}
+{% block crumb %}Calidad · Mejoras{% endblock %}
+{% block content %}
+{% call page_header('Cláusulas 10.1 y 10.3 · Mejora continua', 'Mejora ' ~ mejora.id_mejora) %}
+    <a class="btn btn--sm" href="{{ url_for('mejora.listar_mejoras') }}">Volver al registro</a>
+    {% if can('update', 'improvements') %}<a class="btn btn--sm" href="{{ url_for('mejora.editar_mejora', id=mejora.id_mejora) }}">Editar</a>{% endif %}
+{% endcall %}
+<div class="card">
+    <h2>{{ mejora.estado.value }}</h2>
+    <p class="card__text">{{ mejora.descripcion }}</p>
+    <dl>
+        <dt>Origen</dt><dd>{{ mejora.origen.value }}</dd>
+        {% for column, origin in links.items() if mejora[column] is not none %}
+        <dt>Registro de origen ({{ origin[0].value }})</dt><dd>N.º {{ mejora[column] }}</dd>
+        {% endfor %}
+        <dt>Responsable</dt><dd>{{ personas.get(mejora.responsable_id, '—') }}</dd>
+        <dt>Fecha de identificación</dt><dd>{{ mejora.fecha_identificacion.strftime('%d/%m/%Y') }}</dd>
+        <dt>Beneficio esperado</dt><dd>{{ mejora.beneficio or '—' }}</dd>
+        <dt>Aprobada por</dt><dd>{{ personas.get(mejora.aprobado_por_id, '—') }}</dd>
+        <dt>Fecha de aprobación</dt><dd>{{ mejora.fecha_aprobacion or '—' }}</dd>
+        <dt>Fecha de implantación</dt><dd>{{ mejora.fecha_implementacion or '—' }}</dd>
+        <dt>Eficacia</dt><dd>{{ mejora.eficacia.value if mejora.eficacia else '—' }}</dd>
+        <dt>Revisada por</dt><dd>{{ personas.get(mejora.revisor_eficacia_id, '—') }}</dd>
+        <dt>Fecha de revisión de eficacia</dt><dd>{{ mejora.fecha_eficacia or '—' }}</dd>
+        <dt>Comentario de eficacia</dt><dd>{{ mejora.comentario_eficacia or '—' }}</dd>
+        <dt>Motivo de cancelación</dt><dd>{{ mejora.motivo_cancelacion or '—' }}</dd>
+        <dt>Fecha de cancelación</dt><dd>{{ mejora.fecha_cancelacion or '—' }}</dd>
+    </dl>
+</div>
+{% if puede.aprobar %}{{ action_form(url_for('mejora.aprobar_mejora', id=mejora.id_mejora), 'Aprobar') }}{% endif %}
+{% for name, form, endpoint, label in (
+    ('implantar', implantacion, 'mejora.implantar_mejora', 'Registrar implantación'),
+    ('eficacia', eficacia, 'mejora.revisar_mejora', 'Revisar eficacia'),
+    ('cancelar', cancelacion, 'mejora.cancelar_mejora', 'Cancelar mejora')) if puede[name] %}
+<form method="post" action="{{ url_for(endpoint, id=mejora.id_mejora) }}" class="form-card" novalidate>
+    {{ form.hidden_tag() }}
+    <h2>{{ label }}</h2>
+    <div class="form-grid">{% for f in form if f.type != 'CSRFTokenField' %}{{ field(f) }}{% endfor %}</div>
+    <button class="btn btn--primary" type="submit">{{ label }}</button>
+</form>
+{% endfor %}
+{% endblock %}

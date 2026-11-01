@@ -169,6 +169,22 @@ class RegistryTestCase(unittest.TestCase):
                 self.assertEqual(("enum", tuple(members.__members__), members),
                                  (field.type, field.allowed, field.members))
 
+    def test_improvement_shape_and_state_is_a_readonly_filter(self):
+        from app.models import EstadoMejora, OrigenMejora, MEJORA_LINKS
+        from app.services import improvements
+
+        module = registry().MODULES['mejoras']
+        fields = {f.name: f for f in module.fields}
+        filters = {f.name: f for f in module.filters}
+        self.assertEqual(improvements.SPEC.writable, fields.keys())
+        self.assertEqual({'descripcion', 'fecha_identificacion'},
+                         {f.name for f in module.fields if f.required})
+        self.assertEqual(tuple(OrigenMejora.__members__), fields['origen'].allowed)
+        self.assertEqual(tuple(EstadoMejora.__members__), filters['estado'].allowed)
+        self.assertNotIn('estado', fields)
+        self.assertLessEqual(set(MEJORA_LINKS), fields.keys())
+        self.assertEqual({'estado', 'origen', 'responsable_id'}, filters.keys())
+
     def test_nonconformity_fields_add_origin_severity_and_never_the_state(self) -> None:
         fields = {f.name: f for f in registry().MODULES["no_conformidades"].fields}
         self.assertNotIn("estado", fields)

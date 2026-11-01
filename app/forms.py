@@ -23,7 +23,7 @@ from .models import (
     CompetenceType, DecisionOportunidad, DocumentCategory, EfectoCuestion, EficaciaAccion,
     EficaciaCambio, EstadoAccionRevision, EstadoAccionRiesgo, EstadoAuditoriaEnum,
     EstadoCuestion, EstadoOportunidad, EstadoRiesgo, EstadoTareaCambio, FrecuenciaMedicion,
-    GravedadNoConformidad, OrigenCambio, OrigenNoConformidad, OrigenRiesgo,
+    GravedadNoConformidad, OrigenCambio, OrigenMejora, EficaciaMejora, OrigenNoConformidad, OrigenRiesgo,
     ResultadoVerificacion, RoleEnum, SentidoObjetivo, TipoAccionRevision, TipoContexto,
     TipoConfirmacion, TipoEncuesta, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
     TratamientoSalidaNoConforme,
@@ -188,12 +188,38 @@ class VerificacionAccionForm(BaseForm):
     evidencia_verificacion = TextAreaField('Evidencia', validators=[DataRequired()])
 
 
-# Formulario para registrar Mejoras (acciones correctivas y preventivas)
 class MejoraForm(BaseForm):
-    no_conformidad = TextAreaField('No conformidad', validators=[DataRequired()])
-    accion_correctiva = TextAreaField('Acción correctiva')
-    accion_preventiva = TextAreaField('Acción preventiva')
+    """Improvement proposal; lifecycle columns are never editable fields."""
+
+    descripcion = TextAreaField('Descripción', validators=[DataRequired()])
+    responsable_id = person_field('Responsable')
+    origen = SelectField('Origen', coerce=member_name, default='otro',
+                         choices=[(m.name, m.value) for m in OrigenMejora],
+                         validators=[DataRequired()])
+    no_conformidad_id = SelectField('No conformidad', coerce=optional_id, choices=[])
+    hallazgo_id = SelectField('Hallazgo de auditoría', coerce=optional_id, choices=[])
+    accion_revision_id = SelectField('Acción de revisión por la dirección', coerce=optional_id,
+                                    choices=[])
+    oportunidad_id = SelectField('Oportunidad', coerce=optional_id, choices=[])
+    objetivo_id = SelectField('Objetivo de calidad', coerce=optional_id, choices=[])
+    fecha_identificacion = DateField('Fecha de identificación', validators=[DataRequired()])
+    beneficio = TextAreaField('Beneficio esperado')
     submit = SubmitField('Guardar')
+
+
+class ImplantacionMejoraForm(BaseForm):
+    fecha_implementacion = DateField('Fecha de implantación', validators=[DataRequired()])
+
+
+class EficaciaMejoraForm(BaseForm):
+    eficacia = SelectField('Eficacia', choices=[(m.name, m.value) for m in EficaciaMejora],
+                            validators=[DataRequired()])
+    fecha_eficacia = DateField('Fecha de revisión de eficacia', validators=[DataRequired()])
+    comentario_eficacia = TextAreaField('Comentario de eficacia')
+
+
+class CancelacionMejoraForm(BaseForm):
+    motivo_cancelacion = TextAreaField('Motivo de cancelación', validators=[DataRequired()])
 
 
 # Formulario para encuestas de Satisfacción del Cliente

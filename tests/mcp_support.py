@@ -39,7 +39,7 @@ SEEDS = {
     "satisfaccion_clientes": {"cliente_id": 1, "tipo_encuesta": "otra", "canal": "otro",
                               "fecha_encuesta": "2026-10-01", "puntuacion": 8},
     "partes_interesadas": {"nombre": "Clientes"},
-    "mejoras": {"no_conformidad": "NC-1"},
+    "mejoras": {"descripcion": "NC-1", "fecha_identificacion": "2026-10-01"},
     "roles_responsabilidades": {"rol": "Director"},
     "recursos_capacitacion": {"recurso_necesario": "Formacion"},
     "procesos": {"proceso": "Compras"},
