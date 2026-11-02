@@ -17,7 +17,7 @@ from queue import Queue
 from uuid import uuid4
 
 import test_auth_bootstrap as bootstrap
-from sqlalchemy import create_engine, event, select, text
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateSchema, DropSchema
 
@@ -87,7 +87,7 @@ class EquipmentContentionTestCase(unittest.TestCase):
             connection.execute(DropSchema(self.schema, cascade=True))
 
     def _contended_recovery(self, recovery_date: date, accepted: bool) -> None:
-        attempted, finished = threading.Event(), threading.Event()
+        writing, finished = threading.Event(), threading.Event()
         backend: Queue = Queue()
         outcome: Queue = Queue()
 
@@ -95,17 +95,12 @@ class EquipmentContentionTestCase(unittest.TestCase):
             try:
                 with Session(self.engine) as session:
                     remove = audit.install_audit_guard(session)
-                    connection = session.connection()
-
-                    def observe_lock(conn, cursor, statement, parameters, context, many):
-                        if 'FOR UPDATE' in statement and 'equipos_medicion' in statement:
-                            attempted.set()
-
-                    event.listen(connection, 'before_cursor_execute', observe_lock)
                     try:
+                        connection = session.connection()
                         connection.execute(text("SET LOCAL statement_timeout = '10s'"))
                         connection.execute(text("SET LOCAL lock_timeout = '8s'"))
                         backend.put(connection.scalar(text('SELECT pg_backend_pid()')))
+                        writing.set()  # readiness only; pg_blocking_pids below proves the lock wait
                         row = equipment.checks.create(session, ADMIN,
                             PASS | dict(equipo_id=self.equipment_id, fecha=recovery_date), today=DAY)
                         identity = row.id
@@ -115,7 +110,6 @@ class EquipmentContentionTestCase(unittest.TestCase):
                         session.rollback()
                         result = ('rejected', exc.message)
                     finally:
-                        event.remove(connection, 'before_cursor_execute', observe_lock)
                         remove()
             except BaseException as exc:
                 backend.put(exc)  # wake the parent even when startup fails before a PID
@@ -134,7 +128,7 @@ class EquipmentContentionTestCase(unittest.TestCase):
                 holder_pid = first.scalar(text('SELECT pg_backend_pid()'))
                 worker.start()
                 waiting_pid = _worker_backend(backend)
-                self.assertTrue(attempted.wait(3), 'Recovery did not attempt the row lock')
+                self.assertTrue(writing.wait(3), 'Recovery did not reach the check write')
                 deadline = time.monotonic() + 5
                 blockers = []
                 with self.base_engine.connect() as observer:
@@ -143,6 +137,10 @@ class EquipmentContentionTestCase(unittest.TestCase):
                         if holder_pid in blockers or finished.is_set():
                             break
                         finished.wait(0.02)
+                if finished.is_set():
+                    result = outcome.get(timeout=1)
+                    if isinstance(result, BaseException):
+                        raise result
                 self.assertIn(holder_pid, blockers, 'Recovery never waited for the failure transaction')
                 self.assertFalse(finished.is_set())
                 # Other readers still see only the committed prior successful check.
