@@ -36,6 +36,27 @@ FAIL = dict(resultado='no_apto', fecha_proxima=None,
             evaluacion_impacto='Revisadas mediciones del lote A', acciones='Recomprobar lote A')
 
 
+def _worker_backend(signals: Queue) -> int:
+    """Return the backend PID or re-raise the original worker startup error."""
+    signal = signals.get(timeout=5)
+    if isinstance(signal, BaseException):
+        raise signal
+    return signal
+
+
+class WorkerSignalTestCase(unittest.TestCase):
+    def test_startup_exception_reaches_parent_without_becoming_queue_timeout(self) -> None:
+        signals = Queue()
+        cause = RuntimeError('worker startup failed')
+        signals.put(cause)
+        with self.assertRaises(RuntimeError) as caught:
+            _worker_backend(signals)
+        self.assertIs(cause, caught.exception)
+        self.assertEqual('worker startup failed', str(caught.exception))
+        signals.put(123)
+        self.assertEqual(123, _worker_backend(signals))
+
+
 @unittest.skipUnless(URI or os.environ.get('CI'), 'TEST_POSTGRES_URI is not set')
 class EquipmentContentionTestCase(unittest.TestCase):
     def setUp(self) -> None:
@@ -89,16 +110,18 @@ class EquipmentContentionTestCase(unittest.TestCase):
                             PASS | dict(equipo_id=self.equipment_id, fecha=recovery_date), today=DAY)
                         identity = row.id
                         session.commit()
-                        outcome.put(('created', identity))
+                        result = ('created', identity)
                     except ValidationError as exc:
                         session.rollback()
-                        outcome.put(('rejected', exc.message))
+                        result = ('rejected', exc.message)
                     finally:
                         event.remove(connection, 'before_cursor_execute', observe_lock)
                         remove()
-            except Exception as exc:
-                outcome.put(('error', type(exc).__name__, str(exc)))
+            except BaseException as exc:
+                backend.put(exc)  # wake the parent even when startup fails before a PID
+                result = exc
             finally:
+                outcome.put(result)  # publish success only after cleanup also succeeded
                 finished.set()
 
         worker = threading.Thread(target=recover, daemon=True)
@@ -110,7 +133,7 @@ class EquipmentContentionTestCase(unittest.TestCase):
                 failure_id = failure.id
                 holder_pid = first.scalar(text('SELECT pg_backend_pid()'))
                 worker.start()
-                waiting_pid = backend.get(timeout=5)
+                waiting_pid = _worker_backend(backend)
                 self.assertTrue(attempted.wait(3), 'Recovery did not attempt the row lock')
                 deadline = time.monotonic() + 5
                 blockers = []
@@ -135,6 +158,8 @@ class EquipmentContentionTestCase(unittest.TestCase):
                 remove()
         self.assertFalse(worker.is_alive(), 'Recovery worker did not finish')
         result = outcome.get(timeout=1)
+        if isinstance(result, BaseException):
+            raise result
         if accepted:
             self.assertEqual('created', result[0], result)
             self.assertGreater(result[1], failure_id)
