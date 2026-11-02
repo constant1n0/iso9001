@@ -2029,6 +2029,63 @@ class EvaluacionProveedor(RecordMetadataMixin, db.Model):
 
 
 # Modelo para Control Documental
+class TipoComprobacionEquipo(enum.Enum):
+    calibracion = 'Calibración'
+    verificacion = 'Verificación'
+
+
+class ResultadoComprobacionEquipo(enum.Enum):
+    apto = 'Apto'
+    no_apto = 'No apto'
+
+
+class EquipoMedicion(RecordMetadataMixin, db.Model):
+    """Equipment identity; suitability is derived from immutable checks."""
+
+    __tablename__ = 'equipos_medicion'
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(50), nullable=False, unique=True)
+    nombre = db.Column(db.String(200), nullable=False)
+    numero_serie = db.Column(db.String(100))
+    ubicacion = db.Column(db.String(200))
+    uso_previsto = db.Column(db.Text)
+    responsable_id = person_link('equipos_medicion', 'responsable_id')
+    retirado = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+
+
+class ComprobacionEquipo(RecordMetadataMixin, db.Model):
+    """An immutable calibration or verification and its traceable evidence."""
+
+    __tablename__ = 'comprobaciones_equipo'
+    __table_args__ = (
+        db.CheckConstraint(
+            "(resultado = 'no_apto' AND evaluacion_impacto IS NOT NULL "
+            "AND length(trim(evaluacion_impacto)) > 0 AND acciones IS NOT NULL "
+            "AND length(trim(acciones)) > 0) OR resultado = 'apto'",
+            name='ck_comprobaciones_equipo_impacto'),
+        db.CheckConstraint(
+            "(resultado = 'apto' AND fecha_proxima IS NOT NULL AND fecha_proxima > fecha) "
+            "OR (resultado = 'no_apto' AND fecha_proxima IS NULL)",
+            name='ck_comprobaciones_equipo_proxima'),
+        db.Index('ix_comprobaciones_equipo_historial', 'equipo_id', 'fecha', 'id'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    equipo_id = db.Column(db.Integer, db.ForeignKey(
+        'equipos_medicion.id', name='fk_comprobaciones_equipo_equipo_id', ondelete='RESTRICT'),
+        nullable=False)
+    fecha = db.Column(db.Date, nullable=False)
+    tipo = db.Column(text_enum(TipoComprobacionEquipo, 'ck_comprobaciones_equipo_tipo'),
+                     nullable=False)
+    resultado = db.Column(text_enum(ResultadoComprobacionEquipo, 'ck_comprobaciones_equipo_resultado'),
+                          nullable=False)
+    realizado_por = db.Column(db.String(200), nullable=False)
+    referencia = db.Column(db.Text, nullable=False)
+    certificado = db.Column(db.String(200))
+    fecha_proxima = db.Column(db.Date)
+    evaluacion_impacto = db.Column(db.Text)
+    acciones = db.Column(db.Text)
+
+
 class DocumentCategory(enum.Enum):
     MANUAL_CALIDAD = 'Manual de Calidad'
     PROCEDIMIENTO_OPERATIVO = 'Procedimiento Operativo'

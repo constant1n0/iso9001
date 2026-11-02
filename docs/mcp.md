@@ -34,7 +34,7 @@ nunca puede eliminar.
 
   | Herramienta | Finalidad |
   |---|---|
-  | `qms_modules` | Los 33 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
+  | `qms_modules` | Los 35 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
   | `qms_list` | Una página acotada de un módulo, con los filtros que enumera `qms_modules` |
   | `qms_get` | Un registro por su `id` |
   | `qms_create` | Crea un registro |
@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 33 módulos: `no_conformidades`, `auditorias`,
+`qms_modules` enumera 35 módulos: `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -71,6 +71,26 @@ nunca puede eliminar.
 `cambios_sgc`, `tareas_cambio`, `clientes`, `reclamaciones` y `confirmaciones_lectura`. Cada campo tiene un `type`, un indicador
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
+
+Equipos y comprobaciones (7.1.5):
+
+- `equipos_medicion`: `codigo` único y `nombre` obligatorios; `numero_serie`,
+  `ubicacion`, `uso_previsto`, `responsable_id` y `retirado` opcionales.
+  Filtros `codigo` y `retirado`. Devuelve también `estado` calculado
+  (`sin_comprobar`, `apto`, `vencido`, `no_apto`, `retirado`) y
+  `fecha_proxima`. Administrador y Auditor escriben; todos consultan.
+- `comprobaciones_equipo`: obligatorios `equipo_id`, `fecha` (no futura),
+  `tipo` (`calibracion`/`verificacion`), `resultado` (`apto`/`no_apto`),
+  `realizado_por` y `referencia` de trazabilidad. `certificado` guarda texto,
+  no un fichero. Filtros `equipo_id` y `resultado`.
+- `apto` exige `fecha_proxima` posterior a `fecha`; `no_apto` exige
+  `fecha_proxima: null`, `evaluacion_impacto` de las mediciones anteriores
+  y `acciones`. El resultado más reciente manda; no se admiten fechas anteriores
+  a la última comprobación, y en el mismo día se ordena por identificador.
+- Las comprobaciones admiten creación, lectura y filtros; `qms_update` las
+  rechaza con un error de inmutabilidad, sin cambiar datos ni auditoría.
+  Una nueva comprobación apta recupera el equipo tras un fallo, pero no levanta
+  la retirada manual. No hay herramienta MCP de borrado.
 
 Mejoras (cláusulas 10.1 y 10.3):
 

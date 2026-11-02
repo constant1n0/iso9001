@@ -26,7 +26,7 @@ from .models import (
     GravedadNoConformidad, OrigenCambio, OrigenMejora, EficaciaMejora, OrigenNoConformidad, OrigenRiesgo,
     ResultadoVerificacion, RoleEnum, SentidoObjetivo, TipoAccionRevision, TipoContexto,
     TipoConfirmacion, TipoEncuesta, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
-    TratamientoSalidaNoConforme,
+    TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -77,6 +77,30 @@ class BaseForm(FlaskForm):
 
     class Meta:
         locales = ('es_ES', 'es')
+
+
+class EquipoMedicionForm(BaseForm):
+    codigo = StringField('Código', validators=[DataRequired(), Length(max=50)])
+    nombre = StringField('Nombre', validators=[DataRequired(), Length(max=200)])
+    numero_serie = StringField('Número de serie', validators=[Length(max=100)])
+    ubicacion = StringField('Ubicación', validators=[Length(max=200)])
+    uso_previsto = TextAreaField('Uso previsto')
+    responsable_id = person_field('Responsable')
+    retirado = BooleanField('Retirado')
+    submit = SubmitField('Guardar')
+
+
+class ComprobacionEquipoForm(BaseForm):
+    fecha = DateField('Fecha', validators=[DataRequired()])
+    tipo = SelectField('Tipo', choices=[(m.name, m.value) for m in TipoComprobacionEquipo])
+    resultado = SelectField('Resultado', choices=[(m.name, m.value) for m in ResultadoComprobacionEquipo])
+    realizado_por = StringField('Persona o laboratorio', validators=[DataRequired(), Length(max=200)])
+    referencia = TextAreaField('Patrón o referencia de trazabilidad', validators=[DataRequired()])
+    certificado = StringField('Referencia del certificado', validators=[Length(max=200)])
+    fecha_proxima = DateField('Próxima comprobación (solo apto)', validators=[Optional()])
+    evaluacion_impacto = TextAreaField('Validez de las mediciones anteriores (si no apto)')
+    acciones = TextAreaField('Acciones sobre las mediciones y salidas afectadas (si no apto)')
+    submit = SubmitField('Registrar comprobación')
 
 
 # Formulario de Inicio de Sesión

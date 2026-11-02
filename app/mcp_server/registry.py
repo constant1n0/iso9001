@@ -25,11 +25,11 @@ from ..models import (
     EstadoTareaCambio, FrecuenciaMedicion, GravedadNoConformidad, NivelRiesgo, OrigenCambio,
     OrigenNoConformidad, OrigenRiesgo, PrioridadOportunidad, ResultadoEvaluacion, SentidoObjetivo,
     TipoAccionRevision, TipoContexto, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
-    TratamientoSalidaNoConforme,
+    TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
-    reclamaciones, read_confirmations,
+    reclamaciones, read_confirmations, equipment,
     corrective_actions, document_revisions, documents, improvements, management_reviews,
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
@@ -576,7 +576,36 @@ def _change_modules() -> tuple[Module, ...]:
 # legacy names and are never matched to a person. ``auditor`` and ``personal``
 # are not flagged required: the services require them only when no person is
 # cited (``people.fill_name``), and their note says so.
+def _equipment_extras(item):
+    session = object_session(item)
+    check = equipment.latest(session, item.id)
+    return {
+        'estado': equipment.status(session, item, today=local_today()),
+        'fecha_proxima': None if check is None or check.fecha_proxima is None
+                          else check.fecha_proxima.isoformat(),
+    }
+
+
 _MODULES = (
+    Module('equipos_medicion', 'Measuring equipment', Resource.MEASURING_EQUIPMENT,
+           equipment.equipment, (
+        _f('codigo', required=True), _f('nombre', required=True), _f('numero_serie'),
+        _f('ubicacion'), _f('uso_previsto'), _f('responsable_id', 'integer'),
+        _f('retirado', 'boolean'),
+    ), (_f('codigo'), _f('retirado', 'boolean')), extras=_equipment_extras),
+    Module('comprobaciones_equipo', 'Calibrations and verifications', Resource.MEASURING_EQUIPMENT,
+           _DatedWrites(equipment.checks), (
+        _f('equipo_id', 'integer', True), _f('fecha', 'date', True, note='Not future; not before the latest check.'),
+        _f('tipo', 'enum', True, members=TipoComprobacionEquipo),
+        _f('resultado', 'enum', True, members=ResultadoComprobacionEquipo),
+        _f('realizado_por', required=True),
+        _f('referencia', required=True, note='Traceable standard/reference or documented basis.'),
+        _f('certificado', note='Certificate reference, not a file upload.'),
+        _f('fecha_proxima', 'date', note='Required after fecha for apto; must be null for no_apto.'),
+        _f('evaluacion_impacto', note='Required for no_apto: validity of previous measurements.'),
+        _f('acciones', note='Required for no_apto: actions on affected measurements/outputs. Immutable record; updates are refused.'),
+    ), (_f('equipo_id', 'integer'), _f('resultado', 'enum', members=ResultadoComprobacionEquipo))),
+
     # ``estado`` is not writable: a record starts "abierta" and only the service's
     # explicit transitions move it (records show the Spanish label, filters take
     # the member name, as for ``origen`` and ``gravedad``). A closed or cancelled

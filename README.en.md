@@ -29,6 +29,7 @@ an agent can never delete anything.
 - **Processes** (4.4, 8.1): type, owner, inputs, outputs, resources,
   operating and acceptance criteria, related processes and the records citing
   each process.
+- **Measuring equipment and calibration** (7.1.5): identified equipment, immutable calibration/verification history, traceability and explicit due dates. Failed checks require previous-measurement assessment and actions; only a new successful check restores suitability, never manual withdrawal.
 - **People and competence** (5.3, 7.2): people, QMS roles with their
   responsibilities, authorities and reporting line, required and demonstrated
   competence, the competence matrix.

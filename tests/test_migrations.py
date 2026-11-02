@@ -32,7 +32,7 @@ LATER_AUDITED_TABLES = frozenset(
      "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo",
      "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades",
      "acciones_riesgo", "proveedores", "evaluaciones_proveedor", "cuestiones_contexto",
-     "alcances_sgc", "clientes", "reclamaciones", "cambios_sgc", "tareas_cambio",
+     "equipos_medicion", "comprobaciones_equipo", "alcances_sgc", "clientes", "reclamaciones", "cambios_sgc", "tareas_cambio",
      "confirmaciones_lectura"}
 )
 
@@ -124,6 +124,26 @@ class MigrationsTestCase(unittest.TestCase):
                 'revisor_eficacia', 'cancelacion', 'origen', 'estado', 'eficacia')}, checks)
             downgrade(directory=MIGRATIONS_DIR, revision='ab4c6e8f0a12')
             self.assertIn('no_conformidad', {c['name'] for c in inspect(db.engine).get_columns('mejoras')})
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+    def test_equipment_check_migration_preserves_other_records_and_downgrades(self):
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision='c6e8f0a2b4d6')
+            self._insert_legacy_user_and_nc(estado='abierta')
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            self.assertIn('equipos_medicion', inspector.get_table_names())
+            self.assertIn('comprobaciones_equipo', inspector.get_table_names())
+            checks = {row['name'] for row in inspector.get_check_constraints('comprobaciones_equipo')}
+            self.assertLessEqual({'ck_comprobaciones_equipo_impacto',
+                                  'ck_comprobaciones_equipo_proxima',
+                                  'ck_comprobaciones_equipo_tipo',
+                                  'ck_comprobaciones_equipo_resultado'}, checks)
+            with db.engine.connect() as connection:
+                self.assertEqual(1, connection.scalar(text('SELECT count(*) FROM no_conformidades')))
+            downgrade(directory=MIGRATIONS_DIR, revision='c6e8f0a2b4d6')
+            self.assertNotIn('equipos_medicion', inspect(db.engine).get_table_names())
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 

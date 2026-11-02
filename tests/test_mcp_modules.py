@@ -11,6 +11,7 @@ from mcp_support import ADMIN, AUDITOR, OPERATIVO, McpDbCase, mcp_actor
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUGS = {
+    "equipos_medicion", "comprobaciones_equipo",
     "no_conformidades", "auditorias", "documentos", "capacitaciones",
     "satisfaccion_clientes", "partes_interesadas", "mejoras",
     "roles_responsabilidades", "recursos_capacitacion",
@@ -37,6 +38,7 @@ SHARED_PROVIDERS = ("proveedores", "evaluaciones_proveedor")
 SHARED_CONTEXT = ("cuestiones_contexto", "alcances_sgc")
 # Changes to the QMS and their tasks (decision CP5 of change-planning).
 SHARED_CHANGES = ("cambios_sgc", "tareas_cambio")
+SHARED_EQUIPMENT = ("equipos_medicion", "comprobaciones_equipo")
 # (module, legacy free-text name, person link that can fill it)
 LEGACY_NAMES = (("capacitaciones", "personal", "persona_id"),
                 ("auditorias", "auditor", "auditor_id"),
@@ -60,7 +62,7 @@ class LayoutTestCase(unittest.TestCase):
 
 
 class RegistryTestCase(unittest.TestCase):
-    def test_registry_holds_the_thirty_three_modules(self) -> None:
+    def test_registry_holds_the_thirty_five_modules(self) -> None:
         self.assertEqual(SLUGS, set(registry().MODULES))
 
     def test_each_module_maps_to_its_own_policy_resource(self) -> None:
@@ -68,7 +70,7 @@ class RegistryTestCase(unittest.TestCase):
 
         modules = registry().MODULES
         shared = (SHARED_RESOURCE + SHARED_AUDITS + SHARED_OBJECTIVES + SHARED_REVIEWS
-                  + SHARED_RISKS + SHARED_PROVIDERS + SHARED_CONTEXT + SHARED_CHANGES)
+                  + SHARED_RISKS + SHARED_PROVIDERS + SHARED_CONTEXT + SHARED_CHANGES + SHARED_EQUIPMENT)
         resources = [m.resource for slug, m in modules.items() if slug not in shared]
         self.assertEqual(len(resources), len(set(resources)))
         self.assertEqual({Resource.COMPETENCE}, {modules[s].resource for s in SHARED_RESOURCE})
@@ -84,10 +86,11 @@ class RegistryTestCase(unittest.TestCase):
         self.assertEqual({Resource.ORGANIZATION_CONTEXT},
                          {modules[s].resource for s in SHARED_CONTEXT})
         self.assertEqual({Resource.QMS_CHANGES}, {modules[s].resource for s in SHARED_CHANGES})
+        self.assertEqual({Resource.MEASURING_EQUIPMENT}, {modules[s].resource for s in SHARED_EQUIPMENT})
         self.assertFalse({Resource.COMPETENCE, Resource.AUDITS, Resource.QUALITY_OBJECTIVES,
                           Resource.MANAGEMENT_REVIEW, Resource.RISKS_OPPORTUNITIES,
                           Resource.EXTERNAL_PROVIDERS, Resource.ORGANIZATION_CONTEXT,
-                          Resource.QMS_CHANGES}
+                          Resource.QMS_CHANGES, Resource.MEASURING_EQUIPMENT}
                          & set(resources))
 
     def test_declared_fields_match_what_each_service_requires(self) -> None:

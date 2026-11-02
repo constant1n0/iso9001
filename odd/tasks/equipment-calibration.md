@@ -1,0 +1,24 @@
+# Equipment and Calibration — Phase 3, first delivery
+Branch: `feat/equipment-calibration` · Baseline: `c9d6648` · Delivery: ask-on-risk (1,500-line session cap; no push/PR/deployment).
+Runner: `/home/dcm/workspace/iso9001-worktrees/fixes-2026/venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v`
+
+## Specs
+- **S1** — User: «ok, adelante con la siguiente fase». Selected «Todos los módulos — recomendado»: «Aplicación generalista: desarrollar las seis áreas, empezando por equipos y calibraciones (7.1.5).»
+- **S2** — Selected «Fuera de servicio automático — recomendado»: «El equipo queda no apto; exige evaluar las mediciones anteriores y una nueva comprobación satisfactoria para recuperarlo.»
+
+## Tasks
+- **EC1** [S1–S2] inline — verification_pending — Deliver equipment and calibration/verification history, automatic non-apt state and recovery evidence, service/web/MCP/docs/tests; independent verification for risk items 2/4; commit pending. Writer rule does not fire (one dependent behavior); map delegated because the integration evidence exceeded one bounded batch.
+
+## Log
+- **L1** Original user request: «ok, adelante con la siguiente fase».
+- **L2** Scope choices verbatim are in S1/S2. General-purpose module availability never changes organization scope/applicability.
+- **L3** Read-only map received and one provider scheduling spot check performed. Reuse architectural patterns, not provider rescheduling rules.
+- **L4** Implementation design (not additional quoted user requirements): equipment code/name/serial/location/purpose/owner and withdrawal flag; immutable dated calibration/verification results with performer, traceability/certificate references, explicit next date, impact assessment and actions for non-apt results. Latest operation ordered by date/id controls due date and result; an unresolved historic failure cannot be hidden by a newer pass. Failure assessment is required at recording; failed checks cannot be backdated behind a later successful check to conceal quarantine. No scheduled mail/PDF/new dependency; status is computed, not a physical equipment lock.
+- **L5** Permission follows existing provider registers: all roles read, administrators/auditors write, admin deletes uncited equipment; MCP has no delete. Recorded checks cannot be edited/deleted through web or MCP (audit evidence); replacing them uses a newer dated check. A withdrawn equipment remains withdrawn after a pass.
+- **L6** Forecast ~1,300 authored lines, one coherent work unit; current functional PostgreSQL URI unavailable, CI execution not authorized yet. Runtime RDD switch on; native assessment/review after normalized functional checks as required, with candidate-specific human consent.
+
+- **L7** Checks: observed initial RED (missing equipment model, then HTTP 404 before blueprint registration); focused equipment/service/UI/constraint checks: 12 tests, 11 pass, 1 PostgreSQL skip. One full suite ran: 1,885 tests, 1 failure, 106 skips. The sole failure was the new MCP immutability assertion comparing a transient timestamp with a persisted reload; serialization discrepancy reproduced at baseline by verifier. One bounded correction changed only the assertion to compare persisted reads; parent MCP recheck 18/18 passed, independent blocker-only recheck 18/18 passed. Five independent probes retained in tests/test_ec1_verifier.py pass (5/5); no claim of a second full-suite run.
+- **L8** Independent verdict: S1 met within this module; S2 met for exercised SQLite paths. PostgreSQL DDL components match statically and migration upgrade/downgrade matches SQLite metadata. Live PostgreSQL migration/concurrency remains unverified (TEST_POSTGRES_URI unset); do not substitute compilation for execution. Native ASSESS returned unassessable/package-local-binary-missing; no native review authority created and no switch changed.
+- **L9** Authorized verification-only scratch: /tmp/iso9001-equipment-verify.2RjMxG, no .env/credentials/production data; parent collected exact probes and removes only that scratch. Code/source was never edited by the verifier.
+- **L10** Schema boundary: two new tables only, no existing-data rewrite; nullable person FK RESTRICT and indexed; composite equipment/date/id index serves latest-history queries; code uniqueness indexed by its unique constraint. Existing integer IDs and text enums follow repository conventions. Downgrade destroys these new evidence tables and needs backup. Equipment 1:N immutable checks; optional owner points to Person. No new dependencies or applicability changes.
+- **L11** Next decision: authorize publishing this candidate to GitHub CI for live PostgreSQL proof; native outside-view tooling also remains unavailable. Local commit is a candidate, not a verified-for-merge or deployment claim. No push/PR/deploy authorized by the Phase 3 implementation request.
