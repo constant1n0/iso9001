@@ -1,5 +1,5 @@
 # Equipment and Calibration — Phase 3, first delivery
-Branch: `feat/equipment-calibration` · Baseline: `c9d6648` · Delivery: ask-on-risk (1,500-line session cap; no push/PR/deployment).
+Branch: `feat/equipment-calibration` · Baseline: `c9d6648` · Delivery: ask-on-risk (1,500-line session cap; push/PR/CI authorized; no merge/deployment).
 Runner: `/home/dcm/workspace/iso9001-worktrees/fixes-2026/venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v`
 
 ## Specs
@@ -22,3 +22,5 @@ Runner: `/home/dcm/workspace/iso9001-worktrees/fixes-2026/venv/bin/python -m uni
 - **L9** Authorized verification-only scratch: /tmp/iso9001-equipment-verify.2RjMxG, no .env/credentials/production data; parent collected exact probes and removes only that scratch. Code/source was never edited by the verifier.
 - **L10** Schema boundary: two new tables only, no existing-data rewrite; nullable person FK RESTRICT and indexed; composite equipment/date/id index serves latest-history queries; code uniqueness indexed by its unique constraint. Existing integer IDs and text enums follow repository conventions. Downgrade destroys these new evidence tables and needs backup. Equipment 1:N immutable checks; optional owner points to Person. No new dependencies or applicability changes.
 - **L11** Next decision: authorize publishing this candidate to GitHub CI for live PostgreSQL proof; native outside-view tooling also remains unavailable. Local commit is a candidate, not a verified-for-merge or deployment claim. No push/PR/deploy authorized by the Phase 3 implementation request.
+
+- **L12** User authorization verbatim: «autorizo» — response to the request to push this branch and open a PR on constant1n0/iso9001 with the usual constant1n0 GitHub session for PostgreSQL CI. Account verified as constant1n0; no prior PR for this head. Publish as a draft pending proof; no merge or deployment authorized. GitHub CI runs migrations/constraints on PostgreSQL 17; that alone does not prove concurrent recovery under live contention. Native assessment still unavailable; no retry or switch change.
