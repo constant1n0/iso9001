@@ -7,7 +7,7 @@ Runner: `/home/dcm/workspace/iso9001-worktrees/fixes-2026/venv/bin/python -m uni
 - **S2** — Selected «Fuera de servicio automático — recomendado»: «El equipo queda no apto; exige evaluar las mediciones anteriores y una nueva comprobación satisfactoria para recuperarlo.»
 
 ## Tasks
-- **EC1** [S1–S2] inline — verification_pending — Deliver equipment and calibration/verification history, automatic non-apt state and recovery evidence, service/web/MCP/docs/tests; independent verification for risk items 2/4; commit pending. Writer rule does not fire (one dependent behavior); map delegated because the integration evidence exceeded one bounded batch.
+- **EC1** [S1–S2] inline — verification_pending — Deliver equipment and calibration/verification history, automatic non-apt state and recovery evidence, service/web/MCP/docs/tests; independent verification for risk items 2/4; candidate commit 3debc94, live PostgreSQL/native proof pending. Writer rule does not fire (one dependent behavior); map delegated because the integration evidence exceeded one bounded batch.
 
 ## Log
 - **L1** Original user request: «ok, adelante con la siguiente fase».
