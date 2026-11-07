@@ -25,6 +25,8 @@ from .quality_objectives import Register
 RESOURCE = Resource.MEASURING_EQUIPMENT
 IMMUTABLE = 'Las comprobaciones no se modifican ni se eliminan; registra una nueva.'
 BACKDATED = 'La comprobación no puede ser anterior a la última registrada.'
+REPLAYED_SUCCESS = ('La comprobación apta repite una ya registrada; para recuperar el equipo '
+                    'registra una nueva comprobación con otra referencia o certificado.')
 IMPACT_REQUIRED = 'Un resultado no apto requiere evaluar las mediciones anteriores e indicar las acciones.'
 NEXT_REQUIRED = 'Un resultado apto requiere una próxima fecha posterior a la comprobación.'
 NO_NEXT = 'Un resultado no apto no admite próxima fecha; registra una nueva comprobación para recuperarlo.'
@@ -73,6 +75,12 @@ CHECK_SPEC = crud.Spec(
 )
 
 
+def _check_evidence(data: Mapping[str, Any]) -> tuple[Any, ...]:
+    """Compare only user-supplied evidence, with the register's normalization."""
+    return tuple(field.clean({field.name: data.get(field.name)}, field.name)
+                 for field in CHECK_SPEC.fields if field.name != 'equipo_id')
+
+
 def _lock(session: Session, equipment_id: int) -> EquipoMedicion:
     if not people.is_db_id(equipment_id):
         raise ValidationError('El campo «equipo_id» no corresponde a ningún equipo.')
@@ -93,9 +101,15 @@ def latest(session: Session, equipment_id: int) -> ComprobacionEquipo | None:
 
 def status(session: Session, item: EquipoMedicion, *, today: date) -> str:
     """Read-only suitability; a due date is valid through that entire day."""
+    check = None if item.retirado else latest(session, item.id)
+    return status_from_check(item, check, today=today)
+
+
+def status_from_check(item: EquipoMedicion, check: ComprobacionEquipo | None,
+                      *, today: date) -> str:
+    """Derive suitability without reading another check or changing stored data."""
     if item.retirado:
         return 'retirado'
-    check = latest(session, item.id)
     if check is None:
         return 'sin_comprobar'
     if check.resultado is ResultadoComprobacionEquipo.no_apto:
@@ -145,6 +159,17 @@ def _create_check(session: Session, actor: Actor, data: Mapping[str, Any],
     previous = latest(session, item.id)
     if previous is not None and values['fecha'] < previous.fecha:
         raise ValidationError(BACKDATED)
+    if previous is not None and previous.resultado is ResultadoComprobacionEquipo.no_apto and not failed:
+        evidence = _check_evidence(values)
+        # The equipment lock also serializes this search and the append below.
+        candidates = session.scalars(select(ComprobacionEquipo).where(
+            ComprobacionEquipo.equipo_id == item.id,
+            ComprobacionEquipo.resultado == ResultadoComprobacionEquipo.apto,
+            ComprobacionEquipo.fecha == values['fecha']))
+        for candidate in candidates:
+            recorded = {field.name: getattr(candidate, field.name) for field in CHECK_SPEC.fields}
+            if _check_evidence(recorded) == evidence:
+                raise ValidationError(REPLAYED_SUCCESS)
     return crud.create(CHECK_SPEC, session, actor, values)
 
 

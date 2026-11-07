@@ -90,7 +90,9 @@ Equipos y comprobaciones (7.1.5):
 - Las comprobaciones admiten creación, lectura y filtros; `qms_update` las
   rechaza con un error de inmutabilidad, sin cambiar datos ni auditoría.
   Una nueva comprobación apta recupera el equipo tras un fallo, pero no levanta
-  la retirada manual. No hay herramienta MCP de borrado.
+  la retirada manual. Si tras un fallo se reenvía una comprobación apta idéntica
+  a una ya registrada, se rechaza y el equipo sigue no apto; para recuperarlo,
+  registra una nueva con otra referencia o certificado. No hay herramienta MCP de borrado.
 
 Mejoras (cláusulas 10.1 y 10.3):
 
