@@ -53,3 +53,16 @@ Runner: `/home/dcm/workspace/iso9001-worktrees/fixes-2026/venv/bin/python -m uni
 - **L25** 2026-11-07, new Pi host process (PID 2774840, started 19:03). User verbatim: «vamos con el PR #178», then selected «Diagnosticar la revisión nativa». The `package-local-binary-missing` fault is gone in this process: read-only ASSESS of committed range c9d6648..HEAD (32 paths, 1,365 lines) returned nativeRisk=medium; with agent escalation item 4 (concurrency, `SELECT ... FOR UPDATE`) risk=high, independentVerifier=true, reviewDue=false (under_budget), candidate base-diff not consumed. Root cause of the earlier failure was never isolated; it did not survive a host restart. No INSPECT/START/lineage created; no package/config/RDD change. The required independent verification already exists (L7–L8, L22) and live PostgreSQL proof passed at 3610bf4 (L23). Needs your decision: run the optional native review, or close EC1 on the risk-gated plan.
 
 - **L26** User selected «Lanzar la revisión nativa». After committing L25 (89a501b), one native review ran on the committed range c9d6648..89a501b (32 paths, 1,367 lines, tier medium, correction budget 200) with lenses risk, resilience, reliability; lineage review-d3bb987fbe16d78d. Host-resolved consent; group forecast 3 model runs via pi_host_relay, acknowledged. All 3 reviewers admitted; state approved; acknowledgement completed and authority burned (gentle-ai.review-acknowledged/v1). Non-blocking advisory follow-ups (no correction opened, not to be re-reviewed on this candidate): R3-MCP-SNAPSHOT (reliability, app/mcp_server/registry.py:581-585), R3-SQLITE-ORDER (reliability, app/services/equipment.py:79-81), R4-replayed-success (resilience, app/services/equipment.py:145-148). EC1 done. Delivery (draft→ready, merge, deploy) remains the user's decision under ordinary repository policy; review approval authorizes none of it. Local commits after 3610bf4 are documentation only and not yet pushed.
+
+## Production deployment (2026-11-07)
+
+`main@65c400d` runs on `vulcano`. Authorized over SSH to `192.168.101.46` as `dcm`, no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `1aa6a03`, clean, migration `c6e8f0a2b4d6`; four services active |
+| Backups | `~/work/backups/calidad-2026-11-07-pre-65c400d.dump` (556 entries, via `docker exec iso9001-db pg_dump`; `pg_dump` is not on the host PATH) and `iso9001-code-2026-11-07-pre-65c400d.tar.gz`, mode 600 |
+| Code | Incremental git bundle `1aa6a03..main`, fast-forward to `65c400d`; no dependency changes |
+| Database | `flask db upgrade` `c6e8f0a2b4d6` → `d7f9a1b3c5e7` (equipment and calibration history); `flask db check` clean |
+| Restart (user, with sudo) | All four services, 2026-11-07 20:26–20:27 CET |
+| Smoke tests | Services active, no journal errors; `/login` 200; `/equipos/` and `/equipos/nuevo` redirect to login; `/mcp` 401 Bearer. Services bind to `172.18.0.1` (Docker bridge), not `127.0.0.1` |
