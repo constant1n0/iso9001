@@ -67,7 +67,9 @@ En la ficha, pulsa **Registrar comprobación**:
    El equipo queda **No apto · fuera de servicio** automáticamente.
 
 Para recuperarlo, registra una nueva comprobación apta, con su evidencia y próxima
-fecha. El historial no se edita ni se elimina. No se admiten comprobaciones
+fecha. Si tras un fallo reenvías una comprobación apta idéntica a una ya registrada,
+se rechaza y el equipo sigue no apto; para recuperarlo, registra una nueva con otra
+referencia o certificado. El historial no se edita ni se elimina. No se admiten comprobaciones
 anteriores a la última registrada; si hay varias el mismo día, manda la última
 registrada. Los datos erróneos se rectifican mediante otra comprobación, no
 reescribiendo evidencia. Una comprobación apta no levanta una **retirada** manual.

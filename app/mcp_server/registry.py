@@ -580,7 +580,7 @@ def _equipment_extras(item):
     session = object_session(item)
     check = equipment.latest(session, item.id)
     return {
-        'estado': equipment.status(session, item, today=local_today()),
+        'estado': equipment.status_from_check(item, check, today=local_today()),
         'fecha_proxima': None if check is None or check.fecha_proxima is None
                           else check.fecha_proxima.isoformat(),
     }
@@ -600,7 +600,7 @@ _MODULES = (
         _f('resultado', 'enum', True, members=ResultadoComprobacionEquipo),
         _f('realizado_por', required=True),
         _f('referencia', required=True, note='Traceable standard/reference or documented basis.'),
-        _f('certificado', note='Certificate reference, not a file upload.'),
+        _f('certificado', note='Certificate reference, not a file upload. After no_apto, replaying any earlier identical apto check is refused; record new evidence with another reference or certificate.'),
         _f('fecha_proxima', 'date', note='Required after fecha for apto; must be null for no_apto.'),
         _f('evaluacion_impacto', note='Required for no_apto: validity of previous measurements.'),
         _f('acciones', note='Required for no_apto: actions on affected measurements/outputs. Immutable record; updates are refused.'),
