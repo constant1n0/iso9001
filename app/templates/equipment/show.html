@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form %}
+{% block title %}{{ item.codigo }} · {{ item.nombre }}{% endblock %}
+{% block content %}
+{% call page_header('7.1.5 · Equipo', item.codigo ~ ' · ' ~ item.nombre) %}
+{% if can('update', 'measuring_equipment') %}<a class="btn" href="{{ url_for('equipment.edit_equipment', equipment_id=item.id) }}">Editar equipo</a><a class="btn btn--primary" href="{{ url_for('equipment.new_check', equipment_id=item.id) }}">Registrar comprobación</a>{% endif %}
+{% if can('delete', 'measuring_equipment') and total == 0 %}{{ delete_form(url_for('equipment.delete_equipment', equipment_id=item.id), '¿Eliminar el equipo?') }}{% endif %}
+{% endcall %}
+<article class="card"><h2>{{ state }}</h2>
+<dl>{% for label, value in [('Número de serie', item.numero_serie), ('Ubicación', item.ubicacion), ('Uso previsto', item.uso_previsto), ('Responsable', owners.get(item.responsable_id))] %}<dt>{{ label }}</dt><dd>{{ value or '—' }}</dd>{% endfor %}</dl></article>
+<h2>Calibraciones y verificaciones</h2>
+<p>Historial inmutable. Una comprobación no apta deja el equipo fuera de servicio; una nueva comprobación apta lo recupera, salvo retirada manual.</p>
+{% for check in checks %}
+<article class="card"><h3>{{ check.fecha.strftime('%d/%m/%Y') }} · {{ check.tipo.value }} · {{ check.resultado.value }}</h3>
+<dl>{% for label, value in [('Realizada por', check.realizado_por), ('Trazabilidad', check.referencia), ('Certificado', check.certificado), ('Próxima fecha', check.fecha_proxima), ('Validez de mediciones anteriores', check.evaluacion_impacto), ('Acciones', check.acciones)] %}<dt>{{ label }}</dt><dd>{{ value or '—' }}</dd>{% endfor %}</dl></article>
+{% else %}<p>No hay comprobaciones registradas.</p>{% endfor %}
+<nav class="pagination" aria-label="Historial de comprobaciones">
+{% if page > 1 %}<a href="{{ url_for('equipment.show_equipment', equipment_id=item.id, page=page-1, per_page=per_page) }}">Anterior</a>{% endif %}
+<span>Página {{ page }} · {{ total }} comprobaciones</span>
+{% if page * per_page < total %}<a href="{{ url_for('equipment.show_equipment', equipment_id=item.id, page=page+1, per_page=per_page) }}">Siguiente</a>{% endif %}
+</nav>
+{% endblock %}

@@ -22,6 +22,7 @@ NOBODY = frozenset()
 # The approved matrix (decision D1), written by hand; deliberately NOT derived
 # from the policy module under test.
 EXPECTED = {
+    "MEASURING_EQUIPMENT": (ALL_ROLES, ADMIN_AUDITOR, ADMIN_ONLY),
     "NONCONFORMITIES": (ALL_ROLES, ALL_ROLES, ADMIN_ONLY),
     "IMPROVEMENTS": (ALL_ROLES, ALL_ROLES, ADMIN_ONLY),
     "CUSTOMER_SATISFACTION": (ALL_ROLES, ALL_ROLES, ADMIN_ONLY),

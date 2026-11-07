@@ -265,6 +265,12 @@ CONFIRMATION = dict(persona_id='1', tipo='objetivos', document_revision_id='',
                     fecha_confirmacion='2020-01-01', notas='Evidence')
 
 ENDPOINTS = [
+    *_html('MEASURING_EQUIPMENT', '/equipos/', ('nuevo', dict(codigo='NEW', nombre='Nuevo')),
+           ('1/editar', dict(codigo='EQ-1', nombre='Equipo editado')), '1/eliminar'),
+    Endpoint('MEASURING_EQUIPMENT', 'read', 'GET', '/equipos/1', 200),
+    Endpoint('MEASURING_EQUIPMENT', 'create', 'POST', '/equipos/1/comprobaciones/nueva',
+             302, dict(fecha='2020-01-01', tipo='calibracion', resultado='apto',
+                       realizado_por='Lab', referencia='Patrón', fecha_proxima='2099-01-01')),
     *_html('READ_CONFIRMATIONS', '/confirmaciones/', ('nueva', CONFIRMATION),
            ('1/editar', CONFIRMATION), '1/eliminar'),
     Endpoint('READ_CONFIRMATIONS', 'read', 'GET', '/confirmaciones/1', 200),
@@ -464,6 +470,7 @@ ADMIN_AUDITOR = {ADMIN, AUDITOR}
 ALL = set(RoleEnum)
 JSON_REGISTER = (ALL, ADMIN_AUDITOR, {ADMIN})
 ALLOWED = {
+    "MEASURING_EQUIPMENT": JSON_REGISTER,
     "NONCONFORMITIES": (ALL, ALL, {ADMIN}),
     "IMPROVEMENTS": (ALL, ALL, {ADMIN}),
     "CUSTOMER_SATISFACTION": (ALL, ALL, {ADMIN}),
@@ -632,6 +639,8 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                     ),
                 ]
             )
+            from app.models import EquipoMedicion
+            db.session.add(EquipoMedicion(codigo='EQ-1', nombre='Balanza'))
             db.session.flush()  # the measurement cites objective 1, the action review 1
             db.session.add(
                 MedicionObjetivo(objetivo_id=1, fecha=date(2026, 1, 31), valor=90)

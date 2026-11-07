@@ -57,7 +57,7 @@ from .routes import (
     context_routes,
     scope_routes,
     change_routes,
-    confirmacion_lectura_routes,
+    confirmacion_lectura_routes, equipment_routes,
 )
 from .utils.error_handlers import register_error_handlers
 from .utils.permissions import can
@@ -180,6 +180,7 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
     app.register_blueprint(scope_routes.scope_bp)
     app.register_blueprint(change_routes.bp)
     app.register_blueprint(confirmacion_lectura_routes.bp)
+    app.register_blueprint(equipment_routes.bp)
 
     # Registrar manejadores de errores
     register_error_handlers(app)

@@ -31,6 +31,10 @@ def mcp_actor(role=ADMIN, scopes=("read", "write"), user_id=7) -> Actor:
 
 # Minimal valid payload per module, as an agent would send it (dates as ISO text).
 SEEDS = {
+    "equipos_medicion": {"codigo": "EQ-1", "nombre": "Balanza"},
+    "comprobaciones_equipo": {"equipo_id": 1, "fecha": "2020-01-01",
+        "tipo": "calibracion", "resultado": "apto", "realizado_por": "Lab",
+        "referencia": "Patrón C-1", "fecha_proxima": "2099-01-01"},
     "no_conformidades": {"descripcion": "Pieza fuera de tolerancia", "fecha_detectada": "2026-10-01"},
     "auditorias": {"area_auditada": "Calidad", "fecha": "2026-10-01", "auditor": "Ana", "resultado": "Sin hallazgos"},
     "capacitaciones": {"tema": "Seguridad", "fecha": "2026-10-01", "personal": "Ana"},
@@ -174,6 +178,10 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
                 self.seed("proveedores")
         if slug in ("satisfaccion_clientes", "reclamaciones") and db.session.get(Cliente, 1) is None:
             self.seed("clientes")
+        if slug == "comprobaciones_equipo":
+            from app.models import EquipoMedicion
+            if db.session.get(EquipoMedicion, 1) is None:
+                self.seed("equipos_medicion")
         data = SEEDS[slug] | overrides
         for field in module.fields:
             if field.type == "date" and field.name in data:

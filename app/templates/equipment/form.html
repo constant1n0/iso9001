@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+{{ page_header('7.1.5 · Equipos y comprobaciones', title) }}
+<p>Un resultado no apto requiere evaluar las mediciones anteriores y sus acciones. El historial no se modifica: registra otra comprobación.</p>
+{{ form_card(form, url_for('equipment.list_equipment'), 'Guardar') }}
+{% endblock %}

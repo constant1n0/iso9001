@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% block title %}Equipos de medición{% endblock %}
+{% block content %}
+{% call page_header('7.1.5 · Seguimiento y medición', 'Equipos de medición') %}
+{% if can('create', 'measuring_equipment') %}<a class="btn btn--primary" href="{{ url_for('equipment.new_equipment') }}">Nuevo equipo</a>{% endif %}
+{% endcall %}
+<form method="get"><label for="codigo">Código</label><input name="codigo" id="codigo" value="{{ codigo }}"><button class="btn" type="submit">Buscar</button></form>
+{% if items %}
+<div class="table-wrap"><table><thead><tr><th>Código</th><th>Equipo</th><th>Ubicación</th><th>Estado</th></tr></thead>
+<tbody>{% for item in items %}<tr><td><a href="{{ url_for('equipment.show_equipment', equipment_id=item.id) }}">{{ item.codigo }}</a></td><td>{{ item.nombre }}</td><td>{{ item.ubicacion or '—' }}</td><td>{{ states[item.id] }}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}{{ empty_state('No hay equipos que coincidan.') }}{% endif %}
+<nav class="pagination" aria-label="Páginas de equipos">
+{% if page > 1 %}<a href="{{ url_for('equipment.list_equipment', codigo=codigo, page=page-1, per_page=per_page) }}">Anterior</a>{% endif %}
+<span>Página {{ page }} · {{ total }} equipos</span>
+{% if page * per_page < total %}<a href="{{ url_for('equipment.list_equipment', codigo=codigo, page=page+1, per_page=per_page) }}">Siguiente</a>{% endif %}
+</nav>
+{% endblock %}

@@ -28,6 +28,7 @@ Documentación técnica:
 - [Roles y acceso](#roles-y-acceso)
 - [Panel de control](#panel-de-control)
 - [Usuarios](#usuarios)
+- [Equipos y calibraciones](#equipos-y-calibraciones)
 - [Personas y competencia](#personas-y-competencia)
 - [No conformidades y acciones correctivas](#no-conformidades-y-acciones-correctivas)
 - [Confirmaciones de lectura](#confirmaciones-de-lectura)
@@ -46,6 +47,35 @@ Documentación técnica:
 - [Otros registros](#otros-registros)
 - [Informes y notificaciones por correo electrónico](#informes-y-notificaciones-por-correo-electrónico)
 - [Términos](#términos)
+
+## Equipos y calibraciones
+
+En **Medición → Equipos y calibraciones** (`/equipos/`), registra el código
+único del equipo, nombre, número de serie, ubicación, uso previsto y responsable.
+Todos los roles consultan; Administrador y Auditor registran y modifican;
+solo Administrador elimina equipos que todavía no tengan comprobaciones.
+
+En la ficha, pulsa **Registrar comprobación**:
+1. Indica la fecha (no futura), el tipo **Calibración** o **Verificación**,
+   el resultado y la persona o laboratorio que la realiza.
+2. Describe el patrón o la referencia de trazabilidad y, si existe,
+   la referencia del certificado. No se adjuntan ficheros en este módulo.
+3. Si es **Apto**, indica la próxima fecha, posterior a la comprobación.
+   El equipo sigue apto durante todo ese día; al siguiente figura vencido.
+4. Si es **No apto**, deja vacía la próxima fecha y explica la validez de
+   las mediciones anteriores y las acciones sobre las salidas afectadas.
+   El equipo queda **No apto · fuera de servicio** automáticamente.
+
+Para recuperarlo, registra una nueva comprobación apta, con su evidencia y próxima
+fecha. El historial no se edita ni se elimina. No se admiten comprobaciones
+anteriores a la última registrada; si hay varias el mismo día, manda la última
+registrada. Los datos erróneos se rectifican mediante otra comprobación, no
+reescribiendo evidencia. Una comprobación apta no levanta una **retirada** manual.
+
+Un equipo sin comprobaciones figura **Sin comprobar**. El estado sirve para
+el control documental del SGC: no bloquea físicamente el instrumento ni certifica
+su calibración. La organización sigue siendo responsable de sus patrones,
+certificados, identificación física, custodia y uso.
 
 ## Inicio de sesión y cuenta
 
