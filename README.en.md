@@ -30,6 +30,10 @@ an agent can never delete anything.
   operating and acceptance criteria, related processes and the records citing
   each process.
 - **Measuring equipment and calibration** (7.1.5): identified equipment, immutable calibration/verification history, traceability and explicit due dates. Failed checks require previous-measurement assessment and actions; only a new successful check restores suitability, never manual withdrawal.
+- **Organizational knowledge and lessons** (7.1.6): one editable register with
+  type, title, substantive summary, source, active owner, optional next review
+  and retirement. Web and MCP filters identify overdue reviews and retired items;
+  edits are audited. Links to other registers are deferred to KN2.
 - **People and competence** (5.3, 7.2): people, QMS roles with their
   responsibilities, authorities and reporting line, required and demonstrated
   competence, the competence matrix.

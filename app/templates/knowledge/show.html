@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form %}
+{% block title %}{{ item.title }}{% endblock %}
+{% block content %}
+{% call page_header('7.1.6 · ' ~ item.kind.value, item.title) %}
+    {% if can('update', 'knowledge') %}
+    <a class="btn" href="{{ url_for('knowledge.edit_item', item_id=item.id) }}">Editar conocimiento</a>
+    {% endif %}
+    {% if can('delete', 'knowledge') %}
+    {{ delete_form(url_for('knowledge.delete_item', item_id=item.id), '¿Eliminar el conocimiento? Si ya no se usa, retíralo en su lugar.') }}
+    {% endif %}
+{% endcall %}
+<article class="card">
+    <h2>{{ 'Retirado' if item.retired else ('Revisión vencida' if overdue else 'En uso') }}</h2>
+    <dl>
+        <dt>Resumen</dt>
+        <dd class="document-text">{{ item.summary }}</dd>
+        <dt>Origen</dt>
+        <dd>{{ item.source or '—' }}</dd>
+        <dt>Responsable</dt>
+        <dd>{{ owners.get(item.owner_id, '—') }}</dd>
+        <dt>Próxima revisión</dt>
+        <dd>{{ item.next_review_date.strftime('%d/%m/%Y') if item.next_review_date else '—' }}</dd>
+    </dl>
+</article>
+<a class="btn" href="{{ url_for('knowledge.list_items') }}">Volver al registro</a>
+{% endblock %}

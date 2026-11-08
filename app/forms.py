@@ -27,6 +27,7 @@ from .models import (
     ResultadoVerificacion, RoleEnum, SentidoObjetivo, TipoAccionRevision, TipoContexto,
     TipoConfirmacion, TipoEncuesta, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
+    KnowledgeType,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -77,6 +78,20 @@ class BaseForm(FlaskForm):
 
     class Meta:
         locales = ('es_ES', 'es')
+
+
+class KnowledgeForm(BaseForm):
+    """Editable knowledge and lesson details, with an active-person owner picker."""
+
+    kind = SelectField('Tipo', choices=[(m.name, m.value) for m in KnowledgeType])
+    title = StringField('Título', validators=[DataRequired(), Length(max=200)])
+    summary = TextAreaField('Resumen', validators=[DataRequired()])
+    source = TextAreaField('Origen')
+    owner_id = SelectField('Responsable', coerce=optional_id,
+                           choices=[CHOOSE_PERSON], validators=[DataRequired()])
+    next_review_date = DateField('Próxima revisión', validators=[Optional()])
+    retired = BooleanField('Retirado')
+    submit = SubmitField('Guardar')
 
 
 class EquipoMedicionForm(BaseForm):

@@ -264,7 +264,13 @@ def _json(resource, base, create, update):
 CONFIRMATION = dict(persona_id='1', tipo='objetivos', document_revision_id='',
                     fecha_confirmacion='2020-01-01', notas='Evidence')
 
+KNOWLEDGE = dict(kind='conocimiento', title='Tool set-up', summary='Keep evidence',
+                 source='Workshop', owner_id='1', next_review_date='')
+
 ENDPOINTS = [
+    *_html('KNOWLEDGE', '/conocimientos/', ('nuevo', KNOWLEDGE),
+           ('1/editar', KNOWLEDGE), '1/eliminar'),
+    Endpoint('KNOWLEDGE', 'read', 'GET', '/conocimientos/1', 200),
     *_html('MEASURING_EQUIPMENT', '/equipos/', ('nuevo', dict(codigo='NEW', nombre='Nuevo')),
            ('1/editar', dict(codigo='EQ-1', nombre='Equipo editado')), '1/eliminar'),
     Endpoint('MEASURING_EQUIPMENT', 'read', 'GET', '/equipos/1', 200),
@@ -470,6 +476,7 @@ ADMIN_AUDITOR = {ADMIN, AUDITOR}
 ALL = set(RoleEnum)
 JSON_REGISTER = (ALL, ADMIN_AUDITOR, {ADMIN})
 ALLOWED = {
+    "KNOWLEDGE": JSON_REGISTER,
     "MEASURING_EQUIPMENT": JSON_REGISTER,
     "NONCONFORMITIES": (ALL, ALL, {ADMIN}),
     "IMPROVEMENTS": (ALL, ALL, {ADMIN}),
@@ -639,8 +646,10 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                     ),
                 ]
             )
-            from app.models import EquipoMedicion
+            from app.models import EquipoMedicion, KnowledgeItem, KnowledgeType
             db.session.add(EquipoMedicion(codigo='EQ-1', nombre='Balanza'))
+            db.session.add(KnowledgeItem(kind=KnowledgeType.conocimiento,
+                                        title='Tool set-up', summary='Keep evidence', owner_id=1))
             db.session.flush()  # the measurement cites objective 1, the action review 1
             db.session.add(
                 MedicionObjetivo(objetivo_id=1, fecha=date(2026, 1, 31), valor=90)

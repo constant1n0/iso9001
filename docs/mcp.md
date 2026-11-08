@@ -34,7 +34,7 @@ nunca puede eliminar.
 
   | Herramienta | Finalidad |
   |---|---|
-  | `qms_modules` | Los 35 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
+  | `qms_modules` | Los 36 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
   | `qms_list` | Una página acotada de un módulo, con los filtros que enumera `qms_modules` |
   | `qms_get` | Un registro por su `id` |
   | `qms_create` | Crea un registro |
@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 35 módulos: `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
+`qms_modules` enumera 36 módulos: `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -71,6 +71,32 @@ nunca puede eliminar.
 `cambios_sgc`, `tareas_cambio`, `clientes`, `reclamaciones` y `confirmaciones_lectura`. Cada campo tiene un `type`, un indicador
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
+
+Conocimientos y lecciones (7.1.6, núcleo KN1):
+
+- `knowledge`: obligatorios `kind` (`conocimiento` o `leccion`), `title`
+  (hasta 200 caracteres), `summary` (texto con contenido) y `owner_id`
+  (persona existente de `personas`, activa al elegirla o cambiarla).
+  `source` es el origen en texto libre opcional; `next_review_date` es una
+  fecha opcional YYYY-MM-DD, y `retired` es booleano, falso por defecto.
+- Todos los roles leen con ámbito `read`; Administrador y Auditor crean y
+  actualizan con ámbito `write`. `qms_update` admite ediciones parciales,
+  incluida la retirada con `{"retired": true}`; guardar sin cambios no audita.
+  No hay herramienta de borrado.
+- Filtros: `kind`, `overdue` (booleano) y `retired` (booleano). Por defecto
+  oculta los retirados; `{"retired": true}` devuelve solo los retirados.
+  Los registros devuelven el tipo como etiqueta en español y añaden `overdue`:
+  verdadero solo si no está retirado y su próxima revisión es anterior a hoy.
+  La fecha sigue válida todo ese día; sin fecha o retirado, nunca vence.
+- Si se desactiva al responsable, se puede conservar; cambiarlo exige una
+  persona activa. Una persona citada como responsable no puede eliminarse.
+  Los vínculos a otros registros se incorporarán en KN2; `source` no es un vínculo.
+
+Ejemplo de `qms_create`:
+
+```json
+{"module": "knowledge", "data": {"kind": "leccion", "title": "Ajuste del útil", "summary": "Conserva la muestra de referencia antes de ajustar el útil.", "source": "Experiencia del taller", "owner_id": 1}}
+```
 
 Equipos y comprobaciones (7.1.5):
 

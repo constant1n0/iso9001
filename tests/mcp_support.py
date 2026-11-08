@@ -49,6 +49,8 @@ SEEDS = {
     "procesos": {"proceso": "Compras"},
     "indicadores_auditoria": {"area_auditoria": "Calidad"},
     "personas": {"nombre": "Ana Pérez"},
+    "knowledge": {"kind": "conocimiento", "title": "Tool set-up",
+                  "summary": "Keep the reference sample.", "source": "Workshop", "owner_id": 1},
     # Documents are not written through MCP; ``seed`` creates them through the service,
     # citing the person above (or creating it first when seeded alone).
     "documentos": {"title": "Manual", "code": "MC-1", "category": "MANUAL_CALIDAD",
@@ -161,7 +163,7 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
         if (slug in ("documentos", "objetivos_calidad", "acciones_revision", "riesgos",
-                     "oportunidades", "cambios_sgc", "confirmaciones_lectura") and db.session.get(Person, 1) is None):
+                     "oportunidades", "cambios_sgc", "confirmaciones_lectura", "knowledge") and db.session.get(Person, 1) is None):
             self.seed("personas")
         if slug == "tareas_cambio" and db.session.get(CambioSGC, 1) is None:
             self.seed("cambios_sgc")

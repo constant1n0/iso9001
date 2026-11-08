@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% block title %}Conocimientos y lecciones{% endblock %}
+{% block content %}
+{% call page_header('7.1.6 · Conocimientos de la organización', 'Conocimientos y lecciones') %}
+    {% if can('create', 'knowledge') %}
+    <a class="btn btn--primary" href="{{ url_for('knowledge.new_item') }}">Nuevo conocimiento</a>
+    {% endif %}
+{% endcall %}
+<form method="get">
+    <label for="kind">Tipo</label>
+    <select id="kind" name="kind">
+        <option value="">Todos</option>
+        {% for value in kinds %}
+        <option value="{{ value.name }}" {% if kind == value.name %}selected{% endif %}>{{ value.value }}</option>
+        {% endfor %}
+    </select>
+    <label for="overdue">Revisión</label>
+    <select id="overdue" name="overdue">
+        <option value="">Todas</option>
+        <option value="1" {% if overdue == '1' %}selected{% endif %}>Vencida</option>
+        <option value="0" {% if overdue == '0' %}selected{% endif %}>No vencida</option>
+    </select>
+    <label for="retired">Estado</label>
+    <select id="retired" name="retired">
+        <option value="0" {% if retired == '0' %}selected{% endif %}>En uso</option>
+        <option value="1" {% if retired == '1' %}selected{% endif %}>Retirados</option>
+        <option value="" {% if retired == '' %}selected{% endif %}>Todos</option>
+    </select>
+    <button class="btn" type="submit">Filtrar</button>
+</form>
+{% if items %}
+<div class="table-wrap">
+    <table>
+        <thead><tr><th>Título</th><th>Tipo</th><th>Próxima revisión</th><th>Estado</th></tr></thead>
+        <tbody>
+        {% for item in items %}
+        <tr>
+            <td><a href="{{ url_for('knowledge.show_item', item_id=item.id) }}">{{ item.title }}</a></td>
+            <td>{{ item.kind.value }}</td>
+            <td>{{ item.next_review_date.strftime('%d/%m/%Y') if item.next_review_date else '—' }}</td>
+            <td>{{ 'Retirado' if item.retired else ('Revisión vencida' if is_overdue(item, today=today) else 'En uso') }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+{{ empty_state('No hay conocimientos que coincidan.') }}
+{% endif %}
+<nav class="pagination" aria-label="Páginas de conocimientos">
+    {% if page > 1 %}
+    <a href="{{ url_for('knowledge.list_items', kind=kind, overdue=overdue, retired=retired, page=page-1, per_page=per_page) }}">Anterior</a>
+    {% endif %}
+    <span>Página {{ page }} · {{ total }} conocimientos</span>
+    {% if page * per_page < total %}
+    <a href="{{ url_for('knowledge.list_items', kind=kind, overdue=overdue, retired=retired, page=page+1, per_page=per_page) }}">Siguiente</a>
+    {% endif %}
+</nav>
+{% endblock %}

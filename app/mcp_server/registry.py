@@ -26,10 +26,11 @@ from ..models import (
     OrigenNoConformidad, OrigenRiesgo, PrioridadOportunidad, ResultadoEvaluacion, SentidoObjetivo,
     TipoAccionRevision, TipoContexto, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
+    KnowledgeType,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
-    reclamaciones, read_confirmations, equipment,
+    reclamaciones, read_confirmations, equipment, knowledge,
     corrective_actions, document_revisions, documents, improvements, management_reviews,
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
@@ -586,6 +587,11 @@ def _equipment_extras(item):
     }
 
 
+def _knowledge_extras(item: Any) -> dict[str, Any]:
+    """Expose the review state derived on the adapter's local day."""
+    return {'overdue': knowledge.is_overdue(item, today=local_today())}
+
+
 _MODULES = (
     Module('equipos_medicion', 'Measuring equipment', Resource.MEASURING_EQUIPMENT,
            equipment.equipment, (
@@ -762,6 +768,18 @@ _MODULES = (
         _f("activo", "boolean"), _f("notas"), _f("rol_ids", "integer_list"),
     ), (_f("nombre"), _f("rol_id", "integer"), _f("activo", "boolean")),
         extras=_person_extras),
+    Module('knowledge', 'Organizational knowledge and lessons', Resource.KNOWLEDGE,
+           _DatedLists(knowledge.items), (
+        _f('kind', 'enum', True, members=KnowledgeType),
+        _f('title', required=True), _f('summary', required=True),
+        _f('source', note='Free-text origin or source.'),
+        _f('owner_id', 'integer', True, note='Person (personas), active when newly chosen.'),
+        _f('next_review_date', 'date'),
+        _f('retired', 'boolean', note='Retire unused knowledge instead of deleting it.'),
+    ), (_f('kind', 'enum', members=KnowledgeType),
+        _f('overdue', 'boolean', note='Unretired, with next_review_date strictly before today.'),
+        _f('retired', 'boolean', note='Defaults to false; true lists retired items only.')),
+        extras=_knowledge_extras),
     # Both competence registers share the ``COMPETENCE`` resource. ``rol_id`` names a
     # role, ``persona_id`` and ``evaluador_id`` people, ``requisito_id`` a required
     # competence and ``capacitacion_id`` a training. An evaluation other than

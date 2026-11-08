@@ -29,6 +29,7 @@ Documentación técnica:
 - [Panel de control](#panel-de-control)
 - [Usuarios](#usuarios)
 - [Equipos y calibraciones](#equipos-y-calibraciones)
+- [Conocimientos y lecciones](#conocimientos-y-lecciones)
 - [Personas y competencia](#personas-y-competencia)
 - [No conformidades y acciones correctivas](#no-conformidades-y-acciones-correctivas)
 - [Confirmaciones de lectura](#confirmaciones-de-lectura)
@@ -78,6 +79,33 @@ Un equipo sin comprobaciones figura **Sin comprobar**. El estado sirve para
 el control documental del SGC: no bloquea físicamente el instrumento ni certifica
 su calibración. La organización sigue siendo responsable de sus patrones,
 certificados, identificación física, custodia y uso.
+
+## Conocimientos y lecciones
+
+En **Conocimiento → Conocimientos y lecciones** (`/conocimientos/`), conserva el
+saber hacer de la organización y las lecciones aprendidas en un único registro.
+Todos los roles consultan. Administrador y Auditor crean, editan y retiran;
+solo Administrador puede eliminar elementos que nadie cite. MCP nunca elimina.
+
+1. Pulsa **Nuevo conocimiento** y elige **Conocimiento de la organización**
+   o **Lección aprendida** en **Tipo**.
+2. Escribe un **Título** y un **Resumen** obligatorios. El resumen conserva
+   el contenido del conocimiento, no solo una referencia. **Origen** es texto
+   libre opcional: una fuente externa, una experiencia o una referencia.
+3. Elige una persona **Responsable** activa. Si después se desactiva, sigue
+   figurando y puedes editar el resto de los datos; para cambiarla, elige otra
+   persona activa. No se puede eliminar una persona responsable de un elemento.
+4. Si quieres revisarlo periódicamente, indica **Próxima revisión**. La fecha
+   sigue vigente durante ese día; al siguiente figura **Revisión vencida**.
+   Sin fecha no hay vencimiento. Edita la fecha cuando registres la revisión.
+5. Cuando deje de usarse, edítalo y marca **Retirado** en lugar de eliminarlo.
+   Sigue siendo legible en su ficha y nunca figura como revisión vencida.
+
+La lista oculta los retirados al abrirla. Usa **Tipo**, **Revisión** y **Estado**
+para filtrar; **Retirados** muestra solo los retirados y **Todos**, ambos estados.
+Las modificaciones quedan en el registro de auditoría; guardar sin cambios no
+crea una entrada adicional. El núcleo KN1 aún no vincula procesos, documentos,
+personas expertas, formación, competencias ni registros de origen (pendiente KN2).
 
 ## Inicio de sesión y cuenta
 

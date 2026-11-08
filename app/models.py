@@ -2029,6 +2029,33 @@ class EvaluacionProveedor(RecordMetadataMixin, db.Model):
 
 
 # Modelo para Control Documental
+class KnowledgeType(enum.Enum):
+    """Knowledge register classification, stored by member name (7.1.6)."""
+
+    conocimiento = 'Conocimiento de la organización'
+    leccion = 'Lección aprendida'
+
+
+class KnowledgeItem(RecordMetadataMixin, db.Model):
+    """Editable organizational knowledge; retirement preserves readable history."""
+
+    __tablename__ = 'knowledge_items'
+    __table_args__ = (
+        db.PrimaryKeyConstraint('id', name='pk_knowledge_items'),
+        db.CheckConstraint("length(trim(title)) > 0", name='ck_knowledge_items_title'),
+        db.CheckConstraint("length(trim(summary)) > 0", name='ck_knowledge_items_summary'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    kind = db.Column(text_enum(KnowledgeType, 'ck_knowledge_items_kind'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    summary = db.Column(db.Text, nullable=False)
+    source = db.Column(db.Text)
+    owner_id = person_link('knowledge_items', 'owner_id')
+    owner_id.nullable = False
+    next_review_date = db.Column(db.Date)
+    retired = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+
+
 class TipoComprobacionEquipo(enum.Enum):
     calibracion = 'Calibración'
     verificacion = 'Verificación'
