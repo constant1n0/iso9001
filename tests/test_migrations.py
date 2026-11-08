@@ -158,7 +158,11 @@ class MigrationsTestCase(unittest.TestCase):
             owner = keys['fk_knowledge_items_owner_id_personas']
             self.assertEqual(('personas', 'RESTRICT'),
                              (owner['referred_table'], owner['options'].get('ondelete')))
-            self.assertEqual({'ix_knowledge_items_owner_id'},
+            self.assertEqual({'ix_knowledge_items_owner_id',
+                              'ix_knowledge_items_no_conformidad_id',
+                              'ix_knowledge_items_hallazgo_id',
+                              'ix_knowledge_items_mejora_id',
+                              'ix_knowledge_items_accion_revision_id'},
                              {i['name'] for i in inspector.get_indexes('knowledge_items')})
             self.assertLessEqual({'ck_knowledge_items_kind', 'ck_knowledge_items_title',
                                   'ck_knowledge_items_summary'},
@@ -169,6 +173,34 @@ class MigrationsTestCase(unittest.TestCase):
             with db.engine.connect() as connection:
                 self.assertEqual(1, connection.scalar(text('SELECT count(*) FROM no_conformidades')))
                 self.assertEqual('legacy', connection.scalar(text('SELECT username FROM users')))
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+    def test_knowledge_links_upgrade_downgrade_preserves_existing_knowledge(self) -> None:
+        from app.models import KNOWLEDGE_ASSOCIATIONS, KNOWLEDGE_ORIGINS
+
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision='e8a0c2d4f6b8')
+            with db.engine.begin() as connection:
+                connection.execute(text("INSERT INTO personas (id,nombre) VALUES (1,'Owner')"))
+                connection.execute(text("INSERT INTO knowledge_items (kind,title,summary,owner_id) "
+                                        "VALUES ('leccion','Preserved','Evidence',1)"))
+                before = connection.execute(text('SELECT * FROM knowledge_items')).all()
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            for table in KNOWLEDGE_ASSOCIATIONS.values():
+                self.assertIn(table.name, inspector.get_table_names())
+                for key in inspector.get_foreign_keys(table.name):
+                    self.assertEqual('RESTRICT', key['options']['ondelete'])
+                    self.assertEqual('RESTRICT', key['options']['onupdate'])
+            with db.engine.connect() as connection:
+                row = connection.execute(text('SELECT * FROM knowledge_items')).one()
+                self.assertEqual(before[0], row[:len(before[0])])
+                self.assertTrue(all(row._mapping[key] is None for key in KNOWLEDGE_ORIGINS))
+            self.assertEqual([], self._schema_differences())
+            downgrade(directory=MIGRATIONS_DIR, revision='e8a0c2d4f6b8')
+            with db.engine.connect() as connection:
+                self.assertEqual(before, connection.execute(text('SELECT * FROM knowledge_items')).all())
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 

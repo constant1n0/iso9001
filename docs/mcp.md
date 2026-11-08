@@ -72,7 +72,7 @@ nunca puede eliminar.
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
 
-Conocimientos y lecciones (7.1.6, núcleo KN1):
+Conocimientos y lecciones (7.1.6):
 
 - `knowledge`: obligatorios `kind` (`conocimiento` o `leccion`), `title`
   (hasta 200 caracteres), `summary` (texto con contenido) y `owner_id`
@@ -90,12 +90,40 @@ Conocimientos y lecciones (7.1.6, núcleo KN1):
   La fecha sigue válida todo ese día; sin fecha o retirado, nunca vence.
 - Si se desactiva al responsable, se puede conservar; cambiarlo exige una
   persona activa. Una persona citada como responsable no puede eliminarse.
-  Los vínculos a otros registros se incorporarán en KN2; `source` no es un vínculo.
+  También se protegen las personas expertas citadas; `source` no es un vínculo.
+- Listas opcionales de enteros (también se devuelven en lectura): `process_ids`
+  cita `procesos`, `document_ids` cita `documentos`, `expert_ids` cita `personas`,
+  `training_ids` cita `capacitaciones` y `requirement_ids` cita
+  `competencias_requeridas`. Cada lista sustituye el conjunto anterior; `[]`
+  lo vacía. Omitirla conserva lo anterior; los duplicados se ignoran y las
+  lecturas devuelven ids ordenados. `null`, valores no enteros e ids desconocidos
+  se rechazan sin cambiar datos ni auditoría.
+- Nuevos expertos deben estar activos y nuevos documentos no deben estar dados
+  de baja (no se exige una revisión publicada). Los vínculos existentes se
+  conservan aunque se desactive la persona o se retire el documento. Vincular
+  un registro no lo modifica, no crea otros registros y no concede acceso a
+  su contenido protegido. La retirada del conocimiento conserva sus vínculos.
+- Procedencia tipada opcional: indica **como máximo uno** de
+  `no_conformidad_id` (`no_conformidades`), `hallazgo_id` (`hallazgos_auditoria`),
+  `mejora_id` (`mejoras`) y `accion_revision_id` (`acciones_revision`). Son
+  enteros de registros existentes. Para cambiarlo, envía `null` para el vínculo
+  anterior en la misma actualización. Se admite en ambos tipos de conocimiento;
+  no restringe el tipo de acción de revisión. No hay un id polimórfico ni un
+  campo separado de tipo de origen: la columna elegida determina el tipo.
+- Estas selecciones siguen los mismos permisos de creación y edición, y sus
+  cambios se auditan en el conocimiento. Las claves foráneas RESTRICT protegen
+  todos los registros citados, incluso si el conocimiento está retirado.
 
 Ejemplo de `qms_create`:
 
 ```json
 {"module": "knowledge", "data": {"kind": "leccion", "title": "Ajuste del útil", "summary": "Conserva la muestra de referencia antes de ajustar el útil.", "source": "Experiencia del taller", "owner_id": 1}}
+```
+
+Ejemplo de `qms_update` (los registros citados deben existir):
+
+```json
+{"module": "knowledge", "id": 1, "data": {"process_ids": [2, 3], "document_ids": [4], "expert_ids": [5], "training_ids": [6], "requirement_ids": [7], "no_conformidad_id": 8}}
 ```
 
 Equipos y comprobaciones (7.1.5):

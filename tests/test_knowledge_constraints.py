@@ -65,7 +65,7 @@ class PostgresConstraintTestCase(ConstraintCases, unittest.TestCase):
 
 class KnowledgeMigrationTestCase(unittest.TestCase):
     def test_upgrade_downgrade_preserve_existing_data_and_match_model(self):
-        from app.models import KnowledgeItem
+        from app.models import KNOWLEDGE_ORIGINS, KnowledgeItem
         spec = importlib.util.spec_from_file_location('knowledge_migration', MIGRATION)
         migration = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(migration)
@@ -73,7 +73,8 @@ class KnowledgeMigrationTestCase(unittest.TestCase):
         engine = create_engine('sqlite:///:memory:')
         try:
             with engine.begin() as connection:
-                tables = [table for table in db.metadata.sorted_tables if table is not KnowledgeItem.__table__]
+                tables = [table for table in db.metadata.sorted_tables
+                          if not table.name.startswith('knowledge_')]
                 db.metadata.create_all(connection, tables=tables)
                 connection.execute(Person.__table__.insert().values(nombre='Existing owner'))
                 before = connection.execute(select(Person.__table__)).all()
@@ -82,10 +83,13 @@ class KnowledgeMigrationTestCase(unittest.TestCase):
                     inspector = inspect(connection)
                     self.assertIn('knowledge_items', inspector.get_table_names())
                     self.assertEqual(
-                        {c.name: (str(c.type), c.nullable) for c in KnowledgeItem.__table__.columns},
+                        {c.name: (str(c.type), c.nullable) for c in KnowledgeItem.__table__.columns
+                         if c.name not in KNOWLEDGE_ORIGINS},
                         {c['name']: (str(c['type']), c['nullable']) for c in inspector.get_columns('knowledge_items')})
                     self.assertEqual(
-                        {constraint.name for constraint in KnowledgeItem.__table__.constraints if constraint.name},
+                        {constraint.name for constraint in KnowledgeItem.__table__.constraints
+                         if constraint.name and constraint.name != 'ck_knowledge_items_one_origin'
+                         and constraint.name not in {f'fk_knowledge_items_{key}' for key in KNOWLEDGE_ORIGINS}},
                         {c['name'] for c in inspector.get_check_constraints('knowledge_items')} |
                         {f['name'] for f in inspector.get_foreign_keys('knowledge_items')} |
                         {inspector.get_pk_constraint('knowledge_items')['name']} - {None})

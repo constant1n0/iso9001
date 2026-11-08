@@ -589,7 +589,8 @@ def _equipment_extras(item):
 
 def _knowledge_extras(item: Any) -> dict[str, Any]:
     """Expose the review state derived on the adapter's local day."""
-    return {'overdue': knowledge.is_overdue(item, today=local_today())}
+    return {'overdue': knowledge.is_overdue(item, today=local_today()),
+            **knowledge.link_ids(item)}
 
 
 _MODULES = (
@@ -776,6 +777,21 @@ _MODULES = (
         _f('owner_id', 'integer', True, note='Person (personas), active when newly chosen.'),
         _f('next_review_date', 'date'),
         _f('retired', 'boolean', note='Retire unused knowledge instead of deleting it.'),
+        _f('process_ids', 'integer_list', note='Affected processes (procesos); replaces the set.'),
+        _f('document_ids', 'integer_list', note=(
+            'Controlled documents (documentos); replaces the set. New links require in-use '
+            'documents; previously linked withdrawn documents are retained.')),
+        _f('expert_ids', 'integer_list', note=(
+            'Expert people (personas), in addition to the owner; replaces the set. Newly '
+            'chosen people must be active; existing inactive experts are retained.')),
+        _f('training_ids', 'integer_list', note='Training (capacitaciones); replaces the set.'),
+        _f('requirement_ids', 'integer_list', note=(
+            'Competence requirements (competencias_requeridas); replaces the set.')),
+        *(_f(key, 'integer', note=(
+            'Optional typed provenance: at most one of no_conformidad_id, hallazgo_id, '
+            'mejora_id or accion_revision_id. Clear the old link with null to switch. '
+            'Allowed for both kinds; manually chosen, never creates or changes a target.'))
+          for key in knowledge.KNOWLEDGE_ORIGINS),
     ), (_f('kind', 'enum', members=KnowledgeType),
         _f('overdue', 'boolean', note='Unretired, with next_review_date strictly before today.'),
         _f('retired', 'boolean', note='Defaults to false; true lists retired items only.')),

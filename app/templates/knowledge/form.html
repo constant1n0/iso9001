@@ -6,5 +6,13 @@
 <p>Registra el saber hacer o la lección aprendida en el resumen e indica su origen.
     Elige una persona responsable activa. La próxima revisión es opcional.
     Retira los elementos que ya no se usen para conservar su historia.</p>
+<p>Puedes seleccionar varios procesos, documentos, personas expertas, formaciones y
+    requisitos de competencia. Para el registro de origen, elige como máximo uno
+    entre no conformidad, hallazgo de auditoría, mejora o acción de revisión por la
+    dirección; déjalo vacío en los demás selectores. Se registra a mano y no se
+    crea nada automáticamente. También puedes indicarlo en un conocimiento.</p>
+<p>Los vínculos existentes se conservan aunque se desactive la persona o se dé de
+    baja el documento. Las nuevas elecciones requieren personas activas y documentos
+    en uso. Mantén pulsado Ctrl (o Cmd) para seleccionar o quitar varias opciones.</p>
 {{ form_card(form, url_for('knowledge.list_items'), 'Guardar') }}
 {% endblock %}
