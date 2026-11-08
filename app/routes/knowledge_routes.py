@@ -45,6 +45,9 @@ def list_items() -> ResponseReturnValue:
 def _form(item: KnowledgeItem | None = None) -> KnowledgeForm:
     """Offer active owners plus the item's existing owner, even if deactivated."""
     form = KnowledgeForm(obj=item)
+    if item is not None and not form.is_submitted():
+        # The select offers enum names; obj= would hand it the enum itself.
+        form.kind.data = item.kind.name
     form.owner_id.choices = person_choices(people.choices(
         db.session, current_actor(), include=None if item is None else item.owner_id),
         empty=CHOOSE_PERSON)
