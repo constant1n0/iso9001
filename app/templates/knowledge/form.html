@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+{{ page_header('7.1.6 · Conocimientos y lecciones', title) }}
+<p>Registra el saber hacer o la lección aprendida en el resumen e indica su origen.
+    Elige una persona responsable activa. La próxima revisión es opcional.
+    Retira los elementos que ya no se usen para conservar su historia.</p>
+{{ form_card(form, url_for('knowledge.list_items'), 'Guardar') }}
+{% endblock %}

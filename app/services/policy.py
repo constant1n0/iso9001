@@ -89,6 +89,7 @@ class Action(StrEnum):
 class Resource(StrEnum):
     """Protected resources."""
 
+    KNOWLEDGE = "knowledge"
     MEASURING_EQUIPMENT = "measuring_equipment"
     NONCONFORMITIES = "nonconformities"
     IMPROVEMENTS = "improvements"
@@ -141,6 +142,7 @@ class Grant:
 _OPEN_REGISTER = Grant(_ALL, _ALL, _ADMIN)  # everyone works, administrators delete
 _JSON_REGISTER = Grant(_ALL, _ADMIN_AUDITOR, _ADMIN)
 _MATRIX: dict[Resource, Grant] = {
+    Resource.KNOWLEDGE: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
     Resource.MEASURING_EQUIPMENT: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
     Resource.NONCONFORMITIES: _OPEN_REGISTER,
     Resource.IMPROVEMENTS: _OPEN_REGISTER,

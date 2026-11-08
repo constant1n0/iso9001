@@ -33,7 +33,7 @@ LATER_AUDITED_TABLES = frozenset(
      "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades",
      "acciones_riesgo", "proveedores", "evaluaciones_proveedor", "cuestiones_contexto",
      "equipos_medicion", "comprobaciones_equipo", "alcances_sgc", "clientes", "reclamaciones", "cambios_sgc", "tareas_cambio",
-     "confirmaciones_lectura"}
+     "confirmaciones_lectura", "knowledge_items"}
 )
 
 
@@ -144,6 +144,31 @@ class MigrationsTestCase(unittest.TestCase):
                 self.assertEqual(1, connection.scalar(text('SELECT count(*) FROM no_conformidades')))
             downgrade(directory=MIGRATIONS_DIR, revision='c6e8f0a2b4d6')
             self.assertNotIn('equipos_medicion', inspect(db.engine).get_table_names())
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+    def test_knowledge_upgrade_downgrade_preserves_existing_records(self) -> None:
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision='d7f9a1b3c5e7')
+            self._insert_legacy_user_and_nc(estado='abierta')
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            self.assertIn('knowledge_items', inspector.get_table_names())
+            keys = {fk['name']: fk for fk in inspector.get_foreign_keys('knowledge_items')}
+            owner = keys['fk_knowledge_items_owner_id_personas']
+            self.assertEqual(('personas', 'RESTRICT'),
+                             (owner['referred_table'], owner['options'].get('ondelete')))
+            self.assertEqual({'ix_knowledge_items_owner_id'},
+                             {i['name'] for i in inspector.get_indexes('knowledge_items')})
+            self.assertLessEqual({'ck_knowledge_items_kind', 'ck_knowledge_items_title',
+                                  'ck_knowledge_items_summary'},
+                                 {c['name'] for c in inspector.get_check_constraints('knowledge_items')})
+            self.assertEqual([], self._schema_differences())
+            downgrade(directory=MIGRATIONS_DIR, revision='d7f9a1b3c5e7')
+            self.assertNotIn('knowledge_items', inspect(db.engine).get_table_names())
+            with db.engine.connect() as connection:
+                self.assertEqual(1, connection.scalar(text('SELECT count(*) FROM no_conformidades')))
+                self.assertEqual('legacy', connection.scalar(text('SELECT username FROM users')))
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 
