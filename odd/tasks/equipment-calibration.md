@@ -66,3 +66,16 @@ Runner: `/home/dcm/workspace/iso9001-worktrees/fixes-2026/venv/bin/python -m uni
 | Database | `flask db upgrade` `c6e8f0a2b4d6` → `d7f9a1b3c5e7` (equipment and calibration history); `flask db check` clean |
 | Restart (user, with sudo) | All four services, 2026-11-07 20:26–20:27 CET |
 | Smoke tests | Services active, no journal errors; `/login` 200; `/equipos/` and `/equipos/nuevo` redirect to login; `/mcp` 401 Bearer. Services bind to `172.18.0.1` (Docker bridge), not `127.0.0.1` |
+
+## Production deployment (2026-11-08)
+
+`main@7fe0a9f` (PR #180, review advisories R3-MCP-SNAPSHOT and R4-replayed-success) runs on `vulcano`. Authorized over SSH to `192.168.101.46` as `dcm`, no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `65c400d`, clean, migration `d7f9a1b3c5e7`; four services active |
+| Backups | `~/work/backups/calidad-2026-11-08-pre-7fe0a9f.dump` (579 entries, via `docker exec iso9001-db pg_dump`) and `iso9001-code-2026-11-08-pre-7fe0a9f.tar.gz`, mode 600 |
+| Code | Incremental git bundle `65c400d..main`, fast-forward to `7fe0a9f`; no dependency changes |
+| Database | No migration; `flask db check` clean |
+| Restart (user, with sudo) | All four services, 2026-11-08 21:07 CET |
+| Smoke tests | Services active, no journal errors; `/login` 200; `/equipos/` redirects to login; `/mcp` 401 Bearer |
