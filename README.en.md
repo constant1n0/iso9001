@@ -44,6 +44,9 @@ an agent can never delete anything.
 - **Read confirmations** (5.2, 7.3): dated evidence per person for a specific
   document revision or the quality objectives, with person history, web screens
   and MCP. Every role reads and writes; only administrators delete on the web.
+- **Communication plan** (7.4): what, when, to whom, how and who communicates;
+  linked or free-text audiences, explicit next date, overdue filters, retirement,
+  audit trail, web screens and MCP. Nothing is sent; the dated occurrence log is pending.
 - **Document control** (7.5): numbered revisions reviewed, approved and
   published, attachments, withdrawal and periodic review.
 - **Internal audits** (9.2): yearly audit programme, audits with independence

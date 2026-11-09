@@ -16,7 +16,7 @@ from app.mcp_server.registry import MODULES
 from app.models import AuditLog, EstadoNoConformidad, NoConformidad, User
 from app.services import audit
 
-JSON_REGISTERS = ("knowledge", "roles_responsabilidades", "recursos_capacitacion", "procesos",
+JSON_REGISTERS = ("communication", "knowledge", "roles_responsabilidades", "recursos_capacitacion", "procesos",
                   "indicadores_auditoria", "riesgos", "oportunidades", "acciones_riesgo",
                   "proveedores", "evaluaciones_proveedor", "cuestiones_contexto",
                   "alcances_sgc", "cambios_sgc", "tareas_cambio",

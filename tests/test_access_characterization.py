@@ -267,7 +267,14 @@ CONFIRMATION = dict(persona_id='1', tipo='objetivos', document_revision_id='',
 KNOWLEDGE = dict(kind='conocimiento', title='Tool set-up', summary='Keep evidence',
                  source='Workshop', owner_id='1', next_review_date='')
 
+COMMUNICATION = dict(title='Quality results', content='Explain performance', scope='ambas',
+                     channel='web', owner_id='1', frequency='Every month',
+                     next_date='2026-12-01', audience_text='All staff')
+
 ENDPOINTS = [
+    *_html('COMMUNICATION', '/comunicaciones/', ('nuevo', COMMUNICATION),
+           ('1/editar', COMMUNICATION), '1/eliminar'),
+    Endpoint('COMMUNICATION', 'read', 'GET', '/comunicaciones/1', 200),
     *_html('KNOWLEDGE', '/conocimientos/', ('nuevo', KNOWLEDGE),
            ('1/editar', KNOWLEDGE), '1/eliminar'),
     Endpoint('KNOWLEDGE', 'read', 'GET', '/conocimientos/1', 200),
@@ -476,6 +483,7 @@ ADMIN_AUDITOR = {ADMIN, AUDITOR}
 ALL = set(RoleEnum)
 JSON_REGISTER = (ALL, ADMIN_AUDITOR, {ADMIN})
 ALLOWED = {
+    "COMMUNICATION": JSON_REGISTER,
     "KNOWLEDGE": JSON_REGISTER,
     "MEASURING_EQUIPMENT": JSON_REGISTER,
     "NONCONFORMITIES": (ALL, ALL, {ADMIN}),
@@ -646,7 +654,12 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                     ),
                 ]
             )
-            from app.models import EquipoMedicion, KnowledgeItem, KnowledgeType
+            from app.models import (CommunicationPlan, CommunicationScope, CommunicationChannel,
+                                    EquipoMedicion, KnowledgeItem, KnowledgeType)
+            db.session.add(CommunicationPlan(
+                title='Quality results', content='Explain performance', scope=CommunicationScope.ambas,
+                channel=CommunicationChannel.web, owner_id=1, frequency='Every month',
+                next_date=date(2026, 12, 1), audience_text='All staff'))
             db.session.add(EquipoMedicion(codigo='EQ-1', nombre='Balanza'))
             db.session.add(KnowledgeItem(kind=KnowledgeType.conocimiento,
                                         title='Tool set-up', summary='Keep evidence', owner_id=1))

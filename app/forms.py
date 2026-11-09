@@ -27,7 +27,7 @@ from .models import (
     ResultadoVerificacion, RoleEnum, SentidoObjetivo, TipoAccionRevision, TipoContexto,
     TipoConfirmacion, TipoEncuesta, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
-    KnowledgeType,
+    KnowledgeType, CommunicationChannel, CommunicationScope,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -78,6 +78,27 @@ class BaseForm(FlaskForm):
 
     class Meta:
         locales = ('es_ES', 'es')
+
+
+class CommunicationForm(BaseForm):
+    """Plan details; routes populate the owner and four audience selectors."""
+
+    title = StringField('Asunto', validators=[DataRequired(), Length(max=200)])
+    content = TextAreaField('Contenido o propósito', validators=[DataRequired()])
+    scope = SelectField('Ámbito', choices=[(m.name, m.value) for m in CommunicationScope])
+    channel = SelectField('Canal', choices=[(m.name, m.value) for m in CommunicationChannel])
+    channel_detail = TextAreaField('Detalle del canal')
+    audience_text = TextAreaField('Descripción de destinatarios')
+    stakeholder_ids = SelectMultipleField('Partes interesadas destinatarias', coerce=int, choices=[])
+    customer_ids = SelectMultipleField('Clientes destinatarios', coerce=int, choices=[])
+    provider_ids = SelectMultipleField('Proveedores destinatarios', coerce=int, choices=[])
+    person_ids = SelectMultipleField('Personas destinatarias', coerce=int, choices=[])
+    owner_id = SelectField('Quién comunica', coerce=optional_id,
+                           choices=[CHOOSE_PERSON], validators=[DataRequired()])
+    frequency = TextAreaField('Frecuencia o desencadenante', validators=[DataRequired()])
+    next_date = DateField('Próxima fecha', validators=[DataRequired()])
+    retired = BooleanField('Retirada')
+    submit = SubmitField('Guardar')
 
 
 class KnowledgeForm(BaseForm):
