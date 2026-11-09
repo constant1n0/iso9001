@@ -168,12 +168,12 @@ class IndependentMigration(unittest.TestCase):
         self.assertEqual('d7f9a1b3c5e7',migration.down_revision)
         engine = create_engine('sqlite:///:memory:')
         with engine.begin() as connection:
-            db.metadata.create_all(connection,tables=[t for t in db.metadata.sorted_tables if t.name != 'knowledge_items'])
+            db.metadata.create_all(connection,tables=[t for t in db.metadata.sorted_tables if not t.name.startswith('knowledge_')])
             connection.execute(Person.__table__.insert().values(nombre='Preserved'))
             def schema():
                 return connection.execute(text("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE tbl_name != 'knowledge_items' ORDER BY type,name")).all()
             def data():
-                return {t.name:connection.execute(t.select()).all() for t in db.metadata.sorted_tables if t.name != 'knowledge_items'}
+                return {t.name:connection.execute(t.select()).all() for t in db.metadata.sorted_tables if not t.name.startswith('knowledge_')}
             before_schema,before_data = schema(),data()
             with patch.object(migration,'op',Operations(MigrationContext.configure(connection))):
                 migration.upgrade()

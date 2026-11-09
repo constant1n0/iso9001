@@ -91,6 +91,16 @@ class KnowledgeForm(BaseForm):
                            choices=[CHOOSE_PERSON], validators=[DataRequired()])
     next_review_date = DateField('Próxima revisión', validators=[Optional()])
     retired = BooleanField('Retirado')
+    process_ids = SelectMultipleField('Procesos afectados', coerce=int, choices=[])
+    document_ids = SelectMultipleField('Documentos donde se recoge', coerce=int, choices=[])
+    expert_ids = SelectMultipleField('Personas expertas', coerce=int, choices=[])
+    training_ids = SelectMultipleField('Formación para transmitirlo', coerce=int, choices=[])
+    requirement_ids = SelectMultipleField('Requisitos de competencia', coerce=int, choices=[])
+    no_conformidad_id = SelectField('Origen: no conformidad', coerce=optional_id, choices=[])
+    hallazgo_id = SelectField('Origen: hallazgo de auditoría', coerce=optional_id, choices=[])
+    mejora_id = SelectField('Origen: mejora', coerce=optional_id, choices=[])
+    accion_revision_id = SelectField('Origen: acción de revisión por la dirección',
+                                     coerce=optional_id, choices=[])
     submit = SubmitField('Guardar')
 
 

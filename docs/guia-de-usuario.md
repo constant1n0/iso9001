@@ -104,8 +104,45 @@ solo Administrador puede eliminar elementos que nadie cite. MCP nunca elimina.
 La lista oculta los retirados al abrirla. Usa **Tipo**, **Revisión** y **Estado**
 para filtrar; **Retirados** muestra solo los retirados y **Todos**, ambos estados.
 Las modificaciones quedan en el registro de auditoría; guardar sin cambios no
-crea una entrada adicional. El núcleo KN1 aún no vincula procesos, documentos,
-personas expertas, formación, competencias ni registros de origen (pendiente KN2).
+crea una entrada adicional.
+
+### Vínculos para conservar y transmitir el conocimiento
+
+En el formulario puedes seleccionar varios registros existentes:
+
+- **Procesos afectados**: los procesos donde se aplica el conocimiento.
+- **Documentos donde se recoge**: los documentos controlados que lo explican.
+  Solo se admiten documentos en uso para un vínculo nuevo (no dados de baja;
+  no se exige que tengan ya una revisión publicada).
+- **Personas expertas**: personas activas que lo poseen, además del responsable.
+  Puedes incluir también al responsable si es una de las personas expertas.
+- **Formación para transmitirlo**: sesiones de **Capacitaciones**.
+- **Requisitos de competencia**: lo que los roles necesitan saber o demostrar.
+
+Mantén pulsado Ctrl (Cmd en macOS) para seleccionar o quitar varias opciones.
+Guardar sustituye la selección de cada grupo; dejarla vacía quita esos vínculos.
+Una persona ya vinculada se conserva aunque después se desactive, y un documento
+ya vinculado se conserva aunque se dé de baja. Se muestran marcados en el formulario.
+Una nueva elección de una persona desactivada o un documento de baja se rechaza.
+
+Para indicar el registro del que nace una lección, elige **como máximo uno**
+entre **Origen: no conformidad**, **Origen: hallazgo de auditoría**, **Origen:
+mejora** y **Origen: acción de revisión por la dirección**. Deja los demás vacíos.
+Para cambiar de tipo de origen, vacía el anterior en el mismo guardado.
+Este vínculo opcional también se admite en un **Conocimiento de la organización**;
+no se pierde si cambias su clasificación. **Origen** sigue siendo texto libre
+independiente. Se registra a mano y no se crea nada automáticamente.
+
+La ficha muestra los vínculos y permite abrir los registros citados. La formación
+abre su PDF; un requisito abre la lista de requisitos de su rol. Un vínculo no
+concede permisos adicionales: un origen restringido o un documento no visible
+no revela sus datos. Los registros citados no se modifican al vincularlos.
+
+Los cambios de selecciones se auditan en el propio conocimiento. Retirarlo
+conserva todos los vínculos y sigue protegiendo los registros citados contra el
+borrado; para eliminar uno de ellos, quita antes el vínculo. Las personas expertas
+citadas tampoco pueden eliminarse: desactívalas. Eliminar un conocimiento sin
+citas entrantes elimina sus vínculos propios, no los registros a los que apuntan.
 
 ## Inicio de sesión y cuenta
 

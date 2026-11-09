@@ -2036,6 +2036,44 @@ class KnowledgeType(enum.Enum):
     leccion = 'Lección aprendida'
 
 
+def _knowledge_association(name: str, target: str) -> db.Table:
+    """One-way citations, indexed in both directions; parents remove links first."""
+    return db.Table(
+        name,
+        db.Column('knowledge_id', db.Integer, nullable=False),
+        db.Column('target_id', db.Integer, nullable=False),
+        db.PrimaryKeyConstraint('knowledge_id', 'target_id', name=f'pk_{name}'),
+        db.ForeignKeyConstraint(
+            ['knowledge_id'], ['knowledge_items.id'],
+            name=f'fk_{name}_knowledge_id', ondelete='RESTRICT', onupdate='RESTRICT'),
+        db.ForeignKeyConstraint(
+            ['target_id'], [target], name=f'fk_{name}_target_id',
+            ondelete='RESTRICT', onupdate='RESTRICT'),
+        db.Index(f'ix_{name}_target_id', 'target_id'),
+    )
+
+
+KNOWLEDGE_ASSOCIATIONS = {
+    'process_ids': _knowledge_association('knowledge_processes', 'procesos_operacion.id_proceso'),
+    'document_ids': _knowledge_association('knowledge_documents', 'documents.id'),
+    'expert_ids': _knowledge_association('knowledge_experts', 'personas.id'),
+    'training_ids': _knowledge_association('knowledge_trainings', 'capacitaciones.id'),
+    'requirement_ids': _knowledge_association('knowledge_requirements', 'competencias_requeridas.id'),
+}
+# Like MEJORA_LINKS: real, typed foreign keys, never a polymorphic unchecked id.
+# The chosen column identifies the origin type; at most one may be set.
+KNOWLEDGE_ORIGINS = {
+    'no_conformidad_id': 'no_conformidades.id',
+    'hallazgo_id': 'hallazgos_auditoria.id',
+    'mejora_id': 'mejoras.id_mejora',
+    'accion_revision_id': 'acciones_revision.id',
+}
+_KNOWLEDGE_ONE_ORIGIN = ' + '.join(
+    f'(CASE WHEN {column} IS NULL THEN 0 ELSE 1 END)'
+    for column in KNOWLEDGE_ORIGINS
+) + ' <= 1'
+
+
 class KnowledgeItem(RecordMetadataMixin, db.Model):
     """Editable organizational knowledge; retirement preserves readable history."""
 
@@ -2044,6 +2082,13 @@ class KnowledgeItem(RecordMetadataMixin, db.Model):
         db.PrimaryKeyConstraint('id', name='pk_knowledge_items'),
         db.CheckConstraint("length(trim(title)) > 0", name='ck_knowledge_items_title'),
         db.CheckConstraint("length(trim(summary)) > 0", name='ck_knowledge_items_summary'),
+        db.CheckConstraint(_KNOWLEDGE_ONE_ORIGIN, name='ck_knowledge_items_one_origin'),
+        *(db.ForeignKeyConstraint(
+            [column], [target], name=f'fk_knowledge_items_{column}',
+            ondelete='RESTRICT', onupdate='RESTRICT')
+          for column, target in KNOWLEDGE_ORIGINS.items()),
+        *(db.Index(f'ix_knowledge_items_{column}', column)
+          for column in KNOWLEDGE_ORIGINS),
     )
     id = db.Column(db.Integer, primary_key=True)
     kind = db.Column(text_enum(KnowledgeType, 'ck_knowledge_items_kind'), nullable=False)
@@ -2054,6 +2099,48 @@ class KnowledgeItem(RecordMetadataMixin, db.Model):
     owner_id.nullable = False
     next_review_date = db.Column(db.Date)
     retired = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    no_conformidad_id = db.Column(db.Integer)
+    hallazgo_id = db.Column(db.Integer)
+    mejora_id = db.Column(db.Integer)
+    accion_revision_id = db.Column(db.Integer)
+
+    # No backrefs: citations must not dirty or audit the cited records.
+    processes = db.relationship('ProcesoOperacion', secondary=KNOWLEDGE_ASSOCIATIONS['process_ids'],
+                                order_by='ProcesoOperacion.id_proceso', lazy='selectin')
+    documents = db.relationship('Document', secondary=KNOWLEDGE_ASSOCIATIONS['document_ids'],
+                               order_by='Document.id', lazy='selectin')
+    experts = db.relationship('Person', secondary=KNOWLEDGE_ASSOCIATIONS['expert_ids'],
+                             order_by='Person.id', lazy='selectin')
+    trainings = db.relationship('Capacitacion', secondary=KNOWLEDGE_ASSOCIATIONS['training_ids'],
+                               order_by='Capacitacion.id', lazy='selectin')
+    requirements = db.relationship('CompetenceRequirement',
+                                   secondary=KNOWLEDGE_ASSOCIATIONS['requirement_ids'],
+                                   order_by='CompetenceRequirement.id', lazy='selectin')
+
+    @property
+    def process_ids(self) -> list[int]:
+        """Affected process ids, ascending."""
+        return sorted(row.id_proceso for row in self.processes)
+
+    @property
+    def document_ids(self) -> list[int]:
+        """Document ids, ascending."""
+        return sorted(row.id for row in self.documents)
+
+    @property
+    def expert_ids(self) -> list[int]:
+        """Expert person ids, ascending."""
+        return sorted(row.id for row in self.experts)
+
+    @property
+    def training_ids(self) -> list[int]:
+        """Training ids, ascending."""
+        return sorted(row.id for row in self.trainings)
+
+    @property
+    def requirement_ids(self) -> list[int]:
+        """Competence requirement ids, ascending."""
+        return sorted(row.id for row in self.requirements)
 
 
 class TipoComprobacionEquipo(enum.Enum):

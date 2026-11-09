@@ -23,5 +23,25 @@
         <dd>{{ item.next_review_date.strftime('%d/%m/%Y') if item.next_review_date else '—' }}</dd>
     </dl>
 </article>
+<article class="card">
+    <h2>Vínculos</h2>
+    <dl>
+        <dt>Procesos afectados</dt>
+        <dd>{% for process in item.processes %}<a href="{{ url_for('proceso.show_process', process_id=process.id_proceso) }}">{{ process.proceso }}</a>{{ ', ' if not loop.last }}{% else %}—{% endfor %}</dd>
+        <dt>Documentos donde se recoge</dt>
+        <dd>{% for document in item.documents %}
+            {% if document.id in visible_documents %}<a href="{{ url_for('document.view_document', document_id=document.id) }}">{{ document.code }} · {{ document.title }}</a>{{ ' (de baja)' if document.withdrawn_at }}{% else %}Documento vinculado{% endif %}{{ ', ' if not loop.last }}
+        {% else %}—{% endfor %}</dd>
+        <dt>Personas expertas</dt>
+        <dd>{% for person in item.experts %}<a href="{{ url_for('people.show_person', person_id=person.id) }}">{{ person.nombre }}</a>{{ ' (desactivada)' if not person.activo }}{{ ', ' if not loop.last }}{% else %}—{% endfor %}</dd>
+        <dt>Formación para transmitirlo</dt>
+        <dd>{% for training in item.trainings %}<a href="{{ url_for('capacitacion.exportar_pdf', id=training.id) }}">{{ training.tema }} ({{ training.fecha.strftime('%d/%m/%Y') }})</a>{{ ', ' if not loop.last }}{% else %}—{% endfor %}</dd>
+        <dt>Requisitos de competencia</dt>
+        <dd>{% for requirement in item.requirements %}<a href="{{ url_for('competence.list_requirements', rol_id=requirement.rol_id) }}">{{ requirement.descripcion }}</a>{{ ', ' if not loop.last }}{% else %}—{% endfor %}</dd>
+        <dt>Registro de origen</dt>
+        <dd>{% if origin and origin.url %}<a href="{{ origin.url }}">{{ origin.label }}</a>{% elif origin %}{{ origin.label }}{% else %}—{% endif %}</dd>
+    </dl>
+    <p>Los vínculos no cambian los registros citados ni sus permisos de consulta.</p>
+</article>
 <a class="btn" href="{{ url_for('knowledge.list_items') }}">Volver al registro</a>
 {% endblock %}

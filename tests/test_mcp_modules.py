@@ -97,10 +97,12 @@ class RegistryTestCase(unittest.TestCase):
     def test_declared_fields_match_what_each_service_requires(self) -> None:
         from app.services import (
             audit_findings, audit_programmes, audits, management_reviews, nonconformities,
-            people, process_operations, providers, qms_changes, qms_scope,
+            knowledge, people, process_operations, providers, qms_changes, qms_scope,
         )
 
         bespoke = {
+            'knowledge': (knowledge.WRITABLE,
+                          frozenset(f.name for f in knowledge.SPEC.fields if f.required)),
             "personas": (people.WRITABLE_FIELDS, people.REQUIRED_ON_CREATE),
             "no_conformidades": (nonconformities.WRITABLE_FIELDS,
                                  frozenset({"descripcion", "fecha_detectada"})),
