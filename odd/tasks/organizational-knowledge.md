@@ -14,8 +14,8 @@ Runner: `/home/dcm/workspace/iso9001-worktrees/fixes-2026/venv/bin/python -m uni
 - **S5** — Selected «Como equipos — recomendado»: «Todos los roles leen. Administradores y auditores crean y editan. Solo un administrador puede borrar, y solo elementos que nadie cita. MCP sigue las mismas reglas y nunca borra.»
 
 ## Tasks
-- **KN1** [S1–S3, S5] delegated (context backstop) — done (commits 29a4e07, see L7; risk items 1, 2 independently verified) — Core knowledge register: model with type (knowledge/lesson), title, summary, source text, owner Person (active, RESTRICT), optional next review date, retired flag; migration from `d7f9a1b3c5e7`; service (crud.Spec/Register), policy Resource, web screens with type/overdue/retired filters, nav entry, MCP module, docs, tests.
-- **KN2** [S4] delegated (context backstop) — done (commit ac956be + verifier probes; risk items 1, 2 independently verified, L10) — Links: processes, controlled documents, expert people, training records, competence requirements (many-to-many), and one optional typed lesson origin (nonconformity, audit finding, improvement, review action); audited association snapshots; screens, MCP, docs, tests. Depends on KN1.
+- **KN1** [S1–S3, S5] delegated (context backstop) — done (commits 29a4e07, 87d262d; PR #182 merged 8c2e55e; see L7; risk items 1, 2 independently verified) — Core knowledge register: model with type (knowledge/lesson), title, summary, source text, owner Person (active, RESTRICT), optional next review date, retired flag; migration from `d7f9a1b3c5e7`; service (crud.Spec/Register), policy Resource, web screens with type/overdue/retired filters, nav entry, MCP module, docs, tests.
+- **KN2** [S4] delegated (context backstop) — done (commits ac956be, f03c6ec; PR #183 merged 4467bc4; risk items 1, 2 independently verified, L10) — Links: processes, controlled documents, expert people, training records, competence requirements (many-to-many), and one optional typed lesson origin (nonconformity, audit finding, improvement, review action); audited association snapshots; screens, MCP, docs, tests. Depends on KN1.
 
 ## Log
 - **L1** Original user request: «si» to «¿Empezamos con el siguiente módulo de la Fase 3, conocimiento (7.1.6)?».
@@ -28,3 +28,17 @@ Runner: `/home/dcm/workspace/iso9001-worktrees/fixes-2026/venv/bin/python -m uni
 - **L8** Slice 1 published: user selected «Publicar y fusionar si sale verde» (native review explicitly not chosen for this candidate). PR #182 head 87d262d; CI pull_request 42533862362 and push 42533857849 both success (PostgreSQL migration executed); merged as 8c2e55e. Slice 2 (KN2) starts on `feat/knowledge-links` from 8c2e55e. Not deployed.
 - **L9** KN2 writer result (S4 covered; S3/S5 preserved): migration `f9b1d3e5a7c9` (down `e8a0c2d4f6b8`); five many-to-many links (processes, documents, experts, training, competence requirements) and one optional typed origin (nonconformity, audit finding, improvement, review action) following the improvement typed-FK pattern with a CHECK of at most one. Assumption: origin allowed for both types. All targets RESTRICT; experts added to people REFERENCES; new links need active people/current documents, existing ones retained. Writer checks: knowledge 30 OK/1 skip, person 45 OK/5 skip, MCP 99 OK, full 1,932 OK (111 skips). Parent spot check: allowed surfaces only; knowledge 30 OK/1 skip. KN1 tests test_knowledge_constraints/test_knowledge_independent adjusted to compare the schema at their own revision.
 - **L10** Independent verifier: S3, S4, S5 met, no blockers. Rendered-form no-op saves keep all links/origin without audit rows; rejected writes leave DB hashes unchanged; protected documents/origins not expanded; cited-target deletion refused with user-facing messages (documents have no delete route; FK tested directly); migration additive with existing rows preserved (SQLite). KN1 test edits only scope schema comparisons to their revision. Advisory (baseline, not change-caused): tests/test_ui_foundation.py needs git metadata and errors in a .git-free archive. Probes committed as tests/test_knowledge_links_independent.py (10 OK); knowledge tests 40 OK/1 PG skip. PostgreSQL execution pending CI.
+- **L11** Slice 2 published: user selected «Publicar y fusionar si sale verde» (native review explicitly not chosen). PR #183 head f03c6ec; CI pull_request 42540750971 and push 42540746466 both success (PostgreSQL migrations executed); merged as 4467bc4. 7.1.6 complete.
+
+## Production deployment (2026-11-09)
+
+`main@4467bc4` (PRs #182 and #183) runs on `vulcano`. Authorized over SSH to `192.168.101.46` as `dcm`, no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `7fe0a9f`, clean, migration `d7f9a1b3c5e7`; four services active |
+| Backups | `~/work/backups/calidad-2026-11-09-pre-4467bc4.dump` (579 entries, via `docker exec iso9001-db pg_dump`) and `iso9001-code-2026-11-09-pre-4467bc4.tar.gz`, mode 600 |
+| Code | Incremental git bundle `7fe0a9f..main`, fast-forward to `4467bc4`; no dependency changes |
+| Database | `flask db upgrade` `d7f9a1b3c5e7` → `e8a0c2d4f6b8` (knowledge register) → `f9b1d3e5a7c9` (knowledge links); `flask db check` clean |
+| Restart (user, with sudo) | All four services, 2026-11-09 11:30 CET |
+| Smoke tests | Services active, no journal errors; `/login` 200; `/equipos/`, `/conocimientos/` and `/conocimientos/nuevo` redirect to login; `/mcp` 401 Bearer |
