@@ -30,7 +30,7 @@ from ..models import (
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
-    reclamaciones, read_confirmations, equipment, knowledge, communication,
+    reclamaciones, read_confirmations, equipment, knowledge, communication, communication_log,
     corrective_actions, document_revisions, documents, improvements, management_reviews,
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
@@ -589,7 +589,9 @@ def _equipment_extras(item):
 
 def _communication_extras(item: Any) -> dict[str, Any]:
     """Expose audience sets and overdue state without recording an occurrence."""
+    occurrence = communication_log.latest(object_session(item), item.id)
     return {'overdue': communication.is_overdue(item, today=local_today()),
+            'latest_date': None if occurrence is None else occurrence.date,
             **communication.link_ids(item)}
 
 
@@ -795,6 +797,19 @@ _MODULES = (
         _f('overdue', 'boolean', note='Unretired with next_date strictly before today.'),
         _f('retired', 'boolean', note='Defaults to false; true lists retired plans only.')),
         extras=_communication_extras),
+    Module('communication_log', 'Immutable communication evidence', Resource.COMMUNICATION,
+           _DatedWrites(communication_log.items), (
+        _f('plan_id', 'integer', True, note='Communication plan (communication), not retired.'),
+        _f('date', 'date', True, note='Not future or before the latest occurrence; same-day allowed.'),
+        _f('communicator_id', 'integer', True, note='Actual communicator (personas), active when selected.'),
+        _f('channel', 'enum', True, members=CommunicationChannel),
+        _f('channel_detail'), _f('audience_text'), _f('summary'),
+        _f('evidence', required=True, note='Minutes, email reference or attendance list; not a file upload.'),
+        _f('next_date', 'date', True, note=(
+            'New plan next date, strictly after date; updated and audited in the same transaction. '
+            'Never calculated. Immutable evidence: updates and deletion are refused.')),
+    ), (_f('plan_id', 'integer'), _f('communicator_id', 'integer'),
+        _f('date_from', 'date'), _f('date_to', 'date'))),
     Module('knowledge', 'Organizational knowledge and lessons', Resource.KNOWLEDGE,
            _DatedLists(knowledge.items), (
         _f('kind', 'enum', True, members=KnowledgeType),

@@ -1,0 +1,18 @@
+{% for row in history %}
+<article class="card">
+    <h3>{{ row.date.strftime('%d/%m/%Y') }} · {{ names.get(row.communicator_id, '—') }}</h3>
+    {% if titles is defined %}
+    <p><a href="{{ url_for('communication.show_item', item_id=row.plan_id) }}">{{ titles.get(row.plan_id, '—') }}</a></p>
+    {% endif %}
+    <dl>
+        <dt>Canal utilizado</dt><dd>{{ row.channel.value }}</dd>
+        <dt>Detalle del canal utilizado</dt><dd>{{ row.channel_detail or '—' }}</dd>
+        <dt>Destinatarios de la comunicación</dt><dd>{{ row.audience_text or '—' }}</dd>
+        <dt>Resumen de lo comunicado</dt><dd class="document-text">{{ row.summary or '—' }}</dd>
+        <dt>Evidencia o referencia</dt><dd class="document-text">{{ row.evidence }}</dd>
+        <dt>Nueva próxima fecha indicada</dt><dd>{{ row.next_date.strftime('%d/%m/%Y') }}</dd>
+    </dl>
+</article>
+{% else %}
+<p>No hay comunicaciones registradas que coincidan.</p>
+{% endfor %}

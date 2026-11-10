@@ -34,7 +34,7 @@ nunca puede eliminar.
 
   | Herramienta | Finalidad |
   |---|---|
-  | `qms_modules` | Los 37 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
+  | `qms_modules` | Los 38 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
   | `qms_list` | Una página acotada de un módulo, con los filtros que enumera `qms_modules` |
   | `qms_get` | Un registro por su `id` |
   | `qms_create` | Crea un registro |
@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 37 módulos: `communication`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
+`qms_modules` enumera 38 módulos: `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -72,11 +72,11 @@ nunca puede eliminar.
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
 
-Plan de comunicación (7.4, CM1):
+Plan y registro de comunicación (7.4):
 
 - `communication` registra el plan, no comunicaciones realizadas. La aplicación
-  no envía correos ni programa tareas. El registro fechado con evidencia queda
-  pendiente (CM2); tener el plan no da la comunicación por hecha.
+  no envía correos ni programa tareas. `communication_log` registra cada
+  comunicación realizada con evidencia; tener el plan no la da por hecha.
 - Obligatorios: `title` (asunto, hasta 200 caracteres), `content` (contenido o
   propósito), `scope` (`interna`, `externa`, `ambas`), `channel` (`correo`,
   `reunion`, `telefono`, `tablon_intranet`, `web`, `otro`), `owner_id` (persona
@@ -103,9 +103,38 @@ Plan de comunicación (7.4, CM1):
   pero los filtros y escrituras usan los nombres anteriores. Los registros
   añaden las cuatro listas de ids ordenadas y `overdue`: no retirada y
   `next_date` anterior a hoy (`APP_TIMEZONE`). La fecha vale durante todo ese
-  día y nunca se recalcula automáticamente.
+  día y nunca se recalcula automáticamente. `latest_date` devuelve la fecha
+  de la última comunicación registrada, o `null` si no hay ninguna.
 
-Ejemplo de `qms_create` (la persona 1 debe existir y estar activa):
+`communication_log` admite `qms_create`, `qms_get` y `qms_list`; `qms_update`
+se rechaza por inmutabilidad, incluso sin cambios, igual que las comprobaciones
+de equipos. No hay herramienta de eliminación.
+
+- Obligatorios: `plan_id` (entrada existente de `communication`, no retirada),
+  `date` (YYYY-MM-DD, nunca futura ni anterior a la última registrada de esa
+  entrada; se admite el mismo día), `communicator_id` (persona existente y
+  activa de `personas`), `channel` (el mismo enumerado del plan), `evidence`
+  (texto no vacío: acta, correo o lista de asistencia) y `next_date` (YYYY-MM-DD,
+  estrictamente posterior a `date`).
+- Opcionales: `channel_detail`, `audience_text` (destinatarios reales, texto
+  libre) y `summary`. MCP no copia valores del plan: indica los datos reales.
+- `next_date` actualiza la próxima fecha del plan y queda también en la
+  evidencia. El cambio del plan y la creación se auditan y confirman juntos;
+  no se recalcula por frecuencia. Un rechazo no cambia datos ni auditoría.
+- Todos los roles leen con ámbito `read`; Administrador y Auditor registran
+  con ámbito `write`. Filtros combinables: `plan_id`, `communicator_id`,
+  `date_from` y `date_to` (ambas fechas incluidas). Orden: fecha e id descendentes.
+- Una entrada retirada conserva su historial; no admite nuevos registros.
+  Una entrada con registros y las personas citadas no se pueden eliminar.
+  No hay edición ni borrado de evidencia: registra una nueva para rectificarla.
+
+Ejemplo de `qms_create` del registro (el plan 1 y la persona activa 1 deben existir):
+
+```json
+{"module": "communication_log", "data": {"plan_id": 1, "date": "2020-01-02", "communicator_id": 1, "channel": "reunion", "audience_text": "Personal del taller", "evidence": "Acta M-1", "next_date": "2020-07-19"}}
+```
+
+Ejemplo de `qms_create` del plan (la persona 1 debe existir y estar activa):
 
 ```json
 {"module": "communication", "data": {"title": "Resultados de calidad", "content": "Explicar los resultados del mes", "scope": "interna", "channel": "reunion", "owner_id": 1, "frequency": "Mensual", "next_date": "2026-12-01", "audience_text": "Todo el personal"}}

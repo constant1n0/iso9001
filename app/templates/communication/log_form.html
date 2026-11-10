@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% block title %}Registrar comunicación{% endblock %}
+{% block content %}
+{{ page_header('7.4 · ' ~ item.title, 'Registrar comunicación') }}
+<p>La aplicación no envía nada. Registra la fecha, quién comunicó y el canal y los destinatarios reales.
+    Los datos del plan son solo una sugerencia; elige una persona activa.</p>
+<p>Indica una evidencia o referencia obligatoria (acta, correo o lista de asistencia) y la nueva próxima fecha,
+    posterior a la comunicación. No se calcula automáticamente. No se adjuntan ficheros.</p>
+<p>La fecha no puede ser futura ni anterior a la última comunicación registrada; se admite el mismo día.
+    El registro es inmutable: no se modifica ni se elimina. No se admiten registros en entradas retiradas.</p>
+{{ form_card(form, url_for('communication.show_item', item_id=item.id), 'Registrar comunicación') }}
+{% endblock %}

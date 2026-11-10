@@ -1,8 +1,8 @@
 """Communication plan register (ISO 9001 7.4, CM1); never sends anything.
 
 All roles read, administrators and auditors maintain and retire entries, and only
-administrators outside MCP delete uncited entries. CM2 will register incoming
-citation columns in REFERENCES. Services flush but never commit.
+administrators outside MCP delete uncited entries. Occurrences protect their
+plan through REFERENCES. Services flush but never commit.
 
 Assumption: at least one linked audience or nonblank audience description is
 required. Each supplied id list replaces its set. New people must be active and
@@ -20,7 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
-    Cliente, CommunicationChannel, CommunicationPlan, CommunicationScope,
+    Cliente, CommunicationChannel, CommunicationLog, CommunicationPlan, CommunicationScope,
     EstadoProveedor, ParteInteresada, Person, Proveedor,
 )
 from . import audit, crud, fields, people, policy
@@ -30,7 +30,7 @@ from .errors import Conflict, ValidationError
 from .policy import Action, Resource
 from .quality_objectives import Register
 
-REFERENCES: tuple[Any, ...] = ()
+REFERENCES: tuple[Any, ...] = (CommunicationLog.plan_id,)
 LINKS = {
     'stakeholder_ids': ('stakeholders', ParteInteresada, ParteInteresada.id_interesado),
     'customer_ids': ('customers', Cliente, Cliente.id),
@@ -204,7 +204,7 @@ def _flush(session: Session) -> None:
 
 
 def _delete(session: Session, actor: Actor, record_id: int) -> None:
-    """Delete uncited plans only; CM2 supplies the inbound citation columns."""
+    """Delete uncited plans only; recorded occurrences must remain readable."""
     policy.require(actor, Action.DELETE, Resource.COMMUNICATION)
     found = crud.get(SPEC, session, actor, record_id)
     if any(session.scalar(select(exists().where(column == found.id))) for column in REFERENCES):
