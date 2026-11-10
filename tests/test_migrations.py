@@ -33,7 +33,7 @@ LATER_AUDITED_TABLES = frozenset(
      "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades",
      "acciones_riesgo", "proveedores", "evaluaciones_proveedor", "cuestiones_contexto",
      "equipos_medicion", "comprobaciones_equipo", "alcances_sgc", "clientes", "reclamaciones", "cambios_sgc", "tareas_cambio",
-     "confirmaciones_lectura", "knowledge_items"}
+     "confirmaciones_lectura", "knowledge_items", "communication_plan"}
 )
 
 
@@ -201,6 +201,28 @@ class MigrationsTestCase(unittest.TestCase):
             downgrade(directory=MIGRATIONS_DIR, revision='e8a0c2d4f6b8')
             with db.engine.connect() as connection:
                 self.assertEqual(before, connection.execute(text('SELECT * FROM knowledge_items')).all())
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+    def test_communication_upgrade_downgrade_preserves_existing_data(self) -> None:
+        from app.models import COMMUNICATION_ASSOCIATIONS
+
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision='f9b1d3e5a7c9')
+            self._insert_legacy_user_and_nc(estado='abierta')
+            before = self._rows('SELECT * FROM no_conformidades')
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            for table in COMMUNICATION_ASSOCIATIONS.values():
+                self.assertIn(table.name, inspector.get_table_names())
+                for key in inspector.get_foreign_keys(table.name):
+                    self.assertEqual('RESTRICT', key['options']['ondelete'])
+                    self.assertEqual('RESTRICT', key['options']['onupdate'])
+            self.assertEqual(before, self._rows('SELECT * FROM no_conformidades'))
+            self.assertEqual([], self._schema_differences())
+            downgrade(directory=MIGRATIONS_DIR, revision='f9b1d3e5a7c9')
+            self.assertNotIn('communication_plan', inspect(db.engine).get_table_names())
+            self.assertEqual(before, self._rows('SELECT * FROM no_conformidades'))
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 

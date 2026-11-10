@@ -11,7 +11,7 @@ from mcp_support import ADMIN, AUDITOR, OPERATIVO, McpDbCase, mcp_actor
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUGS = {
-    "knowledge",
+    "communication", "knowledge",
     "equipos_medicion", "comprobaciones_equipo",
     "no_conformidades", "auditorias", "documentos", "capacitaciones",
     "satisfaccion_clientes", "partes_interesadas", "mejoras",
@@ -63,7 +63,7 @@ class LayoutTestCase(unittest.TestCase):
 
 
 class RegistryTestCase(unittest.TestCase):
-    def test_registry_holds_the_thirty_six_modules(self) -> None:
+    def test_registry_holds_the_thirty_seven_modules(self) -> None:
         self.assertEqual(SLUGS, set(registry().MODULES))
 
     def test_each_module_maps_to_its_own_policy_resource(self) -> None:
@@ -97,10 +97,12 @@ class RegistryTestCase(unittest.TestCase):
     def test_declared_fields_match_what_each_service_requires(self) -> None:
         from app.services import (
             audit_findings, audit_programmes, audits, management_reviews, nonconformities,
-            knowledge, people, process_operations, providers, qms_changes, qms_scope,
+            communication, knowledge, people, process_operations, providers, qms_changes, qms_scope,
         )
 
         bespoke = {
+            'communication': (communication.WRITABLE,
+                              frozenset(f.name for f in communication.SPEC.fields if f.required)),
             'knowledge': (knowledge.WRITABLE,
                           frozenset(f.name for f in knowledge.SPEC.fields if f.required)),
             "personas": (people.WRITABLE_FIELDS, people.REQUIRED_ON_CREATE),

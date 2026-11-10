@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form %}
+{% block title %}{{ item.title }}{% endblock %}
+{% block content %}
+{% call page_header('7.4 · Plan de comunicación', item.title) %}
+    {% if can('update', 'communication') %}
+    <a class="btn" href="{{ url_for('communication.edit_item', item_id=item.id) }}">Editar comunicación planificada</a>
+    {% endif %}
+    {% if can('delete', 'communication') %}
+    {{ delete_form(url_for('communication.delete_item', item_id=item.id), '¿Eliminar la entrada del plan? Si ya no se usa, retírala en su lugar.') }}
+    {% endif %}
+{% endcall %}
+<p>El plan no acredita que la comunicación se haya realizado. La aplicación no envía nada.</p>
+<article class="card">
+    <h2>{{ 'Retirada' if item.retired else ('Vencida' if overdue else 'En uso') }}</h2>
+    <dl>
+        <dt>Contenido o propósito</dt><dd class="document-text">{{ item.content }}</dd>
+        <dt>Ámbito</dt><dd>{{ item.scope.value }}</dd>
+        <dt>Canal</dt><dd>{{ item.channel.value }}</dd>
+        <dt>Detalle del canal</dt><dd>{{ item.channel_detail or '—' }}</dd>
+        <dt>Quién comunica</dt><dd>{{ owners.get(item.owner_id, '—') }}</dd>
+        <dt>Frecuencia o desencadenante</dt><dd>{{ item.frequency }}</dd>
+        <dt>Próxima fecha</dt><dd>{{ item.next_date.strftime('%d/%m/%Y') }}</dd>
+    </dl>
+</article>
+<article class="card">
+    <h2>Destinatarios</h2>
+    <dl>
+        <dt>Descripción de destinatarios</dt><dd>{{ item.audience_text or '—' }}</dd>
+        <dt>Partes interesadas</dt>
+        <dd>{% for party in item.stakeholders %}<a href="{{ url_for('parte_interesada.ver_parte_interesada', id=party.id_interesado) }}">{{ party.nombre }}</a>{{ ', ' if not loop.last }}{% else %}—{% endfor %}</dd>
+        <dt>Clientes</dt>
+        <dd>{% for customer in item.customers %}<a href="{{ url_for('cliente.show_cliente', customer_id=customer.id) }}">{{ customer.nombre }}</a>{{ ', ' if not loop.last }}{% else %}—{% endfor %}</dd>
+        <dt>Proveedores</dt>
+        <dd>{% for provider in item.providers %}<a href="{{ url_for('proveedor.show_provider', provider_id=provider.id) }}">{{ provider.nombre }}</a>{{ ' (bloqueado)' if provider.estado.name == 'bloqueado' }}{{ ', ' if not loop.last }}{% else %}—{% endfor %}</dd>
+        <dt>Personas</dt>
+        <dd>{% for person in item.people %}<a href="{{ url_for('people.show_person', person_id=person.id) }}">{{ person.nombre }}</a>{{ ' (desactivada)' if not person.activo }}{{ ', ' if not loop.last }}{% else %}—{% endfor %}</dd>
+    </dl>
+</article>
+<a class="btn" href="{{ url_for('communication.list_items') }}">Volver al plan</a>
+{% endblock %}

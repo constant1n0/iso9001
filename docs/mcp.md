@@ -34,7 +34,7 @@ nunca puede eliminar.
 
   | Herramienta | Finalidad |
   |---|---|
-  | `qms_modules` | Los 36 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
+  | `qms_modules` | Los 37 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
   | `qms_list` | Una página acotada de un módulo, con los filtros que enumera `qms_modules` |
   | `qms_get` | Un registro por su `id` |
   | `qms_create` | Crea un registro |
@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 36 módulos: `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
+`qms_modules` enumera 37 módulos: `communication`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -71,6 +71,45 @@ nunca puede eliminar.
 `cambios_sgc`, `tareas_cambio`, `clientes`, `reclamaciones` y `confirmaciones_lectura`. Cada campo tiene un `type`, un indicador
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
+
+Plan de comunicación (7.4, CM1):
+
+- `communication` registra el plan, no comunicaciones realizadas. La aplicación
+  no envía correos ni programa tareas. El registro fechado con evidencia queda
+  pendiente (CM2); tener el plan no da la comunicación por hecha.
+- Obligatorios: `title` (asunto, hasta 200 caracteres), `content` (contenido o
+  propósito), `scope` (`interna`, `externa`, `ambas`), `channel` (`correo`,
+  `reunion`, `telefono`, `tablon_intranet`, `web`, `otro`), `owner_id` (persona
+  de `personas`, activa al elegirla o cambiarla), `frequency` (frecuencia o
+  desencadenante en texto) y `next_date` (YYYY-MM-DD).
+- Opcionales: `channel_detail`, `audience_text`, `retired` (booleano, falso por
+  defecto) y las listas de enteros `stakeholder_ids` (`partes_interesadas`),
+  `customer_ids` (`clientes`), `provider_ids` (`proveedores`), `person_ids`
+  (`personas`). Debe quedar al menos un vínculo o `audience_text` no vacío.
+  Cada lista sustituye su conjunto; `[]` lo vacía, omitirla lo conserva,
+  duplicados se ignoran y `null`, ids desconocidos o no enteros se rechazan.
+- Nuevas personas deben estar activas y nuevos proveedores no bloqueados.
+  Los vínculos existentes y el responsable se conservan aunque cambie su estado.
+  Partes interesadas y clientes no tienen estado activo. Los destinatarios y el
+  responsable citados están protegidos por claves foráneas RESTRICT; retirarlo
+  conserva esa protección. Las selecciones se auditan en el plan.
+- Todos los roles leen con ámbito `read`; Administrador y Auditor crean y
+  actualizan con ámbito `write`. Una actualización parcial valida el resultado
+  completo. Guardar sin cambios no audita; un rechazo no modifica nada. MCP
+  nunca elimina. Retira una entrada con `{"retired": true}`.
+- Filtros: `scope`, `channel`, `overdue` y `retired`. Las listas ocultan las
+  retiradas por defecto; `{"retired": true}` muestra solo retiradas. Los
+  enumerados se devuelven como etiquetas en español (por ejemplo `"reunión"`),
+  pero los filtros y escrituras usan los nombres anteriores. Los registros
+  añaden las cuatro listas de ids ordenadas y `overdue`: no retirada y
+  `next_date` anterior a hoy (`APP_TIMEZONE`). La fecha vale durante todo ese
+  día y nunca se recalcula automáticamente.
+
+Ejemplo de `qms_create` (la persona 1 debe existir y estar activa):
+
+```json
+{"module": "communication", "data": {"title": "Resultados de calidad", "content": "Explicar los resultados del mes", "scope": "interna", "channel": "reunion", "owner_id": 1, "frequency": "Mensual", "next_date": "2026-12-01", "audience_text": "Todo el personal"}}
+```
 
 Conocimientos y lecciones (7.1.6):
 

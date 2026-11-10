@@ -49,6 +49,10 @@ SEEDS = {
     "procesos": {"proceso": "Compras"},
     "indicadores_auditoria": {"area_auditoria": "Calidad"},
     "personas": {"nombre": "Ana Pérez"},
+    "communication": {"title": "Quality results", "content": "Explain performance",
+                      "scope": "ambas", "channel": "web", "owner_id": 1,
+                      "frequency": "Every month", "next_date": "2026-12-01",
+                      "audience_text": "All staff"},
     "knowledge": {"kind": "conocimiento", "title": "Tool set-up",
                   "summary": "Keep the reference sample.", "source": "Workshop", "owner_id": 1},
     # Documents are not written through MCP; ``seed`` creates them through the service,
@@ -163,7 +167,7 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
         if (slug in ("documentos", "objetivos_calidad", "acciones_revision", "riesgos",
-                     "oportunidades", "cambios_sgc", "confirmaciones_lectura", "knowledge") and db.session.get(Person, 1) is None):
+                     "oportunidades", "cambios_sgc", "confirmaciones_lectura", "knowledge", "communication") and db.session.get(Person, 1) is None):
             self.seed("personas")
         if slug == "tareas_cambio" and db.session.get(CambioSGC, 1) is None:
             self.seed("cambios_sgc")

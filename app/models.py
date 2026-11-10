@@ -2143,6 +2143,112 @@ class KnowledgeItem(RecordMetadataMixin, db.Model):
         return sorted(row.id for row in self.requirements)
 
 
+class CommunicationScope(enum.Enum):
+    """Internal, external or shared communication audiences (ISO 9001 7.4)."""
+
+    interna = 'Interna'
+    externa = 'Externa'
+    ambas = 'Ambas'
+
+
+class CommunicationChannel(enum.Enum):
+    """The communication plan vocabulary, distinct from customer contact channels."""
+
+    correo = 'correo'
+    reunion = 'reunión'
+    telefono = 'teléfono'
+    tablon_intranet = 'tablón o intranet'
+    web = 'web'
+    otro = 'otro'
+
+
+def _communication_association(name: str, target: str) -> db.Table:
+    """One-way audience citations with indexed, restrictive foreign keys."""
+    return db.Table(
+        name,
+        db.Column('communication_id', db.Integer, nullable=False),
+        db.Column('target_id', db.Integer, nullable=False),
+        db.PrimaryKeyConstraint('communication_id', 'target_id', name=f'pk_{name}'),
+        db.ForeignKeyConstraint(
+            ['communication_id'], ['communication_plan.id'],
+            name=f'fk_{name}_communication_id', ondelete='RESTRICT', onupdate='RESTRICT'),
+        db.ForeignKeyConstraint(
+            ['target_id'], [target], name=f'fk_{name}_target_id',
+            ondelete='RESTRICT', onupdate='RESTRICT'),
+        db.Index(f'ix_{name}_target_id', 'target_id'),
+    )
+
+
+COMMUNICATION_ASSOCIATIONS = {
+    'stakeholder_ids': _communication_association(
+        'communication_stakeholders', 'partes_interesadas.id_interesado'),
+    'customer_ids': _communication_association('communication_customers', 'clientes.id'),
+    'provider_ids': _communication_association('communication_providers', 'proveedores.id'),
+    'person_ids': _communication_association('communication_people', 'personas.id'),
+}
+
+
+class CommunicationPlan(RecordMetadataMixin, db.Model):
+    """What, when, to whom, how and who communicates; not evidence of delivery."""
+
+    __tablename__ = 'communication_plan'
+    __table_args__ = (
+        db.PrimaryKeyConstraint('id', name='pk_communication_plan'),
+        *(db.CheckConstraint(f'length(trim({column})) > 0',
+                             name=f'ck_communication_plan_{column}')
+          for column in ('title', 'content', 'frequency')),
+        db.ForeignKeyConstraint(
+            ['owner_id'], ['personas.id'], name='fk_communication_plan_owner_id',
+            ondelete='RESTRICT', onupdate='RESTRICT'),
+        db.Index('ix_communication_plan_owner_id', 'owner_id'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    scope = db.Column(text_enum(CommunicationScope, 'ck_communication_plan_scope'), nullable=False)
+    channel = db.Column(text_enum(CommunicationChannel, 'ck_communication_plan_channel'), nullable=False)
+    channel_detail = db.Column(db.Text)
+    audience_text = db.Column(db.Text)
+    owner_id = db.Column(db.Integer, nullable=False)
+    frequency = db.Column(db.Text, nullable=False)
+    next_date = db.Column(db.Date, nullable=False)
+    retired = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+
+    # No backrefs: changing the audience must never dirty a cited record.
+    stakeholders = db.relationship(
+        'ParteInteresada', secondary=COMMUNICATION_ASSOCIATIONS['stakeholder_ids'],
+        order_by='ParteInteresada.id_interesado', lazy='selectin')
+    customers = db.relationship(
+        'Cliente', secondary=COMMUNICATION_ASSOCIATIONS['customer_ids'],
+        order_by='Cliente.id', lazy='selectin')
+    providers = db.relationship(
+        'Proveedor', secondary=COMMUNICATION_ASSOCIATIONS['provider_ids'],
+        order_by='Proveedor.id', lazy='selectin')
+    people = db.relationship(
+        'Person', secondary=COMMUNICATION_ASSOCIATIONS['person_ids'],
+        order_by='Person.id', lazy='selectin')
+
+    @property
+    def stakeholder_ids(self) -> list[int]:
+        """Interested party audience ids, ascending."""
+        return sorted(row.id_interesado for row in self.stakeholders)
+
+    @property
+    def customer_ids(self) -> list[int]:
+        """Customer audience ids, ascending."""
+        return sorted(row.id for row in self.customers)
+
+    @property
+    def provider_ids(self) -> list[int]:
+        """Provider audience ids, ascending."""
+        return sorted(row.id for row in self.providers)
+
+    @property
+    def person_ids(self) -> list[int]:
+        """Person audience ids, ascending."""
+        return sorted(row.id for row in self.people)
+
+
 class TipoComprobacionEquipo(enum.Enum):
     calibracion = 'Calibración'
     verificacion = 'Verificación'

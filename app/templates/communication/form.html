@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+{{ page_header('7.4 · Plan de comunicación', title) }}
+<p>Registra qué se comunica y su propósito, cuándo, a quién, cómo y quién comunica.
+    Indica al menos un destinatario enlazado o una descripción libre. Puedes combinar ambos.</p>
+<p>Elige personas activas y proveedores no bloqueados para los nuevos vínculos.
+    Los vínculos existentes se conservan aunque cambie su estado.
+    Mantén pulsado Ctrl (o Cmd) para seleccionar o quitar varias opciones.</p>
+<p>La próxima fecha es obligatoria y se considera vencida desde el día siguiente.
+    No se recalcula automáticamente. Retira las entradas que ya no uses para conservarlas.
+    Tener un plan no da la comunicación por hecha; la aplicación no envía nada.</p>
+{{ form_card(form, url_for('communication.list_items'), 'Guardar') }}
+{% endblock %}

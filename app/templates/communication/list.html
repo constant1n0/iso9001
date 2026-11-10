@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% block title %}Plan de comunicación{% endblock %}
+{% block content %}
+{% call page_header('7.4 · Comunicación', 'Plan de comunicación') %}
+    {% if can('create', 'communication') %}
+    <a class="btn btn--primary" href="{{ url_for('communication.new_item') }}">Nueva comunicación planificada</a>
+    {% endif %}
+{% endcall %}
+<p>El plan no acredita que la comunicación se haya realizado. La aplicación no envía nada.</p>
+<form method="get">
+    {% for name, label, values, selected in [('scope', 'Ámbito', scopes, scope), ('channel', 'Canal', channels, channel)] %}
+    <label for="{{ name }}">{{ label }}</label>
+    <select id="{{ name }}" name="{{ name }}">
+        <option value="">Todos</option>
+        {% for value in values %}
+        <option value="{{ value.name }}" {% if selected == value.name %}selected{% endif %}>{{ value.value }}</option>
+        {% endfor %}
+    </select>
+    {% endfor %}
+    <label for="overdue">Vencimiento</label>
+    <select id="overdue" name="overdue">
+        <option value="">Todos</option>
+        <option value="1" {% if overdue == '1' %}selected{% endif %}>Vencida</option>
+        <option value="0" {% if overdue == '0' %}selected{% endif %}>No vencida</option>
+    </select>
+    <label for="retired">Estado</label>
+    <select id="retired" name="retired">
+        <option value="0" {% if retired == '0' %}selected{% endif %}>En uso</option>
+        <option value="1" {% if retired == '1' %}selected{% endif %}>Retiradas</option>
+        <option value="" {% if retired == '' %}selected{% endif %}>Todas</option>
+    </select>
+    <button class="btn" type="submit">Filtrar</button>
+</form>
+{% if items %}
+<div class="table-wrap">
+    <table>
+        <thead><tr><th>Asunto</th><th>Ámbito</th><th>Canal</th><th>Próxima fecha</th><th>Estado</th></tr></thead>
+        <tbody>
+        {% for item in items %}
+        <tr>
+            <td><a href="{{ url_for('communication.show_item', item_id=item.id) }}">{{ item.title }}</a></td>
+            <td>{{ item.scope.value }}</td>
+            <td>{{ item.channel.value }}</td>
+            <td>{{ item.next_date.strftime('%d/%m/%Y') }}</td>
+            <td>{{ 'Retirada' if item.retired else ('Vencida' if is_overdue(item, today=today) else 'En uso') }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+{{ empty_state('No hay comunicaciones planificadas que coincidan.') }}
+{% endif %}
+<nav class="pagination" aria-label="Páginas del plan de comunicación">
+    {% if page > 1 %}
+    <a href="{{ url_for('communication.list_items', scope=scope, channel=channel, overdue=overdue, retired=retired, page=page-1, per_page=per_page) }}">Anterior</a>
+    {% endif %}
+    <span>Página {{ page }} · {{ total }} comunicaciones planificadas</span>
+    {% if page * per_page < total %}
+    <a href="{{ url_for('communication.list_items', scope=scope, channel=channel, overdue=overdue, retired=retired, page=page+1, per_page=per_page) }}">Siguiente</a>
+    {% endif %}
+</nav>
+{% endblock %}

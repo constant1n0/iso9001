@@ -26,11 +26,11 @@ from ..models import (
     OrigenNoConformidad, OrigenRiesgo, PrioridadOportunidad, ResultadoEvaluacion, SentidoObjetivo,
     TipoAccionRevision, TipoContexto, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
-    KnowledgeType,
+    KnowledgeType, CommunicationChannel, CommunicationScope,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
-    reclamaciones, read_confirmations, equipment, knowledge,
+    reclamaciones, read_confirmations, equipment, knowledge, communication,
     corrective_actions, document_revisions, documents, improvements, management_reviews,
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
@@ -587,6 +587,12 @@ def _equipment_extras(item):
     }
 
 
+def _communication_extras(item: Any) -> dict[str, Any]:
+    """Expose audience sets and overdue state without recording an occurrence."""
+    return {'overdue': communication.is_overdue(item, today=local_today()),
+            **communication.link_ids(item)}
+
+
 def _knowledge_extras(item: Any) -> dict[str, Any]:
     """Expose the review state derived on the adapter's local day."""
     return {'overdue': knowledge.is_overdue(item, today=local_today()),
@@ -769,6 +775,26 @@ _MODULES = (
         _f("activo", "boolean"), _f("notas"), _f("rol_ids", "integer_list"),
     ), (_f("nombre"), _f("rol_id", "integer"), _f("activo", "boolean")),
         extras=_person_extras),
+    Module('communication', 'Communication plan', Resource.COMMUNICATION,
+           _DatedLists(communication.items), (
+        _f('title', required=True), _f('content', required=True),
+        _f('scope', 'enum', True, members=CommunicationScope),
+        _f('channel', 'enum', True, members=CommunicationChannel),
+        _f('channel_detail'),
+        _f('audience_text', note='At least one linked audience or nonblank description is required.'),
+        _f('owner_id', 'integer', True, note='Person (personas), active when newly chosen.'),
+        _f('frequency', required=True, note='Frequency or trigger, free text.'),
+        _f('next_date', 'date', True, note='Valid through that day; never automatically recalculated.'),
+        _f('retired', 'boolean', note='Retire unused plans; they remain readable.'),
+        _f('stakeholder_ids', 'integer_list', note='Interested parties (partes_interesadas); replaces the set.'),
+        _f('customer_ids', 'integer_list', note='Customers (clientes); replaces the set.'),
+        _f('provider_ids', 'integer_list', note='Providers (proveedores); replaces the set. New links cannot be blocked.'),
+        _f('person_ids', 'integer_list', note='People (personas); replaces the set. New links require active people; existing inactive links remain.'),
+    ), (_f('scope', 'enum', members=CommunicationScope),
+        _f('channel', 'enum', members=CommunicationChannel),
+        _f('overdue', 'boolean', note='Unretired with next_date strictly before today.'),
+        _f('retired', 'boolean', note='Defaults to false; true lists retired plans only.')),
+        extras=_communication_extras),
     Module('knowledge', 'Organizational knowledge and lessons', Resource.KNOWLEDGE,
            _DatedLists(knowledge.items), (
         _f('kind', 'enum', True, members=KnowledgeType),

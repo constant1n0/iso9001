@@ -33,6 +33,7 @@ Documentación técnica:
 - [Personas y competencia](#personas-y-competencia)
 - [No conformidades y acciones correctivas](#no-conformidades-y-acciones-correctivas)
 - [Confirmaciones de lectura](#confirmaciones-de-lectura)
+- [Plan de comunicación](#plan-de-comunicación)
 - [Control de documentos](#control-de-documentos)
 - [Programa de auditoría, auditorías y hallazgos](#programa-de-auditoría-auditorías-y-hallazgos)
 - [Contexto de la organización](#contexto-de-la-organización)
@@ -144,6 +145,50 @@ borrado; para eliminar uno de ellos, quita antes el vínculo. Las personas exper
 citadas tampoco pueden eliminarse: desactívalas. Eliminar un conocimiento sin
 citas entrantes elimina sus vínculos propios, no los registros a los que apuntan.
 
+## Plan de comunicación
+
+En **Personas y competencia → Plan de comunicación** (`/comunicaciones/`),
+planifica las comunicaciones del apartado 7.4. **El plan no acredita que la
+comunicación se haya realizado. La aplicación no envía nada.** El registro
+fechado de comunicaciones realizadas y sus evidencias queda pendiente (CM2).
+
+Todos los roles consultan. Administrador y Auditor crean, editan y retiran;
+solo Administrador elimina entradas que nadie cite. MCP nunca elimina.
+
+1. Pulsa **Nueva comunicación planificada** y escribe **Asunto** (hasta 200
+   caracteres) y **Contenido o propósito**, ambos obligatorios.
+2. Elige **Ámbito**: **Interna**, **Externa** o **Ambas**. Selecciona las
+   **Partes interesadas destinatarias**, **Clientes destinatarios**,
+   **Proveedores destinatarios** o **Personas destinatarias** existentes y,
+   si quieres, añade una **Descripción de destinatarios** libre. Es obligatorio
+   al menos un vínculo o una descripción: **Indica al menos un destinatario o
+   una descripción de destinatarios.** Puedes combinar todos los grupos.
+3. Elige **Canal**: **correo**, **reunión**, **teléfono**, **tablón o intranet**,
+   **web** u **otro**. **Detalle del canal** es texto opcional.
+4. Elige **Quién comunica**: una persona activa, obligatoria. Escribe la
+   **Frecuencia o desencadenante** y la **Próxima fecha**, ambos obligatorios.
+   La fecha es válida durante todo ese día; al siguiente figura **Vencida**.
+   No se recalcula automáticamente ni se programan envíos.
+5. Guarda. La ficha muestra todos los datos y enlaza los destinatarios.
+   **Editar comunicación planificada** permite cambiarlos o marcar **Retirada**
+   cuando ya no se use. Sigue siendo legible y nunca aparece como vencida.
+
+La lista oculta las retiradas por defecto. Filtra por **Ámbito**, **Canal**,
+**Vencimiento** y **Estado**; pulsa **Filtrar**. **Retiradas** muestra solo esas
+entradas y **Todas**, ambos estados. Se conserva la selección al pasar de página.
+
+Mantén Ctrl (Cmd en macOS) para seleccionar o quitar varias opciones.
+Guardar sustituye cada grupo seleccionado; vaciarlo quita esos vínculos, siempre
+que quede otro destinatario o descripción. Los nuevos vínculos requieren personas
+activas y proveedores no bloqueados. Las personas ya elegidas, incluido quien
+comunica, se conservan aunque se desactiven; los proveedores ya enlazados se
+conservan aunque se bloqueen. Clientes y partes interesadas no tienen estado activo.
+
+No se pueden eliminar los destinatarios citados ni la persona que comunica,
+también tras retirar el plan. Las personas se desactivan; para quitar otro
+registro, elimina antes sus vínculos. Las selecciones se auditan con el plan;
+guardar sin cambios no añade auditoría y un rechazo no cambia nada.
+
 ## Inicio de sesión y cuenta
 
 ### Inicio de sesión
@@ -219,7 +264,7 @@ puede consultar.
 | **Contexto** | **Contexto** 4.1, **Partes interesadas** 4.2, **Alcance del SGC** 4.3 |
 | **Calidad** | **Procesos** 4.4, **Riesgos** 6.1, **Oportunidades** 6.1, **Objetivos de calidad** 6.2, **Indicadores de auditoría** 9.1, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
 | **Clientes** | **Cliente** 8.2, **Reclamaciones** 9.1.2, **Satisfacción** 9.1.2 |
-| **Personas y competencia** | **Roles y responsabilidades** 5.3, **Personas** 7.2, **Competencias requeridas** 7.2, **Matriz de competencias** 7.2, **Capacitaciones** 7.2, **Confirmaciones de lectura** 7.3, **Recursos de capacitación** 7.1 |
+| **Personas y competencia** | **Roles y responsabilidades** 5.3, **Personas** 7.2, **Competencias requeridas** 7.2, **Matriz de competencias** 7.2, **Capacitaciones** 7.2, **Confirmaciones de lectura** 7.3, **Plan de comunicación** 7.4, **Recursos de capacitación** 7.1 |
 | **Documentación** | **Documentos** 7.5 |
 | **Administración** | **Usuarios** 5.3 |
 | **Cuenta** | **Mi perfil** |
@@ -276,6 +321,7 @@ aprobar en cada módulo.
 | Competencia (requisitos, competencias acreditadas, matriz) | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
 | Capacitaciones | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar, crear, editar |
 | Confirmaciones de lectura | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar, crear, editar |
+| Plan de comunicación | Consultar, crear, editar, retirar, eliminar si no está citado | Consultar, crear, editar, retirar | Consultar |
 | No conformidades | Consultar, crear, editar, eliminar; cancelar, cerrar, reabrir | Consultar, crear, editar; cancelar, cerrar | Consultar, crear, editar |
 | Acciones correctivas | Consultar, crear, editar, eliminar; verificar | Consultar, crear, editar; verificar | Consultar, crear, editar |
 | Documentos | Consultar todas las revisiones, crear, editar, enviar a revisión, rechazar, publicar, adjuntar ficheros; aprobar, dar de baja | Consultar todas las revisiones, crear, editar, enviar a revisión, rechazar, publicar, adjuntar ficheros | Consultar la revisión vigente |
