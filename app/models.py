@@ -2249,6 +2249,39 @@ class CommunicationPlan(RecordMetadataMixin, db.Model):
         return sorted(row.id for row in self.people)
 
 
+class CommunicationLog(RecordMetadataMixin, db.Model):
+    """Immutable evidence of one communication and the next date chosen then."""
+
+    __tablename__ = 'communication_log'
+    __table_args__ = (
+        db.PrimaryKeyConstraint('id', name='pk_communication_log'),
+        db.CheckConstraint('length(trim(evidence)) > 0',
+                           name='ck_communication_log_evidence'),
+        db.CheckConstraint('next_date > date', name='ck_communication_log_next_date'),
+        db.ForeignKeyConstraint(
+            ['plan_id'], ['communication_plan.id'], name='fk_communication_log_plan_id',
+            ondelete='RESTRICT', onupdate='RESTRICT'),
+        db.ForeignKeyConstraint(
+            ['communicator_id'], ['personas.id'], name='fk_communication_log_communicator_id',
+            ondelete='RESTRICT', onupdate='RESTRICT'),
+        db.Index('ix_communication_log_history', 'plan_id', 'date', 'id'),
+        db.Index('ix_communication_log_communicator_id', 'communicator_id'),
+        db.Index('ix_communication_log_created_by_id', 'created_by_id'),
+        db.Index('ix_communication_log_updated_by_id', 'updated_by_id'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    plan_id = db.Column(db.Integer, nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    communicator_id = db.Column(db.Integer, nullable=False)
+    channel = db.Column(text_enum(CommunicationChannel, 'ck_communication_log_channel'),
+                        nullable=False)
+    channel_detail = db.Column(db.Text)
+    audience_text = db.Column(db.Text)
+    summary = db.Column(db.Text)
+    evidence = db.Column(db.Text, nullable=False)
+    next_date = db.Column(db.Date, nullable=False)
+
+
 class TipoComprobacionEquipo(enum.Enum):
     calibracion = 'Calibración'
     verificacion = 'Verificación'

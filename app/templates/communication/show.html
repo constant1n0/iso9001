@@ -3,6 +3,9 @@
 {% block title %}{{ item.title }}{% endblock %}
 {% block content %}
 {% call page_header('7.4 · Plan de comunicación', item.title) %}
+    {% if can('create', 'communication') and not item.retired %}
+    <a class="btn btn--primary" href="{{ url_for('communication.record_occurrence', item_id=item.id) }}">Registrar comunicación</a>
+    {% endif %}
     {% if can('update', 'communication') %}
     <a class="btn" href="{{ url_for('communication.edit_item', item_id=item.id) }}">Editar comunicación planificada</a>
     {% endif %}
@@ -37,5 +40,16 @@
         <dd>{% for person in item.people %}<a href="{{ url_for('people.show_person', person_id=person.id) }}">{{ person.nombre }}</a>{{ ' (desactivada)' if not person.activo }}{{ ', ' if not loop.last }}{% else %}—{% endfor %}</dd>
     </dl>
 </article>
+<section>
+    <h2>Historial de comunicaciones</h2>
+    <p>Las comunicaciones registradas no se modifican ni se eliminan; registra una nueva.</p>
+    {% include 'communication/log_history.html' %}
+    <nav class="pagination" aria-label="Páginas del historial">
+        {% if page > 1 %}<a href="{{ url_for('communication.show_item', item_id=item.id, page=page-1) }}">Anterior</a>{% endif %}
+        <span>Página {{ page }} · {{ total }} comunicaciones registradas</span>
+        {% if page * per_page < total %}<a href="{{ url_for('communication.show_item', item_id=item.id, page=page+1) }}">Siguiente</a>{% endif %}
+    </nav>
+</section>
+<a class="btn" href="{{ url_for('communication.list_log') }}">Registro de comunicaciones</a>
 <a class="btn" href="{{ url_for('communication.list_items') }}">Volver al plan</a>
 {% endblock %}

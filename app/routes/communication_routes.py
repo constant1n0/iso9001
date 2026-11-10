@@ -1,13 +1,16 @@
-"""Thin Spanish web adapters for the communication plan register (CM1)."""
+"""Thin Spanish web adapters for the communication plan and immutable log."""
+from datetime import date
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from flask_login import login_required
 
 from ..audit_notifications import local_today
 from ..extensions import db
-from ..forms import CHOOSE_PERSON, CommunicationForm, person_choices
+from ..forms import CHOOSE_PERSON, CommunicationForm, CommunicationLogForm, person_choices
 from ..models import CommunicationChannel, CommunicationPlan, CommunicationScope, EstadoProveedor
-from ..services import clientes, communication, crud, people, providers, stakeholders
+from ..services import (
+    clientes, communication, communication_log, crud, people, providers, stakeholders,
+)
 from ..services.errors import ValidationError
 from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
@@ -90,8 +93,71 @@ def show_item(item_id: int) -> ResponseReturnValue:
     """Read every field and audience, including retired plans."""
     item = communication.items.get(db.session, current_actor(), item_id)
     owners = people.names(db.session, current_actor(), [item.owner_id])
+    page, per_page = crud.page_bounds(request.args.get('page', 1, type=int), 20)
+    history, total = communication_log.items.list_page(
+        db.session, current_actor(), plan_id=item.id, page=page, per_page=per_page)
+    names = people.names(db.session, current_actor(), [row.communicator_id for row in history])
     return render_template('communication/show.html', item=item, owners=owners,
+                           history=history, names=names, total=total,
+                           page=page, per_page=per_page,
                            overdue=communication.is_overdue(item, today=local_today()))
+
+
+@bp.route('/<int:item_id>/registrar', methods=['GET', 'POST'])
+@login_required
+@require_permission('create', RESOURCE)
+def record_occurrence(item_id: int) -> ResponseReturnValue:
+    """Suggest plan values, but require evidence and a user-chosen new next date."""
+    actor = current_actor()
+    item = communication.items.get(db.session, actor, item_id)
+    form = CommunicationLogForm()
+    form.communicator_id.choices = person_choices(
+        people.choices(db.session, actor, include=item.owner_id), empty=CHOOSE_PERSON)
+    if not form.is_submitted():
+        form.date.data = local_today()
+        form.communicator_id.data = item.owner_id
+        form.channel.data = item.channel.name
+        form.channel_detail.data = item.channel_detail
+        form.audience_text.data = item.audience_text
+    names = [field.name for field in communication_log.SPEC.fields if field.name != 'plan_id']
+    if form.validate_on_submit() and saved(lambda: communication_log.items.create(
+            db.session, actor, form_data(form, names) | {'plan_id': item.id},
+            today=local_today())):
+        flash('Comunicación registrada.', 'success')
+        return redirect(url_for('communication.show_item', item_id=item.id))
+    return render_template('communication/log_form.html', item=item, form=form)
+
+
+@bp.get('/registro')
+@login_required
+@require_permission('read', RESOURCE)
+def list_log() -> ResponseReturnValue:
+    """Read occurrences across active and retired plans, with inclusive filters."""
+    actor = current_actor()
+    page, per_page = crud.page_bounds(request.args.get('page', 1, type=int),
+                                     request.args.get('per_page', 20, type=int))
+    filters = {}
+    for key in ('plan_id', 'communicator_id'):
+        if request.args.get(key):
+            try:
+                filters[key] = int(request.args[key])
+            except ValueError:
+                raise ValidationError(f'El filtro «{key}» debe ser un número entero.') from None
+    for key in ('date_from', 'date_to'):
+        if request.args.get(key):
+            try:
+                filters[key] = date.fromisoformat(request.args[key])
+            except ValueError:
+                raise ValidationError(f'El filtro «{key}» debe ser una fecha AAAA-MM-DD.') from None
+    history, total = communication_log.items.list_page(
+        db.session, actor, page=page, per_page=per_page, **filters)
+    plans = communication.items.list_(db.session, actor, retired=None)
+    persons = people.list_(db.session, actor)
+    return render_template(
+        'communication/log_list.html', history=history, total=total,
+        page=page, per_page=per_page, filters=filters, plans=plans, persons=persons,
+        titles={plan.id: plan.title for plan in plans},
+        names={person.id: person.nombre for person in persons})
 
 
 @bp.route('/<int:item_id>/editar', methods=['GET', 'POST'])

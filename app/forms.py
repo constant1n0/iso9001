@@ -101,6 +101,22 @@ class CommunicationForm(BaseForm):
     submit = SubmitField('Guardar')
 
 
+class CommunicationLogForm(BaseForm):
+    """Immutable occurrence evidence; routes suggest the plan's actual values."""
+
+    date = DateField('Fecha de comunicación', validators=[DataRequired()])
+    communicator_id = SelectField('Quién comunicó', coerce=optional_id,
+                                  choices=[CHOOSE_PERSON], validators=[DataRequired()])
+    channel = SelectField('Canal utilizado',
+                          choices=[(m.name, m.value) for m in CommunicationChannel])
+    channel_detail = TextAreaField('Detalle del canal utilizado')
+    audience_text = TextAreaField('Destinatarios de la comunicación')
+    summary = TextAreaField('Resumen de lo comunicado')
+    evidence = TextAreaField('Evidencia o referencia', validators=[DataRequired()])
+    next_date = DateField('Nueva próxima fecha', validators=[DataRequired()])
+    submit = SubmitField('Registrar comunicación')
+
+
 class KnowledgeForm(BaseForm):
     """Editable knowledge and lesson details, with an active-person owner picker."""
 

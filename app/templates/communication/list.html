@@ -3,6 +3,7 @@
 {% block title %}Plan de comunicación{% endblock %}
 {% block content %}
 {% call page_header('7.4 · Comunicación', 'Plan de comunicación') %}
+    <a class="btn" href="{{ url_for('communication.list_log') }}">Registro de comunicaciones</a>
     {% if can('create', 'communication') %}
     <a class="btn btn--primary" href="{{ url_for('communication.new_item') }}">Nueva comunicación planificada</a>
     {% endif %}

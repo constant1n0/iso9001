@@ -53,6 +53,9 @@ SEEDS = {
                       "scope": "ambas", "channel": "web", "owner_id": 1,
                       "frequency": "Every month", "next_date": "2026-12-01",
                       "audience_text": "All staff"},
+    "communication_log": {"plan_id": 1, "date": "2020-01-02", "communicator_id": 1,
+                          "channel": "reunion", "evidence": "Minutes M-1",
+                          "next_date": "2020-07-19"},
     "knowledge": {"kind": "conocimiento", "title": "Tool set-up",
                   "summary": "Keep the reference sample.", "source": "Workshop", "owner_id": 1},
     # Documents are not written through MCP; ``seed`` creates them through the service,
@@ -169,6 +172,10 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
         if (slug in ("documentos", "objetivos_calidad", "acciones_revision", "riesgos",
                      "oportunidades", "cambios_sgc", "confirmaciones_lectura", "knowledge", "communication") and db.session.get(Person, 1) is None):
             self.seed("personas")
+        if slug == 'communication_log':
+            from app.models import CommunicationPlan
+            if db.session.get(CommunicationPlan, 1) is None:
+                self.seed('communication')
         if slug == "tareas_cambio" and db.session.get(CambioSGC, 1) is None:
             self.seed("cambios_sgc")
         if slug == "acciones_riesgo" and db.session.get(Riesgo, 1) is None:

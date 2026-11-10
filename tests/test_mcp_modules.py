@@ -11,7 +11,7 @@ from mcp_support import ADMIN, AUDITOR, OPERATIVO, McpDbCase, mcp_actor
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUGS = {
-    "communication", "knowledge",
+    "communication", "communication_log", "knowledge",
     "equipos_medicion", "comprobaciones_equipo",
     "no_conformidades", "auditorias", "documentos", "capacitaciones",
     "satisfaccion_clientes", "partes_interesadas", "mejoras",
@@ -40,6 +40,7 @@ SHARED_CONTEXT = ("cuestiones_contexto", "alcances_sgc")
 # Changes to the QMS and their tasks (decision CP5 of change-planning).
 SHARED_CHANGES = ("cambios_sgc", "tareas_cambio")
 SHARED_EQUIPMENT = ("equipos_medicion", "comprobaciones_equipo")
+SHARED_COMMUNICATION = ('communication', 'communication_log')
 # (module, legacy free-text name, person link that can fill it)
 LEGACY_NAMES = (("capacitaciones", "personal", "persona_id"),
                 ("auditorias", "auditor", "auditor_id"),
@@ -63,7 +64,7 @@ class LayoutTestCase(unittest.TestCase):
 
 
 class RegistryTestCase(unittest.TestCase):
-    def test_registry_holds_the_thirty_seven_modules(self) -> None:
+    def test_registry_holds_the_thirty_eight_modules(self) -> None:
         self.assertEqual(SLUGS, set(registry().MODULES))
 
     def test_each_module_maps_to_its_own_policy_resource(self) -> None:
@@ -71,7 +72,8 @@ class RegistryTestCase(unittest.TestCase):
 
         modules = registry().MODULES
         shared = (SHARED_RESOURCE + SHARED_AUDITS + SHARED_OBJECTIVES + SHARED_REVIEWS
-                  + SHARED_RISKS + SHARED_PROVIDERS + SHARED_CONTEXT + SHARED_CHANGES + SHARED_EQUIPMENT)
+                  + SHARED_RISKS + SHARED_PROVIDERS + SHARED_CONTEXT + SHARED_CHANGES
+                  + SHARED_EQUIPMENT + SHARED_COMMUNICATION)
         resources = [m.resource for slug, m in modules.items() if slug not in shared]
         self.assertEqual(len(resources), len(set(resources)))
         self.assertEqual({Resource.COMPETENCE}, {modules[s].resource for s in SHARED_RESOURCE})
@@ -88,7 +90,9 @@ class RegistryTestCase(unittest.TestCase):
                          {modules[s].resource for s in SHARED_CONTEXT})
         self.assertEqual({Resource.QMS_CHANGES}, {modules[s].resource for s in SHARED_CHANGES})
         self.assertEqual({Resource.MEASURING_EQUIPMENT}, {modules[s].resource for s in SHARED_EQUIPMENT})
-        self.assertFalse({Resource.COMPETENCE, Resource.AUDITS, Resource.QUALITY_OBJECTIVES,
+        self.assertEqual({Resource.COMMUNICATION},
+                         {modules[s].resource for s in SHARED_COMMUNICATION})
+        self.assertFalse({Resource.COMMUNICATION, Resource.COMPETENCE, Resource.AUDITS, Resource.QUALITY_OBJECTIVES,
                           Resource.MANAGEMENT_REVIEW, Resource.RISKS_OPPORTUNITIES,
                           Resource.EXTERNAL_PROVIDERS, Resource.ORGANIZATION_CONTEXT,
                           Resource.QMS_CHANGES, Resource.MEASURING_EQUIPMENT}

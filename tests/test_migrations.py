@@ -33,7 +33,7 @@ LATER_AUDITED_TABLES = frozenset(
      "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades",
      "acciones_riesgo", "proveedores", "evaluaciones_proveedor", "cuestiones_contexto",
      "equipos_medicion", "comprobaciones_equipo", "alcances_sgc", "clientes", "reclamaciones", "cambios_sgc", "tareas_cambio",
-     "confirmaciones_lectura", "knowledge_items", "communication_plan"}
+     "confirmaciones_lectura", "knowledge_items", "communication_plan", "communication_log"}
 )
 
 
@@ -223,6 +223,33 @@ class MigrationsTestCase(unittest.TestCase):
             downgrade(directory=MIGRATIONS_DIR, revision='f9b1d3e5a7c9')
             self.assertNotIn('communication_plan', inspect(db.engine).get_table_names())
             self.assertEqual(before, self._rows('SELECT * FROM no_conformidades'))
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+    def test_communication_log_upgrade_downgrade_preserves_existing_plan(self) -> None:
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision='a0c2e4f6b8d0')
+            with db.engine.begin() as connection:
+                connection.execute(text("INSERT INTO personas (id,nombre) VALUES (1,'Owner')"))
+                connection.execute(text(
+                    "INSERT INTO communication_plan "
+                    "(title,content,scope,channel,owner_id,frequency,next_date,audience_text) "
+                    "VALUES ('Results','Explain results','ambas','web',1,'Monthly',"
+                    "'2026-12-01','Staff')"))
+            before = self._rows('SELECT * FROM communication_plan')
+            upgrade(directory=MIGRATIONS_DIR)
+            info = inspect(db.engine)
+            self.assertIn('communication_log', info.get_table_names())
+            for fk in info.get_foreign_keys('communication_log'):
+                self.assertTrue(fk['name'])
+                if fk['referred_table'] != 'users':
+                    self.assertEqual('RESTRICT', fk['options']['ondelete'])
+                    self.assertEqual('RESTRICT', fk['options']['onupdate'])
+            self.assertEqual(before, self._rows('SELECT * FROM communication_plan'))
+            self.assertEqual([], self._schema_differences())
+            downgrade(directory=MIGRATIONS_DIR, revision='a0c2e4f6b8d0')
+            self.assertNotIn('communication_log', inspect(db.engine).get_table_names())
+            self.assertEqual(before, self._rows('SELECT * FROM communication_plan'))
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 

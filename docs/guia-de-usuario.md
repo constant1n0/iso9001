@@ -149,8 +149,8 @@ citas entrantes elimina sus vínculos propios, no los registros a los que apunta
 
 En **Personas y competencia → Plan de comunicación** (`/comunicaciones/`),
 planifica las comunicaciones del apartado 7.4. **El plan no acredita que la
-comunicación se haya realizado. La aplicación no envía nada.** El registro
-fechado de comunicaciones realizadas y sus evidencias queda pendiente (CM2).
+comunicación se haya realizado. La aplicación no envía nada.** Registra cada
+comunicación realizada por separado, con su fecha y evidencia.
 
 Todos los roles consultan. Administrador y Auditor crean, editan y retiran;
 solo Administrador elimina entradas que nadie cite. MCP nunca elimina.
@@ -188,6 +188,45 @@ No se pueden eliminar los destinatarios citados ni la persona que comunica,
 también tras retirar el plan. Las personas se desactivan; para quitar otro
 registro, elimina antes sus vínculos. Las selecciones se auditan con el plan;
 guardar sin cambios no añade auditoría y un rechazo no cambia nada.
+
+### Registrar una comunicación realizada
+
+En la ficha de una entrada en uso, Administrador y Auditor pueden pulsar
+**Registrar comunicación**:
+
+1. Indica **Fecha de comunicación**, obligatoria y nunca futura. Como regla
+   de conservación del orden del historial, no se admite una fecha anterior
+   a la última comunicación registrada de esa entrada; sí el mismo día.
+2. Elige **Quién comunicó**, una persona activa. El formulario sugiere la
+   persona del plan; si se ha desactivado, elige otra activa. Indica el
+   **Canal utilizado** y, si quieres, su detalle y los **Destinatarios de la
+   comunicación** reales. El canal, detalle y destinatarios empiezan con los
+   del plan, pero puedes cambiarlos. Los destinatarios reales son texto libre.
+3. Añade, si quieres, un **Resumen de lo comunicado**. Escribe obligatoriamente
+   la **Evidencia o referencia**: por ejemplo, el acta, la referencia del correo
+   o la lista de asistencia. Es texto, no una carga de ficheros.
+4. Elige obligatoriamente la **Nueva próxima fecha**, posterior a la fecha
+   de comunicación. Empieza vacía: no se calcula a partir de la frecuencia ni
+   se copia la anterior. Al guardar, se aplica al plan en la misma transacción
+   y se auditan tanto el cambio del plan como el nuevo registro.
+
+El **Historial de comunicaciones** de la ficha muestra primero las fechas más
+recientes; en empates, la última registrada. Conserva el canal y los destinatarios
+reales, el resumen, la evidencia y la próxima fecha elegida en ese momento.
+Los registros **no se modifican ni se eliminan**, ni desde la web ni desde MCP:
+para rectificar, registra otra comunicación explicando la corrección.
+
+**Registro de comunicaciones** (`/comunicaciones/registro`), accesible desde
+el plan o su ficha, permite a todos los roles filtrar por **Entrada del plan**,
+**Quién comunicó**, **Desde** y **Hasta**, ambas fechas incluidas. Incluye el
+historial de entradas retiradas y personas desactivadas. Las selecciones se
+conservan al pasar de página.
+
+Una entrada retirada conserva su historial, pero no admite nuevos registros.
+Una entrada con comunicaciones realizadas no se puede eliminar: retírala.
+La persona que comunicó queda protegida contra el borrado incluso si ya no
+figura en el plan o se retira la entrada; puedes desactivarla.
+Un rechazo no cambia ni el plan ni el registro ni la auditoría.
 
 ## Inicio de sesión y cuenta
 
@@ -322,6 +361,7 @@ aprobar en cada módulo.
 | Capacitaciones | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar, crear, editar |
 | Confirmaciones de lectura | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar, crear, editar |
 | Plan de comunicación | Consultar, crear, editar, retirar, eliminar si no está citado | Consultar, crear, editar, retirar | Consultar |
+| Registro de comunicaciones | Consultar y registrar; nunca editar ni eliminar | Consultar y registrar; nunca editar ni eliminar | Consultar |
 | No conformidades | Consultar, crear, editar, eliminar; cancelar, cerrar, reabrir | Consultar, crear, editar; cancelar, cerrar | Consultar, crear, editar |
 | Acciones correctivas | Consultar, crear, editar, eliminar; verificar | Consultar, crear, editar; verificar | Consultar, crear, editar |
 | Documentos | Consultar todas las revisiones, crear, editar, enviar a revisión, rechazar, publicar, adjuntar ficheros; aprobar, dar de baja | Consultar todas las revisiones, crear, editar, enviar a revisión, rechazar, publicar, adjuntar ficheros | Consultar la revisión vigente |

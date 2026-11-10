@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header %}
+{% block title %}Registro de comunicaciones{% endblock %}
+{% block content %}
+{% call page_header('7.4 · Comunicación', 'Registro de comunicaciones') %}
+<a class="btn" href="{{ url_for('communication.list_items') }}">Volver al plan</a>
+{% endcall %}
+<p>Comunicaciones realizadas, con su evidencia. La aplicación no envía nada.</p>
+<form method="get">
+    <label for="plan_id">Entrada del plan</label>
+    <select id="plan_id" name="plan_id">
+        <option value="">Todas</option>
+        {% for plan in plans %}
+        <option value="{{ plan.id }}" {% if filters.get('plan_id') == plan.id %}selected{% endif %}>{{ plan.title }}{{ ' (retirada)' if plan.retired }}</option>
+        {% endfor %}
+    </select>
+    <label for="communicator_id">Quién comunicó</label>
+    <select id="communicator_id" name="communicator_id">
+        <option value="">Todas las personas</option>
+        {% for person in persons %}
+        <option value="{{ person.id }}" {% if filters.get('communicator_id') == person.id %}selected{% endif %}>{{ person.nombre }}{{ ' (desactivada)' if not person.activo }}</option>
+        {% endfor %}
+    </select>
+    <label for="date_from">Desde</label>
+    <input id="date_from" name="date_from" type="date" value="{{ filters.get('date_from', '') }}">
+    <label for="date_to">Hasta</label>
+    <input id="date_to" name="date_to" type="date" value="{{ filters.get('date_to', '') }}">
+    <button type="submit" class="btn">Filtrar</button>
+</form>
+{% include 'communication/log_history.html' %}
+<nav class="pagination" aria-label="Páginas del registro de comunicaciones">
+    {% if page > 1 %}<a href="{{ url_for('communication.list_log', page=page-1, per_page=per_page, **filters) }}">Anterior</a>{% endif %}
+    <span>Página {{ page }} · {{ total }} comunicaciones registradas</span>
+    {% if page * per_page < total %}<a href="{{ url_for('communication.list_log', page=page+1, per_page=per_page, **filters) }}">Siguiente</a>{% endif %}
+</nav>
+{% endblock %}
