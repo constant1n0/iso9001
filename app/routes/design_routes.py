@@ -67,6 +67,10 @@ def show_project(project_id: int) -> ResponseReturnValue:
         editable=project.state in design.TRANSITIONS)
 
 
+STARTER_ONLY_ON_CREATE = ('Las etapas iniciales solo se crean al dar de alta el proyecto; '
+                          'añade las etapas desde la ficha del proyecto.')
+
+
 def _project_form(actor: Actor, project: DesignProject | None = None) -> DesignProjectForm:
     form = DesignProjectForm(obj=project)
     form.owner_id.choices = person_choices(people.choices(
@@ -107,6 +111,12 @@ def edit_project(project_id: int) -> ResponseReturnValue:
         flash('El proyecto es de solo lectura.', 'danger')
         return _page(project_id)
     form = _project_form(actor, project)
+    if request.method == 'POST' and 'starter_stages' in request.form:
+        # The starter sequence is offered only on creation; never accept it silently here.
+        form.validate_on_submit()
+        flash(STARTER_ONLY_ON_CREATE, 'danger')
+        return render_template('design/form.html', form=form,
+                               title='Editar proyecto de diseño'), 400
     if form.validate_on_submit() and saved(lambda: design.projects.update(
             db.session, actor, project_id, form_data(form, PROJECT_FIELDS))):
         flash('Proyecto de diseño actualizado.', 'success')
