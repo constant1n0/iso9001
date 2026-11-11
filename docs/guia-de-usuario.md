@@ -43,6 +43,7 @@ Documentación técnica:
 - [Riesgos y oportunidades](#riesgos-y-oportunidades)
 - [Objetivos de la calidad](#objetivos-de-la-calidad)
 - [Cambios en el SGC](#cambios-en-el-sgc)
+- [Diseño y desarrollo](#diseño-y-desarrollo)
 - [Proveedores externos](#proveedores-externos)
 - [Revisión por la dirección](#revisión-por-la-dirección)
 - [Clientes, reclamaciones y satisfacción](#clientes-reclamaciones-y-satisfacción)
@@ -301,7 +302,7 @@ puede consultar.
 |---|---|
 | (arriba) | **Panel** |
 | **Contexto** | **Contexto** 4.1, **Partes interesadas** 4.2, **Alcance del SGC** 4.3 |
-| **Calidad** | **Procesos** 4.4, **Riesgos** 6.1, **Oportunidades** 6.1, **Objetivos de calidad** 6.2, **Indicadores de auditoría** 9.1, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
+| **Calidad** | **Procesos** 4.4, **Riesgos** 6.1, **Oportunidades** 6.1, **Objetivos de calidad** 6.2, **Diseño y desarrollo** 8.3, **Indicadores de auditoría** 9.1, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
 | **Clientes** | **Cliente** 8.2, **Reclamaciones** 9.1.2, **Satisfacción** 9.1.2 |
 | **Personas y competencia** | **Roles y responsabilidades** 5.3, **Personas** 7.2, **Competencias requeridas** 7.2, **Matriz de competencias** 7.2, **Capacitaciones** 7.2, **Confirmaciones de lectura** 7.3, **Plan de comunicación** 7.4, **Recursos de capacitación** 7.1 |
 | **Documentación** | **Documentos** 7.5 |
@@ -371,6 +372,7 @@ aprobar en cada módulo.
 | Riesgos, oportunidades y sus acciones | Consultar, crear, editar, eliminar; evaluar la eficacia de las acciones | Consultar, crear, editar; evaluar la eficacia de las acciones | Consultar |
 | Objetivos de la calidad y mediciones | Consultar, crear, editar, cambiar el estado, eliminar | Consultar, crear, editar, cambiar el estado | Consultar |
 | Cambios en el SGC y sus tareas | Consultar, crear, editar, eliminar; aprobar, cancelar, registrar la implantación, revisar la eficacia | Consultar, crear, editar; registrar la implantación, revisar la eficacia | Consultar |
+| Diseño y desarrollo (DD1) | Consultar, crear, editar, planificar, iniciar, cancelar; eliminar borradores sin etapas y etapas pendientes | Consultar, crear, editar, planificar, iniciar, cancelar; eliminar etapas pendientes | Consultar |
 | Proveedores externos y sus evaluaciones | Consultar, crear, editar, eliminar; aprobar, condicionar, bloquear | Consultar, crear, editar | Consultar |
 | Revisiones por la dirección y sus acciones | Consultar, crear, editar, eliminar; celebrar, cerrar | Consultar, crear, editar | Sin acceso |
 | Clientes | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
@@ -1667,6 +1669,60 @@ servidor MCP (véase [Agentes y tokens de API](#agentes-y-tokens-de-api)).
 
 Los cambios del periodo son también una entrada de la revisión por la
 dirección (véase [Entradas (9.3.2)](#entradas-932)).
+
+## Diseño y desarrollo
+
+**Calidad → Diseño y desarrollo** (`/diseno/`) registra los proyectos de diseño
+de productos y servicios (8.3). Todos los roles consultan; Administrador y Auditor
+crean y mantienen proyectos y etapas. Esta entrega (DD1) cubre la planificación,
+no las entradas, salidas, controles de revisión/verificación/validación ni la
+aprobación final; se incorporarán en DD2–DD4.
+
+1. Pulsa **Nuevo proyecto**. Escribe **Título** (hasta 200 caracteres) y
+   **Producto o servicio que se diseña**, ambos obligatorios.
+2. Elige una persona **Responsable** activa, obligatoria. Añade, si procede,
+   **Cliente**, varios **Procesos vinculados**, **Inicio previsto** y **Fin
+   previsto**. Si indicas ambas fechas, el fin no puede ser anterior al inicio.
+   Un responsable ya guardado se conserva aunque después se desactive.
+3. Marca **Crear etapas iniciales** solo si quieres la secuencia editable
+   Planificación, Entradas, Diseño, Revisión, Verificación, Validación y Cierre.
+   Todas empiezan pendientes y con el responsable del proyecto. Sin marcarla,
+   el proyecto empieza sin etapas.
+4. Guarda. En la ficha, **Añadir etapa** registra **Nombre**, **Responsable**
+   activo y **Fecha prevista** opcional. **Editar / ordenar** permite cambiar
+   esos datos y la **Posición** (desde 1); una etapa nueva sin posición va al
+   final. No puedes mover una etapa a otro proyecto.
+5. Para finalizar una etapa, marca **Finalizada** e indica **Fecha de
+   finalización**, obligatoria solo al finalizar y nunca futura. Una etapa
+   finalizada no se edita, reordena ni elimina; tampoco puedes desplazarla
+   insertando, moviendo o eliminando otra etapa anterior.
+
+### Ciclo de vida del proyecto (DD1)
+
+| Estado | Acción en la ficha | Resultado |
+|---|---|---|
+| **borrador** | **Planificar**, con al menos una etapa | **planificado** |
+| **planificado** | **Iniciar** | **en curso** |
+| **borrador**, **planificado** o **en curso** | **Cancelar proyecto**, con **Motivo de cancelación** no vacío | **cancelado**, conserva el motivo |
+
+Administrador y Auditor ejecutan estas acciones exclusivamente desde la web.
+El estado no se elige en el formulario. **completado** está reservado para DD4:
+no hay ninguna acción que permita alcanzarlo en DD1. Un proyecto cancelado y
+sus etapas son de solo lectura, sin reapertura. Solo Administrador elimina un
+proyecto **borrador sin etapas**; Administrador y Auditor pueden eliminar etapas
+pendientes cuando no se desplace una etapa finalizada.
+
+La lista filtra por **Estado**, **Responsable** y **Cliente**. La lista y la
+ficha muestran si 8.3 aplica según el alcance aprobado y su justificación cuando
+no aplica. **Este módulo no modifica el alcance ni sus exclusiones**; crear un
+proyecto no decide la aplicabilidad de la organización.
+
+Los responsables, clientes y procesos citados quedan protegidos contra el
+borrado por claves foráneas RESTRICT; para quitar un vínculo opcional, edita
+antes el proyecto. Los cambios de procesos se auditan con el proyecto. Cada
+escritura conserva atribución y auditoría; guardar sin cambios no escribe nada
+y un rechazo no cambia datos ni auditoría. MCP permite leer, crear y editar los
+campos ordinarios, nunca transiciones ni eliminaciones.
 
 ## Proveedores externos
 

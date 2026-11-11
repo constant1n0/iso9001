@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+{{ page_header('8.3 · Diseño y desarrollo', title) }}
+<p>Elige una persona activa como responsable. Los responsables ya guardados se conservan aunque se desactiven.</p>
+{% if 'starter_stages' in form %}
+<p>Puedes crear una secuencia inicial editable: Planificación, Entradas, Diseño, Revisión, Verificación, Validación y Cierre.</p>
+{% endif %}
+{% if 'process_ids' in form %}
+<p>Mantén pulsado Ctrl (o Cmd) para seleccionar o quitar varios procesos.</p>
+{% else %}
+<p>Indica una posición para ordenar la etapa; si la dejas vacía al crearla se añade al final.
+    Una etapa finalizada no se modifica ni se elimina. No puedes mover otras etapas a través de ella.</p>
+{% endif %}
+{{ form_card(form, url_for('design.show_project', project_id=project_id) if project_id else url_for('design.list_projects')) }}
+{% endblock %}

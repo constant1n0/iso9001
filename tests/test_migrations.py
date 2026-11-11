@@ -33,7 +33,8 @@ LATER_AUDITED_TABLES = frozenset(
      "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades",
      "acciones_riesgo", "proveedores", "evaluaciones_proveedor", "cuestiones_contexto",
      "equipos_medicion", "comprobaciones_equipo", "alcances_sgc", "clientes", "reclamaciones", "cambios_sgc", "tareas_cambio",
-     "confirmaciones_lectura", "knowledge_items", "communication_plan", "communication_log"}
+     "confirmaciones_lectura", "knowledge_items", "communication_plan", "communication_log",
+     'design_projects', 'design_stages'}
 )
 
 
