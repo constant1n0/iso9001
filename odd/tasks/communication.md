@@ -24,3 +24,16 @@ Runner: `/home/dcm/workspace/iso9001-worktrees/fixes-2026/venv/bin/python -m uni
 - **L8** CM2 writer result (S2, S4, S5 for the log; S3 channel/audience as carried out): migration `b1d3e5f7a9c1` (down `a0c2e4f6b8d0`); immutable occurrences (date not in future, active communicator, channel, audience text, summary, required evidence) under a plan row lock; recording requires the plan's new next date strictly after the occurrence date, applied in the same transaction through the plan update/audit path; backdating before the latest occurrence rejected, same day allowed (assumption); retired plans reject recording; plans with occurrences cannot be deleted; communicators protected; MCP module `communication_log` (create/get/list only). PostgreSQL contention test added (skips locally). Writer checks: communication 46 OK/3 skip, person 45 OK/5 skip, MCP 99 OK, full 1,990 OK (116 skips). Parent spot check: allowed surfaces only; communication 46 OK/3 skip.
 - **L9** Independent verifier: S2, S3 (as carried out), S4, S5 met, no blockers. Plan lock precedes the latest-occurrence read; contention test statically mutation-sensitive (removing the initial lock lets the backdated worker succeed) but PostgreSQL execution pending CI. Injected failures after either audit roll back both plan update and occurrence; rejected web/MCP writes keep DB/audit hashes; occurrences immutable (no edit/delete routes, MCP update refused, no delete tool); plans with occurrences and communicators protected with user-facing refusals; CM1 no-op plan edit still writes nothing; form defaults (owner, channel, audience) preselected. Migration additive (SQLite). Probes committed as tests/test_communication_log_independent.py (SHA-256 5fe27e76…, 6 OK); communication tests 52 OK/3 PG skips.
 - **L10** Slice 2 published: user selected «Publicar y fusionar si sale verde» (native review explicitly not chosen). PR #186 head 2815b97; CI pull_request 42889076938 and push 42889065918 both success, 1,996 tests; both PostgreSQL contention tests executed and passed (`test_backdated_append_waits_then_rejects_without_changing_plan_or_audit`, `test_same_day_append_waits_then_updates_next_date_and_keeps_both_evidences`). Merged as 05bb723. 7.4 complete. Not deployed (production runs 4467bc4).
+
+## Production deployment (2026-11-11)
+
+`main@f82284f` (PRs #185 and #186) runs on `vulcano`. Authorized over SSH to `192.168.101.46` as `dcm`, no `sudo` by the agent.
+
+| Step | Result |
+|---|---|
+| Preflight | Was `4467bc4`, clean, migration `f9b1d3e5a7c9`; four services active |
+| Backups | `~/work/backups/calidad-2026-11-11-pre-f82284f.dump` (628 entries, via `docker exec iso9001-db pg_dump`) and `iso9001-code-2026-11-11-pre-f82284f.tar.gz`, mode 600 |
+| Code | Incremental git bundle `4467bc4..main`, fast-forward to `f82284f`; no dependency changes |
+| Database | `flask db upgrade` `f9b1d3e5a7c9` → `a0c2e4f6b8d0` (communication plan) → `b1d3e5f7a9c1` (communication log); `flask db check` clean |
+| Restart (user, with sudo) | All four services, 2026-11-11 13:52 CET |
+| Smoke tests | Services active, no journal errors; `/login` 200; `/conocimientos/`, `/comunicaciones/` and `/comunicaciones/registro` redirect to login; `/mcp` 401 Bearer |
