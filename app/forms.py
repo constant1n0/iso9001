@@ -80,6 +80,39 @@ class BaseForm(FlaskForm):
         locales = ('es_ES', 'es')
 
 
+class DesignProjectForm(BaseForm):
+    """Project details; lifecycle state is intentionally never a writable field."""
+
+    title = StringField('Título', validators=[DataRequired(), Length(max=200)])
+    description = TextAreaField('Producto o servicio que se diseña', validators=[DataRequired()])
+    owner_id = SelectField('Responsable', coerce=optional_id,
+                           choices=[CHOOSE_PERSON], validators=[DataRequired()])
+    customer_id = SelectField('Cliente', coerce=optional_id, choices=[])
+    process_ids = SelectMultipleField('Procesos vinculados', coerce=int, choices=[])
+    planned_start = DateField('Inicio previsto', validators=[Optional()])
+    planned_end = DateField('Fin previsto', validators=[Optional()])
+    starter_stages = BooleanField('Crear etapas iniciales')
+
+
+class DesignStageForm(BaseForm):
+    """Stage details; the service validates completion and ordered positions."""
+
+    name = StringField('Nombre', validators=[DataRequired(), Length(max=200)])
+    owner_id = SelectField('Responsable', coerce=optional_id,
+                           choices=[CHOOSE_PERSON], validators=[DataRequired()])
+    planned_date = DateField('Fecha prevista', validators=[Optional()])
+    position = IntegerField('Posición', validators=[Optional(), NumberRange(min=1)])
+    done = BooleanField('Finalizada')
+    done_date = DateField('Fecha de finalización', validators=[Optional()])
+
+
+class DesignTransitionForm(BaseForm):
+    """CSRF-protected web-only lifecycle action."""
+
+    target = StringField('Estado de destino', validators=[DataRequired()])
+    cancellation_reason = TextAreaField('Motivo de cancelación')
+
+
 class CommunicationForm(BaseForm):
     """Plan details; routes populate the owner and four audience selectors."""
 

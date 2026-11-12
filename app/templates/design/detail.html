@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form %}
+{% from "_partials/forms.html" import field %}
+{% block title %}{{ project.title }}{% endblock %}
+{% block content %}
+{% call page_header('8.3 · Diseño y desarrollo', project.title) %}
+    <a class="btn" href="{{ url_for('design.list_projects') }}">Volver al registro</a>
+    {% if editable and can('update', 'design') %}
+    <a class="btn" href="{{ url_for('design.edit_project', project_id=project.id) }}">Editar proyecto</a>
+    {% endif %}
+    {% if project.state.name == 'borrador' and not stages and can('delete', 'design') %}
+    {{ delete_form(url_for('design.delete_project', project_id=project.id), '¿Eliminar este proyecto borrador?') }}
+    {% endif %}
+{% endcall %}
+{% include 'design/_applicability.html' %}
+<section class="card">
+    <h2>Plan del proyecto</h2>
+    <p><strong>Estado:</strong> {{ project.state.value }}</p>
+    <p><strong>Producto o servicio:</strong> {{ project.description }}</p>
+    <p><strong>Responsable:</strong> {{ project.owner.nombre }}</p>
+    <p><strong>Cliente:</strong> {{ project.customer.nombre if project.customer else '—' }}</p>
+    <p><strong>Inicio previsto:</strong> {{ project.planned_start or '—' }} · <strong>Fin previsto:</strong> {{ project.planned_end or '—' }}</p>
+    <p><strong>Procesos:</strong> {% for process in project.processes %}{{ process.proceso }}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}</p>
+    {% if project.cancellation_reason %}<p><strong>Motivo de cancelación:</strong> {{ project.cancellation_reason }}</p>{% endif %}
+</section>
+<section class="card">
+    <h2>Etapas ordenadas</h2>
+    {% if editable and can('create', 'design') %}<a class="btn" href="{{ url_for('design.new_stage', project_id=project.id) }}">Añadir etapa</a>{% endif %}
+    <ol>{% for stage in stages %}<li>
+        <strong>{{ stage.name }}</strong> · {{ stage.owner.nombre }} · Prevista: {{ stage.planned_date or '—' }}
+        {% if stage.done %} · Finalizada: {{ stage.done_date }}{% else %} · Pendiente{% endif %}
+        {% if editable and not stage.done and can('update', 'design') %}
+        <a class="btn btn--sm" href="{{ url_for('design.edit_stage', project_id=project.id, stage_id=stage.id) }}">Editar / ordenar</a>
+        {{ delete_form(url_for('design.delete_stage', project_id=project.id, stage_id=stage.id), '¿Eliminar esta etapa pendiente?') }}
+        {% endif %}
+    </li>{% else %}<li>No hay etapas; registra al menos una antes de planificar.</li>{% endfor %}</ol>
+</section>
+{% if targets %}
+<section class="card">
+    <h2>Estado del proyecto</h2>
+    {% for target in targets %}
+    <form method="post" action="{{ url_for('design.transition_project', project_id=project.id) }}" class="form-card">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="target" value="{{ target.name }}">
+        {% if target.name == 'cancelado' %}{{ field(transition_form.cancellation_reason) }}{% endif %}
+        <button class="btn" type="submit">{{ {'planificado': 'Planificar', 'en_curso': 'Iniciar', 'cancelado': 'Cancelar proyecto'}[target.name] }}</button>
+    </form>
+    {% endfor %}
+    <p>La finalización con aprobación no está disponible en esta entrega (DD1).</p>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,9 @@
+{% if applicability is not none %}
+<div class="card">
+    <p>Aplicabilidad de 8.3 en el alcance aprobado: <strong>{{ 'Aplica' if applicability.aplica else 'No aplica' }}</strong>.</p>
+    {% if not applicability.aplica %}<p>{{ applicability.justificacion }}</p>{% endif %}
+    <p>Este registro no modifica el alcance del SGC ni sus exclusiones.</p>
+</div>
+{% else %}
+<p>No hay un alcance aprobado; la aplicabilidad de 8.3 aún no está declarada.</p>
+{% endif %}

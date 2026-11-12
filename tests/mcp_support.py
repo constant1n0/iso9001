@@ -117,6 +117,9 @@ SEEDS = {
                       "responsable_id": 1, "fecha_limite": "2026-12-31"},
     "confirmaciones_lectura": {"persona_id": 1, "tipo": "objetivos",
                                "fecha_confirmacion": "2020-01-01"},
+    # Keep citation dependencies ahead of their children in every-module loops.
+    'design_projects': {'title': 'Design', 'description': 'Product', 'owner_id': 1},
+    'design_stages': {'project_id': 1, 'name': 'Prototype', 'owner_id': 1},
 }
 
 
@@ -169,6 +172,12 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
     def seed(self, slug: str, **overrides) -> int:
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
+        if slug == 'design_projects' and db.session.get(Person, 1) is None:
+            self.seed('personas')
+        if slug == 'design_stages':
+            from app.models import DesignProject
+            if db.session.get(DesignProject, 1) is None:
+                self.seed('design_projects')
         if (slug in ("documentos", "objetivos_calidad", "acciones_revision", "riesgos",
                      "oportunidades", "cambios_sgc", "confirmaciones_lectura", "knowledge", "communication") and db.session.get(Person, 1) is None):
             self.seed("personas")

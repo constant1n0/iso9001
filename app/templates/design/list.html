@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% block title %}Diseño y desarrollo{% endblock %}
+{% block content %}
+{% call page_header('8.3 · Diseño y desarrollo', 'Proyectos de diseño') %}
+    {% if can('create', 'design') %}<a class="btn btn--primary" href="{{ url_for('design.new_project') }}">Nuevo proyecto</a>{% endif %}
+{% endcall %}
+{% include 'design/_applicability.html' %}
+<form method="get" class="form-card">
+    {% for key, label in [('state', 'Estado'), ('owner_id', 'Responsable'), ('customer_id', 'Cliente')] %}
+    <label for="{{ key }}">{{ label }}</label>
+    <select id="{{ key }}" name="{{ key }}">
+        <option value="">Todos</option>
+        {% for value, text in choices[key] %}<option value="{{ value }}"{% if selected.get(key) == value %} selected{% endif %}>{{ text }}</option>{% endfor %}
+    </select>
+    {% endfor %}
+    <button class="btn" type="submit">Filtrar</button>
+    <a class="btn btn--ghost" href="{{ url_for('design.list_projects') }}">Limpiar filtros</a>
+</form>
+{% if projects %}
+<div class="card table-wrap"><table class="table">
+    <thead><tr><th>Proyecto</th><th>Estado</th><th>Responsable</th><th>Cliente</th><th>Fin previsto</th></tr></thead>
+    <tbody>{% for project in projects %}<tr>
+        <td><a href="{{ url_for('design.show_project', project_id=project.id) }}">{{ project.title }}</a></td>
+        <td>{{ project.state.value }}</td><td>{{ project.owner.nombre }}</td>
+        <td>{{ project.customer.nombre if project.customer else '—' }}</td><td>{{ project.planned_end or '—' }}</td>
+    </tr>{% endfor %}</tbody>
+</table></div>
+{% else %}{{ empty_state('No hay proyectos de diseño con estos filtros.') }}{% endif %}
+{% endblock %}

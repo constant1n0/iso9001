@@ -26,7 +26,7 @@ from ..models import (
     OrigenNoConformidad, OrigenRiesgo, PrioridadOportunidad, ResultadoEvaluacion, SentidoObjetivo,
     TipoAccionRevision, TipoContexto, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
-    KnowledgeType, CommunicationChannel, CommunicationScope,
+    KnowledgeType, CommunicationChannel, CommunicationScope, DesignState,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
@@ -34,7 +34,7 @@ from ..services import (
     corrective_actions, document_revisions, documents, improvements, management_reviews,
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
-    training_resources,
+    training_resources, design,
 )
 from ..services.policy import Resource
 
@@ -601,6 +601,32 @@ def _knowledge_extras(item: Any) -> dict[str, Any]:
             **knowledge.link_ids(item)}
 
 
+_DESIGN_MODULES = (
+    # Lifecycle columns are read-only. Planning, starting, cancelling and all
+    # deletion stay on the web, as for qms_changes; DD1 cannot complete projects.
+    Module('design_projects', 'Design projects (8.3)', Resource.DESIGN,
+           design.projects, (
+        _f('title', required=True), _f('description', required=True),
+        _f('owner_id', 'integer', True, note='Person (personas), active when newly chosen.'),
+        _f('customer_id', 'integer', note='Optional customer (clientes); null clears it.'),
+        _f('process_ids', 'integer_list', note='Processes (procesos); replaces the set.'),
+        _f('planned_start', 'date'), _f('planned_end', 'date', note='Not before planned_start.'),
+        _f('starter_stages', 'boolean', note='Create only: offer seven editable initial stages.'),
+    ), (_f('state', 'enum', members=DesignState, note=(
+            'Starts borrador. Transitions web-only; completion unavailable in DD1.')),
+        _f('owner_id', 'integer'), _f('customer_id', 'integer')),
+        extras=lambda row: {'process_ids': row.process_ids}),
+    Module('design_stages', 'Design project stages (8.3.2)', Resource.DESIGN,
+           _DatedWrites(design.stages), (
+        _f('project_id', 'integer', True, note='Design project; cannot change later.'),
+        _f('name', required=True), _f('owner_id', 'integer', True),
+        _f('planned_date', 'date'), _f('position', 'integer', note='1-based; defaults to append.'),
+        _f('done', 'boolean'), _f('done_date', 'date', note=(
+            'Required exactly when done, never future. Done stages are read-only. '
+            'Cancelled projects take no stage writes.')),
+    ), (_f('project_id', 'integer'),)),
+)
+
 _MODULES = (
     Module('equipos_medicion', 'Measuring equipment', Resource.MEASURING_EQUIPMENT,
            equipment.equipment, (
@@ -962,6 +988,7 @@ _MODULES = (
     *_provider_modules(),
     *_context_modules(),
     *_change_modules(),
+    *_DESIGN_MODULES,
     Module("confirmaciones_lectura", "Read confirmations", Resource.READ_CONFIRMATIONS,
            _DatedWrites(read_confirmations), (
         _f("persona_id", "integer", True, note="Existing person (personas), active when newly chosen."),

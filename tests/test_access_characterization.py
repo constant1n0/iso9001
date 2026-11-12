@@ -271,7 +271,16 @@ COMMUNICATION = dict(title='Quality results', content='Explain performance', sco
                      channel='web', owner_id='1', frequency='Every month',
                      next_date='2026-12-01', audience_text='All staff')
 
+DESIGN = dict(title='New design', description='Product', owner_id='1')
+DESIGN_STAGE = dict(name='Stage', owner_id='1')
+
 ENDPOINTS = [
+    *_html('DESIGN', '/diseno/', ('nuevo', DESIGN), ('1/editar', DESIGN), '2/eliminar'),
+    Endpoint('DESIGN', 'read', 'GET', '/diseno/1', 200),
+    Endpoint('DESIGN', 'create', 'POST', '/diseno/1/etapas/nueva', 302, DESIGN_STAGE),
+    Endpoint('DESIGN', 'update', 'POST', '/diseno/1/etapas/1/editar', 302, DESIGN_STAGE),
+    Endpoint('DESIGN', 'update', 'POST', '/diseno/1/etapas/1/eliminar', 302),
+    Endpoint('DESIGN', 'update', 'POST', '/diseno/1/transicion', 302, {'target': 'planificado'}),
     *_html('COMMUNICATION', '/comunicaciones/', ('nuevo', COMMUNICATION),
            ('1/editar', COMMUNICATION), '1/eliminar'),
     Endpoint('COMMUNICATION', 'read', 'GET', '/comunicaciones/1', 200),
@@ -483,6 +492,7 @@ ADMIN_AUDITOR = {ADMIN, AUDITOR}
 ALL = set(RoleEnum)
 JSON_REGISTER = (ALL, ADMIN_AUDITOR, {ADMIN})
 ALLOWED = {
+    'DESIGN': JSON_REGISTER,
     "COMMUNICATION": JSON_REGISTER,
     "KNOWLEDGE": JSON_REGISTER,
     "MEASURING_EQUIPMENT": JSON_REGISTER,
@@ -663,6 +673,13 @@ class AccessCharacterizationTestCase(unittest.TestCase):
             db.session.add(EquipoMedicion(codigo='EQ-1', nombre='Balanza'))
             db.session.add(KnowledgeItem(kind=KnowledgeType.conocimiento,
                                         title='Tool set-up', summary='Keep evidence', owner_id=1))
+            from app.models import DesignProject, DesignStage
+            db.session.add_all([
+                DesignProject(title='Seed', description='Product', owner_id=1),
+                DesignProject(title='Empty draft', description='Product', owner_id=1),
+            ])
+            db.session.flush()
+            db.session.add(DesignStage(project_id=1, name='Prototype', owner_id=1, position=1))
             db.session.flush()  # the measurement cites objective 1, the action review 1
             db.session.add(
                 MedicionObjetivo(objetivo_id=1, fecha=date(2026, 1, 31), valor=90)

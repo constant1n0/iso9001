@@ -34,7 +34,7 @@ nunca puede eliminar.
 
   | Herramienta | Finalidad |
   |---|---|
-  | `qms_modules` | Los 38 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
+  | `qms_modules` | Los 40 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
   | `qms_list` | Una página acotada de un módulo, con los filtros que enumera `qms_modules` |
   | `qms_get` | Un registro por su `id` |
   | `qms_create` | Crea un registro |
@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 38 módulos: `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
+`qms_modules` enumera 40 módulos: `design_projects`, `design_stages`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -71,6 +71,45 @@ nunca puede eliminar.
 `cambios_sgc`, `tareas_cambio`, `clientes`, `reclamaciones` y `confirmaciones_lectura`. Cada campo tiene un `type`, un indicador
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
+
+Diseño y desarrollo (8.3, DD1):
+
+- `design_projects`: obligatorios `title` (hasta 200 caracteres), `description`
+  (producto o servicio que se diseña) y `owner_id` (persona existente de
+  `personas`, activa al elegirla o cambiarla). Opcionales: `customer_id`
+  (`clientes`, `null` quita el vínculo), `process_ids` (lista de enteros de
+  `procesos`; sustituye el conjunto, `[]` lo vacía, omitirlo lo conserva),
+  `planned_start` y `planned_end` (YYYY-MM-DD; fin no anterior al inicio).
+  `starter_stages` es booleano, solo de creación: si es `true`, crea siete
+  etapas editables con el responsable del proyecto; si se omite, no crea ninguna.
+- Lecturas devuelven `process_ids`, `state` y `cancellation_reason`. `state`
+  es de solo lectura y empieza en `borrador`. Filtros: `state` (`borrador`,
+  `planificado`, `en_curso`, `completado`, `cancelado`), `owner_id`, `customer_id`.
+  La etiqueta devuelta para `en_curso` es `en curso`. Planificar, iniciar y
+  cancelar son exclusivamente web; `completado` no es alcanzable en DD1.
+- `design_stages`: obligatorios `project_id`, `name` (hasta 200 caracteres) y
+  `owner_id` (persona activa al elegirla). Opcionales: `planned_date`,
+  `position` (entero desde 1; omitirlo añade al final), `done` (booleano,
+  inicialmente falso) y `done_date` (YYYY-MM-DD, obligatoria exactamente cuando
+  `done` es verdadero y nunca futura). Filtro: `project_id`. Orden por proyecto
+  y posición. Una etapa nunca cambia de proyecto; una finalizada es de solo
+  lectura. No se pueden desplazar etapas finalizadas con otra operación de orden.
+- Todos los roles leen con ámbito `read`; Administrador y Auditor crean y
+  actualizan con ámbito `write`. Responsables existentes inactivos se conservan.
+  Proyectos cancelados no admiten cambios ni nuevas etapas. Guardar sin cambios
+  no añade auditoría; los rechazos no cambian nada. Las listas de procesos se
+  auditan en el proyecto y las citas quedan protegidas por RESTRICT.
+- Ningún token elimina ni ejecuta transiciones, ni siquiera enviando `state`,
+  `target` o `cancellation_reason` a `qms_update`: son campos no permitidos.
+  Entradas, salidas, controles y aprobación final están pendientes de DD2–DD4.
+  La aplicabilidad de 8.3 sigue siendo la del alcance aprobado, nunca la decide
+  la creación de un proyecto.
+
+Ejemplo de `qms_create` (la persona activa 1 debe existir):
+
+```json
+{"module": "design_projects", "data": {"title": "Nuevo envase", "description": "Envase reciclable", "owner_id": 1, "starter_stages": true}}
+```
 
 Plan y registro de comunicación (7.4):
 

@@ -2934,6 +2934,110 @@ class TareaCambio(RecordMetadataMixin, db.Model):
         return f'<TareaCambio {self.id} {self.estado.name if self.estado else None}>'
 
 
+class DesignState(enum.Enum):
+    """Design lifecycle; completion is reserved for the later approval gate."""
+
+    borrador = 'borrador'
+    planificado = 'planificado'
+    en_curso = 'en curso'
+    completado = 'completado'
+    cancelado = 'cancelado'
+
+
+design_processes = db.Table(
+    'design_processes',
+    db.Column('project_id', db.Integer, nullable=False),
+    db.Column('process_id', db.Integer, nullable=False),
+    db.PrimaryKeyConstraint('project_id', 'process_id', name='pk_design_processes'),
+    db.ForeignKeyConstraint(
+        ['project_id'], ['design_projects.id'], name='fk_design_processes_project_id',
+        ondelete='RESTRICT', onupdate='RESTRICT'),
+    db.ForeignKeyConstraint(
+        ['process_id'], ['procesos_operacion.id_proceso'],
+        name='fk_design_processes_process_id', ondelete='RESTRICT', onupdate='RESTRICT'),
+    db.Index('ix_design_processes_process_id', 'process_id'),
+)
+
+
+class DesignProject(RecordMetadataMixin, db.Model):
+    """A product/service design project (8.3), separate from QMS changes."""
+
+    __tablename__ = 'design_projects'
+    __table_args__ = (
+        db.PrimaryKeyConstraint('id', name='pk_design_projects'),
+        db.CheckConstraint('length(trim(title)) > 0', name='ck_design_projects_title'),
+        db.CheckConstraint('length(trim(description)) > 0',
+                           name='ck_design_projects_description'),
+        db.CheckConstraint('planned_end >= planned_start', name='ck_design_projects_dates'),
+        db.CheckConstraint(
+            "state != 'cancelado' OR (cancellation_reason IS NOT NULL AND "
+            "length(trim(cancellation_reason)) > 0)", name='ck_design_projects_cancelled'),
+        db.ForeignKeyConstraint(['owner_id'], ['personas.id'],
+                                name='fk_design_projects_owner_id',
+                                ondelete='RESTRICT', onupdate='RESTRICT'),
+        db.ForeignKeyConstraint(['customer_id'], ['clientes.id'],
+                                name='fk_design_projects_customer_id',
+                                ondelete='RESTRICT', onupdate='RESTRICT'),
+        *(db.Index(f'ix_design_projects_{column}', column) for column in (
+            'owner_id', 'customer_id', 'state', 'created_by_id', 'updated_by_id')),
+    )
+
+    id = db.Column(db.Integer, nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    owner_id = db.Column(db.Integer, nullable=False)
+    customer_id = db.Column(db.Integer)
+    planned_start = db.Column(db.Date)
+    planned_end = db.Column(db.Date)
+    state = db.Column(text_enum(DesignState, 'ck_design_projects_state'), nullable=False,
+                      default=DesignState.borrador, server_default='borrador')
+    cancellation_reason = db.Column(db.Text)
+    owner = db.relationship('Person')
+    customer = db.relationship('Cliente')
+    processes = db.relationship('ProcesoOperacion', secondary=design_processes,
+                                order_by='ProcesoOperacion.id_proceso', lazy='selectin')
+    stages = db.relationship('DesignStage', order_by='DesignStage.position',
+                             passive_deletes='all')
+
+    @property
+    def process_ids(self) -> list[int]:
+        """Stable, ascending process ids for forms, MCP and audit snapshots."""
+        return sorted(process.id_proceso for process in self.processes)
+
+
+class DesignStage(RecordMetadataMixin, db.Model):
+    """One freely named, ordered stage; done stages are retained as evidence."""
+
+    __tablename__ = 'design_stages'
+    __table_args__ = (
+        db.PrimaryKeyConstraint('id', name='pk_design_stages'),
+        db.UniqueConstraint('project_id', 'position', name='uq_design_stages_position'),
+        db.CheckConstraint('position > 0', name='ck_design_stages_position'),
+        db.CheckConstraint('length(trim(name)) > 0', name='ck_design_stages_name'),
+        db.CheckConstraint(
+            '(done AND done_date IS NOT NULL) OR (NOT done AND done_date IS NULL)',
+            name='ck_design_stages_done'),
+        db.ForeignKeyConstraint(['project_id'], ['design_projects.id'],
+                                name='fk_design_stages_project_id',
+                                ondelete='RESTRICT', onupdate='RESTRICT'),
+        db.ForeignKeyConstraint(['owner_id'], ['personas.id'],
+                                name='fk_design_stages_owner_id',
+                                ondelete='RESTRICT', onupdate='RESTRICT'),
+        *(db.Index(f'ix_design_stages_{column}', column) for column in (
+            'project_id', 'owner_id', 'created_by_id', 'updated_by_id')),
+    )
+
+    id = db.Column(db.Integer, nullable=False)
+    project_id = db.Column(db.Integer, nullable=False)
+    position = db.Column(db.Integer, nullable=False)
+    name = db.Column(db.String(200), nullable=False)
+    owner_id = db.Column(db.Integer, nullable=False)
+    planned_date = db.Column(db.Date)
+    done = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    done_date = db.Column(db.Date)
+    owner = db.relationship('Person')
+
+
 # Registro de auditoría append-only: quién cambió qué y cuándo (ISO 9001 7.5.3)
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
