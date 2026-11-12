@@ -201,6 +201,9 @@ def new_element(project_id: int, section: str) -> ResponseReturnValue:
     register = IO_SECTIONS[section][0]
     form = _element_form(actor, section)
     names = tuple(f.name for f in register.SPEC.fields if f.name != 'project_id')
+    if (refused := _foreign_parent(project_id)) is not None:
+        return render_template('design/io_form.html', form=form,
+                               title='Añadir elemento de diseño', project_id=project_id), refused
     if form.validate_on_submit() and saved(lambda: register.create(
             db.session, actor, form_data(form, names) | {'project_id': project_id})):
         flash('Elemento de diseño añadido.', 'success')
@@ -220,6 +223,9 @@ def edit_element(project_id: int, section: str, element_id: int) -> ResponseRetu
     register = IO_SECTIONS[section][0]
     form = _element_form(actor, section, found)
     names = tuple(f.name for f in register.SPEC.fields if f.name != 'project_id')
+    if (refused := _foreign_parent(project_id)) is not None:
+        return render_template('design/io_form.html', form=form,
+                               title='Editar elemento de diseño', project_id=project_id), refused
     if form.validate_on_submit() and saved(lambda: register.update(
             db.session, actor, element_id, form_data(form, names))):
         flash('Elemento de diseño actualizado.', 'success')
@@ -247,9 +253,21 @@ def delete_element(project_id: int, section: str, element_id: int) -> ResponseRe
 def show_revision(revision_id: int) -> ResponseReturnValue:
     """Show the exact cited revision, never substituting today's effective revision."""
     actor = current_actor()
+    if not design_io.is_cited(db.session, revision_id):
+        # Only revisions cited by a design input or output are served here.
+        raise NotFound('Revisión no encontrada.')
     revision = document_revisions.get(db.session, actor, revision_id)
     return render_template('design/revision.html', revision=revision,
                            document=db.session.get(Document, revision.document_id))
+
+
+def _foreign_parent(project_id: int) -> int | None:
+    """Refuse, never drop, a submitted project_id naming another project."""
+    submitted = request.form.get('project_id') if request.method == 'POST' else None
+    if submitted is None or submitted == str(project_id):
+        return None
+    flash(design_io.MOVE_REFUSED, 'danger')
+    return 400
 
 
 def _stage(actor: Actor, project_id: int, stage_id: int) -> DesignStage:

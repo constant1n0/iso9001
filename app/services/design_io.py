@@ -80,11 +80,20 @@ def revision_choices(session: Session, who: Actor,
     return choices
 
 
+MOVE_REFUSED = 'Un elemento no puede pasar a otro proyecto.'
+
+
+def is_cited(session: Session, revision_id: int) -> bool:
+    """Whether any design input or output cites this exact document revision."""
+    return any(session.scalar(select(model.id).where(model.revision_id == revision_id).limit(1))
+               is not None for model in (DesignInput, DesignOutput))
+
+
 def _values(spec: crud.Spec, session: Session, who: Actor, data: Mapping[str, Any],
             found: Any = None) -> dict[str, Any]:
     values = crud._clean(spec, session, data, found)
     if found is not None and values.get('project_id', found.project_id) != found.project_id:
-        raise ValidationError('Un elemento no puede pasar a otro proyecto.')
+        raise ValidationError(MOVE_REFUSED)
     revision_id = values.get('revision_id')
     if revision_id is not None and revision_id != getattr(found, 'revision_id', None):
         if not people.is_db_id(revision_id):
