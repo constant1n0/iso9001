@@ -1,4 +1,4 @@
-"""Thin, CSRF-protected web adapters for design projects and stages (DD1)."""
+"""CSRF-protected design projects, stages, inputs and outputs (DD1–DD2)."""
 from typing import Any
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
@@ -7,10 +7,13 @@ from flask_login import login_required
 
 from ..audit_notifications import local_today
 from ..extensions import db
-from ..forms import (CHOOSE_PERSON, DesignProjectForm, DesignStageForm,
-                     DesignTransitionForm, person_choices)
-from ..models import DesignProject, DesignStage, DesignState
-from ..services import clientes, design, people, process_operations, qms_scope
+from ..forms import (CHOOSE_PERSON, DesignInputForm, DesignOutputForm,
+                     DesignProjectForm, DesignStageForm, DesignTransitionForm,
+                     person_choices)
+from ..models import (DesignInputType, DesignOutputType, DesignProject,
+                      DesignStage, DesignState, Document)
+from ..services import (clientes, design, design_io, document_revisions,
+                        people, process_operations, qms_scope)
 from ..services.actor import Actor
 from ..services.errors import NotFound
 from ..utils.permissions import require_permission
@@ -56,11 +59,29 @@ def list_projects() -> ResponseReturnValue:
 @login_required
 @require_permission('read', RESOURCE)
 def show_project(project_id: int) -> ResponseReturnValue:
-    """Show the design plan, ordered stages and allowed lifecycle actions."""
+    """Show the plan, stages, typed inputs/outputs and permitted lifecycle actions."""
     actor = current_actor()
     project = design.projects.get(db.session, actor, project_id)
+    sections = []
+    revisions = {}
+    has_elements = False
+    for section, (register, form_class, members, title) in IO_SECTIONS.items():
+        all_rows = register.list_(db.session, actor, project_id=project_id)
+        has_elements = has_elements or bool(all_rows)
+        selected = request.args.get(section + '_tipo', '')
+        if selected not in members.__members__:
+            selected = ''
+        rows = [row for row in all_rows if not selected or row.kind.name == selected]
+        sections.append(dict(slug=section, title=title, rows=rows, members=members,
+                             selected=selected))
+        for row in rows:
+            revision = design_io.visible_revision(db.session, actor, row.revision_id)
+            if revision is not None:
+                document = db.session.get(Document, revision.document_id)
+                revisions[revision.id] = (document.code, revision.numero)
     return render_template(
         'design/detail.html', project=project,
+        io_sections=sections, visible_revisions=revisions, has_elements=has_elements,
         stages=design.stages.list_(db.session, actor, project_id=project_id),
         targets=design.TRANSITIONS.get(project.state, ()) if design.may_transition(actor, project) else (),
         applicability=_applicability(actor), transition_form=DesignTransitionForm(),
@@ -146,6 +167,89 @@ def transition_project(project_id: int) -> ResponseReturnValue:
             cancellation_reason=form.cancellation_reason.data)):
         flash('Estado del proyecto actualizado.', 'success')
     return _page(project_id)
+
+
+IO_SECTIONS = {
+    'entradas': (design_io.inputs, DesignInputForm, DesignInputType, 'Entradas del diseño'),
+    'salidas': (design_io.outputs, DesignOutputForm, DesignOutputType, 'Salidas del diseño'),
+}
+
+
+def _element(actor: Actor, section: str, project_id: int, element_id: int) -> Any:
+    register = IO_SECTIONS[section][0]
+    found = register.get(db.session, actor, element_id)
+    if found.project_id != project_id:
+        raise NotFound(register.SPEC.not_found)
+    return found
+
+
+def _element_form(actor: Actor, section: str, found: Any = None) -> Any:
+    form_class = IO_SECTIONS[section][1]
+    form = form_class(obj=found)
+    form.revision_id.choices = design_io.revision_choices(
+        db.session, actor, getattr(found, 'revision_id', None))
+    return form
+
+
+@bp.route('/<int:project_id>/<any(entradas,salidas):section>/nuevo', methods=['GET', 'POST'])
+@login_required
+@require_permission('create', RESOURCE)
+def new_element(project_id: int, section: str) -> ResponseReturnValue:
+    """Add an input or output through the same policy and validation as MCP."""
+    actor = current_actor()
+    design.projects.get(db.session, actor, project_id)
+    register = IO_SECTIONS[section][0]
+    form = _element_form(actor, section)
+    names = tuple(f.name for f in register.SPEC.fields if f.name != 'project_id')
+    if form.validate_on_submit() and saved(lambda: register.create(
+            db.session, actor, form_data(form, names) | {'project_id': project_id})):
+        flash('Elemento de diseño añadido.', 'success')
+        return _page(project_id)
+    return render_template('design/io_form.html', form=form, title='Añadir elemento de diseño',
+                           project_id=project_id)
+
+
+@bp.route('/<int:project_id>/<any(entradas,salidas):section>/<int:element_id>/editar',
+          methods=['GET', 'POST'])
+@login_required
+@require_permission('update', RESOURCE)
+def edit_element(project_id: int, section: str, element_id: int) -> ResponseReturnValue:
+    """Edit ordinary DD2 fields; rendered selectors retain stored enum/revision values."""
+    actor = current_actor()
+    found = _element(actor, section, project_id, element_id)
+    register = IO_SECTIONS[section][0]
+    form = _element_form(actor, section, found)
+    names = tuple(f.name for f in register.SPEC.fields if f.name != 'project_id')
+    if form.validate_on_submit() and saved(lambda: register.update(
+            db.session, actor, element_id, form_data(form, names))):
+        flash('Elemento de diseño actualizado.', 'success')
+        return _page(project_id)
+    return render_template('design/io_form.html', form=form, title='Editar elemento de diseño',
+                           project_id=project_id)
+
+
+@bp.route('/<int:project_id>/<any(entradas,salidas):section>/<int:element_id>/eliminar',
+          methods=['POST'])
+@login_required
+@require_permission('update', RESOURCE)
+def delete_element(project_id: int, section: str, element_id: int) -> ResponseReturnValue:
+    """Maintaining roles delete ordinary DD2 elements on the web only."""
+    actor = current_actor()
+    _element(actor, section, project_id, element_id)
+    if committed(lambda: IO_SECTIONS[section][0].delete(db.session, actor, element_id)):
+        flash('Elemento de diseño eliminado.', 'success')
+    return _page(project_id)
+
+
+@bp.route('/revisiones/<int:revision_id>')
+@login_required
+@require_permission('read', RESOURCE)
+def show_revision(revision_id: int) -> ResponseReturnValue:
+    """Show the exact cited revision, never substituting today's effective revision."""
+    actor = current_actor()
+    revision = document_revisions.get(db.session, actor, revision_id)
+    return render_template('design/revision.html', revision=revision,
+                           document=db.session.get(Document, revision.document_id))
 
 
 def _stage(actor: Actor, project_id: int, stage_id: int) -> DesignStage:

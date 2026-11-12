@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+{{ page_header('8.3 · Entradas y salidas del diseño', title) }}
+<p>Elige un tipo y escribe el texto. Las salidas necesitan criterios de aceptación.</p>
+<p>Puedes citar una revisión aprobada o vigente de un documento controlado que puedas consultar.
+    El vínculo conserva esa revisión exacta aunque después quede obsoleta; no cambia a la revisión más reciente.</p>
+{{ form_card(form, url_for('design.show_project', project_id=project_id)) }}
+{% endblock %}

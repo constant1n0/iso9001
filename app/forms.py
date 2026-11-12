@@ -28,6 +28,7 @@ from .models import (
     TipoConfirmacion, TipoEncuesta, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
     KnowledgeType, CommunicationChannel, CommunicationScope,
+    DesignInputType, DesignOutputType,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -744,6 +745,26 @@ def _choice(label, enum_cls, empty=None):
         return SelectField(label, coerce=member_name, choices=members,
                            validators=[DataRequired()])
     return SelectField(label, coerce=optional_member, choices=[('', empty), *members])
+
+
+class DesignInputForm(BaseForm):
+    """Typed design input with an optional exact revision selected by the route."""
+
+    kind = _choice('Tipo', DesignInputType)
+    text = TextAreaField('Texto', validators=[DataRequired()])
+    revision_id = SelectField('Revisión de documento controlado', coerce=optional_id,
+                              choices=[])
+
+
+class DesignOutputForm(BaseForm):
+    """Typed output; acceptance criteria are mandatory, approval is not offered."""
+
+    kind = _choice('Tipo', DesignOutputType)
+    text = TextAreaField('Texto', validators=[DataRequired()])
+    acceptance_criteria = TextAreaField('Criterios de aceptación',
+                                       validators=[DataRequired()])
+    revision_id = SelectField('Revisión de documento controlado', coerce=optional_id,
+                              choices=[])
 
 
 def _scale(label):
