@@ -16,7 +16,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..models import (DesignInput, DesignOutput, DesignProject, DesignStage,
+from ..models import (DesignControlRecord, DesignPlannedControl,
+                      DesignInput, DesignOutput, DesignProject, DesignStage,
                       DesignState, ProcesoOperacion)
 from . import audit, clientes, crud, fields, people, policy
 from .actor import Actor
@@ -202,6 +203,9 @@ def _delete_project(session: Session, who: Actor, record_id: int) -> None:
     if any(session.scalar(select(model.id).where(model.project_id == found.id).limit(1))
            is not None for model in (DesignInput, DesignOutput)):
         raise ValidationError('No se puede eliminar un proyecto con entradas o salidas.')
+    if any(session.scalar(select(model.id).where(model.project_id == found.id).limit(1))
+           is not None for model in (DesignPlannedControl, DesignControlRecord)):
+        raise ValidationError('No se puede eliminar un proyecto con controles del diseño.')
     audit.record(session, who, 'delete', found, before=_snapshot(found))
     session.delete(found)
     _flush(session)
@@ -362,6 +366,9 @@ def _delete_stage(session: Session, who: Actor, record_id: int) -> None:
         raise PermissionDenied()
     parent, found = _stage_parent(session, record_id)
     _editable(parent)
+    if any(session.scalar(select(model.id).where(model.stage_id == found.id).limit(1))
+           is not None for model in (DesignPlannedControl, DesignControlRecord)):
+        raise ValidationError('No se puede eliminar una etapa citada por controles del diseño.')
     rows = _stage_rows(session, parent.id)
     if any(row.done for row in rows if row.position >= found.position):
         raise ValidationError(DONE_LOCKED)

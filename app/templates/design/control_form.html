@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+{{ page_header('8.3 · Controles del diseño', title) }}
+<p>Planifica revisión, verificación y validación por separado. Al registrar un control,
+    indica la fecha, el responsable, el resultado y la evidencia o referencia.
+    Añade acciones si el resultado no es «conforme».</p>
+<p>Los registros son evidencia inmutable: para rectificar, registra uno nuevo.
+    Un plan se resuelve con al menos un registro «conforme» o «conforme con observaciones»
+    vinculado, o al retirarlo con justificación. «No conforme» no lo resuelve.</p>
+{{ form_card(form, url_for('design.show_project', project_id=project_id)) }}
+{% endblock %}

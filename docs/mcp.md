@@ -34,7 +34,7 @@ nunca puede eliminar.
 
   | Herramienta | Finalidad |
   |---|---|
-  | `qms_modules` | Los 40 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
+  | `qms_modules` | Los 44 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
   | `qms_list` | Una página acotada de un módulo, con los filtros que enumera `qms_modules` |
   | `qms_get` | Un registro por su `id` |
   | `qms_create` | Crea un registro |
@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 42 módulos: `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
+`qms_modules` enumera 44 módulos: `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -72,7 +72,7 @@ nunca puede eliminar.
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
 
-Diseño y desarrollo (8.3, DD1–DD2):
+Diseño y desarrollo (8.3, DD1–DD3):
 
 - `design_projects`: obligatorios `title` (hasta 200 caracteres), `description`
   (producto o servicio que se diseña) y `owner_id` (persona existente de
@@ -101,8 +101,8 @@ Diseño y desarrollo (8.3, DD1–DD2):
   auditan en el proyecto y las citas quedan protegidas por RESTRICT.
 - Ningún token elimina ni ejecuta transiciones, ni siquiera enviando `state`,
   `target` o `cancellation_reason` a `qms_update`: son campos no permitidos.
-  Controles, versiones de salidas, cambios autorizados y aprobación final están
-  pendientes de DD3–DD4.
+  Versiones de salidas, cambios autorizados y aprobación final están
+  pendientes de DD4.
   La aplicabilidad de 8.3 sigue siendo la del alcance aprobado, nunca la decide
   la creación de un proyecto.
 
@@ -140,6 +140,50 @@ Ejemplo de salida para un proyecto 1 existente:
 
 ```json
 {"module": "design_outputs", "data": {"project_id": 1, "kind": "specification", "text": "Especificación del envase", "acceptance_criteria": "Capacidad de 500 ml ± 5 ml"}}
+```
+
+Controles del diseño (DD3, 8.3.2/8.3.4):
+
+- `design_planned_controls`: obligatorios `project_id`, `kind`, `description`
+  (propósito no vacío) y `responsible_id` (persona activa al elegirla).
+  `kind`: `review` (revisión), `verification` (verificación), `validation`
+  (validación). Opcionales: `stage_id` del mismo proyecto y `planned_date`
+  (YYYY-MM-DD). Los planes se crean y editan en `borrador`, `planificado`
+  y `en_curso`, solo mientras no estén resueltos.
+- `qms_update` permite retirar un plan pendiente con `{"withdrawn": true,
+  "withdrawal_reason": "Motivo de la omisión"}`. El motivo no puede estar
+  vacío. No se borran planes ni se reactivan planes resueltos. Los planes
+  citados por registros no pueden cambiar de tipo ni de proyecto.
+- Las lecturas añaden `resolved`, booleano calculado: retirada justificada o
+  al menos un registro vinculado `conforming` o `conforming_with_observations`.
+  Un resultado `nonconforming` no resuelve; uno posterior tampoco anula una
+  resolución previa. No se escribe `resolved`, ni se aprueba o completa el
+  proyecto. Filtros: `project_id`, `kind`; orden por proyecto e id.
+- `design_control_records`: admite `qms_get`, `qms_list` y `qms_create`.
+  `qms_update` se rechaza por inmutabilidad incluso sin cambios, igual que
+  `communication_log`; no hay herramienta de borrado.
+- Obligatorios: `project_id` en estado `planificado` o `en_curso`, `kind`
+  (mismo enumerado del plan), `date` (YYYY-MM-DD, nunca futura),
+  `responsible_id` (persona activa), `result` y `evidence` no vacía (texto o
+  referencia, no fichero). `result`: `conforming` (conforme),
+  `conforming_with_observations` (conforme con observaciones), `nonconforming`
+  (no conforme). `actions` es obligatorio salvo con `conforming`.
+- Opcionales: `stage_id` del mismo proyecto, `planned_control_id` de un plan
+  del mismo proyecto y tipo. Se admiten repeticiones por tipo/fecha/plan y
+  registros antiguos añadidos después. Filtros combinables: `project_id`,
+  `kind`, `result`; orden por fecha e id descendentes.
+- Todos los roles leen con ámbito `read`; Administrador y Auditor escriben
+  con ámbito `write`. Los proyectos cancelados/completados son de solo
+  lectura. Las personas ya citadas por planes se conservan aunque se
+  desactiven; las nuevas elecciones exigen personas activas. Personas,
+  etapas, planes y proyectos citados están protegidos por RESTRICT.
+  Cada escritura conserva atribución y auditoría; los no-ops de planes y
+  los rechazos no cambian datos ni auditoría.
+
+Ejemplo de `qms_create` (proyecto 1 planificado/en curso y persona 1 activa):
+
+```json
+{"module": "design_control_records", "data": {"project_id": 1, "kind": "verification", "date": "2020-01-01", "responsible_id": 1, "result": "conforming", "evidence": "Informe de ensayo E-1"}}
 ```
 
 Plan y registro de comunicación (7.4):
