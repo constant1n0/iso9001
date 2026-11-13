@@ -757,7 +757,7 @@ class DesignInputForm(BaseForm):
 
 
 class DesignOutputForm(BaseForm):
-    """Typed output; acceptance criteria are mandatory, approval is not offered."""
+    """Editable draft output content; approval is a separate protected action."""
 
     kind = _choice('Tipo', DesignOutputType)
     text = TextAreaField('Texto', validators=[DataRequired()])
@@ -788,6 +788,23 @@ class DesignControlRecordForm(BaseForm):
     actions = TextAreaField('Acciones (obligatorias salvo resultado «conforme»)')
     stage_id = SelectField('Etapa', coerce=optional_id, choices=[])
     planned_control_id = SelectField('Control planificado', coerce=optional_id, choices=[])
+
+
+class DesignChangeForm(BaseForm):
+    """Proposed change; affected exact approved versions come from the route."""
+
+    reason = TextAreaField('Motivo', validators=[DataRequired()])
+    impact = TextAreaField('Impacto', validators=[DataRequired()])
+    review = TextAreaField('Revisión (obligatoria antes de autorizar)')
+    actions = TextAreaField('Acciones', validators=[DataRequired()])
+    output_ids = SelectMultipleField('Salidas afectadas', coerce=int,
+                                     choices=[], validators=[DataRequired()])
+
+
+class DesignChangeRejectionForm(BaseForm):
+    """A rejection must retain an explicit reason."""
+
+    reason = TextAreaField('Motivo del rechazo', validators=[DataRequired()])
 
 
 class DesignControlWithdrawalForm(BaseForm):

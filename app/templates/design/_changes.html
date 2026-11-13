@@ -1,0 +1,38 @@
+<section class="card" id="cambios">
+    <h2>Cambios del diseño</h2>
+    <p>Indica motivo, impacto, revisión y acciones. Selecciona al menos una salida aprobada actual del proyecto.
+        La autorización y el rechazo exigen un administrador distinto del responsable, con persona vinculada.</p>
+    {% if editable and can('create', 'design') %}
+    <a class="btn" href="{{ url_for('design.new_change', project_id=project.id) }}">Proponer cambio</a>
+    {% endif %}
+    {% for change in design_changes %}
+    <article>
+        <h3>Cambio #{{ change.id }} · {{ change.state.value }}</h3>
+        <p><strong>Motivo:</strong> {{ change.reason }}</p>
+        <p><strong>Impacto:</strong> {{ change.impact }}</p>
+        <p><strong>Revisión:</strong> {{ change.review or 'Pendiente' }}</p>
+        <p><strong>Acciones:</strong> {{ change.actions }}</p>
+        <p><strong>Salidas afectadas:</strong> {% for output in change.outputs %}#{{ output.lineage_id }} · Versión {{ output.version }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+        {% if change.authorized_at %}<p><strong>Autorización:</strong> {{ change.authorized_by.nombre }} · {{ change.authorized_at }}</p>{% endif %}
+        {% if change.rejection_reason %}<p><strong>Motivo del rechazo:</strong> {{ change.rejection_reason }}</p>{% endif %}
+        {% if change.id in applied_changes %}<p>Aplicado: nuevas versiones conservadas en el historial.</p>{% endif %}
+        {% if editable and change.state.name == 'proposed' and can('update', 'design') %}
+        <a class="btn" href="{{ url_for('design.edit_change', project_id=project.id, change_id=change.id) }}">Editar propuesta</a>
+        {% if can_approve %}
+        <form method="post" action="{{ url_for('design.decide_change', project_id=project.id, change_id=change.id, action='autorizar') }}">
+            {{ action_form.hidden_tag() }}<button class="btn" type="submit">Autorizar</button>
+        </form>
+        <form method="post" action="{{ url_for('design.decide_change', project_id=project.id, change_id=change.id, action='rechazar') }}">
+            {{ rejection_form.hidden_tag() }}{{ field(rejection_form.reason) }}
+            <button class="btn" type="submit">Rechazar</button>
+        </form>
+        {% endif %}
+        {% endif %}
+        {% if editable and change.state.name == 'authorized' and change.id not in applied_changes and can('update', 'design') %}
+        <form method="post" action="{{ url_for('design.decide_change', project_id=project.id, change_id=change.id, action='aplicar') }}">
+            {{ action_form.hidden_tag() }}<button class="btn" type="submit">Aplicar cambio: abrir nuevas versiones</button>
+        </form>
+        {% endif %}
+    </article>
+    {% else %}<p>No hay cambios del diseño.</p>{% endfor %}
+</section>

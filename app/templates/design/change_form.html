@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+{{ page_header('8.3.6 · Cambios del diseño', title) }}
+<p>Indica motivo, impacto y acciones. Selecciona al menos una versión actual aprobada
+    del mismo proyecto. La revisión puede quedar pendiente al proponer, pero debe
+    estar cumplimentada antes de autorizar.</p>
+<p>Solo un administrador con persona vinculada distinta del responsable puede
+    autorizar o rechazar. Una decisión es inmutable; al aplicar una autorización,
+    se abren nuevos borradores sin modificar las versiones anteriores.</p>
+{{ form_card(form, url_for('design.show_project', project_id=project_id)) }}
+{% endblock %}

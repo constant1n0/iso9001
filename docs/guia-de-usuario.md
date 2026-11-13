@@ -372,7 +372,7 @@ aprobar en cada módulo.
 | Riesgos, oportunidades y sus acciones | Consultar, crear, editar, eliminar; evaluar la eficacia de las acciones | Consultar, crear, editar; evaluar la eficacia de las acciones | Consultar |
 | Objetivos de la calidad y mediciones | Consultar, crear, editar, cambiar el estado, eliminar | Consultar, crear, editar, cambiar el estado | Consultar |
 | Cambios en el SGC y sus tareas | Consultar, crear, editar, eliminar; aprobar, cancelar, registrar la implantación, revisar la eficacia | Consultar, crear, editar; registrar la implantación, revisar la eficacia | Consultar |
-| Diseño y desarrollo (DD1–DD3) | Consultar y mantener proyectos, etapas, entradas, salidas y planes de control; registrar evidencias inmutables; planificar, iniciar, cancelar; eliminar borradores vacíos y etapas no citadas | Consultar y mantener; registrar evidencias inmutables; planificar, iniciar, cancelar; eliminar etapas no citadas | Consultar |
+| Diseño y desarrollo | Consultar y mantener proyectos, etapas, entradas, salidas borrador y planes; registrar evidencias, proponer y aplicar cambios; aprobar salidas, autorizar/rechazar cambios y completar como persona distinta del responsable; planificar, iniciar, cancelar; eliminar borradores vacíos y etapas no citadas | Consultar y mantener; registrar evidencias, proponer y aplicar cambios; planificar, iniciar, cancelar; eliminar etapas no citadas; sin aprobaciones | Consultar |
 | Proveedores externos y sus evaluaciones | Consultar, crear, editar, eliminar; aprobar, condicionar, bloquear | Consultar, crear, editar | Consultar |
 | Revisiones por la dirección y sus acciones | Consultar, crear, editar, eliminar; celebrar, cerrar | Consultar, crear, editar | Sin acceso |
 | Clientes | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
@@ -1676,8 +1676,10 @@ dirección (véase [Entradas (9.3.2)](#entradas-932)).
 de productos y servicios (8.3). Todos los roles consultan; Administrador y Auditor
 crean y mantienen proyectos, etapas, entradas, salidas y controles planificados,
 y registran evidencias inmutables de revisión, verificación y validación.
-DD1–DD3 cubren estos registros; versiones, cambios autorizados y aprobación
-final quedan pendientes de DD4.
+Las salidas aprobadas se conservan por versiones; los cambios autorizados abren
+nuevos borradores. Solo un Administrador con persona vinculada distinta del
+responsable del proyecto aprueba salidas, autoriza o rechaza cambios y aprueba
+el cierre. Estas decisiones no están disponibles por MCP.
 
 1. Pulsa **Nuevo proyecto**. Escribe **Título** (hasta 200 caracteres) y
    **Producto o servicio que se diseña**, ambos obligatorios.
@@ -1698,7 +1700,7 @@ final quedan pendientes de DD4.
    finalizada no se edita, reordena ni elimina; tampoco puedes desplazarla
    insertando, moviendo o eliminando otra etapa anterior.
 
-### Ciclo de vida del proyecto (DD1)
+### Ciclo de vida del proyecto
 
 | Estado | Acción en la ficha | Resultado |
 |---|---|---|
@@ -1707,9 +1709,9 @@ final quedan pendientes de DD4.
 | **borrador**, **planificado** o **en curso** | **Cancelar proyecto**, con **Motivo de cancelación** no vacío | **cancelado**, conserva el motivo |
 
 Administrador y Auditor ejecutan estas acciones exclusivamente desde la web.
-El estado no se elige en el formulario. **completado** está reservado para DD4:
-no hay ninguna acción que permita alcanzarlo en DD1–DD3. Un proyecto cancelado y
-sus etapas, entradas, salidas y controles son de solo lectura, sin reapertura. Solo
+El estado no se elige en el formulario. El cierre **en curso → completado** exige
+la aprobación independiente descrita más abajo. Un proyecto cancelado o completado
+y sus etapas, entradas, salidas, controles y cambios son de solo lectura, sin reapertura. Solo
 Administrador elimina un proyecto **borrador sin etapas, entradas, salidas ni controles**;
 Administrador y Auditor pueden eliminar etapas
 pendientes cuando no estén citadas por controles y no se desplace una etapa finalizada.
@@ -1743,10 +1745,12 @@ de aceptación** no vacíos. Cada sección permite filtrar por tipo.
   revisiones que pueden consultar. En caso contrario aparece **Revisión
   vinculada**, sin código, título ni enlace. MCP devuelve únicamente el
   identificador de la revisión, igual que otros vínculos entre registros.
-- Administrador y Auditor pueden editar y eliminar estos elementos desde la
-  web mientras el proyecto no esté cancelado. No pueden moverlos a otro
-  proyecto. MCP permite crear y editar, nunca eliminar. La aprobación y las
-  versiones de las salidas pertenecen a DD4; aún no se ofrecen.
+- Administrador y Auditor pueden editar entradas y salidas **borrador** mientras
+  el proyecto no esté cancelado ni completado. No pueden moverlas a otro
+  proyecto. Las entradas y las primeras versiones borrador se pueden eliminar
+  desde la web; las versiones abiertas por un cambio se conservan incluso en
+  borrador. MCP permite crear y editar borradores, nunca eliminar ni aprobar.
+  Las entradas no tienen versiones.
 
 Los responsables, clientes y procesos citados quedan protegidos contra el
 borrado por claves foráneas RESTRICT; para quitar un vínculo opcional, edita
@@ -1784,7 +1788,7 @@ vinculado **conforme** o **conforme con observaciones**, o si está retirado con
 justificación. **no conforme** no lo resuelve; un registro posterior no conforme
 no deshace una resolución anterior. Un registro sin vínculo al plan no lo
 resuelve. La resolución se calcula, no se marca a mano; no aprueba ni completa
-el proyecto (esa puerta de cierre pertenece a DD4).
+el proyecto; el cierre requiere una aprobación independiente.
 
 Para omitir un plan pendiente, escribe **Justificación de la retirada** y pulsa
 **Retirar control planificado**. No se acepta una justificación vacía. El plan
@@ -1799,6 +1803,47 @@ pueden eliminar, ni siquiera tras retirar el plan; desactiva las personas.
 Tampoco se elimina un proyecto con controles. Los proyectos cancelados o
 completados no admiten escrituras de controles. Las negativas se explican y
 no cambian datos ni auditoría.
+
+### Aprobar salidas, autorizar cambios y completar (8.3.5–8.3.6)
+
+1. En **Salidas del diseño**, revisa contenido y criterios de aceptación. Como
+   Administrador independiente, pulsa **Aprobar**. Quedan registrados la persona
+   y la fecha: esa versión ya no se edita ni elimina, ni siquiera por MCP.
+2. Para modificarla, pulsa **Proponer cambio** en **Cambios del diseño**. Indica
+   **Motivo**, **Impacto** y **Acciones** no vacíos. Selecciona al menos una
+   **Salida afectada**: debe ser una versión actual aprobada del mismo proyecto.
+   Puedes dejar pendiente la **Revisión** al proponer, pero es obligatoria para
+   autorizar. Administrador y Auditor pueden editar propuestas desde la web.
+3. Un Administrador distinto del responsable pulsa **Autorizar**, o escribe un
+   **Motivo del rechazo** y pulsa **Rechazar**. La autorización conserva persona
+   y fecha. Una decisión no se modifica ni elimina; también se conservan los
+   rechazos. Si cambian las salidas mientras se revisa una propuesta, actualiza
+   sus vínculos antes de autorizarla.
+4. Administrador o Auditor pulsa **Aplicar cambio: abrir nuevas versiones**.
+   Es una sola operación para todas las salidas afectadas: copia su texto,
+   criterios y cita documental exacta en nuevos borradores numerados. El cambio
+   permanece inmutable y solo se aplica una vez. Si otra autorización ya abrió
+   una versión posterior de alguna salida, esta aplicación se rechaza entera;
+   propone un nuevo cambio sobre las versiones actuales, sin borrar el anterior.
+   Edita y aprueba los nuevos borradores. **Historial de versiones** conserva las
+   versiones anteriores legibles; la numeración pertenece a cada salida original.
+5. Cuando el proyecto esté **en curso**, consulta **Completar proyecto**. La ficha
+   muestra cada condición pendiente. Para completar necesitas **al menos una
+   salida**, todas sus versiones actuales aprobadas, todos los controles
+   planificados resueltos, ningún cambio **propuesto** y ningún cambio
+   **autorizado sin aplicar**: aplica cada cambio autorizado y aprueba sus nuevas
+   versiones antes de cerrar. El Administrador independiente pulsa **Completar proyecto**:
+   se guardan persona y fecha en **Aprobación final** y todo el proyecto queda de
+   solo lectura, incluso los envíos sin cambios. Las evidencias nunca se borran.
+
+La separación compara la persona vinculada al usuario, no el nombre ni el id
+numérico del usuario con el del responsable. Si no tienes persona vinculada, se
+rechaza con **Tu usuario debe tener una persona vinculada para aprobar.** Vincula
+el usuario desde **Personas** antes de aprobar. Los formularios no aceptan
+ficheros ni campos ajenos; una negativa no modifica datos ni auditoría.
+
+Por MCP puedes consultar todo el historial y proponer cambios, pero no editar
+propuestas, aprobar salidas, autorizar, rechazar, aplicar ni completar.
 
 ## Proveedores externos
 

@@ -21,6 +21,7 @@
     <p><strong>Cliente:</strong> {{ project.customer.nombre if project.customer else '—' }}</p>
     <p><strong>Inicio previsto:</strong> {{ project.planned_start or '—' }} · <strong>Fin previsto:</strong> {{ project.planned_end or '—' }}</p>
     <p><strong>Procesos:</strong> {% for process in project.processes %}{{ process.proceso }}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}</p>
+    {% if project.completed_at %}<p><strong>Aprobación final:</strong> {{ project.completed_by.nombre }} · {{ project.completed_at }}</p>{% endif %}
     {% if project.cancellation_reason %}<p><strong>Motivo de cancelación:</strong> {{ project.cancellation_reason }}</p>{% endif %}
 </section>
 <section class="card">
@@ -37,6 +38,20 @@
 </section>
 {% include 'design/_io_sections.html' %}
 {% include 'design/_controls.html' %}
+{% include 'design/_changes.html' %}
+{% if project.state.name == 'en_curso' %}
+<section class="card">
+    <h2>Completar proyecto</h2>
+    <p>Solo un administrador con persona vinculada distinta del responsable puede aprobar el cierre.</p>
+    <ul>{% for reason in completion_blockers %}<li>{{ reason }}</li>{% endfor %}</ul>
+    {% if can_approve %}
+    <form method="post" action="{{ url_for('design.complete_project', project_id=project.id) }}">
+        {{ action_form.hidden_tag() }}
+        <button class="btn" type="submit"{% if completion_blockers %} disabled{% endif %}>Completar proyecto</button>
+    </form>
+    {% endif %}
+</section>
+{% endif %}
 {% if targets %}
 <section class="card">
     <h2>Estado del proyecto</h2>
@@ -48,7 +63,6 @@
         <button class="btn" type="submit">{{ {'planificado': 'Planificar', 'en_curso': 'Iniciar', 'cancelado': 'Cancelar proyecto'}[target.name] }}</button>
     </form>
     {% endfor %}
-    <p>La finalización con aprobación está pendiente de DD4.</p>
 </section>
 {% endif %}
 {% endblock %}
