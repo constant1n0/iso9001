@@ -302,7 +302,9 @@ def _control_payload_refused(form: Any, project_id: int) -> bool:
     if _foreign_parent(project_id) is not None:
         return True
     if request.method == 'POST':
-        unknown = set(request.form) - {field.name for field in form} - {'project_id'}
+        # Uploaded files are submitted fields too; these forms accept none.
+        unknown = ((set(request.form) | set(request.files))
+                   - {field.name for field in form} - {'project_id'})
         if unknown:
             flash(f'Campos no permitidos: {", ".join(sorted(unknown))}.', 'danger')
             return True
