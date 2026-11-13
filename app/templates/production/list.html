@@ -3,7 +3,7 @@
 {% block title %}Producción y servicio{% endblock %}
 {% block content %}
 {% call page_header('8.5 · Producción y servicio', 'Órdenes de producción y servicio') %}
-{% if can('create', 'production') %}<a class="btn btn--primary" href="{{ url_for('production.edit_order') }}">Nueva orden</a>{% endif %}
+{% if can('create', 'production') %}<a class="btn btn--primary" href="{{ url_for('production.new_order') }}">Nueva orden</a>{% endif %}
 {% endcall %}
 {% include 'production/_applicability.html' %}
 <form method="get" class="form-card">

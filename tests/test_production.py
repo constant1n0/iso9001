@@ -172,7 +172,7 @@ class ProductionTests(RegisterRoutesBase):
                     self.service.transition(db.session, self.who, row.id, 'in_progress')
                 if source.name in ('finished', 'cancelled'):
                     self.service.transition(db.session, self.who, row.id, source.name,
-                                            cancellation_reason='Stop')
+                                            cancellation_reason='Stop' if source.name == 'cancelled' else None)
                 db.session.commit()
             if (source.name, target.name) in allowed:
                 before = AuditLog.query.count()

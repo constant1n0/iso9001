@@ -105,13 +105,24 @@ def _refused(form: Any) -> bool:
 
 
 @bp.route('/nuevo', methods=['GET', 'POST'])
+@login_required
+@require_permission('create', 'production')
+def new_order() -> ResponseReturnValue:
+    """Create an order through the same service as MCP."""
+    return _edit(None)
+
+
 @bp.route('/<int:order_id>/editar', methods=['GET', 'POST'])
 @login_required
-def edit_order(order_id: int | None = None) -> ResponseReturnValue:
+@require_permission('update', 'production')
+def edit_order(order_id: int) -> ResponseReturnValue:
+    """Edit an order through the same service as MCP."""
+    return _edit(order_id)
+
+
+def _edit(order_id: int | None) -> ResponseReturnValue:
     """Create/edit via the same service as MCP; every selector round-trips exactly."""
-    from ..services.policy import Action, Resource, require
     who = current_actor()
-    require(who, Action.CREATE if order_id is None else Action.UPDATE, Resource.PRODUCTION)
     row = None if order_id is None else production.orders.get(db.session, who, order_id)
     if row is not None and row.state not in production.TRANSITIONS:
         flash(production.READ_ONLY, 'danger')
@@ -129,14 +140,24 @@ def edit_order(order_id: int | None = None) -> ResponseReturnValue:
     return render_template('production/form.html', form=form, title=title)
 
 
-@bp.route('/<int:order_id>/transicion', methods=['POST'], endpoint='transition_order')
-@bp.route('/<int:order_id>/eliminar', methods=['POST'], endpoint='delete_order')
+@bp.route('/<int:order_id>/transicion', methods=['POST'])
 @login_required
-def order_action(order_id: int) -> ResponseReturnValue:
+@require_permission('update', 'production')
+def transition_order(order_id: int) -> ResponseReturnValue:
+    """Start, finish or cancel an order on the web."""
+    return _action(order_id, deleting=False)
+
+
+@bp.route('/<int:order_id>/eliminar', methods=['POST'])
+@login_required
+@require_permission('delete', 'production')
+def delete_order(order_id: int) -> ResponseReturnValue:
+    """Delete a planned order on the web."""
+    return _action(order_id, deleting=True)
+
+
+def _action(order_id: int, *, deleting: bool) -> ResponseReturnValue:
     """Explicit web POST actions; service rechecks role and state under the row lock."""
-    from ..services.policy import Action, Resource, require
-    deleting = request.path.endswith('/eliminar')
-    require(current_actor(), Action.DELETE if deleting else Action.UPDATE, Resource.PRODUCTION)
     form = BaseForm() if deleting else DesignTransitionForm()
     if _refused(form):
         return redirect(url_for('production.show_order', order_id=order_id)), 400

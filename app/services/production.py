@@ -200,11 +200,12 @@ def transition(session: Session, who: Actor, record_id: int, target: str, *,
     state = fields.enum_member({'state': target}, 'state', ProductionState)
     if state not in TRANSITIONS.get(row.state, ()):
         raise ValidationError('La transición de estado no está permitida.')
-    reason = None
-    if state is ProductionState.cancelled:
-        reason = fields.text({'reason': cancellation_reason}, 'reason')
-        if not reason:
-            raise ValidationError('Indica el motivo de la cancelación.')
+    reason = fields.text({'reason': cancellation_reason}, 'reason')
+    if state is ProductionState.cancelled and not reason:
+        raise ValidationError('Indica el motivo de la cancelación.')
+    if state is not ProductionState.cancelled and reason:
+        # An explicit reason for another transition is refused, never silently dropped.
+        raise ValidationError('El motivo solo se indica al cancelar la orden.')
     before = _snapshot(row)
     row.state, row.cancellation_reason = state, reason
     _record(session, who, row, before)
