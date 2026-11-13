@@ -29,6 +29,7 @@ INVALID_OUTPUTS = 'Elige al menos una salida aprobada actual del mismo proyecto.
 APPLY_ONCE = 'Solo puedes aplicar un cambio autorizado una vez.'
 NO_PERSON = 'Tu usuario debe tener una persona vinculada para aprobar.'
 SEPARATION = 'La aprobación requiere una persona distinta del responsable del proyecto.'
+OVERLAPPING = 'Aplica antes el cambio autorizado que afecta a las mismas salidas.'
 
 
 def _ids(data: Mapping[str, Any], key: str) -> list[int]:
@@ -263,6 +264,13 @@ def authorize(session: Session, who: Actor, change_id: int, *, today: date) -> D
     if not change.review or not change.review.strip():
         raise ValidationError('Revisa el cambio antes de autorizarlo.')
     _linked_outputs(session, project.id, change.output_ids)
+    # Two pending authorizations on one output would strand the second forever.
+    pending = session.scalars(select(DesignChange).where(
+        DesignChange.project_id == project.id, DesignChange.id != change.id,
+        DesignChange.state == DesignChangeState.authorized))
+    if any(set(other.output_ids) & set(change.output_ids)
+           and not is_applied(session, other.id) for other in pending):
+        raise ValidationError(OVERLAPPING)
     day = fields.required_date({'today': today}, 'today')
     before = snapshot(change)
     change.state = DesignChangeState.authorized
