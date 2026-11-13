@@ -16,7 +16,8 @@ from app.mcp_server.registry import MODULES
 from app.models import AuditLog, EstadoNoConformidad, NoConformidad, User
 from app.services import audit
 
-JSON_REGISTERS = ('design_projects', 'design_stages', 'design_inputs', 'design_outputs', "communication", "communication_log", "knowledge", "roles_responsabilidades", "recursos_capacitacion", "procesos",
+JSON_REGISTERS = ('design_projects', 'design_stages', 'design_inputs', 'design_outputs',
+                  'design_planned_controls', 'design_control_records', "communication", "communication_log", "knowledge", "roles_responsabilidades", "recursos_capacitacion", "procesos",
                   "indicadores_auditoria", "riesgos", "oportunidades", "acciones_riesgo",
                   "proveedores", "evaluaciones_proveedor", "cuestiones_contexto",
                   "alcances_sgc", "cambios_sgc", "tareas_cambio",
@@ -50,6 +51,12 @@ class EveryModuleTestCase(McpDbCase):
         self.assertEqual({"documentos"}, MODULES.keys() - writable.keys())  # web only (DC-1)
         for slug, module in writable.items():
             with self.subTest(module=slug):
+                if slug == 'design_control_records':
+                    from app.models import DesignProject, DesignState
+                    # Fixture state only: no additional lifecycle tool or audit event.
+                    db.session.execute(DesignProject.__table__.update().where(
+                        DesignProject.id == 1).values(state=DesignState.planificado))
+                    db.session.commit()
                 created = await self.call(actor, "qms_create", {"module": slug, "data": SEEDS[slug]})
                 self.assertFalse(created.is_error, created.content)
                 record = created.structured_content
@@ -58,13 +65,13 @@ class EveryModuleTestCase(McpDbCase):
                 # A required text field, or any text field when none is required.
                 field = next(f.name for f in sorted(module.fields, key=lambda f: not f.required)
                              if f.type == "string")
-                if slug in ('comprobaciones_equipo', 'communication_log'):
+                if slug in ('comprobaciones_equipo', 'communication_log', 'design_control_records'):
                     persisted_before = await self.call(actor, "qms_get", {
                         "module": slug, "id": record["id"]})
                     self.assertFalse(persisted_before.is_error, persisted_before.content)
                 updated = await self.call(actor, "qms_update", {
                     "module": slug, "id": record["id"], "data": {field: "Cambiado"}})
-                if slug in ('comprobaciones_equipo', 'communication_log'):
+                if slug in ('comprobaciones_equipo', 'communication_log', 'design_control_records'):
                     self.assertTrue(updated.is_error, updated.content)
                     self.assertIn("no se modifican", error_text(updated))
                     unchanged = await self.call(actor, "qms_get", {"module": slug, "id": record["id"]})
@@ -76,8 +83,8 @@ class EveryModuleTestCase(McpDbCase):
         db.session.expire_all()
         rows = audit_rows()
         # Plus the nonconformity's move to "Acción planificada" on its first action.
-        # Two immutable logs refuse updates; communication logging also updates its plan.
-        self.assertEqual(len(writable) + (len(writable) - 2) + 2, len(rows))
+        # Three immutable logs refuse updates; communication logging also updates its plan.
+        self.assertEqual(len(writable) + (len(writable) - 3) + 2, len(rows))
         self.assertEqual({"mcp"}, {r.channel for r in rows})
         self.assertEqual({7}, {r.actor_user_id for r in rows})
         self.assertEqual({"create", "update"}, {r.action for r in rows})

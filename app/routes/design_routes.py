@@ -1,4 +1,4 @@
-"""CSRF-protected design projects, stages, inputs and outputs (DD1–DD2)."""
+"""CSRF-protected design projects, stages, IO and control evidence (DD1–DD3)."""
 from typing import Any
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
@@ -9,10 +9,11 @@ from ..audit_notifications import local_today
 from ..extensions import db
 from ..forms import (CHOOSE_PERSON, DesignInputForm, DesignOutputForm,
                      DesignProjectForm, DesignStageForm, DesignTransitionForm,
-                     person_choices)
+                     DesignPlannedControlForm, DesignControlRecordForm,
+                     DesignControlWithdrawalForm, person_choices)
 from ..models import (DesignInputType, DesignOutputType, DesignProject,
                       DesignStage, DesignState, Document)
-from ..services import (clientes, design, design_io, document_revisions,
+from ..services import (clientes, design, design_controls, design_io, document_revisions,
                         people, process_operations, qms_scope)
 from ..services.actor import Actor
 from ..services.errors import NotFound
@@ -79,9 +80,15 @@ def show_project(project_id: int) -> ResponseReturnValue:
             if revision is not None:
                 document = db.session.get(Document, revision.document_id)
                 revisions[revision.id] = (document.code, revision.numero)
+    plans = design_controls.plans.list_(db.session, actor, project_id=project_id)
+    records = design_controls.records.list_(db.session, actor, project_id=project_id)
+    resolved = {plan.id for plan in plans if design_controls.is_resolved(db.session, plan)}
     return render_template(
         'design/detail.html', project=project,
-        io_sections=sections, visible_revisions=revisions, has_elements=has_elements,
+        control_plans=plans, control_records=records, resolved_controls=resolved,
+        can_record_controls=project.state in design_controls.RECORD_STATES,
+        io_sections=sections, visible_revisions=revisions,
+        has_elements=has_elements or bool(plans) or bool(records),
         stages=design.stages.list_(db.session, actor, project_id=project_id),
         targets=design.TRANSITIONS.get(project.state, ()) if design.may_transition(actor, project) else (),
         applicability=_applicability(actor), transition_form=DesignTransitionForm(),
@@ -268,6 +275,132 @@ def _foreign_parent(project_id: int) -> int | None:
         return None
     flash(design_io.MOVE_REFUSED, 'danger')
     return 400
+
+
+def _control_form(actor: Actor, project_id: int, *, record: bool = False,
+                  found: Any = None) -> Any:
+    """Populate all selectors, preserving the current plan's inactive person."""
+    form = (DesignControlRecordForm if record else DesignPlannedControlForm)(obj=found)
+    form.responsible_id.choices = person_choices(people.choices(
+        db.session, actor, include=getattr(found, 'responsible_id', None)), empty=CHOOSE_PERSON)
+    form.stage_id.choices = [('', '— Sin etapa —'), *((stage.id, stage.name) for stage in
+        design.stages.list_(db.session, actor, project_id=project_id))]
+    if record:
+        form.planned_control_id.choices = [('', '— Sin control planificado —'), *(
+            (plan.id, f'{plan.kind.value} · {plan.description}') for plan in
+            design_controls.plans.list_(db.session, actor, project_id=project_id))]
+    if request.method == 'GET' and found is None:
+        form.kind.data = 'review'
+        if record:
+            form.result.data = 'conforming'
+            form.date.data = local_today()
+    return form
+
+
+def _control_payload_refused(form: Any, project_id: int) -> bool:
+    """Reject every explicitly submitted field the form would otherwise discard."""
+    if _foreign_parent(project_id) is not None:
+        return True
+    if request.method == 'POST':
+        unknown = set(request.form) - {field.name for field in form} - {'project_id'}
+        if unknown:
+            flash(f'Campos no permitidos: {", ".join(sorted(unknown))}.', 'danger')
+            return True
+        if any(len(request.form.getlist(key)) != 1 for key in request.form):
+            flash('No repitas los campos del control.', 'danger')
+            return True
+    return False
+
+
+def _control_page(form: Any, project_id: int, title: str) -> str:
+    return render_template('design/control_form.html', form=form, project_id=project_id,
+                           title=title)
+
+
+@bp.route('/<int:project_id>/controles/planes/nuevo', methods=['GET', 'POST'])
+@login_required
+@require_permission('create', RESOURCE)
+def new_control_plan(project_id: int) -> ResponseReturnValue:
+    """Plan a separate review, verification or validation."""
+    actor = current_actor()
+    design.projects.get(db.session, actor, project_id)
+    form = _control_form(actor, project_id)
+    title = 'Planificar control del diseño'
+    if _control_payload_refused(form, project_id):
+        return _control_page(form, project_id, title), 400
+    names = tuple(f.name for f in design_controls.PLAN_SPEC.fields
+                  if f.name not in ('project_id', 'withdrawn', 'withdrawal_reason'))
+    if form.validate_on_submit() and saved(lambda: design_controls.plans.create(
+            db.session, actor, form_data(form, names) | {'project_id': project_id})):
+        flash('Control del diseño planificado.', 'success')
+        return _page(project_id)
+    return _control_page(form, project_id, title)
+
+
+def _control_plan(actor: Actor, project_id: int, plan_id: int) -> Any:
+    found = design_controls.plans.get(db.session, actor, plan_id)
+    if found.project_id != project_id:
+        raise NotFound(design_controls.PLAN_SPEC.not_found)
+    return found
+
+
+@bp.route('/<int:project_id>/controles/planes/<int:plan_id>/editar', methods=['GET', 'POST'])
+@login_required
+@require_permission('update', RESOURCE)
+def edit_control_plan(project_id: int, plan_id: int) -> ResponseReturnValue:
+    """Edit an unresolved plan; rendered no-op submissions never add audit rows."""
+    actor = current_actor()
+    found = _control_plan(actor, project_id, plan_id)
+    form = _control_form(actor, project_id, found=found)
+    title = 'Editar control planificado'
+    if _control_payload_refused(form, project_id):
+        return _control_page(form, project_id, title), 400
+    names = tuple(f.name for f in design_controls.PLAN_SPEC.fields
+                  if f.name not in ('project_id', 'withdrawn', 'withdrawal_reason'))
+    if form.validate_on_submit() and saved(lambda: design_controls.plans.update(
+            db.session, actor, plan_id, form_data(form, names))):
+        flash('Control planificado actualizado.', 'success')
+        return _page(project_id)
+    return _control_page(form, project_id, title)
+
+
+@bp.route('/<int:project_id>/controles/planes/<int:plan_id>/retirar', methods=['POST'])
+@login_required
+@require_permission('update', RESOURCE)
+def withdraw_control_plan(project_id: int, plan_id: int) -> ResponseReturnValue:
+    """Resolve an omitted planned control only through a justified, CSRF POST."""
+    actor = current_actor()
+    _control_plan(actor, project_id, plan_id)
+    form = DesignControlWithdrawalForm()
+    title = 'Retirar control planificado'
+    if _control_payload_refused(form, project_id):
+        return _control_page(form, project_id, title), 400
+    if form.validate_on_submit() and saved(lambda: design_controls.plans.update(
+            db.session, actor, plan_id, {'withdrawn': True,
+                                        'withdrawal_reason': form.withdrawal_reason.data})):
+        flash('Control planificado retirado con justificación.', 'success')
+        return _page(project_id)
+    return _control_page(form, project_id, title)
+
+
+@bp.route('/<int:project_id>/controles/registro/nuevo', methods=['GET', 'POST'])
+@login_required
+@require_permission('create', RESOURCE)
+def new_control_record(project_id: int) -> ResponseReturnValue:
+    """Append immutable control evidence; no edit/delete routes exist."""
+    actor = current_actor()
+    design.projects.get(db.session, actor, project_id)
+    form = _control_form(actor, project_id, record=True)
+    title = 'Registrar control del diseño'
+    if _control_payload_refused(form, project_id):
+        return _control_page(form, project_id, title), 400
+    names = tuple(f.name for f in design_controls.RECORD_SPEC.fields if f.name != 'project_id')
+    if form.validate_on_submit() and saved(lambda: design_controls.records.create(
+            db.session, actor, form_data(form, names) | {'project_id': project_id},
+            today=local_today())):
+        flash('Control del diseño registrado; la evidencia no se modifica ni se elimina.', 'success')
+        return _page(project_id)
+    return _control_page(form, project_id, title)
 
 
 def _stage(actor: Actor, project_id: int, stage_id: int) -> DesignStage:

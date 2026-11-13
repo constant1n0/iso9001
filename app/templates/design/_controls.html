@@ -1,0 +1,44 @@
+<section class="card">
+    <h2>Controles del diseño</h2>
+    <p>Revisión, verificación y validación se planifican y registran por separado; pueden repetirse.
+        Un plan se resuelve con al menos un registro «conforme» o «conforme con observaciones»
+        vinculado, o al retirarlo con justificación. Un registro «no conforme» no lo resuelve.</p>
+    {% if editable and can('create', 'design') %}
+    <a class="btn" href="{{ url_for('design.new_control_plan', project_id=project.id) }}">Planificar control</a>
+    {% endif %}
+    {% if can_record_controls and can('create', 'design') %}
+    <a class="btn" href="{{ url_for('design.new_control_record', project_id=project.id) }}">Registrar control</a>
+    {% endif %}
+    <h3>Controles planificados</h3>
+    <ul>{% for plan in control_plans %}
+        <li id="control-plan-{{ plan.id }}">
+            <strong>#{{ plan.id }} · {{ plan.kind.value }}</strong>: {{ plan.description }}
+            · {{ plan.responsible.nombre }} · Prevista: {{ plan.planned_date or '—' }}
+            · Etapa: {{ plan.stage.name if plan.stage else '—' }}
+            · {{ 'Resuelto' if plan.id in resolved_controls else 'Pendiente' }}
+            {% if plan.withdrawn %}<p>Retirado: {{ plan.withdrawal_reason }}</p>{% endif %}
+            {% if editable and plan.id not in resolved_controls and can('update', 'design') %}
+            <a class="btn btn--sm" href="{{ url_for('design.edit_control_plan', project_id=project.id, plan_id=plan.id) }}">Editar control planificado</a>
+            <form method="post" action="{{ url_for('design.withdraw_control_plan', project_id=project.id, plan_id=plan.id) }}" class="form-card">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label for="withdrawal-{{ plan.id }}">Justificación de la retirada</label>
+                <textarea id="withdrawal-{{ plan.id }}" name="withdrawal_reason" required></textarea>
+                <button class="btn" type="submit">Retirar control planificado</button>
+            </form>
+            {% endif %}
+        </li>
+    {% else %}<li>No hay controles planificados.</li>{% endfor %}</ul>
+    <h3>Historial de controles</h3>
+    <p>La evidencia no se modifica ni se elimina. Para rectificar, registra otro control.</p>
+    {% for record in control_records %}
+    <article class="card" id="control-record-{{ record.id }}">
+        <h4>{{ record.date }} · {{ record.kind.value }} · {{ record.result.value }}</h4>
+        <p><strong>Responsable:</strong> {{ record.responsible.nombre }}
+            · <strong>Etapa:</strong> {{ record.stage.name if record.stage else '—' }}
+            · <strong>Control planificado:</strong>
+            {% if record.planned_control_id %}<a href="#control-plan-{{ record.planned_control_id }}">#{{ record.planned_control_id }}</a>{% else %}—{% endif %}</p>
+        <p><strong>Evidencia o referencia:</strong> {{ record.evidence }}</p>
+        <p><strong>Acciones:</strong> {{ record.actions or '—' }}</p>
+    </article>
+    {% else %}<p>No hay controles registrados.</p>{% endfor %}
+</section>

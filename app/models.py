@@ -3108,6 +3108,99 @@ class DesignOutput(RecordMetadataMixin, db.Model):
     revision_id = db.Column(db.Integer)
 
 
+class DesignControlKind(enum.Enum):
+    """Independent, repeatable design controls (8.3.4), stored by English name."""
+
+    review = 'revisión'
+    verification = 'verificación'
+    validation = 'validación'
+
+
+class DesignControlResult(enum.Enum):
+    """Both conforming outcomes resolve a plan; nonconforming never does."""
+
+    conforming = 'conforme'
+    conforming_with_observations = 'conforme con observaciones'
+    nonconforming = 'no conforme'
+
+
+def _design_control_constraints(table: str) -> tuple:
+    """Named restrictive citations and B-tree reverse/attribution indexes."""
+    return (
+        db.PrimaryKeyConstraint('id', name=f'pk_{table}'),
+        *(db.ForeignKeyConstraint([column], [target], name=f'fk_{table}_{column}',
+                                  ondelete='RESTRICT', onupdate='RESTRICT')
+          for column, target in (('project_id', 'design_projects.id'),
+                                 ('stage_id', 'design_stages.id'),
+                                 ('responsible_id', 'personas.id'))),
+        *(db.Index(f'ix_{table}_{column}', column) for column in (
+            'project_id', 'stage_id', 'responsible_id', 'created_by_id', 'updated_by_id')),
+    )
+
+
+class DesignPlannedControl(RecordMetadataMixin, db.Model):
+    """A planned control; resolution is derived from withdrawal or linked evidence."""
+
+    __tablename__ = 'design_planned_controls'
+    __table_args__ = (
+        *_design_control_constraints('design_planned_controls'),
+        db.CheckConstraint('length(trim(description)) > 0',
+                           name='ck_design_planned_controls_description'),
+        db.CheckConstraint(
+            '(withdrawn AND withdrawal_reason IS NOT NULL AND '
+            'length(trim(withdrawal_reason)) > 0) OR '
+            '(NOT withdrawn AND withdrawal_reason IS NULL)',
+            name='ck_design_planned_controls_withdrawal'),
+    )
+    id = db.Column(db.Integer, nullable=False)
+    project_id = db.Column(db.Integer, nullable=False)
+    kind = db.Column(text_enum(DesignControlKind, 'ck_design_planned_controls_kind'),
+                     nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    stage_id = db.Column(db.Integer)
+    responsible_id = db.Column(db.Integer, nullable=False)
+    planned_date = db.Column(db.Date)
+    withdrawn = db.Column(db.Boolean, nullable=False, default=False,
+                          server_default=db.false())
+    withdrawal_reason = db.Column(db.Text)
+    responsible = db.relationship('Person')
+    stage = db.relationship('DesignStage')
+
+
+class DesignControlRecord(RecordMetadataMixin, db.Model):
+    """Append-only evidence, independent of stage completion or output approval."""
+
+    __tablename__ = 'design_control_records'
+    __table_args__ = (
+        *_design_control_constraints('design_control_records'),
+        db.CheckConstraint('length(trim(evidence)) > 0',
+                           name='ck_design_control_records_evidence'),
+        db.CheckConstraint(
+            "result = 'conforming' OR (actions IS NOT NULL AND length(trim(actions)) > 0)",
+            name='ck_design_control_records_actions'),
+        db.ForeignKeyConstraint(['planned_control_id'], ['design_planned_controls.id'],
+                                name='fk_design_control_records_planned_control_id',
+                                ondelete='RESTRICT', onupdate='RESTRICT'),
+        db.Index('ix_design_control_records_planned_control_id', 'planned_control_id'),
+        db.Index('ix_design_control_records_history', 'project_id', 'date', 'id'),
+    )
+    id = db.Column(db.Integer, nullable=False)
+    project_id = db.Column(db.Integer, nullable=False)
+    kind = db.Column(text_enum(DesignControlKind, 'ck_design_control_records_kind'),
+                     nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    responsible_id = db.Column(db.Integer, nullable=False)
+    result = db.Column(text_enum(DesignControlResult, 'ck_design_control_records_result',
+                                 length=30), nullable=False)
+    evidence = db.Column(db.Text, nullable=False)
+    actions = db.Column(db.Text)
+    stage_id = db.Column(db.Integer)
+    planned_control_id = db.Column(db.Integer)
+    responsible = db.relationship('Person')
+    stage = db.relationship('DesignStage')
+    planned_control = db.relationship('DesignPlannedControl')
+
+
 # Registro de auditoría append-only: quién cambió qué y cuándo (ISO 9001 7.5.3)
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'

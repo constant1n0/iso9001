@@ -28,7 +28,7 @@ from .models import (
     TipoConfirmacion, TipoEncuesta, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
     KnowledgeType, CommunicationChannel, CommunicationScope,
-    DesignInputType, DesignOutputType,
+    DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -765,6 +765,36 @@ class DesignOutputForm(BaseForm):
                                        validators=[DataRequired()])
     revision_id = SelectField('Revisión de documento controlado', coerce=optional_id,
                               choices=[])
+
+
+class DesignPlannedControlForm(BaseForm):
+    """Plan details; withdrawal is a separate justified POST, not an edit field."""
+
+    kind = _choice('Tipo', DesignControlKind)
+    description = TextAreaField('Descripción o propósito', validators=[DataRequired()])
+    responsible_id = required_person_field('Responsable')
+    stage_id = SelectField('Etapa', coerce=optional_id, choices=[])
+    planned_date = DateField('Fecha prevista', validators=[Optional()])
+
+
+class DesignControlRecordForm(BaseForm):
+    """Actual control evidence, appended whole and never edited."""
+
+    kind = _choice('Tipo', DesignControlKind)
+    date = DateField('Fecha del control', validators=[DataRequired()])
+    responsible_id = required_person_field('Responsable')
+    result = _choice('Resultado', DesignControlResult)
+    evidence = TextAreaField('Evidencia o referencia', validators=[DataRequired()])
+    actions = TextAreaField('Acciones (obligatorias salvo resultado «conforme»)')
+    stage_id = SelectField('Etapa', coerce=optional_id, choices=[])
+    planned_control_id = SelectField('Control planificado', coerce=optional_id, choices=[])
+
+
+class DesignControlWithdrawalForm(BaseForm):
+    """An omission must be justified explicitly, with CSRF protection."""
+
+    withdrawal_reason = TextAreaField('Justificación de la retirada',
+                                      validators=[DataRequired()])
 
 
 def _scale(label):

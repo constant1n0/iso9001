@@ -36,6 +36,7 @@
     </li>{% else %}<li>No hay etapas; registra al menos una antes de planificar.</li>{% endfor %}</ol>
 </section>
 {% include 'design/_io_sections.html' %}
+{% include 'design/_controls.html' %}
 {% if targets %}
 <section class="card">
     <h2>Estado del proyecto</h2>
@@ -47,7 +48,7 @@
         <button class="btn" type="submit">{{ {'planificado': 'Planificar', 'en_curso': 'Iniciar', 'cancelado': 'Cancelar proyecto'}[target.name] }}</button>
     </form>
     {% endfor %}
-    <p>La finalización con aprobación no está disponible en esta entrega (DD1).</p>
+    <p>La finalización con aprobación está pendiente de DD4.</p>
 </section>
 {% endif %}
 {% endblock %}

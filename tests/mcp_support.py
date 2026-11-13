@@ -123,6 +123,11 @@ SEEDS = {
     'design_inputs': {'project_id': 1, 'kind': 'functional_performance', 'text': 'Needs'},
     'design_outputs': {'project_id': 1, 'kind': 'specification', 'text': 'Specification',
                        'acceptance_criteria': 'Tolerance 1 mm'},
+    'design_planned_controls': {'project_id': 1, 'kind': 'review',
+                                'description': 'Review prototype', 'responsible_id': 1},
+    'design_control_records': {'project_id': 1, 'kind': 'review', 'date': '2020-01-01',
+                               'responsible_id': 1, 'result': 'conforming',
+                               'evidence': 'Minutes M-1'},
 }
 
 
@@ -177,10 +182,17 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
         module = MODULES[slug]
         if slug == 'design_projects' and db.session.get(Person, 1) is None:
             self.seed('personas')
-        if slug in ('design_stages', 'design_inputs', 'design_outputs'):
+        if slug in ('design_stages', 'design_inputs', 'design_outputs',
+                    'design_planned_controls', 'design_control_records'):
             from app.models import DesignProject
             if db.session.get(DesignProject, 1) is None:
                 self.seed('design_projects')
+        if slug == 'design_control_records':
+            from app.models import DesignProject, DesignState
+            # Fixture-only state injection; lifecycle transitions are web-only.
+            db.session.execute(DesignProject.__table__.update().where(
+                DesignProject.id == 1).values(state=DesignState.planificado))
+            db.session.commit()
         if (slug in ("documentos", "objetivos_calidad", "acciones_revision", "riesgos",
                      "oportunidades", "cambios_sgc", "confirmaciones_lectura", "knowledge", "communication") and db.session.get(Person, 1) is None):
             self.seed("personas")

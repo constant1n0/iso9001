@@ -27,7 +27,7 @@ from ..models import (
     TipoAccionRevision, TipoContexto, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
     KnowledgeType, CommunicationChannel, CommunicationScope, DesignState,
-    DesignInputType, DesignOutputType,
+    DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
@@ -35,7 +35,7 @@ from ..services import (
     corrective_actions, document_revisions, documents, improvements, management_reviews,
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
-    training_resources, design, design_io,
+    training_resources, design, design_controls, design_io,
 )
 from ..services.policy import Resource
 
@@ -602,6 +602,11 @@ def _knowledge_extras(item: Any) -> dict[str, Any]:
             **knowledge.link_ids(item)}
 
 
+def _control_plan_extras(row: Any) -> dict[str, Any]:
+    """Computed resolution, never a writable completion/approval flag."""
+    return {'resolved': design_controls.is_resolved(object_session(row), row)}
+
+
 _DESIGN_MODULES = (
     # Lifecycle columns are read-only. Planning, starting, cancelling and all
     # deletion stay on the web, as for qms_changes; DD1 cannot complete projects.
@@ -641,6 +646,38 @@ _DESIGN_MODULES = (
           ('design_inputs', 'Design inputs (8.3.3)', design_io.inputs, DesignInputType, False),
           ('design_outputs', 'Design outputs (8.3.5)', design_io.outputs, DesignOutputType, True),
       )),
+)
+
+_DESIGN_CONTROL_MODULES = (
+    Module('design_planned_controls', 'Planned design controls (8.3.2/8.3.4)',
+           Resource.DESIGN, design_controls.plans, (
+        _f('project_id', 'integer', True, note='Design project; cannot change later.'),
+        _f('kind', 'enum', True, members=DesignControlKind),
+        _f('description', required=True, note='Purpose of the control.'),
+        _f('responsible_id', 'integer', True, note='Person, active when newly selected.'),
+        _f('stage_id', 'integer', note='Optional stage of the same project.'),
+        _f('planned_date', 'date'),
+        _f('withdrawn', 'boolean', note=(
+            'Withdraw instead of deleting; requires nonblank withdrawal_reason. '
+            'Resolved plans are read-only. Plans editable in borrador/planificado/en_curso.')),
+        _f('withdrawal_reason', note='Justify an omitted control; only with withdrawn=true.'),
+    ), (_f('project_id', 'integer'), _f('kind', 'enum', members=DesignControlKind)),
+        extras=_control_plan_extras),
+    Module('design_control_records', 'Immutable design control evidence (8.3.4)',
+           Resource.DESIGN, _DatedWrites(design_controls.records), (
+        _f('project_id', 'integer', True, note='Only planificado or en_curso projects.'),
+        _f('kind', 'enum', True, members=DesignControlKind),
+        _f('date', 'date', True, note='Never future; repeats and earlier dates allowed.'),
+        _f('responsible_id', 'integer', True, note='Person, active when selected.'),
+        _f('result', 'enum', True, members=DesignControlResult),
+        _f('evidence', required=True, note=(
+            'Text/reference, not an upload. Immutable: update and delete refused. '
+            'Any linked conforming/conforming_with_observations record resolves its plan.')),
+        _f('actions', note='Required unless result=conforming.'),
+        _f('stage_id', 'integer', note='Optional stage of the same project.'),
+        _f('planned_control_id', 'integer', note='Optional plan of the same project and kind.'),
+    ), (_f('project_id', 'integer'), _f('kind', 'enum', members=DesignControlKind),
+        _f('result', 'enum', members=DesignControlResult))),
 )
 
 _MODULES = (
@@ -1005,6 +1042,7 @@ _MODULES = (
     *_context_modules(),
     *_change_modules(),
     *_DESIGN_MODULES,
+    *_DESIGN_CONTROL_MODULES,
     Module("confirmaciones_lectura", "Read confirmations", Resource.READ_CONFIRMATIONS,
            _DatedWrites(read_confirmations), (
         _f("persona_id", "integer", True, note="Existing person (personas), active when newly chosen."),

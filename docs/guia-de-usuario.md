@@ -372,7 +372,7 @@ aprobar en cada módulo.
 | Riesgos, oportunidades y sus acciones | Consultar, crear, editar, eliminar; evaluar la eficacia de las acciones | Consultar, crear, editar; evaluar la eficacia de las acciones | Consultar |
 | Objetivos de la calidad y mediciones | Consultar, crear, editar, cambiar el estado, eliminar | Consultar, crear, editar, cambiar el estado | Consultar |
 | Cambios en el SGC y sus tareas | Consultar, crear, editar, eliminar; aprobar, cancelar, registrar la implantación, revisar la eficacia | Consultar, crear, editar; registrar la implantación, revisar la eficacia | Consultar |
-| Diseño y desarrollo (DD1) | Consultar, crear, editar, planificar, iniciar, cancelar; eliminar borradores sin etapas y etapas pendientes | Consultar, crear, editar, planificar, iniciar, cancelar; eliminar etapas pendientes | Consultar |
+| Diseño y desarrollo (DD1–DD3) | Consultar y mantener proyectos, etapas, entradas, salidas y planes de control; registrar evidencias inmutables; planificar, iniciar, cancelar; eliminar borradores vacíos y etapas no citadas | Consultar y mantener; registrar evidencias inmutables; planificar, iniciar, cancelar; eliminar etapas no citadas | Consultar |
 | Proveedores externos y sus evaluaciones | Consultar, crear, editar, eliminar; aprobar, condicionar, bloquear | Consultar, crear, editar | Consultar |
 | Revisiones por la dirección y sus acciones | Consultar, crear, editar, eliminar; celebrar, cerrar | Consultar, crear, editar | Sin acceso |
 | Clientes | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
@@ -1674,9 +1674,10 @@ dirección (véase [Entradas (9.3.2)](#entradas-932)).
 
 **Calidad → Diseño y desarrollo** (`/diseno/`) registra los proyectos de diseño
 de productos y servicios (8.3). Todos los roles consultan; Administrador y Auditor
-crean y mantienen proyectos, etapas, entradas y salidas. DD1–DD2 cubren la
-planificación y los elementos de entrada y salida; los controles de
-revisión/verificación/validación y la aprobación final llegarán en DD3–DD4.
+crean y mantienen proyectos, etapas, entradas, salidas y controles planificados,
+y registran evidencias inmutables de revisión, verificación y validación.
+DD1–DD3 cubren estos registros; versiones, cambios autorizados y aprobación
+final quedan pendientes de DD4.
 
 1. Pulsa **Nuevo proyecto**. Escribe **Título** (hasta 200 caracteres) y
    **Producto o servicio que se diseña**, ambos obligatorios.
@@ -1707,11 +1708,11 @@ revisión/verificación/validación y la aprobación final llegarán en DD3–DD
 
 Administrador y Auditor ejecutan estas acciones exclusivamente desde la web.
 El estado no se elige en el formulario. **completado** está reservado para DD4:
-no hay ninguna acción que permita alcanzarlo en DD1–DD2. Un proyecto cancelado y
-sus etapas, entradas y salidas son de solo lectura, sin reapertura. Solo
-Administrador elimina un proyecto **borrador sin etapas, entradas ni salidas**;
+no hay ninguna acción que permita alcanzarlo en DD1–DD3. Un proyecto cancelado y
+sus etapas, entradas, salidas y controles son de solo lectura, sin reapertura. Solo
+Administrador elimina un proyecto **borrador sin etapas, entradas, salidas ni controles**;
 Administrador y Auditor pueden eliminar etapas
-pendientes cuando no se desplace una etapa finalizada.
+pendientes cuando no estén citadas por controles y no se desplace una etapa finalizada.
 
 La lista filtra por **Estado**, **Responsable** y **Cliente**. La lista y la
 ficha muestran si 8.3 aplica según el alcance aprobado y su justificación cuando
@@ -1753,6 +1754,51 @@ antes el proyecto. Los cambios de procesos se auditan con el proyecto. Cada
 escritura conserva atribución y auditoría; guardar sin cambios no escribe nada
 y un rechazo no cambia datos ni auditoría. MCP permite leer, crear y editar los
 campos ordinarios, nunca transiciones ni eliminaciones.
+
+### Controles del diseño (DD3)
+
+En la ficha, **Controles del diseño** separa lo planificado de las evidencias.
+Todos los roles consultan; Administrador y Auditor planifican, editan planes
+pendientes, los retiran con justificación y registran controles realizados.
+
+1. Pulsa **Planificar control**. Elige **Tipo**: **revisión**, **verificación**
+   o **validación**. Escribe **Descripción o propósito** y elige una persona
+   **Responsable** activa; ambos son obligatorios. Puedes añadir **Etapa** del
+   mismo proyecto y **Fecha prevista**. Los planes se mantienen en proyectos
+   **borrador**, **planificado** o **en curso**, mientras estén pendientes.
+2. En un proyecto **planificado** o **en curso**, pulsa **Registrar control**.
+   Elige el tipo y el responsable activo, indica **Fecha del control** (obligatoria,
+   nunca futura), **Resultado** y **Evidencia o referencia** no vacía. Es texto,
+   no una carga de ficheros. Si el resultado es **conforme con observaciones**
+   o **no conforme**, escribe también las **Acciones**; con **conforme** son
+   opcionales. Puedes enlazar una etapa y un control planificado del mismo
+   proyecto; el plan debe ser del mismo tipo que el registro.
+3. Puedes registrar varios controles del mismo tipo, fecha o plan, también
+   controles anteriores registrados después. El historial muestra primero las
+   fechas más recientes; en empates, el último registrado. **Los registros no
+   se editan ni se eliminan**, ni por web ni por MCP. Para rectificar, añade
+   otro registro y explica la corrección en su evidencia.
+
+**Resolución del plan:** figura **Resuelto** si tiene al menos un registro
+vinculado **conforme** o **conforme con observaciones**, o si está retirado con
+justificación. **no conforme** no lo resuelve; un registro posterior no conforme
+no deshace una resolución anterior. Un registro sin vínculo al plan no lo
+resuelve. La resolución se calcula, no se marca a mano; no aprueba ni completa
+el proyecto (esa puerta de cierre pertenece a DD4).
+
+Para omitir un plan pendiente, escribe **Justificación de la retirada** y pulsa
+**Retirar control planificado**. No se acepta una justificación vacía. El plan
+queda **Retirado**, conserva su motivo y cuenta como resuelto. Los planes no
+se eliminan: así queda justificada cualquier omisión. Un plan resuelto ya no
+cambia ni se reactiva. Un plan todavía pendiente con registros no conformes
+puede editarse o retirarse, pero no cambiar de tipo si algún registro lo cita.
+Guardar un formulario de edición sin cambios no crea auditoría.
+
+Las personas responsables y las etapas citadas por planes o registros no se
+pueden eliminar, ni siquiera tras retirar el plan; desactiva las personas.
+Tampoco se elimina un proyecto con controles. Los proyectos cancelados o
+completados no admiten escrituras de controles. Las negativas se explican y
+no cambian datos ni auditoría.
 
 ## Proveedores externos
 
