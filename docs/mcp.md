@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 45 módulos: `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
+`qms_modules` enumera 46 módulos: `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -71,6 +71,20 @@ nunca puede eliminar.
 `cambios_sgc`, `tareas_cambio`, `clientes`, `reclamaciones` y `confirmaciones_lectura`. Cada campo tiene un `type`, un indicador
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
+
+Producción y servicio (8.5.1/8.5.2, PS1): `production_orders` permite consultar,
+listar, crear y actualizar. Obligatorios: `code` (único, hasta 50 caracteres),
+`kind` (`production` o `service`), `title` y `process_id`. Opcionales: `customer_id`,
+`design_output_id` (versión exacta aprobada), `lot`, `owner_id` (persona activa al
+vincularla), `planned_start` y `planned_end` (YYYY-MM-DD, fin ≥ inicio).
+`revision_ids`, `equipment_ids` y `person_ids` sustituyen los conjuntos; `[]` vacía,
+omitir conserva. Nuevos vínculos: revisiones legibles aprobadas/vigentes, equipos
+aptos y personas activas. Se conservan los vínculos anteriores; las lecturas solo
+exponen identificadores de revisión, nunca datos documentales restringidos.
+Filtros: `state` (`planned`, `in_progress`, `finished`, `cancelled`), `kind`,
+`process_id`, `customer_id`, `lot` (fragmento). Todos leen; administradores y
+auditores escriben. MCP nunca elimina ni cambia estados; las órdenes terminadas o
+canceladas son de solo lectura. Terminar trabajo NO autoriza la entrega (8.6).
 
 Diseño y desarrollo (8.3.1–8.3.6):
 

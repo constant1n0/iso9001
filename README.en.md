@@ -67,6 +67,10 @@ an agent can never delete anything.
   administrators and auditors maintain. Approvals require a linked person and are
   web-only; MCP can propose changes but never approve, authorize, reject, apply,
   complete or delete.
+- **Production and service orders** (8.5.1–8.5.2, partial PS1): unique code,
+  required process, optional lot/reference, customer and exact approved design output;
+  exact controlled revisions, suitable equipment and assigned people. Web and MCP
+  register; web-only lifecycle. Finishing work never authorizes release (8.6).
 - **External providers** (8.4, 9.1.3): selection criteria, affected processes,
   approval by an administrator, scored evaluations with the next evaluation,
   linked nonconformities and the approved-providers PDF.

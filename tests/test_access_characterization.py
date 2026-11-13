@@ -275,6 +275,11 @@ DESIGN = dict(title='New design', description='Product', owner_id='1')
 DESIGN_STAGE = dict(name='Stage', owner_id='1')
 
 ENDPOINTS = [
+    *_html('PRODUCTION', '/produccion/',
+           ('nuevo', dict(code='O-NEW', kind='production', title='Container', process_id='1')),
+           ('1/editar', dict(code='O-1', kind='service', title='Service', process_id='1')), '1/eliminar'),
+    Endpoint('PRODUCTION', 'read', 'GET', '/produccion/1', 200),
+    Endpoint('PRODUCTION', 'update', 'POST', '/produccion/1/transicion', 302, {'target': 'in_progress'}),
     *_html('DESIGN', '/diseno/', ('nuevo', DESIGN), ('1/editar', DESIGN), '2/eliminar'),
     Endpoint('DESIGN', 'read', 'GET', '/diseno/1', 200),
     Endpoint('DESIGN', 'create', 'POST', '/diseno/1/etapas/nueva', 302, DESIGN_STAGE),
@@ -492,6 +497,7 @@ ADMIN_AUDITOR = {ADMIN, AUDITOR}
 ALL = set(RoleEnum)
 JSON_REGISTER = (ALL, ADMIN_AUDITOR, {ADMIN})
 ALLOWED = {
+    'PRODUCTION': JSON_REGISTER,
     'DESIGN': JSON_REGISTER,
     "COMMUNICATION": JSON_REGISTER,
     "KNOWLEDGE": JSON_REGISTER,
@@ -673,7 +679,9 @@ class AccessCharacterizationTestCase(unittest.TestCase):
             db.session.add(EquipoMedicion(codigo='EQ-1', nombre='Balanza'))
             db.session.add(KnowledgeItem(kind=KnowledgeType.conocimiento,
                                         title='Tool set-up', summary='Keep evidence', owner_id=1))
-            from app.models import DesignProject, DesignStage
+            from app.models import DesignProject, DesignStage, ProductionOrder, ProductionKind
+            db.session.add(ProductionOrder(code='O-1', kind=ProductionKind.service,
+                                           title='Service', process_id=1))
             db.session.add_all([
                 DesignProject(title='Seed', description='Product', owner_id=1),
                 DesignProject(title='Empty draft', description='Product', owner_id=1),

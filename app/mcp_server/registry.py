@@ -28,7 +28,7 @@ from ..models import (
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
     KnowledgeType, CommunicationChannel, CommunicationScope, DesignState,
     DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult,
-    DesignChangeState,
+    DesignChangeState, ProductionKind, ProductionState,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
@@ -36,7 +36,7 @@ from ..services import (
     corrective_actions, document_revisions, documents, improvements, management_reviews,
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
-    training_resources, design, design_changes, design_controls, design_io,
+    training_resources, design, design_changes, design_controls, design_io, production,
 )
 from ..services.policy import Resource
 
@@ -698,6 +698,24 @@ _DESIGN_CONTROL_MODULES = (
         _f('result', 'enum', members=DesignControlResult))),
 )
 
+_PRODUCTION_MODULES = (
+    Module('production_orders', 'Production/service orders (8.5.1/8.5.2)', Resource.PRODUCTION,
+           production.orders, (
+        _f('code', required=True, note='Unique user-entered identifier, up to 50 characters.'),
+        _f('kind', 'enum', True, members=ProductionKind), _f('title', required=True),
+        _f('process_id', 'integer', True), _f('customer_id', 'integer'),
+        _f('design_output_id', 'integer', note='Exact approved design output version, retained.'),
+        _f('lot', note='Optional lot/reference, no serial number assumption.'),
+        _f('owner_id', 'integer', note='Active person when newly selected; retained otherwise.'),
+        _f('planned_start', 'date'), _f('planned_end', 'date', note='Not before planned_start.'),
+        _f('revision_ids', 'integer_list', note='Replace exact readable approved/published revisions; retained links survive obsolescence. Reads expose ids only.'),
+        _f('equipment_ids', 'integer_list', note='Replace equipment set; new links must be suitable (apto).'),
+        _f('person_ids', 'integer_list', note='Replace assigned people; new links must be active.'),
+    ), (_f('state', 'enum', members=ProductionState, note='Web-only transitions. Finished is work finished, NOT released. Terminal orders are read-only.'),
+        _f('kind', 'enum', members=ProductionKind), _f('process_id', 'integer'),
+        _f('customer_id', 'integer'), _f('lot')), extras=production.link_ids),
+)
+
 _MODULES = (
     Module('equipos_medicion', 'Measuring equipment', Resource.MEASURING_EQUIPMENT,
            equipment.equipment, (
@@ -1061,6 +1079,7 @@ _MODULES = (
     *_change_modules(),
     *_DESIGN_MODULES,
     *_DESIGN_CONTROL_MODULES,
+    *_PRODUCTION_MODULES,
     Module("confirmaciones_lectura", "Read confirmations", Resource.READ_CONFIRMATIONS,
            _DatedWrites(read_confirmations), (
         _f("persona_id", "integer", True, note="Existing person (personas), active when newly chosen."),

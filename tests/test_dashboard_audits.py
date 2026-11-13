@@ -38,7 +38,9 @@ AUDITS = (
     ("Laboratorio", 7, EstadoAuditoriaEnum.PENDIENTE),
     ("Ventas", 3, EstadoAuditoriaEnum.PENDIENTE),
     ("Compras", 0, EstadoAuditoriaEnum.EN_PROCESO),
-    ("Producción", 1, EstadoAuditoriaEnum.COMPLETADA),
+    # Not "Producción": that is now a navigation label, which this test must not confuse
+    # with a leaked audit area.
+    ("Fabricación", 1, EstadoAuditoriaEnum.COMPLETADA),
     ("Logística", 2, EstadoAuditoriaEnum.CANCELADA),
     ("Ayer", -1, EstadoAuditoriaEnum.PENDIENTE),
     ("Lejana", 8, EstadoAuditoriaEnum.PENDIENTE),

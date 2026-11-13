@@ -16,7 +16,7 @@ from app.mcp_server.registry import MODULES
 from app.models import AuditLog, EstadoNoConformidad, NoConformidad, User
 from app.services import audit
 
-JSON_REGISTERS = ('design_projects', 'design_stages', 'design_inputs', 'design_outputs',
+JSON_REGISTERS = ('production_orders', 'design_projects', 'design_stages', 'design_inputs', 'design_outputs',
                   'design_planned_controls', 'design_control_records', 'design_changes', "communication", "communication_log", "knowledge", "roles_responsabilidades", "recursos_capacitacion", "procesos",
                   "indicadores_auditoria", "riesgos", "oportunidades", "acciones_riesgo",
                   "proveedores", "evaluaciones_proveedor", "cuestiones_contexto",

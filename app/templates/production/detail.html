@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% from '_partials/ui.html' import page_header, delete_form %}
+{% from '_partials/forms.html' import field %}
+{% block title %}{{ order.code }}{% endblock %}
+{% block content %}
+{% call page_header('8.5 · Producción y servicio', order.code) %}
+<a class="btn" href="{{ url_for('production.list_orders') }}">Volver al registro</a>
+{% if editable and can('update', 'production') %}<a class="btn" href="{{ url_for('production.edit_order', order_id=order.id) }}">Editar orden</a>{% endif %}
+{% if order.state.name == 'planned' and can('delete', 'production') %}{{ delete_form(url_for('production.delete_order', order_id=order.id), '¿Eliminar esta orden planificada?') }}{% endif %}
+{% endcall %}
+{% include 'production/_applicability.html' %}
+<section class="card"><h2>{{ order.title }}</h2>
+<p><strong>Tipo:</strong> {{ order.kind.value }} · <strong>Estado:</strong> {{ order.state.value }}</p>
+<p>Terminar una orden no autoriza su entrega: la decisión de liberación (8.6) es independiente.</p>
+<p><strong>Proceso:</strong> {{ order.process.proceso }} · <strong>Cliente:</strong> {{ order.customer.nombre if order.customer else '—' }}</p>
+<p><strong>Lote o referencia:</strong> {{ order.lot or '—' }} · <strong>Responsable:</strong> {{ order.owner.nombre if order.owner else '—' }}</p>
+<p><strong>Inicio previsto:</strong> {{ order.planned_start or '—' }} · <strong>Fin previsto:</strong> {{ order.planned_end or '—' }}</p>
+{% if order.design_output %}<p><strong>Diseño:</strong> #{{ order.design_output.lineage_id }} · Versión {{ order.design_output.version }} · {{ order.design_output.text }}</p>{% endif %}
+{% if order.cancellation_reason %}<p><strong>Motivo de cancelación:</strong> {{ order.cancellation_reason }}</p>{% endif %}</section>
+<section class="card"><h2>Condiciones controladas</h2>
+<h3>Instrucciones y criterios</h3><ul>{% for rid in order.revision_ids %}<li>{{ revision_labels[rid] }}</li>{% else %}<li>Sin revisiones vinculadas.</li>{% endfor %}</ul>
+<h3>Equipos y aptitud actual</h3><ul>{% for item in order.equipment %}<li>{{ item.codigo }} · {{ item.nombre }} · {{ suitability[item.id] }}</li>{% else %}<li>Sin equipos vinculados.</li>{% endfor %}</ul>
+<h3>Personas asignadas</h3><ul>{% for person in order.people %}<li>{{ person.nombre }}{{ ' (desactivada)' if not person.activo else '' }}</li>{% else %}<li>Sin personas asignadas.</li>{% endfor %}</ul></section>
+{% if can('update', 'production') %}{% for target in targets %}
+<form method="post" action="{{ url_for('production.transition_order', order_id=order.id) }}" class="form-card">
+{{ transition_form.hidden_tag() }}<input type="hidden" name="target" value="{{ target.name }}">
+{% if target.name == 'cancelled' %}{{ field(transition_form.cancellation_reason) }}{% endif %}
+<button class="btn" type="submit">{{ target.value }}</button></form>
+{% endfor %}{% endif %}
+{% endblock %}

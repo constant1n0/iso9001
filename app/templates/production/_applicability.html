@@ -1,0 +1,5 @@
+{% if applicability is not none %}
+<section class="card"><h2>Aplicabilidad en el alcance aprobado</h2>
+{% for code, value in applicability.items() %}<p>{{ code }}: {{ 'Aplica' if value.aplica else 'No aplica' }}. {{ value.justificacion or '' }}</p>{% endfor %}
+<p>Este registro no modifica el alcance ni sus exclusiones.</p></section>
+{% else %}<p>No hay un alcance aprobado; la aplicabilidad de 8.5.1 y 8.5.2 aún no está declarada.</p>{% endif %}

@@ -128,6 +128,7 @@ SEEDS = {
     'design_control_records': {'project_id': 1, 'kind': 'review', 'date': '2020-01-01',
                                'responsible_id': 1, 'result': 'conforming',
                                'evidence': 'Minutes M-1'},
+    'production_orders': {'code': 'O-1', 'kind': 'production', 'title': 'Container', 'process_id': 1},
     'design_changes': {'project_id': 1, 'reason': 'Requirement changed',
                        'impact': 'Drawing changes', 'review': 'Safety checked',
                        'actions': 'Revise drawing', 'output_ids': [1]},
@@ -183,6 +184,10 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
     def seed(self, slug: str, **overrides) -> int:
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
+        if slug == 'production_orders':
+            from app.models import ProcesoOperacion
+            if db.session.get(ProcesoOperacion, 1) is None:
+                self.seed('procesos')
         if slug == 'design_projects' and db.session.get(Person, 1) is None:
             self.seed('personas')
         if slug in ('design_stages', 'design_inputs', 'design_outputs',
