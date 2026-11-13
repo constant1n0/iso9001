@@ -47,15 +47,18 @@ class IndependentChanges(fixtures.ChangeCase):
         self.fail('Completion stranded an authorized change without creating its versions')
 
     def test_s4_competing_authorizations_are_atomic_for_multiple_lineages(self):
+        # Native review R3-001: a competing authorization on an output already
+        # covered by a pending authorized change is refused instead of stranded.
         first, second = [self.approve(self.output()) for _ in range(2)]
         multi = self.authorize(self.propose(output_ids=[first.id, second.id]))
-        competing = self.authorize(self.propose(output_ids=[second.id]))
-        changes.apply(db.session, self.admin, competing.id)
+        competing = self.propose(output_ids=[second.id])
+        self.reject(lambda: changes.authorize(db.session, self.admin, competing.id,
+                                              today=TODAY), changes.OVERLAPPING)
+        created = changes.apply(db.session, self.admin, multi.id)
         db.session.commit()
-        self.reject(lambda: changes.apply(db.session, self.admin, multi.id),
-                    'Elige al menos una salida aprobada actual del mismo proyecto.')
-        self.assertFalse(changes.is_applied(db.session, multi.id))
-        self.assertEqual([first.id], [r.id for r in
+        self.assertTrue(changes.is_applied(db.session, multi.id))
+        self.assertEqual({first.id, second.id}, {v.lineage_id for v in created})
+        self.assertEqual([first.id, created[0].id], [r.id for r in
             changes.history(db.session, self.who, first.id)])
 
     def test_s4_history_is_readable_by_every_role_and_original_is_frozen(self):
