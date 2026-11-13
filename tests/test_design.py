@@ -112,10 +112,17 @@ class DesignTests(DesignCase):
         db.session.commit()
         self.assertEqual(before, hashes())
 
-    def test_each_transition_and_no_path_to_completion(self):
+    def test_each_transition_and_gated_completion(self):
         from app.models import DesignState
+        from app.services import design_changes, design_io
+        person = people.create(db.session, self.who, {'nombre': 'Approver',
+            'user_id': self.ids[RoleEnum.ADMINISTRADOR]})
+        db.session.commit()
+        approver = Actor(self.ids[RoleEnum.ADMINISTRADOR], 'Approver',
+                         RoleEnum.ADMINISTRADOR, 'web')
         allowed = {('borrador', 'planificado'), ('planificado', 'en_curso'),
-                   ('borrador', 'cancelado'), ('planificado', 'cancelado'), ('en_curso', 'cancelado')}
+                   ('borrador', 'cancelado'), ('planificado', 'cancelado'),
+                   ('en_curso', 'cancelado'), ('en_curso', 'completado')}
         for source, target in product(DesignState, repeat=2):
             row = self.create()
             self.stage(row)
@@ -124,9 +131,14 @@ class DesignTests(DesignCase):
                 state=source, cancellation_reason='Cancelled fixture' if source.name == 'cancelado' else None))
             db.session.commit()
             if (source.name, target.name) in allowed:
+                if target is DesignState.completado:
+                    output = design_io.outputs.create(db.session, self.who, dict(
+                        project_id=row.id, kind='other', text='Output', acceptance_criteria='Works'))
+                    design_changes.approve_output(db.session, approver, output.id, today=TODAY)
+                    db.session.commit()
                 before = AuditLog.query.count()
-                self.design.transition(db.session, self.who, row.id, target.name,
-                                       cancellation_reason='  Duplicate project  ')
+                self.design.transition(db.session, approver, row.id, target.name,
+                                       cancellation_reason='  Duplicate project  ', today=TODAY)
                 db.session.commit()
                 self.assertEqual(target, row.state)
                 self.assertEqual(before + 1, AuditLog.query.count())
