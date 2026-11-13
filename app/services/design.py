@@ -1,7 +1,7 @@
 """Design projects and ordered stages (ISO 9001 8.3, DD1).
 
 Every role reads; administrators and auditors maintain projects and stages.
-Transitions are web-only and never complete a project in DD1. Administrators
+Transitions are web-only; completion requires an independent administrator. Administrators
 may delete drafts without stages, inputs or outputs only. Done stages and
 cancelled projects are retained.
 Writes flush/audit but never commit; no-ops and validation refusals write nothing.
@@ -179,6 +179,8 @@ def _update_project(session: Session, who: Actor, record_id: int,
     policy.require(who, Action.UPDATE, RESOURCE)
     _payload(data, PROJECT_WRITABLE)
     found = _lock_project(session, record_id)
+    if found.state is DesignState.completado:
+        _editable(found)
     values, linked = _project_values(session, data, found)
     changes = {key: value for key, value in values.items() if getattr(found, key) != value}
     if linked is not None and {p.id_proceso for p in linked} != set(found.process_ids):
@@ -218,8 +220,11 @@ def may_transition(who: Actor, project: DesignProject | None = None) -> bool:
 
 
 def transition(session: Session, who: Actor, project_id: int, target: str, *,
-               cancellation_reason: str | None = None) -> DesignProject:
-    """Plan, start or cancel; completion has no reachable path in DD1."""
+               cancellation_reason: str | None = None,
+               today: date | None = None) -> DesignProject:
+    """Plan, start, cancel, or use the separate administrator completion gate."""
+    if target == 'completado':
+        return complete(session, who, project_id, today=today)
     if not may_transition(who):
         raise PermissionDenied()
     state = fields.enum_member({'state': target}, 'state', DesignState)
@@ -240,6 +245,55 @@ def transition(session: Session, who: Actor, project_id: int, target: str, *,
     _record_update(session, who, found, before)
     _flush(session)
     return found
+
+
+def completion_blockers(session: Session, project: DesignProject) -> list[str]:
+    """Describe unmet gates; completion calls this only after locking the project."""
+    from ..models import DesignApprovalState, DesignChange, DesignChangeState
+    from . import design_changes, design_controls
+    reasons = []
+    if project.state is not DesignState.en_curso:
+        reasons.append('Solo puedes completar un proyecto en curso.')
+    if design_controls.unresolved_planned_controls(session, project.id):
+        reasons.append('Resuelve todos los controles planificados antes de completar.')
+    versions = design_changes.current_versions(session, project.id)
+    if not versions:
+        reasons.append('Para completar el proyecto, registra al menos una salida.')
+    elif any(v.state is not DesignApprovalState.approved for v in versions):
+        reasons.append('Aprueba todas las versiones actuales de las salidas antes de completar.')
+    if session.scalar(select(DesignChange.id).where(
+            DesignChange.project_id == project.id,
+            DesignChange.state == DesignChangeState.proposed).limit(1)) is not None:
+        reasons.append('Resuelve todos los cambios propuestos antes de completar.')
+    authorized = session.scalars(select(DesignChange.id).where(
+        DesignChange.project_id == project.id,
+        DesignChange.state == DesignChangeState.authorized))
+    # An authorized change must become new output versions before the project closes.
+    if any(not design_changes.is_applied(session, change_id) for change_id in authorized):
+        reasons.append('Aplica todos los cambios autorizados antes de completar.')
+    return reasons
+
+
+def complete(session: Session, who: Actor, project_id: int, *,
+             today: date | None) -> DesignProject:
+    """Complete under the shared parent lock, recording an independent approver."""
+    from . import design_changes
+    design_changes._web_admin(who)
+    project = _lock_project(session, project_id)
+    _editable(project)
+    if project.state is not DesignState.en_curso:
+        raise ValidationError('Solo puedes completar un proyecto en curso.')
+    person_id = design_changes.approval_person(session, who, project)
+    reasons = completion_blockers(session, project)
+    if reasons:
+        raise ValidationError(reasons[0])
+    day = fields.required_date({'today': today}, 'today')
+    before = _snapshot(project)
+    project.state = DesignState.completado
+    project.completed_at, project.completed_by_id = day, person_id
+    _record_update(session, who, project, before)
+    _flush(session)
+    return project
 
 
 def _stage_rows(session: Session, project_id: int) -> list[DesignStage]:
@@ -342,6 +396,8 @@ def _update_stage(session: Session, who: Actor, record_id: int, data: Mapping[st
     policy.require(who, Action.UPDATE, RESOURCE)
     _payload(data, STAGE_SPEC.writable)
     parent, found = _stage_parent(session, record_id)
+    if parent.state is DesignState.completado:
+        _editable(parent)
     values = _stage_values(session, data, today, found)
     if values.get('project_id', found.project_id) != found.project_id:
         raise ValidationError('Una etapa no puede pasar a otro proyecto.')
