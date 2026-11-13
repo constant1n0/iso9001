@@ -1674,9 +1674,9 @@ dirección (véase [Entradas (9.3.2)](#entradas-932)).
 
 **Calidad → Diseño y desarrollo** (`/diseno/`) registra los proyectos de diseño
 de productos y servicios (8.3). Todos los roles consultan; Administrador y Auditor
-crean y mantienen proyectos y etapas. Esta entrega (DD1) cubre la planificación,
-no las entradas, salidas, controles de revisión/verificación/validación ni la
-aprobación final; se incorporarán en DD2–DD4.
+crean y mantienen proyectos, etapas, entradas y salidas. DD1–DD2 cubren la
+planificación y los elementos de entrada y salida; los controles de
+revisión/verificación/validación y la aprobación final llegarán en DD3–DD4.
 
 1. Pulsa **Nuevo proyecto**. Escribe **Título** (hasta 200 caracteres) y
    **Producto o servicio que se diseña**, ambos obligatorios.
@@ -1707,15 +1707,45 @@ aprobación final; se incorporarán en DD2–DD4.
 
 Administrador y Auditor ejecutan estas acciones exclusivamente desde la web.
 El estado no se elige en el formulario. **completado** está reservado para DD4:
-no hay ninguna acción que permita alcanzarlo en DD1. Un proyecto cancelado y
-sus etapas son de solo lectura, sin reapertura. Solo Administrador elimina un
-proyecto **borrador sin etapas**; Administrador y Auditor pueden eliminar etapas
+no hay ninguna acción que permita alcanzarlo en DD1–DD2. Un proyecto cancelado y
+sus etapas, entradas y salidas son de solo lectura, sin reapertura. Solo
+Administrador elimina un proyecto **borrador sin etapas, entradas ni salidas**;
+Administrador y Auditor pueden eliminar etapas
 pendientes cuando no se desplace una etapa finalizada.
 
 La lista filtra por **Estado**, **Responsable** y **Cliente**. La lista y la
 ficha muestran si 8.3 aplica según el alcance aprobado y su justificación cuando
 no aplica. **Este módulo no modifica el alcance ni sus exclusiones**; crear un
 proyecto no decide la aplicabilidad de la organización.
+
+### Entradas y salidas del diseño (DD2)
+
+En la ficha del proyecto aparecen **Entradas del diseño** (8.3.3) y **Salidas del
+diseño** (8.3.5). Pulsa **Añadir entrada** o **Añadir salida**, elige **Tipo** y
+escribe **Texto**, ambos obligatorios. Las salidas también necesitan **Criterios
+de aceptación** no vacíos. Cada sección permite filtrar por tipo.
+
+- Tipos de entrada: **funcional o de desempeño**, **legal o reglamentario**,
+  **conocimiento previo**, **consecuencias de fallo**, **otro**.
+- Tipos de salida: **especificación**, **plano o dibujo**, **procedimiento o
+  instrucción**, **prototipo o muestra**, **software**, **otro**.
+- Puedes elegir una **Revisión de documento controlado** opcional: debe estar
+  aprobada o vigente y debes poder consultarla. No se admiten borradores,
+  revisiones en revisión, desconocidas o que no puedas leer.
+- El vínculo cita esa revisión exacta, no el documento ni su versión más
+  reciente. El enlace abre el texto de esa revisión. Si después queda obsoleta,
+  el vínculo se conserva y puedes guardar otros cambios sin perderlo. Elige
+  **Sin revisión** para quitarlo. Las revisiones citadas están protegidas contra
+  el borrado por RESTRICT; el control documental solo descarta borradores,
+  que aquí no se pueden citar.
+- Todos los roles leen los elementos, pero solo ven enlaces y datos de las
+  revisiones que pueden consultar. En caso contrario aparece **Revisión
+  vinculada**, sin código, título ni enlace. MCP devuelve únicamente el
+  identificador de la revisión, igual que otros vínculos entre registros.
+- Administrador y Auditor pueden editar y eliminar estos elementos desde la
+  web mientras el proyecto no esté cancelado. No pueden moverlos a otro
+  proyecto. MCP permite crear y editar, nunca eliminar. La aprobación y las
+  versiones de las salidas pertenecen a DD4; aún no se ofrecen.
 
 Los responsables, clientes y procesos citados quedan protegidos contra el
 borrado por claves foráneas RESTRICT; para quitar un vínculo opcional, edita

@@ -120,6 +120,9 @@ SEEDS = {
     # Keep citation dependencies ahead of their children in every-module loops.
     'design_projects': {'title': 'Design', 'description': 'Product', 'owner_id': 1},
     'design_stages': {'project_id': 1, 'name': 'Prototype', 'owner_id': 1},
+    'design_inputs': {'project_id': 1, 'kind': 'functional_performance', 'text': 'Needs'},
+    'design_outputs': {'project_id': 1, 'kind': 'specification', 'text': 'Specification',
+                       'acceptance_criteria': 'Tolerance 1 mm'},
 }
 
 
@@ -174,7 +177,7 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
         module = MODULES[slug]
         if slug == 'design_projects' and db.session.get(Person, 1) is None:
             self.seed('personas')
-        if slug == 'design_stages':
+        if slug in ('design_stages', 'design_inputs', 'design_outputs'):
             from app.models import DesignProject
             if db.session.get(DesignProject, 1) is None:
                 self.seed('design_projects')

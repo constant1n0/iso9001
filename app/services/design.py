@@ -2,7 +2,8 @@
 
 Every role reads; administrators and auditors maintain projects and stages.
 Transitions are web-only and never complete a project in DD1. Administrators
-may delete empty drafts only. Done stages and cancelled projects are retained.
+may delete drafts without stages, inputs or outputs only. Done stages and
+cancelled projects are retained.
 Writes flush/audit but never commit; no-ops and validation refusals write nothing.
 Every child write and transition locks the parent FOR UPDATE before judging it.
 """
@@ -15,7 +16,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..models import DesignProject, DesignStage, DesignState, ProcesoOperacion
+from ..models import (DesignInput, DesignOutput, DesignProject, DesignStage,
+                      DesignState, ProcesoOperacion)
 from . import audit, clientes, crud, fields, people, policy
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
@@ -192,11 +194,14 @@ def _update_project(session: Session, who: Actor, record_id: int,
 
 
 def _delete_project(session: Session, who: Actor, record_id: int) -> None:
-    """Administrators delete only drafts without stages; no evidence is cascaded."""
+    """Delete only drafts without stages or IO elements; never cascade evidence."""
     policy.require(who, Action.DELETE, RESOURCE)
     found = _lock_project(session, record_id)
     if found.state is not DesignState.borrador or _stage_rows(session, found.id):
         raise ValidationError('Solo se puede eliminar un proyecto borrador sin etapas.')
+    if any(session.scalar(select(model.id).where(model.project_id == found.id).limit(1))
+           is not None for model in (DesignInput, DesignOutput)):
+        raise ValidationError('No se puede eliminar un proyecto con entradas o salidas.')
     audit.record(session, who, 'delete', found, before=_snapshot(found))
     session.delete(found)
     _flush(session)

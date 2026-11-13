@@ -8,7 +8,7 @@
     {% if editable and can('update', 'design') %}
     <a class="btn" href="{{ url_for('design.edit_project', project_id=project.id) }}">Editar proyecto</a>
     {% endif %}
-    {% if project.state.name == 'borrador' and not stages and can('delete', 'design') %}
+    {% if project.state.name == 'borrador' and not stages and not has_elements and can('delete', 'design') %}
     {{ delete_form(url_for('design.delete_project', project_id=project.id), '¿Eliminar este proyecto borrador?') }}
     {% endif %}
 {% endcall %}
@@ -35,6 +35,7 @@
         {% endif %}
     </li>{% else %}<li>No hay etapas; registra al menos una antes de planificar.</li>{% endfor %}</ol>
 </section>
+{% include 'design/_io_sections.html' %}
 {% if targets %}
 <section class="card">
     <h2>Estado del proyecto</h2>

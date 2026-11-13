@@ -1,0 +1,41 @@
+{% for section in io_sections %}
+<section class="card" id="{{ section.slug }}">
+    <h2>{{ section.title }}</h2>
+    {% if editable and can('create', 'design') %}
+    <a class="btn" href="{{ url_for('design.new_element', project_id=project.id, section=section.slug) }}">{{ 'Añadir entrada' if section.slug == 'entradas' else 'Añadir salida' }}</a>
+    {% endif %}
+    <form method="get" action="{{ url_for('design.show_project', project_id=project.id) }}#{{ section.slug }}">
+        {% for other in io_sections if other.slug != section.slug and other.selected %}
+        <input type="hidden" name="{{ other.slug }}_tipo" value="{{ other.selected }}">
+        {% endfor %}
+        <label for="{{ section.slug }}_tipo">Tipo</label>
+        <select id="{{ section.slug }}_tipo" name="{{ section.slug }}_tipo">
+            <option value="">Todos los tipos</option>
+            {% for member in section.members %}
+            <option value="{{ member.name }}"{% if member.name == section.selected %} selected{% endif %}>{{ member.value }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn" type="submit">Filtrar</button>
+    </form>
+    {% for row in section.rows %}
+    <article>
+        <h3>{{ row.kind.value }}</h3>
+        <p class="document-text">{{ row.text }}</p>
+        {% if section.slug == 'salidas' %}
+        <p><strong>Criterios de aceptación:</strong></p>
+        <p class="document-text">{{ row.acceptance_criteria }}</p>
+        {% endif %}
+        {% if row.revision_id %}
+            {% if row.revision_id in visible_revisions %}
+            {% set citation = visible_revisions[row.revision_id] %}
+            <p><a href="{{ url_for('design.show_revision', revision_id=row.revision_id) }}">{{ citation[0] }} · Revisión {{ citation[1] }}</a></p>
+            {% else %}<p>Revisión vinculada</p>{% endif %}
+        {% endif %}
+        {% if editable and can('update', 'design') %}
+        <a class="btn btn--sm" href="{{ url_for('design.edit_element', project_id=project.id, section=section.slug, element_id=row.id) }}">Editar</a>
+        {{ delete_form(url_for('design.delete_element', project_id=project.id, section=section.slug, element_id=row.id), '¿Eliminar este elemento de diseño?') }}
+        {% endif %}
+    </article>
+    {% else %}<p>No hay elementos para los filtros seleccionados.</p>{% endfor %}
+</section>
+{% endfor %}

@@ -27,6 +27,7 @@ from ..models import (
     TipoAccionRevision, TipoContexto, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
     KnowledgeType, CommunicationChannel, CommunicationScope, DesignState,
+    DesignInputType, DesignOutputType,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
@@ -34,7 +35,7 @@ from ..services import (
     corrective_actions, document_revisions, documents, improvements, management_reviews,
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
-    training_resources, design,
+    training_resources, design, design_io,
 )
 from ..services.policy import Resource
 
@@ -625,6 +626,21 @@ _DESIGN_MODULES = (
             'Required exactly when done, never future. Done stages are read-only. '
             'Cancelled projects take no stage writes.')),
     ), (_f('project_id', 'integer'),)),
+    *(Module(slug, label, Resource.DESIGN, register, (
+        _f('project_id', 'integer', True, note=(
+            'Design project; cannot change later. Cancelled projects are read-only.')),
+        _f('kind', 'enum', True, members=members),
+        _f('text', required=True),
+        *((_f('acceptance_criteria', required=True),) if output else ()),
+        _f('revision_id', 'integer', note=(
+            'Exact controlled-document revision, readable and aprobado/vigente when newly '
+            'linked. Existing obsolete citations are retained; null clears it. '
+            'Reads expose only this id, never revision metadata.')),
+    ), (_f('project_id', 'integer'), _f('kind', 'enum', members=members)))
+      for slug, label, register, members, output in (
+          ('design_inputs', 'Design inputs (8.3.3)', design_io.inputs, DesignInputType, False),
+          ('design_outputs', 'Design outputs (8.3.5)', design_io.outputs, DesignOutputType, True),
+      )),
 )
 
 _MODULES = (

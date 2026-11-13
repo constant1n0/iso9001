@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header %}
+{% block title %}{{ document.code }} · Revisión {{ revision.numero }}{% endblock %}
+{% block content %}
+{{ page_header('Revisión exacta de documento controlado', document.code ~ ' · Revisión ' ~ revision.numero) }}
+<article class="card">
+    <h2>{{ document.title }}</h2>
+    <p><strong>Estado:</strong> {{ revision.estado.value }}</p>
+    <p class="document-text">{{ revision.content }}</p>
+    <p><strong>Resumen de cambios:</strong> {{ revision.change_summary or '—' }}</p>
+</article>
+<a class="btn" href="{{ url_for('document.view_document', document_id=document.id) }}">Consultar documento e historial</a>
+{% endblock %}

@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 40 módulos: `design_projects`, `design_stages`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
+`qms_modules` enumera 42 módulos: `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -72,7 +72,7 @@ nunca puede eliminar.
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
 
-Diseño y desarrollo (8.3, DD1):
+Diseño y desarrollo (8.3, DD1–DD2):
 
 - `design_projects`: obligatorios `title` (hasta 200 caracteres), `description`
   (producto o servicio que se diseña) y `owner_id` (persona existente de
@@ -101,14 +101,45 @@ Diseño y desarrollo (8.3, DD1):
   auditan en el proyecto y las citas quedan protegidas por RESTRICT.
 - Ningún token elimina ni ejecuta transiciones, ni siquiera enviando `state`,
   `target` o `cancellation_reason` a `qms_update`: son campos no permitidos.
-  Entradas, salidas, controles y aprobación final están pendientes de DD2–DD4.
+  Controles, versiones de salidas, cambios autorizados y aprobación final están
+  pendientes de DD3–DD4.
   La aplicabilidad de 8.3 sigue siendo la del alcance aprobado, nunca la decide
   la creación de un proyecto.
+
+- `design_inputs` (8.3.3): obligatorios `project_id`, `kind` y `text` no vacío.
+  `kind`: `functional_performance` (funcional o de desempeño), `legal_regulatory`
+  (legal o reglamentario), `prior_knowledge` (conocimiento previo),
+  `failure_consequences` (consecuencias de fallo), `other` (otro).
+- `design_outputs` (8.3.5): obligatorios `project_id`, `kind`, `text` y
+  `acceptance_criteria` no vacíos. `kind`: `specification` (especificación),
+  `drawing` (plano o dibujo), `procedure_instruction` (procedimiento o instrucción),
+  `prototype_sample` (prototipo o muestra), `software`, `other` (otro).
+- Ambos módulos admiten `revision_id` opcional: identificador de una revisión
+  exacta de documento controlado, no del documento. Una nueva cita exige una
+  revisión legible por el actor y en estado `aprobado` o `vigente`; se rechazan
+  borradores, revisiones en revisión, desconocidas o inaccesibles. Una cita ya
+  guardada se conserva aunque después quede obsoleta; `null` la quita. Las
+  lecturas exponen solo el identificador, nunca contenido, título ni código de
+  la revisión (convención de los vínculos de `knowledge`). FK RESTRICT protege
+  las citas contra borrado. El control documental solo descarta borradores,
+  que aquí no se pueden citar.
+- Filtros de entradas y salidas: `project_id` y `kind` (nombre del miembro).
+  Orden por proyecto e identificador; los registros devuelven las etiquetas
+  españolas de `kind`. El proyecto de un elemento nunca cambia. Todos los roles
+  leen con ámbito `read`; Administrador y Auditor escriben con ámbito `write`.
+  No hay eliminación MCP, aprobación ni versionado. Un proyecto cancelado es
+  de solo lectura; guardar sin cambios no escribe datos ni auditoría.
 
 Ejemplo de `qms_create` (la persona activa 1 debe existir):
 
 ```json
 {"module": "design_projects", "data": {"title": "Nuevo envase", "description": "Envase reciclable", "owner_id": 1, "starter_stages": true}}
+```
+
+Ejemplo de salida para un proyecto 1 existente:
+
+```json
+{"module": "design_outputs", "data": {"project_id": 1, "kind": "specification", "text": "Especificación del envase", "acceptance_criteria": "Capacidad de 500 ml ± 5 ml"}}
 ```
 
 Plan y registro de comunicación (7.4):

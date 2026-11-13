@@ -3038,6 +3038,76 @@ class DesignStage(RecordMetadataMixin, db.Model):
     owner = db.relationship('Person')
 
 
+class DesignInputType(enum.Enum):
+    """Closed classifications of design inputs (8.3.3)."""
+
+    functional_performance = 'funcional o de desempeño'
+    legal_regulatory = 'legal o reglamentario'
+    prior_knowledge = 'conocimiento previo'
+    failure_consequences = 'consecuencias de fallo'
+    other = 'otro'
+
+
+class DesignOutputType(enum.Enum):
+    """Closed classifications of design outputs (8.3.5)."""
+
+    specification = 'especificación'
+    drawing = 'plano o dibujo'
+    procedure_instruction = 'procedimiento o instrucción'
+    prototype_sample = 'prototipo o muestra'
+    software = 'software'
+    other = 'otro'
+
+
+def _design_io_constraints(table: str) -> tuple:
+    """Named keys, nonblank text and indexed restrictive citations for DD2."""
+    return (
+        db.PrimaryKeyConstraint('id', name=f'pk_{table}'),
+        db.CheckConstraint('length(trim(text)) > 0', name=f'ck_{table}_text'),
+        db.ForeignKeyConstraint(['project_id'], ['design_projects.id'],
+                                name=f'fk_{table}_project_id',
+                                ondelete='RESTRICT', onupdate='RESTRICT'),
+        db.ForeignKeyConstraint(['revision_id'], ['document_revisions.id'],
+                                name=f'fk_{table}_revision_id',
+                                ondelete='RESTRICT', onupdate='RESTRICT'),
+        *(db.Index(f'ix_{table}_{column}', column) for column in (
+            'project_id', 'revision_id', 'created_by_id', 'updated_by_id')),
+    )
+
+
+class DesignInput(RecordMetadataMixin, db.Model):
+    """One typed input, optionally citing an exact controlled revision."""
+
+    __tablename__ = 'design_inputs'
+    __table_args__ = _design_io_constraints('design_inputs')
+
+    id = db.Column(db.Integer, nullable=False)
+    project_id = db.Column(db.Integer, nullable=False)
+    kind = db.Column(text_enum(DesignInputType, 'ck_design_inputs_kind', length=30),
+                     nullable=False)
+    text = db.Column(db.Text, nullable=False)
+    revision_id = db.Column(db.Integer)
+
+
+class DesignOutput(RecordMetadataMixin, db.Model):
+    """A typed output and acceptance criteria; approval/versioning belongs to DD4."""
+
+    __tablename__ = 'design_outputs'
+    __table_args__ = (
+        *_design_io_constraints('design_outputs'),
+        db.CheckConstraint('length(trim(acceptance_criteria)) > 0',
+                           name='ck_design_outputs_acceptance_criteria'),
+    )
+
+    id = db.Column(db.Integer, nullable=False)
+    project_id = db.Column(db.Integer, nullable=False)
+    kind = db.Column(text_enum(DesignOutputType, 'ck_design_outputs_kind', length=30),
+                     nullable=False)
+    text = db.Column(db.Text, nullable=False)
+    acceptance_criteria = db.Column(db.Text, nullable=False)
+    revision_id = db.Column(db.Integer)
+
+
 # Registro de auditoría append-only: quién cambió qué y cuándo (ISO 9001 7.5.3)
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
