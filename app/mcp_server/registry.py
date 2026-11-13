@@ -28,6 +28,7 @@ from ..models import (
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
     KnowledgeType, CommunicationChannel, CommunicationScope, DesignState,
     DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult,
+    DesignChangeState,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
@@ -35,7 +36,7 @@ from ..services import (
     corrective_actions, document_revisions, documents, improvements, management_reviews,
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
-    training_resources, design, design_controls, design_io,
+    training_resources, design, design_changes, design_controls, design_io,
 )
 from ..services.policy import Resource
 
@@ -609,7 +610,7 @@ def _control_plan_extras(row: Any) -> dict[str, Any]:
 
 _DESIGN_MODULES = (
     # Lifecycle columns are read-only. Planning, starting, cancelling and all
-    # deletion stay on the web, as for qms_changes; DD1 cannot complete projects.
+    # deletion stay on the web. Approval/completion never enter the MCP surface.
     Module('design_projects', 'Design projects (8.3)', Resource.DESIGN,
            design.projects, (
         _f('title', required=True), _f('description', required=True),
@@ -619,7 +620,7 @@ _DESIGN_MODULES = (
         _f('planned_start', 'date'), _f('planned_end', 'date', note='Not before planned_start.'),
         _f('starter_stages', 'boolean', note='Create only: offer seven editable initial stages.'),
     ), (_f('state', 'enum', members=DesignState, note=(
-            'Starts borrador. Transitions web-only; completion unavailable in DD1.')),
+            'Starts borrador. Transitions and independent approval/completion web-only.')),
         _f('owner_id', 'integer'), _f('customer_id', 'integer')),
         extras=lambda row: {'process_ids': row.process_ids}),
     Module('design_stages', 'Design project stages (8.3.2)', Resource.DESIGN,
@@ -629,11 +630,12 @@ _DESIGN_MODULES = (
         _f('planned_date', 'date'), _f('position', 'integer', note='1-based; defaults to append.'),
         _f('done', 'boolean'), _f('done_date', 'date', note=(
             'Required exactly when done, never future. Done stages are read-only. '
-            'Cancelled projects take no stage writes.')),
+            'Cancelled and completed projects take no stage writes.')),
     ), (_f('project_id', 'integer'),)),
     *(Module(slug, label, Resource.DESIGN, register, (
         _f('project_id', 'integer', True, note=(
-            'Design project; cannot change later. Cancelled projects are read-only.')),
+            'Design project; cannot change later. Cancelled/completed projects are read-only. '
+            'Approved output versions are immutable; approval/versioning is web-only.')),
         _f('kind', 'enum', True, members=members),
         _f('text', required=True),
         *((_f('acceptance_criteria', required=True),) if output else ()),
@@ -641,7 +643,11 @@ _DESIGN_MODULES = (
             'Exact controlled-document revision, readable and aprobado/vigente when newly '
             'linked. Existing obsolete citations are retained; null clears it. '
             'Reads expose only this id, never revision metadata.')),
-    ), (_f('project_id', 'integer'), _f('kind', 'enum', members=members)))
+    ), (_f('project_id', 'integer'), _f('kind', 'enum', members=members)),
+        extras=(lambda row: {
+            'version': row.version, 'lineage_id': row.lineage_id,
+            'approval_state': row.approval_state, 'approved_at': row.approved_at,
+            'approved_by_id': row.approved_by_id}) if output else None)
       for slug, label, register, members, output in (
           ('design_inputs', 'Design inputs (8.3.3)', design_io.inputs, DesignInputType, False),
           ('design_outputs', 'Design outputs (8.3.5)', design_io.outputs, DesignOutputType, True),
@@ -649,6 +655,18 @@ _DESIGN_MODULES = (
 )
 
 _DESIGN_CONTROL_MODULES = (
+    Module('design_changes', 'Proposed design changes (8.3.6)', Resource.DESIGN,
+           design_changes.changes, (
+        _f('project_id', 'integer', True, note='Immutable parent; completed/cancelled read-only.'),
+        _f('reason', required=True), _f('impact', required=True),
+        _f('actions', required=True),
+        _f('review', note='May be pending on proposal; required before web authorization.'),
+        _f('output_ids', 'integer_list', True, note=(
+            'At least one approved current output version of the same project. '
+            'Create/read only through MCP; no updates, authorize, reject, apply or delete.')),
+    ), (_f('project_id', 'integer'), _f('state', 'enum', members=DesignChangeState)),
+        extras=lambda row: {'output_ids': row.output_ids,
+                            'applied': design_changes.is_applied(object_session(row), row.id)}),
     Module('design_planned_controls', 'Planned design controls (8.3.2/8.3.4)',
            Resource.DESIGN, design_controls.plans, (
         _f('project_id', 'integer', True, note='Design project; cannot change later.'),

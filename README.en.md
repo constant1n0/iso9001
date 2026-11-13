@@ -60,11 +60,13 @@ an agent can never delete anything.
   considerations a) to d), communication, affected processes and documents,
   tasks, approval by an administrator, implementation, effectiveness review,
   dashboard alerts, register and plan PDFs, and a management review input.
-- **Design and development (DD1)** (8.3): projects with product/service description,
-  owner, optional customer/process links, planned dates and freely ordered stages.
-  Draft → planned → in progress, or cancellation with a reason, on the web only.
-  All roles read; administrators and auditors maintain. MCP never transitions or
-  deletes. Inputs, outputs, controls and completion approval are deferred.
+- **Design and development** (8.3.1–8.3.6): projects and freely ordered stages,
+  typed inputs, outputs with acceptance criteria and immutable approved versions,
+  planned controls and repeatable evidence, authorized changes retaining history,
+  and completion by an administrator other than the project owner. All roles read;
+  administrators and auditors maintain. Approvals require a linked person and are
+  web-only; MCP can propose changes but never approve, authorize, reject, apply,
+  complete or delete.
 - **External providers** (8.4, 9.1.3): selection criteria, affected processes,
   approval by an administrator, scored evaluations with the next evaluation,
   linked nonconformities and the approved-providers PDF.

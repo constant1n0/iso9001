@@ -2935,7 +2935,7 @@ class TareaCambio(RecordMetadataMixin, db.Model):
 
 
 class DesignState(enum.Enum):
-    """Design lifecycle; completion is reserved for the later approval gate."""
+    """Design lifecycle; completion requires an independent administrator."""
 
     borrador = 'borrador'
     planificado = 'planificado'
@@ -2992,7 +2992,12 @@ class DesignProject(RecordMetadataMixin, db.Model):
     state = db.Column(text_enum(DesignState, 'ck_design_projects_state'), nullable=False,
                       default=DesignState.borrador, server_default='borrador')
     cancellation_reason = db.Column(db.Text)
-    owner = db.relationship('Person')
+    completed_at = db.Column(db.Date)
+    completed_by_id = db.Column(db.Integer, db.ForeignKey(
+        'personas.id', name='fk_design_projects_completed_by_id',
+        ondelete='RESTRICT', onupdate='RESTRICT'), index=True)
+    completed_by = db.relationship('Person', foreign_keys=[completed_by_id])
+    owner = db.relationship('Person', foreign_keys=[owner_id])
     customer = db.relationship('Cliente')
     processes = db.relationship('ProcesoOperacion', secondary=design_processes,
                                 order_by='ProcesoOperacion.id_proceso', lazy='selectin')
@@ -3090,7 +3095,7 @@ class DesignInput(RecordMetadataMixin, db.Model):
 
 
 class DesignOutput(RecordMetadataMixin, db.Model):
-    """A typed output and acceptance criteria; approval/versioning belongs to DD4."""
+    """One output version's content; DD4 metadata is stored separately, one-to-one."""
 
     __tablename__ = 'design_outputs'
     __table_args__ = (
@@ -3106,6 +3111,155 @@ class DesignOutput(RecordMetadataMixin, db.Model):
     text = db.Column(db.Text, nullable=False)
     acceptance_criteria = db.Column(db.Text, nullable=False)
     revision_id = db.Column(db.Integer)
+    version_record = db.relationship(
+        'DesignOutputVersion', foreign_keys='DesignOutputVersion.output_id',
+        uselist=False, passive_deletes='all')
+
+    @property
+    def version(self) -> int:
+        """Version number within the original output's lineage."""
+        return self.version_record.version
+
+    @property
+    def lineage_id(self) -> int:
+        """Original output id, shared by all versions."""
+        return self.version_record.lineage_id
+
+    @property
+    def approval_state(self) -> 'DesignApprovalState':
+        """Draft or approved; historical approved versions stay approved."""
+        return self.version_record.state
+
+    @property
+    def approved_at(self) -> date | None:
+        """Approval date, supplied by the web adapter."""
+        return self.version_record.approved_at
+
+    @property
+    def approved_by_id(self) -> int | None:
+        """Person who approved this exact version."""
+        return self.version_record.approved_by_id
+
+
+class DesignApprovalState(enum.Enum):
+    """Output version approval states, stored by English name."""
+
+    draft = 'borrador'
+    approved = 'aprobada'
+
+
+class DesignChangeState(enum.Enum):
+    """Proposed changes acquire an immutable authorization or rejection."""
+
+    proposed = 'propuesto'
+    authorized = 'autorizado'
+    rejected = 'rechazado'
+
+
+design_change_outputs = db.Table(
+    'design_change_outputs',
+    db.Column('change_id', db.Integer, nullable=False),
+    db.Column('output_id', db.Integer, nullable=False),
+    db.PrimaryKeyConstraint('change_id', 'output_id', name='pk_design_change_outputs'),
+    db.ForeignKeyConstraint(['change_id'], ['design_changes.id'],
+                            name='fk_design_change_outputs_change_id',
+                            ondelete='RESTRICT', onupdate='RESTRICT'),
+    db.ForeignKeyConstraint(['output_id'], ['design_outputs.id'],
+                            name='fk_design_change_outputs_output_id',
+                            ondelete='RESTRICT', onupdate='RESTRICT'),
+    db.Index('ix_design_change_outputs_output_id', 'output_id'),
+)
+
+
+class DesignChange(RecordMetadataMixin, db.Model):
+    """An auditable design change; decided records and their links are immutable."""
+
+    __tablename__ = 'design_changes'
+    __table_args__ = (
+        db.PrimaryKeyConstraint('id', name='pk_design_changes'),
+        *(db.CheckConstraint(f'length(trim({column})) > 0',
+                             name=f'ck_design_changes_{column}')
+          for column in ('reason', 'impact', 'actions')),
+        db.CheckConstraint(
+            "(state = 'authorized' AND authorized_by_id IS NOT NULL AND "
+            "authorized_at IS NOT NULL AND review IS NOT NULL AND "
+            "length(trim(review)) > 0) OR (state != 'authorized' AND "
+            "authorized_by_id IS NULL AND authorized_at IS NULL)",
+            name='ck_design_changes_authorization'),
+        db.CheckConstraint(
+            "(state = 'rejected' AND rejection_reason IS NOT NULL AND "
+            "length(trim(rejection_reason)) > 0) OR "
+            "(state != 'rejected' AND rejection_reason IS NULL)",
+            name='ck_design_changes_rejection'),
+        *(db.ForeignKeyConstraint([column], [target],
+                                  name=f'fk_design_changes_{column}',
+                                  ondelete='RESTRICT', onupdate='RESTRICT')
+          for column, target in (('project_id', 'design_projects.id'),
+                                 ('authorized_by_id', 'personas.id'))),
+        *(db.Index(f'ix_design_changes_{column}', column) for column in (
+            'project_id', 'authorized_by_id', 'created_by_id', 'updated_by_id')),
+    )
+    id = db.Column(db.Integer, nullable=False)
+    project_id = db.Column(db.Integer, nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    impact = db.Column(db.Text, nullable=False)
+    review = db.Column(db.Text)
+    actions = db.Column(db.Text, nullable=False)
+    state = db.Column(text_enum(DesignChangeState, 'ck_design_changes_state'),
+                      nullable=False, default=DesignChangeState.proposed,
+                      server_default='proposed')
+    rejection_reason = db.Column(db.Text)
+    authorized_by_id = db.Column(db.Integer)
+    authorized_at = db.Column(db.Date)
+    authorized_by = db.relationship('Person', foreign_keys=[authorized_by_id])
+    outputs = db.relationship('DesignOutput', secondary=design_change_outputs,
+                              order_by='DesignOutput.id', lazy='selectin')
+
+    @property
+    def output_ids(self) -> list[int]:
+        """Stable affected-version identifiers for forms, MCP and audit."""
+        return sorted(row.id for row in self.outputs)
+
+
+class DesignOutputVersion(RecordMetadataMixin, db.Model):
+    """Approval/lineage metadata; content stays in DD2 rows, including on downgrade."""
+
+    __tablename__ = 'design_output_versions'
+    __table_args__ = (
+        db.PrimaryKeyConstraint('output_id', name='pk_design_output_versions'),
+        db.UniqueConstraint('lineage_id', 'version',
+                            name='uq_design_output_versions_lineage_version'),
+        db.UniqueConstraint('change_id', 'lineage_id',
+                            name='uq_design_output_versions_change_lineage'),
+        db.CheckConstraint('version >= 1', name='ck_design_output_versions_version'),
+        db.CheckConstraint(
+            '(version = 1 AND output_id = lineage_id AND change_id IS NULL) OR '
+            '(version > 1 AND output_id != lineage_id AND change_id IS NOT NULL)',
+            name='ck_design_output_versions_origin'),
+        db.CheckConstraint(
+            "(state = 'approved' AND approved_by_id IS NOT NULL AND "
+            "approved_at IS NOT NULL) OR (state = 'draft' AND "
+            "approved_by_id IS NULL AND approved_at IS NULL)",
+            name='ck_design_output_versions_approval'),
+        *(db.ForeignKeyConstraint([column], [target],
+                                  name=f'fk_design_output_versions_{column}',
+                                  ondelete='RESTRICT', onupdate='RESTRICT')
+          for column, target in (('output_id', 'design_outputs.id'),
+                                 ('lineage_id', 'design_outputs.id'),
+                                 ('change_id', 'design_changes.id'),
+                                 ('approved_by_id', 'personas.id'))),
+        *(db.Index(f'ix_design_output_versions_{column}', column) for column in (
+            'lineage_id', 'change_id', 'approved_by_id', 'created_by_id', 'updated_by_id')),
+    )
+    output_id = db.Column(db.Integer, nullable=False)
+    lineage_id = db.Column(db.Integer, nullable=False)
+    version = db.Column(db.Integer, nullable=False)
+    state = db.Column(text_enum(DesignApprovalState, 'ck_design_output_versions_state'),
+                      nullable=False, default=DesignApprovalState.draft,
+                      server_default='draft')
+    approved_by_id = db.Column(db.Integer)
+    approved_at = db.Column(db.Date)
+    change_id = db.Column(db.Integer)
 
 
 class DesignControlKind(enum.Enum):

@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 44 módulos: `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
+`qms_modules` enumera 45 módulos: `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -72,7 +72,7 @@ nunca puede eliminar.
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
 
-Diseño y desarrollo (8.3, DD1–DD3):
+Diseño y desarrollo (8.3.1–8.3.6):
 
 - `design_projects`: obligatorios `title` (hasta 200 caracteres), `description`
   (producto o servicio que se diseña) y `owner_id` (persona existente de
@@ -86,7 +86,8 @@ Diseño y desarrollo (8.3, DD1–DD3):
   es de solo lectura y empieza en `borrador`. Filtros: `state` (`borrador`,
   `planificado`, `en_curso`, `completado`, `cancelado`), `owner_id`, `customer_id`.
   La etiqueta devuelta para `en_curso` es `en curso`. Planificar, iniciar y
-  cancelar son exclusivamente web; `completado` no es alcanzable en DD1.
+  cancelar y completar son exclusivamente web. Las lecturas incluyen
+  `completed_at` y `completed_by_id` (persona que aprobó el cierre).
 - `design_stages`: obligatorios `project_id`, `name` (hasta 200 caracteres) y
   `owner_id` (persona activa al elegirla). Opcionales: `planned_date`,
   `position` (entero desde 1; omitirlo añade al final), `done` (booleano,
@@ -96,13 +97,14 @@ Diseño y desarrollo (8.3, DD1–DD3):
   lectura. No se pueden desplazar etapas finalizadas con otra operación de orden.
 - Todos los roles leen con ámbito `read`; Administrador y Auditor crean y
   actualizan con ámbito `write`. Responsables existentes inactivos se conservan.
-  Proyectos cancelados no admiten cambios ni nuevas etapas. Guardar sin cambios
-  no añade auditoría; los rechazos no cambian nada. Las listas de procesos se
+  Proyectos cancelados o completados no admiten escrituras. Los completados
+  rechazan incluso envíos sin cambios. Los demás no-ops admitidos no añaden
+  auditoría; los rechazos no cambian nada. Las listas de procesos se
   auditan en el proyecto y las citas quedan protegidas por RESTRICT.
 - Ningún token elimina ni ejecuta transiciones, ni siquiera enviando `state`,
   `target` o `cancellation_reason` a `qms_update`: son campos no permitidos.
-  Versiones de salidas, cambios autorizados y aprobación final están
-  pendientes de DD4.
+  Las aprobaciones de salidas, autorizaciones/rechazos y aplicaciones de cambios,
+  así como el cierre del proyecto, nunca se ejecutan por MCP.
   La aplicabilidad de 8.3 sigue siendo la del alcance aprobado, nunca la decide
   la creación de un proyecto.
 
@@ -127,8 +129,15 @@ Diseño y desarrollo (8.3, DD1–DD3):
   Orden por proyecto e identificador; los registros devuelven las etiquetas
   españolas de `kind`. El proyecto de un elemento nunca cambia. Todos los roles
   leen con ámbito `read`; Administrador y Auditor escriben con ámbito `write`.
-  No hay eliminación MCP, aprobación ni versionado. Un proyecto cancelado es
-  de solo lectura; guardar sin cambios no escribe datos ni auditoría.
+  No hay eliminación MCP, aprobación ni aplicación de cambios. Las salidas
+  devuelven `version` (desde 1), `lineage_id` (id de la primera salida),
+  `approval_state` (`borrador` o `aprobada`), `approved_at` y `approved_by_id`
+  (persona, no usuario). Cada versión es una fila con id propio; las listas
+  incluyen el historial aprobado. La creación abre versión 1 borrador; una
+  versión aprobada rechaza cualquier `qms_update`, incluso vacío o idéntico.
+  Cambiarla requiere un cambio autorizado aplicado desde la web, que abre
+  nuevos borradores. Las entradas no tienen versiones. Los proyectos cancelados
+  o completados son de solo lectura.
 
 Ejemplo de `qms_create` (la persona activa 1 debe existir):
 
@@ -141,6 +150,40 @@ Ejemplo de salida para un proyecto 1 existente:
 ```json
 {"module": "design_outputs", "data": {"project_id": 1, "kind": "specification", "text": "Especificación del envase", "acceptance_criteria": "Capacidad de 500 ml ± 5 ml"}}
 ```
+
+Cambios del diseño (DD4, 8.3.6):
+
+- `design_changes` admite `qms_get`, `qms_list` y `qms_create`; **no admite
+  `qms_update`**, ni siquiera vacío. Todos los roles leen; Administrador y
+  Auditor proponen con ámbito `write`.
+- Obligatorios: `project_id`, `reason`, `impact`, `actions` (textos no vacíos)
+  y `output_ids` (lista no vacía de enteros). Cada salida afectada debe ser una
+  versión actual aprobada del mismo proyecto. Se normalizan ids repetidos.
+- Opcional: `review`, texto de revisión. Puede quedar pendiente al proponer;
+  la autorización web exige una revisión no vacía. El estado inicial siempre
+  es `proposed`; no se aceptan estado ni datos de autorización enviados.
+- Lecturas: `output_ids`, `state` (etiquetas `propuesto`, `autorizado`,
+  `rechazado`), `authorized_by_id`, `authorized_at`, `rejection_reason` y
+  `applied` (booleano derivado de las nuevas versiones). Filtros combinables:
+  `project_id`, `state` (`proposed`, `authorized`, `rejected`); orden por proyecto e id.
+- Autorizar/rechazar exige Administrador web con persona vinculada distinta del
+  responsable. Rechazar exige motivo. Las decisiones son inmutables. Aplicar
+  solo se ofrece en la web a Administrador/Auditor, una vez y para todas las
+  salidas, copiando su contenido a nuevos borradores sin tocar las anteriores.
+- Completar exige proyecto en curso, al menos una salida, todas las versiones
+  actuales aprobadas, controles planificados resueltos, ningún cambio propuesto y
+  ningún cambio autorizado sin aplicar. La aprobación final
+  requiere el mismo Administrador independiente; no hay reapertura.
+
+Ejemplo de propuesta (la versión de salida 1 debe ser actual y estar aprobada):
+
+```json
+{"module": "design_changes", "data": {"project_id": 1, "reason": "Nuevo requisito", "impact": "Cambia la tolerancia", "review": "Evaluado el riesgo", "actions": "Actualizar el plano", "output_ids": [1]}}
+```
+
+Los indicadores `permissions` de `qms_modules` expresan permisos por rol y recurso;
+las restricciones específicas de cada operación figuran en estas notas y siempre
+se comprueban en el servicio (por ejemplo, los cambios no admiten actualización MCP).
 
 Controles del diseño (DD3, 8.3.2/8.3.4):
 

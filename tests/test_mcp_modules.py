@@ -12,7 +12,7 @@ from mcp_support import ADMIN, AUDITOR, OPERATIVO, McpDbCase, mcp_actor
 ROOT = Path(__file__).resolve().parents[1]
 SLUGS = {
     'design_projects', 'design_stages', 'design_inputs', 'design_outputs',
-    'design_planned_controls', 'design_control_records',
+    'design_planned_controls', 'design_control_records', 'design_changes',
     "communication", "communication_log", "knowledge",
     "equipos_medicion", "comprobaciones_equipo",
     "no_conformidades", "auditorias", "documentos", "capacitaciones",
@@ -44,7 +44,7 @@ SHARED_CHANGES = ("cambios_sgc", "tareas_cambio")
 SHARED_EQUIPMENT = ("equipos_medicion", "comprobaciones_equipo")
 SHARED_COMMUNICATION = ('communication', 'communication_log')
 SHARED_DESIGN = ('design_projects', 'design_stages', 'design_inputs', 'design_outputs',
-                 'design_planned_controls', 'design_control_records')
+                 'design_planned_controls', 'design_control_records', 'design_changes')
 # (module, legacy free-text name, person link that can fill it)
 LEGACY_NAMES = (("capacitaciones", "personal", "persona_id"),
                 ("auditorias", "auditor", "auditor_id"),

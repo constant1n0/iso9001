@@ -63,7 +63,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
-    DesignControlRecord, DesignPlannedControl, DesignProject, DesignStage,
+    DesignChange, DesignOutputVersion, DesignControlRecord, DesignPlannedControl,
+    DesignProject, DesignStage,
     COMMUNICATION_ASSOCIATIONS, CommunicationLog, CommunicationPlan,
     EquipoMedicion, KnowledgeItem, KNOWLEDGE_ASSOCIATIONS,
     AccionCorrectiva, AccionRevision, AccionRiesgo, AlcanceSGC, Auditoria, CambioSGC,
@@ -98,7 +99,8 @@ STILL_REFERENCED = (
 # Columns that cite a person. Their foreign keys are ``ON DELETE RESTRICT``,
 # which SQLite only enforces on request, so ``delete`` also checks them.
 REFERENCES = (
-    DesignProject.owner_id, DesignStage.owner_id,
+    DesignProject.owner_id, DesignStage.owner_id, DesignProject.completed_by_id,
+    DesignChange.authorized_by_id, DesignOutputVersion.approved_by_id,
     DesignPlannedControl.responsible_id, DesignControlRecord.responsible_id,
     CommunicationPlan.owner_id, COMMUNICATION_ASSOCIATIONS['person_ids'].c.target_id,
     CommunicationLog.communicator_id,

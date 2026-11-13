@@ -128,6 +128,9 @@ SEEDS = {
     'design_control_records': {'project_id': 1, 'kind': 'review', 'date': '2020-01-01',
                                'responsible_id': 1, 'result': 'conforming',
                                'evidence': 'Minutes M-1'},
+    'design_changes': {'project_id': 1, 'reason': 'Requirement changed',
+                       'impact': 'Drawing changes', 'review': 'Safety checked',
+                       'actions': 'Revise drawing', 'output_ids': [1]},
 }
 
 
@@ -187,6 +190,11 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
             from app.models import DesignProject
             if db.session.get(DesignProject, 1) is None:
                 self.seed('design_projects')
+        if slug == 'design_changes':
+            from app.models import DesignOutput
+            if db.session.get(DesignOutput, 1) is None:
+                self.seed('design_outputs')
+            self.approve_design_output(1)
         if slug == 'design_control_records':
             from app.models import DesignProject, DesignState
             # Fixture-only state injection; lifecycle transitions are web-only.
@@ -227,6 +235,22 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
         row = module.service.create(db.session, admin, data)
         db.session.commit()
         return sa_inspect(row).mapper.primary_key_from_instance(row)[0]
+
+    def approve_design_output(self, output_id: int) -> None:
+        """Seed approval through the web service with a real independent linked user."""
+        from app.models import DesignOutput
+        from app.services import design_changes, people
+        output = db.session.get(DesignOutput, output_id)
+        if output.approval_state.name == 'approved':
+            return
+        user = User(username=f'design-approver-{User.query.count() + 1}',
+                    password='unused', role=ADMIN)
+        db.session.add(user)
+        db.session.commit()
+        people.create(db.session, self.cli(), {'nombre': user.username, 'user_id': user.id})
+        who = Actor(user.id, user.username, ADMIN, 'web')
+        design_changes.approve_output(db.session, who, output_id, today=date(2020, 1, 1))
+        db.session.commit()
 
     @staticmethod
     def force_nc_state(record_id: int, estado: EstadoNoConformidad) -> None:

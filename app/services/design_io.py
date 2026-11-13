@@ -128,7 +128,11 @@ def _create(spec: crud.Spec, session: Session, who: Actor,
     project_id = fields.integer(data, 'project_id', required=True)
     design._editable(design._lock_project(session, project_id))
     values = _values(spec, session, who, data)
-    return crud.create(spec, session, who, values)
+    created = crud.create(spec, session, who, values)
+    if spec is OUTPUT_SPEC:
+        from . import design_changes
+        design_changes.add_version(session, who, created)
+    return created
 
 
 def _update(spec: crud.Spec, session: Session, who: Actor, record_id: int,
@@ -136,6 +140,11 @@ def _update(spec: crud.Spec, session: Session, who: Actor, record_id: int,
     policy.require(who, Action.UPDATE, Resource.DESIGN)
     design._payload(data, spec.writable)
     parent, found = _parent(spec, session, record_id)
+    if parent.state is design.DesignState.completado:
+        design._editable(parent)
+    if spec is OUTPUT_SPEC:
+        from . import design_changes
+        design_changes.ensure_draft(session, found)
     values = _values(spec, session, who, data, found)
     if all(getattr(found, key) == value for key, value in values.items()):
         return found
@@ -149,6 +158,16 @@ def _delete(spec: crud.Spec, session: Session, who: Actor, record_id: int) -> No
         raise PermissionDenied()
     parent, found = _parent(spec, session, record_id)
     design._editable(parent)
+    if spec is OUTPUT_SPEC:
+        from . import design_changes
+        version = design_changes.ensure_draft(session, found)
+        # Versions opened by authorization are retained, even while draft. Otherwise
+        # deleting a tip could reopen the same authorization and reuse its number.
+        if version.version != 1:
+            raise ValidationError('Las versiones creadas por cambios no se eliminan.')
+        audit.record(session, who, 'delete', version)
+        session.delete(version)
+        design._flush(session)
     audit.record(session, who, 'delete', found)
     session.delete(found)
     design._flush(session)

@@ -1,4 +1,4 @@
-"""CSRF-protected design projects, stages, IO and control evidence (DD1–DD3)."""
+"""CSRF-protected design projects, versions, changes and immutable evidence."""
 from typing import Any
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
@@ -7,13 +7,14 @@ from flask_login import login_required
 
 from ..audit_notifications import local_today
 from ..extensions import db
-from ..forms import (CHOOSE_PERSON, DesignInputForm, DesignOutputForm,
+from ..forms import (BaseForm, CHOOSE_PERSON, DesignChangeForm,
+                     DesignChangeRejectionForm, DesignInputForm, DesignOutputForm,
                      DesignProjectForm, DesignStageForm, DesignTransitionForm,
                      DesignPlannedControlForm, DesignControlRecordForm,
                      DesignControlWithdrawalForm, person_choices)
 from ..models import (DesignInputType, DesignOutputType, DesignProject,
                       DesignStage, DesignState, Document)
-from ..services import (clientes, design, design_controls, design_io, document_revisions,
+from ..services import (clientes, design, design_changes, design_controls, design_io, document_revisions,
                         people, process_operations, qms_scope)
 from ..services.actor import Actor
 from ..services.errors import NotFound
@@ -83,12 +84,18 @@ def show_project(project_id: int) -> ResponseReturnValue:
     plans = design_controls.plans.list_(db.session, actor, project_id=project_id)
     records = design_controls.records.list_(db.session, actor, project_id=project_id)
     resolved = {plan.id for plan in plans if design_controls.is_resolved(db.session, plan)}
+    changes = design_changes.changes.list_(db.session, actor, project_id=project_id)
     return render_template(
         'design/detail.html', project=project,
+        design_changes=changes,
+        applied_changes={row.id for row in changes if design_changes.is_applied(db.session, row.id)},
+        can_approve=design_changes.may_approve(db.session, actor, project),
+        completion_blockers=design.completion_blockers(db.session, project),
+        action_form=BaseForm(), rejection_form=DesignChangeRejectionForm(),
         control_plans=plans, control_records=records, resolved_controls=resolved,
         can_record_controls=project.state in design_controls.RECORD_STATES,
         io_sections=sections, visible_revisions=revisions,
-        has_elements=has_elements or bool(plans) or bool(records),
+        has_elements=has_elements or bool(plans) or bool(records) or bool(changes),
         stages=design.stages.list_(db.session, actor, project_id=project_id),
         targets=design.TRANSITIONS.get(project.state, ()) if design.may_transition(actor, project) else (),
         applicability=_applicability(actor), transition_form=DesignTransitionForm(),
@@ -121,6 +128,9 @@ def new_project() -> ResponseReturnValue:
     """Create a draft, offering but never silently creating initial stages."""
     actor = current_actor()
     form = _project_form(actor)
+    if _control_payload_refused(form, 0):
+        return render_template('design/form.html', form=form,
+                               title='Nuevo proyecto de diseño'), 400
     if form.validate_on_submit() and (created := saved(lambda: design.projects.create(
             db.session, actor, form_data(form, PROJECT_FIELDS + ('starter_stages',))))):
         flash('Proyecto de diseño creado.', 'success')
@@ -145,6 +155,9 @@ def edit_project(project_id: int) -> ResponseReturnValue:
         flash(STARTER_ONLY_ON_CREATE, 'danger')
         return render_template('design/form.html', form=form,
                                title='Editar proyecto de diseño'), 400
+    if _control_payload_refused(form, project_id):
+        return render_template('design/form.html', form=form,
+                               title='Editar proyecto de diseño'), 400
     if form.validate_on_submit() and saved(lambda: design.projects.update(
             db.session, actor, project_id, form_data(form, PROJECT_FIELDS))):
         flash('Proyecto de diseño actualizado.', 'success')
@@ -157,7 +170,10 @@ def edit_project(project_id: int) -> ResponseReturnValue:
 @require_permission('delete', RESOURCE)
 def delete_project(project_id: int) -> ResponseReturnValue:
     """Delete an empty draft only, keeping its audit snapshot."""
-    if committed(lambda: design.projects.delete(db.session, current_actor(), project_id)):
+    form = BaseForm()
+    if _control_payload_refused(form, project_id):
+        return _page(project_id), 400
+    if form.validate_on_submit() and committed(lambda: design.projects.delete(db.session, current_actor(), project_id)):
         flash('Proyecto de diseño eliminado.', 'success')
         return redirect(url_for('design.list_projects'))
     return _page(project_id)
@@ -169,9 +185,11 @@ def delete_project(project_id: int) -> ResponseReturnValue:
 def transition_project(project_id: int) -> ResponseReturnValue:
     """Plan, start or cancel from explicit POST actions only."""
     form = DesignTransitionForm()
+    if _control_payload_refused(form, project_id):
+        return _page(project_id), 400
     if form.validate_on_submit() and committed(lambda: design.transition(
             db.session, current_actor(), project_id, form.target.data,
-            cancellation_reason=form.cancellation_reason.data)):
+            cancellation_reason=form.cancellation_reason.data, today=local_today())):
         flash('Estado del proyecto actualizado.', 'success')
     return _page(project_id)
 
@@ -208,9 +226,9 @@ def new_element(project_id: int, section: str) -> ResponseReturnValue:
     register = IO_SECTIONS[section][0]
     form = _element_form(actor, section)
     names = tuple(f.name for f in register.SPEC.fields if f.name != 'project_id')
-    if (refused := _foreign_parent(project_id)) is not None:
+    if _control_payload_refused(form, project_id):
         return render_template('design/io_form.html', form=form,
-                               title='Añadir elemento de diseño', project_id=project_id), refused
+                               title='Añadir elemento de diseño', project_id=project_id), 400
     if form.validate_on_submit() and saved(lambda: register.create(
             db.session, actor, form_data(form, names) | {'project_id': project_id})):
         flash('Elemento de diseño añadido.', 'success')
@@ -230,9 +248,9 @@ def edit_element(project_id: int, section: str, element_id: int) -> ResponseRetu
     register = IO_SECTIONS[section][0]
     form = _element_form(actor, section, found)
     names = tuple(f.name for f in register.SPEC.fields if f.name != 'project_id')
-    if (refused := _foreign_parent(project_id)) is not None:
+    if _control_payload_refused(form, project_id):
         return render_template('design/io_form.html', form=form,
-                               title='Editar elemento de diseño', project_id=project_id), refused
+                               title='Editar elemento de diseño', project_id=project_id), 400
     if form.validate_on_submit() and saved(lambda: register.update(
             db.session, actor, element_id, form_data(form, names))):
         flash('Elemento de diseño actualizado.', 'success')
@@ -249,7 +267,10 @@ def delete_element(project_id: int, section: str, element_id: int) -> ResponseRe
     """Maintaining roles delete ordinary DD2 elements on the web only."""
     actor = current_actor()
     _element(actor, section, project_id, element_id)
-    if committed(lambda: IO_SECTIONS[section][0].delete(db.session, actor, element_id)):
+    form = BaseForm()
+    if _control_payload_refused(form, project_id):
+        return _page(project_id), 400
+    if form.validate_on_submit() and committed(lambda: IO_SECTIONS[section][0].delete(db.session, actor, element_id)):
         flash('Elemento de diseño eliminado.', 'success')
     return _page(project_id)
 
@@ -303,20 +324,24 @@ def _control_payload_refused(form: Any, project_id: int) -> bool:
         return True
     if request.method == 'POST':
         # Uploaded files are submitted fields too; these forms accept none.
-        unknown = ((set(request.form) | set(request.files))
-                   - {field.name for field in form} - {'project_id'})
+        unknown = ((set(request.form) - {field.name for field in form} - {'project_id'})
+                   | set(request.files))
         if unknown:
             flash(f'Campos no permitidos: {", ".join(sorted(unknown))}.', 'danger')
             return True
-        if any(len(request.form.getlist(key)) != 1 for key in request.form):
+        if any(len(request.form.getlist(key)) != 1
+               and (key not in form or form[key].type != 'SelectMultipleField'
+                    or len(set(request.form.getlist(key))) != len(request.form.getlist(key)))
+               for key in request.form):
             flash('No repitas los campos del control.', 'danger')
             return True
     return False
 
 
 def _control_page(form: Any, project_id: int, title: str) -> str:
-    return render_template('design/control_form.html', form=form, project_id=project_id,
-                           title=title)
+    template = ('design/change_form.html' if isinstance(form, DesignChangeForm)
+                else 'design/control_form.html')
+    return render_template(template, form=form, project_id=project_id, title=title)
 
 
 @bp.route('/<int:project_id>/controles/planes/nuevo', methods=['GET', 'POST'])
@@ -405,6 +430,117 @@ def new_control_record(project_id: int) -> ResponseReturnValue:
     return _control_page(form, project_id, title)
 
 
+def _change_form(actor: Actor, project_id: int, found: Any = None) -> DesignChangeForm:
+    """Offer approved current versions, retaining selected links on a GET round-trip."""
+    form = DesignChangeForm(obj=found)
+    tips = {v.output_id for v in design_changes.current_versions(db.session, project_id)
+            if v.state.name == 'approved'}
+    retained = set(found.output_ids) if found is not None else set()
+    rows = design_io.outputs.list_(db.session, actor, project_id=project_id)
+    form.output_ids.choices = [(row.id, f'{row.kind.value} · #{row.lineage_id} · Versión {row.version}')
+                              for row in rows if row.id in tips | retained]
+    if request.method == 'GET' and found is not None:
+        form.output_ids.data = found.output_ids
+    return form
+
+
+def _change(actor: Actor, project_id: int, change_id: int) -> Any:
+    """Never serve a child action through a foreign project URL."""
+    row = design_changes.changes.get(db.session, actor, change_id)
+    if row.project_id != project_id:
+        raise NotFound(design_changes.CHANGE_SPEC.not_found)
+    return row
+
+
+@bp.route('/<int:project_id>/cambios/nuevo', methods=['GET', 'POST'])
+@login_required
+@require_permission('create', RESOURCE)
+def new_change(project_id: int) -> ResponseReturnValue:
+    """Propose a design change; no approval state is accepted as form data."""
+    actor = current_actor()
+    design.projects.get(db.session, actor, project_id)
+    form = _change_form(actor, project_id)
+    title = 'Proponer cambio del diseño'
+    if _control_payload_refused(form, project_id):
+        return _control_page(form, project_id, title), 400
+    names = tuple(f.name for f in design_changes.CHANGE_SPEC.fields if f.name != 'project_id')
+    if form.validate_on_submit() and saved(lambda: design_changes.changes.create(
+            db.session, actor, form_data(form, names) | {'project_id': project_id})):
+        flash('Cambio del diseño propuesto.', 'success')
+        return _page(project_id)
+    return _control_page(form, project_id, title)
+
+
+@bp.route('/<int:project_id>/cambios/<int:change_id>/editar', methods=['GET', 'POST'])
+@login_required
+@require_permission('update', RESOURCE)
+def edit_change(project_id: int, change_id: int) -> ResponseReturnValue:
+    """Edit proposed changes, with all selectors preselected on GET."""
+    actor = current_actor()
+    found = _change(actor, project_id, change_id)
+    form = _change_form(actor, project_id, found)
+    title = 'Editar cambio del diseño'
+    if _control_payload_refused(form, project_id):
+        return _control_page(form, project_id, title), 400
+    names = tuple(f.name for f in design_changes.CHANGE_SPEC.fields if f.name != 'project_id')
+    if form.validate_on_submit() and saved(lambda: design_changes.changes.update(
+            db.session, actor, change_id, form_data(form, names))):
+        flash('Cambio del diseño actualizado.', 'success')
+        return _page(project_id)
+    return _control_page(form, project_id, title)
+
+
+@bp.route('/<int:project_id>/salidas/<int:element_id>/aprobar', methods=['POST'])
+@login_required
+@require_permission('update', RESOURCE)
+def approve_output(project_id: int, element_id: int) -> ResponseReturnValue:
+    """Approve an exact output version, never an arbitrary posted identifier."""
+    actor = current_actor()
+    _element(actor, 'salidas', project_id, element_id)
+    form = BaseForm()
+    if _control_payload_refused(form, project_id):
+        return _page(project_id), 400
+    if form.validate_on_submit() and committed(lambda: design_changes.approve_output(
+            db.session, actor, element_id, today=local_today())):
+        flash('Salida del diseño aprobada.', 'success')
+    return _page(project_id)
+
+
+@bp.route('/<int:project_id>/cambios/<int:change_id>/<any(autorizar,rechazar,aplicar):action>',
+          methods=['POST'])
+@login_required
+@require_permission('update', RESOURCE)
+def decide_change(project_id: int, change_id: int, action: str) -> ResponseReturnValue:
+    """Authorize/reject as independent administrator, or apply as a maintaining role."""
+    actor = current_actor()
+    _change(actor, project_id, change_id)
+    form = DesignChangeRejectionForm() if action == 'rechazar' else BaseForm()
+    if _control_payload_refused(form, project_id):
+        return _page(project_id), 400
+    operations = {
+        'autorizar': lambda: design_changes.authorize(db.session, actor, change_id, today=local_today()),
+        'rechazar': lambda: design_changes.reject(db.session, actor, change_id, reason=form.reason.data),
+        'aplicar': lambda: design_changes.apply(db.session, actor, change_id),
+    }
+    if form.validate_on_submit() and committed(operations[action]):
+        flash('Cambio del diseño actualizado.', 'success')
+    return _page(project_id)
+
+
+@bp.route('/<int:project_id>/completar', methods=['POST'])
+@login_required
+@require_permission('update', RESOURCE)
+def complete_project(project_id: int) -> ResponseReturnValue:
+    """Complete only through the locked, independent-administrator service gate."""
+    form = BaseForm()
+    if _control_payload_refused(form, project_id):
+        return _page(project_id), 400
+    if form.validate_on_submit() and committed(lambda: design.complete(
+            db.session, current_actor(), project_id, today=local_today())):
+        flash('Proyecto de diseño completado con aprobación.', 'success')
+    return _page(project_id)
+
+
 def _stage(actor: Actor, project_id: int, stage_id: int) -> DesignStage:
     found = design.stages.get(db.session, actor, stage_id)
     if found.project_id != project_id:
@@ -427,6 +563,9 @@ def new_stage(project_id: int) -> ResponseReturnValue:
     actor = current_actor()
     design.projects.get(db.session, actor, project_id)
     form = _stage_form(actor)
+    if _control_payload_refused(form, project_id):
+        return render_template('design/form.html', form=form,
+                               title='Nueva etapa', project_id=project_id), 400
     data = form_data(form, STAGE_FIELDS)
     if data['position'] is None:
         data.pop('position')
@@ -445,6 +584,9 @@ def edit_stage(project_id: int, stage_id: int) -> ResponseReturnValue:
     actor = current_actor()
     stage = _stage(actor, project_id, stage_id)
     form = _stage_form(actor, stage)
+    if _control_payload_refused(form, project_id):
+        return render_template('design/form.html', form=form,
+                               title='Editar etapa', project_id=project_id), 400
     data = form_data(form, STAGE_FIELDS)
     if data['position'] is None:
         data.pop('position')
@@ -462,6 +604,9 @@ def delete_stage(project_id: int, stage_id: int) -> ResponseReturnValue:
     """Both maintaining roles may delete unfinished stages, never evidence."""
     actor = current_actor()
     _stage(actor, project_id, stage_id)
-    if committed(lambda: design.stages.delete(db.session, actor, stage_id)):
+    form = BaseForm()
+    if _control_payload_refused(form, project_id):
+        return _page(project_id), 400
+    if form.validate_on_submit() and committed(lambda: design.stages.delete(db.session, actor, stage_id)):
         flash('Etapa eliminada.', 'success')
     return _page(project_id)
