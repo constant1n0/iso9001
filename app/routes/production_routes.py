@@ -79,6 +79,11 @@ def _property_submit(form: Any, operation: Any, title: str) -> ResponseReturnVal
     if request.method == 'POST' and (missing := {f.name for f in form if f.name != 'csrf_token'} - set(request.form)):
         flash(f'Faltan campos del formulario: {", ".join(sorted(missing))}.', 'danger')
         refused = True
+    picked = request.form.getlist('order_ids') if request.method == 'POST' else []
+    if '' in picked and any(value != '' for value in picked):
+        # «Sin órdenes» plus an order contradict each other: refuse, never pick one.
+        flash('Elige «Sin órdenes» o una o varias órdenes, no ambas cosas.', 'danger')
+        refused = True
     if not refused and form.validate_on_submit() and (result := saved(operation)):
         return redirect(url_for('production.show_property', item_id=getattr(result, 'item_id', result.id)))
     return render_template('production/property_form.html', form=form, title=title), 400 if refused else 200
