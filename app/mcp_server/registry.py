@@ -30,6 +30,7 @@ from ..models import (
     DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult,
     DesignChangeState, ProductionKind, ProductionState,
     ProductionControlKind, PreservationAspect, ProductionResult, PropertyStatus, PropertyIncidentKind,
+    PostDeliveryKind, PostDeliveryStatus,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
@@ -38,7 +39,7 @@ from ..services import (
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
     training_resources, design, design_changes, design_controls, design_io, production,
-    production_records, production_changes, production_property,
+    production_records, production_changes, production_property, production_post_delivery,
 )
 from ..services.policy import Resource
 
@@ -1122,6 +1123,21 @@ _MODULES = (
     *_PRODUCTION_MODULES,
     *_PRODUCTION_RECORD_MODULES,
     *_PRODUCTION_CHANGE_MODULES,
+    Module('post_delivery_activities', 'Post-delivery activities (8.5.5)', Resource.PRODUCTION,
+        _DatedRegister(production_post_delivery.activities), (
+            _f('description', required=True, note='Obligation; pending activities only for writes. Terminal history remains readable.'),
+            _f('kind', 'enum', True, members=PostDeliveryKind), _f('source'),
+            _f('responsible_id', 'integer', True, note='Person, active when newly selected.'),
+            _f('due_date', 'date', True), _f('customer_id', 'integer'),
+            _f('complaint_id', 'integer'), _f('nonconformity_id', 'integer'),
+            _f('order_ids', 'integer_list', note=(
+                'Replacement set; new links non-cancelled, existing retained. '
+                'No completion, cancellation or deletion through MCP. Never releases product.')),
+        ), (_f('status', 'enum', members=PostDeliveryStatus),
+            _f('kind', 'enum', members=PostDeliveryKind), _f('customer_id', 'integer'),
+            _f('responsible_id', 'integer'), _f('overdue', 'boolean', note='Pending and due strictly before today.')),
+        extras=lambda row: {'order_ids': row.order_ids,
+            'overdue': production_post_delivery.is_overdue(row, today=local_today())}),
     Module('customer_property', 'Customer/provider property (8.5.3)', Resource.PRODUCTION,
         _DatedWrites(production_property.items), (
             *(_f(k, required=True) for k in ('identification', 'description', 'location', 'condition')),

@@ -3716,6 +3716,78 @@ class PropertyIncident(RecordMetadataMixin, db.Model):
     nonconformity_id = db.Column(db.Integer)
 
 
+class PostDeliveryKind(enum.Enum):
+    """Post-delivery obligations (8.5.5), not release decisions."""
+
+    warranty = 'garantía'
+    maintenance = 'mantenimiento'
+    technical_support = 'asistencia técnica'
+    recovery = 'retirada/reciclaje'
+    complementary = 'servicio complementario'
+    other = 'otra'
+
+
+class PostDeliveryStatus(enum.Enum):
+    """Terminal activities retain immutable dated evidence."""
+
+    pending = 'pendiente'
+    completed = 'realizada'
+    cancelled = 'anulada'
+
+
+post_delivery_orders = db.Table('post_delivery_orders',
+    db.Column('activity_id', db.Integer, nullable=False),
+    db.Column('order_id', db.Integer, nullable=False),
+    db.PrimaryKeyConstraint('activity_id', 'order_id', name='pk_post_delivery_orders'),
+    *(db.ForeignKeyConstraint([key], [target], name=f'fk_post_delivery_orders_{key}',
+        ondelete='RESTRICT', onupdate='RESTRICT') for key, target in (
+            ('activity_id', 'post_delivery_activities.id'), ('order_id', 'production_orders.id'))),
+    db.Index('ix_post_delivery_orders_order_id', 'order_id'))
+
+
+class PostDeliveryActivity(RecordMetadataMixin, db.Model):
+    """Obligation, planned responsibility and dated outcome; no order mutation."""
+
+    __tablename__ = 'post_delivery_activities'
+    __table_args__ = (
+        *_property_constraints(__tablename__, (('customer_id', 'clientes.id'),
+            ('responsible_id', 'personas.id'), ('complaint_id', 'reclamaciones.id'),
+            ('nonconformity_id', 'no_conformidades.id'))),
+        db.CheckConstraint('length(trim(description)) > 0', name='ck_post_delivery_description'),
+        db.CheckConstraint(
+            "(status = 'pending' AND result_date IS NULL AND result IS NULL AND evidence IS NULL AND reason IS NULL) OR "
+            "(status = 'completed' AND result_date IS NOT NULL AND result IS NOT NULL AND length(trim(result)) > 0 "
+            "AND evidence IS NOT NULL AND length(trim(evidence)) > 0 AND reason IS NULL) OR "
+            "(status = 'cancelled' AND result_date IS NOT NULL AND reason IS NOT NULL AND length(trim(reason)) > 0 "
+            "AND result IS NULL AND evidence IS NULL)", name='ck_post_delivery_terminal'),
+        db.Index('ix_post_delivery_activities_status_due', 'status', 'due_date'),
+        db.Index('ix_post_delivery_activities_kind', 'kind'))
+    id = db.Column(db.Integer, nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    kind = db.Column(text_enum(PostDeliveryKind, 'ck_post_delivery_kind'), nullable=False)
+    source = db.Column(db.Text)
+    responsible_id = db.Column(db.Integer, nullable=False)
+    due_date = db.Column(db.Date, nullable=False)
+    customer_id = db.Column(db.Integer)
+    complaint_id = db.Column(db.Integer)
+    nonconformity_id = db.Column(db.Integer)
+    status = db.Column(text_enum(PostDeliveryStatus, 'ck_post_delivery_status'), nullable=False,
+                       default=PostDeliveryStatus.pending, server_default='pending')
+    result_date = db.Column(db.Date)
+    result = db.Column(db.Text)
+    evidence = db.Column(db.Text)
+    reason = db.Column(db.Text)
+    customer = db.relationship('Cliente')
+    responsible = db.relationship('Person')
+    orders = db.relationship('ProductionOrder', secondary=post_delivery_orders,
+                             order_by='ProductionOrder.id', lazy='selectin')
+
+    @property
+    def order_ids(self) -> list[int]:
+        """Stable citations shared by audit, forms and MCP."""
+        return sorted(row.id for row in self.orders)
+
+
 # Registro de auditoría append-only: quién cambió qué y cuándo (ISO 9001 7.5.3)
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'

@@ -29,7 +29,7 @@ from .models import (
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
     KnowledgeType, CommunicationChannel, CommunicationScope,
     DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult, ProductionKind,
-    ProductionControlKind, PreservationAspect, ProductionResult, PropertyIncidentKind,
+    ProductionControlKind, PreservationAspect, ProductionResult, PropertyIncidentKind, PostDeliveryKind,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -80,6 +80,35 @@ class BaseForm(FlaskForm):
 
     class Meta:
         locales = ('es_ES', 'es')
+
+
+class PostDeliveryForm(BaseForm):
+    """Pending obligation; dated outcomes use separate web-only forms."""
+
+    description = TextAreaField('Obligación o descripción', validators=[DataRequired()])
+    kind = SelectField('Tipo', choices=[(m.name, m.value) for m in PostDeliveryKind])
+    source = TextAreaField('Origen o fundamento del requisito')
+    responsible_id = person_field('Responsable')
+    due_date = DateField('Fecha prevista', validators=[DataRequired()])
+    customer_id = SelectField('Cliente', coerce=optional_id, choices=[])
+    complaint_id = SelectField('Reclamación', coerce=optional_id, choices=[])
+    nonconformity_id = SelectField('No conformidad', coerce=optional_id, choices=[])
+    order_ids = SelectMultipleField('Órdenes vinculadas (elige «Sin órdenes» para vaciar)', coerce=optional_id, choices=[])
+
+
+class PostDeliveryCompletionForm(BaseForm):
+    """Dated result with evidence, never an uploaded file."""
+
+    result_date = DateField('Fecha del resultado', validators=[DataRequired()])
+    result = TextAreaField('Resultado', validators=[DataRequired()])
+    evidence = TextAreaField('Evidencia o referencia', validators=[DataRequired()])
+
+
+class PostDeliveryCancellationForm(BaseForm):
+    """Dated cancellation reason retained in history."""
+
+    result_date = DateField('Fecha de anulación', validators=[DataRequired()])
+    reason = TextAreaField('Motivo de anulación', validators=[DataRequired()])
 
 
 class PropertyForm(BaseForm):

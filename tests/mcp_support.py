@@ -135,6 +135,8 @@ SEEDS = {
         'responsible_id': 1, 'description': 'Dry storage', 'result': 'conforming'},
     'production_changes': {'reason': 'New tolerance', 'description': 'Adjust tooling',
                            'actions': 'Recheck', 'order_ids': [1]},
+    'post_delivery_activities': {'description': 'Warranty visit', 'kind': 'warranty',
+        'responsible_id': 1, 'due_date': '2020-01-01'},
     'customer_property': {'customer_id': 1, 'identification': 'Gauge', 'description': 'Gauge',
         'received_date': '2020-01-01', 'responsible_id': 1, 'location': 'Store', 'condition': 'Intact'},
     'property_incidents': {'item_id': 1, 'date': '2020-01-02', 'kind': 'damage',
@@ -195,6 +197,8 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
     def seed(self, slug: str, **overrides) -> int:
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
+        if slug == 'post_delivery_activities' and db.session.get(Person, 1) is None:
+            self.seed('personas')
         if slug == 'customer_property':
             if db.session.get(Cliente, 1) is None:
                 self.seed('clientes')
