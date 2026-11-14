@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera los módulos: `customer_property`, `property_incidents`, `production_changes`, `production_control_records`, `production_preservation_records`, `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
+`qms_modules` enumera los módulos: `post_delivery_activities`, `customer_property`, `property_incidents`, `production_changes`, `production_control_records`, `production_preservation_records`, `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -71,6 +71,19 @@ nunca puede eliminar.
 `cambios_sgc`, `tareas_cambio`, `clientes`, `reclamaciones` y `confirmaciones_lectura`. Cada campo tiene un `type`, un indicador
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
+
+Posventa (PS5, 8.5.5): `post_delivery_activities` consulta/lista todo el historial,
+crea y actualiza solo pendientes. Obligatorios: `description` (obligación), `kind`
+(`warranty`, `maintenance`, `technical_support`, `recovery`, `complementary`, `other`),
+`responsible_id` (persona activa al elegirla), `due_date` (YYYY-MM-DD). Opcionales:
+`source` (fundamento), `customer_id`, `complaint_id`, `nonconformity_id`, `order_ids`
+(conjunto sustitutorio; `[]` vacía, omitir conserva; nuevas órdenes no canceladas,
+existentes conservadas). Filtros AND: `status` (`pending`, `completed`, `cancelled`),
+`kind`, `customer_id`, `responsible_id`, `overdue` booleano. Las lecturas incluyen
+`order_ids` y `overdue`: pendiente con fecha prevista estrictamente anterior a hoy.
+Todos leen; administradores y auditores escriben con ámbito `write`. Realizar, anular
+y eliminar son **solo web**, nunca MCP; campos terminales de solo lectura. No modifica
+órdenes ni libera producto. Las citas RESTRICT conservan los registros existentes.
 
 Propiedad de terceros (PS4, 8.5.3): `customer_property` permite consultar, listar,
 crear y actualizar custodia: `customer_id` o `provider_id` (exactamente uno),

@@ -11,14 +11,15 @@ from ..extensions import db
 from ..forms import (BaseForm, DesignTransitionForm, ProductionOrderForm, person_choices,
                      ProductionControlForm, ProductionPreservationForm,
                      ProductionChangeForm, DesignChangeRejectionForm, PropertyForm,
-                     PropertyTransitionForm, PropertyIncidentForm)
+                     PropertyTransitionForm, PropertyIncidentForm, PostDeliveryForm,
+                     PostDeliveryCompletionForm, PostDeliveryCancellationForm)
 from ..models import (DesignApprovalState, DesignOutput, DesignOutputVersion, EquipoMedicion,
                       Person, ProductionKind, ProductionState, NoConformidad,
                       DesignChange, DesignChangeState, CambioSGC, PropertyStatus,
-                      Cliente, Proveedor, Reclamacion)
+                      Cliente, Proveedor, Reclamacion, PostDeliveryKind, PostDeliveryStatus)
 from ..services import (clientes, design_io, equipment, people, process_operations,
                         production, production_records, production_changes, qms_scope,
-                        production_property)
+                        production_property, production_post_delivery)
 from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
 from .auditoria_routes import committed
@@ -26,6 +27,134 @@ from .design_routes import _control_payload_refused
 from .people_routes import form_data, saved
 
 bp = Blueprint('production', __name__, url_prefix='/produccion')
+
+
+def _post_delivery_choices() -> dict:
+    return {'status': [(m.name, m.value) for m in PostDeliveryStatus],
+        'kind': [(m.name, m.value) for m in PostDeliveryKind],
+        'overdue': [('true', 'Vencidas'), ('false', 'No vencidas')],
+        **{key: [(str(r.id), r.nombre) for r in db.session.scalars(select(model).order_by(model.id))]
+           for key, model in (('customer_id', Cliente), ('responsible_id', Person))}}
+
+
+@bp.route('/posventa/')
+@login_required
+@require_permission('read', 'production')
+def list_post_delivery() -> ResponseReturnValue:
+    """Ignore unknown filter values; overdue is computed on the local day."""
+    choices = _post_delivery_choices()
+    selected = {k: v for k in choices if (v := request.args.get(k, '')) in dict(choices[k])}
+    filters = {k: int(v) if k.endswith('_id') else v for k, v in selected.items()}
+    if 'overdue' in filters:
+        filters['overdue'] = filters['overdue'] == 'true'
+    today = local_today()
+    return render_template('production/post_delivery_list.html', choices=choices, selected=selected,
+        items=production_post_delivery.activities.list_(db.session, current_actor(), today=today, **filters),
+        today=today, is_overdue=production_post_delivery.is_overdue)
+
+
+@bp.route('/posventa/<int:activity_id>')
+@login_required
+@require_permission('read', 'production')
+def show_post_delivery(activity_id: int) -> ResponseReturnValue:
+    """Read obligations and immutable dated outcomes, without release authority."""
+    return render_template('production/post_delivery_detail.html',
+        item=production_post_delivery.activities.get(db.session, current_actor(), activity_id),
+        complete_form=PostDeliveryCompletionForm(), cancel_form=PostDeliveryCancellationForm())
+
+
+@bp.route('/posventa/nueva', methods=['GET', 'POST'])
+@login_required
+@require_permission('create', 'production')
+def new_post_delivery() -> ResponseReturnValue:
+    """Create a pending obligation."""
+    return _edit_post_delivery(None)
+
+
+@bp.route('/posventa/<int:activity_id>/editar', methods=['GET', 'POST'])
+@login_required
+@require_permission('update', 'production')
+def edit_post_delivery(activity_id: int) -> ResponseReturnValue:
+    """Edit pending obligations only."""
+    return _edit_post_delivery(activity_id)
+
+
+def _post_delivery_refused(form: Any) -> bool:
+    refused = _refused(form)
+    if request.method == 'POST' and (missing := {f.name for f in form if f.name != 'csrf_token'} - set(request.form)):
+        flash(f'Faltan campos del formulario: {", ".join(sorted(missing))}.', 'danger')
+        refused = True
+    picked = request.form.getlist('order_ids') if request.method == 'POST' else []
+    if '' in picked and any(value != '' for value in picked):
+        flash('Elige «Sin órdenes» o una o varias órdenes, no ambas cosas.', 'danger')
+        refused = True
+    return refused
+
+
+def _edit_post_delivery(activity_id: int | None) -> ResponseReturnValue:
+    who = current_actor()
+    row = None if activity_id is None else production_post_delivery.activities.get(db.session, who, activity_id)
+    if row is not None and row.status is not PostDeliveryStatus.pending:
+        flash(production_post_delivery.READ_ONLY, 'danger')
+        return redirect(url_for('production.show_post_delivery', activity_id=activity_id))
+    form = PostDeliveryForm(obj=row)
+    form.customer_id.choices = [('', '— Sin cliente —'), *_post_delivery_choices()['customer_id']]
+    form.responsible_id.choices = person_choices(people.choices(db.session, who, include=getattr(row, 'responsible_id', None)))
+    for key, model in (('complaint_id', Reclamacion), ('nonconformity_id', NoConformidad)):
+        form[key].choices = [('', '— Ninguna —'), *((r.id, f'#{r.id} · {r.descripcion[:80]}')
+            for r in db.session.scalars(select(model).order_by(model.id))) ]
+    form.order_ids.choices = [('', '— Sin órdenes —'), *((o.id, o.code) for o in production.orders.list_(db.session, who)
+        if o.state is not ProductionState.cancelled or o.id in getattr(row, 'order_ids', []))]
+    if request.method == 'GET':
+        form.order_ids.data = getattr(row, 'order_ids', []) or [None]
+        form.kind.data = row.kind.name if row else 'warranty'
+        form.due_date.data = row.due_date if row else local_today()
+    refused = _post_delivery_refused(form)
+    if not refused and form.validate_on_submit():
+        data = form_data(form, production_post_delivery.SPEC.writable)
+        data['order_ids'] = [value for value in data['order_ids'] if value is not None]
+        result = saved(lambda: production_post_delivery.activities.create(db.session, who, data, today=local_today())
+            if row is None else production_post_delivery.activities.update(db.session, who, row.id, data, today=local_today()))
+        if result:
+            return redirect(url_for('production.show_post_delivery', activity_id=result.id))
+    return render_template('production/post_delivery_form.html', form=form,
+        title='Nueva actividad de posventa' if row is None else 'Editar actividad de posventa'), 400 if refused else 200
+
+
+@bp.route('/posventa/<int:activity_id>/realizar', methods=['POST'])
+@login_required
+@require_permission('update', 'production')
+def complete_post_delivery(activity_id: int) -> ResponseReturnValue:
+    """Web-only completion with CSRF and dated evidence."""
+    return _post_delivery_action(activity_id, 'completed', PostDeliveryCompletionForm())
+
+
+@bp.route('/posventa/<int:activity_id>/anular', methods=['POST'])
+@login_required
+@require_permission('update', 'production')
+def cancel_post_delivery(activity_id: int) -> ResponseReturnValue:
+    """Web-only dated cancellation, never a product release."""
+    return _post_delivery_action(activity_id, 'cancelled', PostDeliveryCancellationForm())
+
+
+@bp.route('/posventa/<int:activity_id>/eliminar', methods=['POST'])
+@login_required
+@require_permission('delete', 'production')
+def delete_post_delivery(activity_id: int) -> ResponseReturnValue:
+    """Only web administrators delete pending activities without orders."""
+    return _post_delivery_action(activity_id, None, BaseForm())
+
+
+def _post_delivery_action(activity_id: int, target: str | None, form: Any) -> ResponseReturnValue:
+    refused = _post_delivery_refused(form)
+    if not refused and form.validate_on_submit():
+        if target is None:
+            if committed(lambda: production_post_delivery.activities.delete(db.session, current_actor(), activity_id)):
+                return redirect(url_for('production.list_post_delivery'))
+        else:
+            committed(lambda: production_post_delivery.transition(db.session, current_actor(), activity_id,
+                target, today=local_today(), **form_data(form, {f.name for f in form if f.name != 'csrf_token'})))
+    return redirect(url_for('production.show_post_delivery', activity_id=activity_id)), 400 if refused else 302
 
 
 def _property_choices() -> dict:

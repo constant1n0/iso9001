@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% from '_partials/ui.html' import page_header, action_form %}
+{% block title %}Actividad de posventa{% endblock %}
+{% block content %}
+{% call page_header('8.5.5 · Posventa', item.description) %}
+<a class="btn" href="{{ url_for('production.list_post_delivery') }}">Posventa</a>
+{% if item.status.name == 'pending' and can('update', 'production') %}<a class="btn" href="{{ url_for('production.edit_post_delivery', activity_id=item.id) }}">Editar actividad</a>{% endif %}
+{% endcall %}
+<div class="card"><p>{{ item.kind.value }} · {{ item.status.value }} · Fecha prevista: {{ item.due_date }}</p>
+<p>Responsable: {{ item.responsible.nombre }} · Cliente: {{ item.customer.nombre if item.customer else '—' }}</p>
+<p>Origen o fundamento: {{ item.source or '—' }}</p>
+<p>Reclamación: {{ item.complaint_id or '—' }} · No conformidad: {{ item.nonconformity_id or '—' }}</p>
+{% for order in item.orders %}<a href="{{ url_for('production.show_order', order_id=order.id) }}">{{ order.code }}</a> {% endfor %}
+{% if item.result_date %}<p>{{ item.result_date }} · {{ item.result or item.reason }}</p><p>{{ item.evidence or '' }}</p>{% endif %}</div>
+<p>Realizar o anular no modifica las órdenes ni libera producto. Las actividades realizadas o anuladas son de solo lectura. Solo un administrador web elimina actividades pendientes sin órdenes vinculadas.</p>
+{% if item.status.name == 'pending' and can('update', 'production') %}
+{% for form, endpoint, label in [(complete_form, 'production.complete_post_delivery', 'Registrar realización'), (cancel_form, 'production.cancel_post_delivery', 'Anular actividad')] %}
+<form method="post" action="{{ url_for(endpoint, activity_id=item.id) }}" class="form-card">
+{{ form.hidden_tag() }}{% for f in form if f.name != 'csrf_token' %}{{ f.label }}{{ f() }}{% endfor %}<button class="btn">{{ label }}</button></form>{% endfor %}{% endif %}
+{% if item.status.name == 'pending' and not item.order_ids and can('delete', 'production') %}{{ action_form(url_for('production.delete_post_delivery', activity_id=item.id), 'Eliminar actividad', '¿Eliminar actividad pendiente sin órdenes?') }}{% endif %}
+{% endblock %}

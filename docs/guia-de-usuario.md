@@ -75,7 +75,26 @@ orden planificada sin registros, incluidos sus vínculos; queda su instantánea 
 **Terminar una orden nunca equivale a liberar el producto.** «Terminada» significa
 trabajo terminado, NO autorización de entrega. La liberación (8.6) es independiente
 y todavía no está implementada. No necesitas registros para terminar una orden.
-Siguen pendientes las actividades posteriores a la entrega (PS5).
+Las actividades posteriores a la entrega se registran en **Posventa** (8.5.5).
+
+### Actividades de posventa (8.5.5)
+
+En **Posventa** (`/produccion/posventa/`), registra obligación o descripción, tipo
+(garantía, mantenimiento, asistencia técnica, retirada/reciclaje, servicio complementario
+u otra), persona responsable activa al elegirla y fecha prevista obligatoria. Puedes
+indicar el origen del requisito (legal, contractual, comentarios del cliente…) y citar
+cliente, reclamación, NC y varias órdenes existentes. Los nuevos vínculos requieren
+órdenes no canceladas; los existentes se conservan. Para vaciar, elige «Sin órdenes»;
+combinarlo con una orden se rechaza. Se conservan responsables desactivados ya citados.
+
+Todos consultan; administradores y auditores crean y editan pendientes. Solo en la web,
+**Registrar realización** exige fecha no futura, resultado y evidencia textual o referencia
+(no archivo); **Anular actividad** exige fecha no futura y motivo. Realizadas y anuladas
+son de solo lectura. Solo un administrador web elimina pendientes sin órdenes vinculadas.
+Las citas quedan protegidas del borrado. Filtra por estado, tipo, cliente, responsable o
+**Vencidas**: pendiente con fecha prevista anterior a hoy; vencer hoy no cuenta.
+MCP consulta todo el historial y crea/edita pendientes, pero no realiza, anula ni elimina.
+**Ninguna actividad modifica las órdenes ni libera producto (8.6).**
 
 ### Propiedad de clientes y proveedores (8.5.3)
 

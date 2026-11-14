@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% from '_partials/ui.html' import page_header, form_card %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+{{ page_header('8.5.5 · Posventa', title) }}
+<p>Registra la obligación, su responsable y la fecha prevista. Realizar o anular no modifica las órdenes ni libera producto.</p>
+{{ form_card(form, url_for('production.list_post_delivery')) }}
+{% endblock %}
