@@ -192,8 +192,12 @@ class ProductionChanges(ChangeCase):
         self.assertEqual([row.id], [r.id for r in self.changes.changes.list_(
             db.session, who, order_id=1, state='proposed')])
         self.decide(row)
-        self.assertEqual([], self.changes.changes.list_(db.session, who, state='authorized'))
-        self.reject(lambda: self.changes.changes.get(db.session, who, row.id), error=PermissionDenied)
+        # Decided changes stay readable through MCP (retained evidence) but not writable.
+        self.assertEqual([row.id], [r.id for r in self.changes.changes.list_(
+            db.session, who, state='authorized')])
+        self.assertEqual(row.id, self.changes.changes.get(db.session, who, row.id).id)
+        self.reject(lambda: self.changes.changes.update(db.session, who, row.id,
+                                                        {'review': 'Late'}))
         self.assertEqual([row.id], [r.id for r in self.changes.changes.list_(
             db.session, self.who, state='authorized', order_id=1)])
 

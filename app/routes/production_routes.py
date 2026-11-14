@@ -156,8 +156,15 @@ def _form(row: Any = None) -> ProductionOrderForm:
     return form
 
 
+FORM_MIMETYPES = ('application/x-www-form-urlencoded', 'multipart/form-data')
+
+
 def _refused(form: Any) -> bool:
     if request.method == 'POST':
+        if request.mimetype not in FORM_MIMETYPES and request.get_data(cache=True):
+            # A JSON or other body would be silently ignored by form handling: refuse it.
+            flash('Envía los datos desde el formulario.', 'danger')
+            return True
         unknown = (set(request.form) | set(request.files)) - {field.name for field in form}
         if unknown:
             flash(f'Campos no permitidos: {", ".join(sorted(unknown))}.', 'danger')

@@ -199,30 +199,6 @@ def _conditions(state: Any = None, order_id: int | None = None) -> list[Any]:
     return where
 
 
-class ChangeRegister(Register):
-    """MCP is limited to proposals, including reads; web retains decided history."""
-
-    def get(self, session: Session, actor: Actor, record_id: int) -> ProductionChange:
-        """Read a proposal through MCP or any retained state through the web."""
-        row = super().get(session, actor, record_id)
-        if actor.channel == 'mcp' and row.state is not State.proposed:
-            raise PermissionDenied()
-        return row
-
-    def list_(self, session: Session, actor: Actor, **filters: Any) -> list:
-        """Apply AND filters without exposing decided records to MCP."""
-        where = _conditions(**filters)
-        if actor.channel == 'mcp':
-            where.append(ProductionChange.state == State.proposed)
-        return crud.list_(SPEC, session, actor, where)
-
-    def list_page(self, session: Session, actor: Actor, *, page: int = 1,
-                  per_page: int = crud.DEFAULT_PER_PAGE, **filters: Any) -> tuple[list, int]:
-        """Page and count the same channel-visible records in the database."""
-        where = _conditions(**filters)
-        if actor.channel == 'mcp':
-            where.append(ProductionChange.state == State.proposed)
-        return crud.list_page(SPEC, session, actor, where, page=page, per_page=per_page)
-
-
-changes = ChangeRegister(SPEC, _conditions, _create, _update, _delete)
+# Decided changes stay readable everywhere (retained evidence); only proposals are
+# writable, which _update enforces for every channel.
+changes = Register(SPEC, _conditions, _create, _update, _delete)
