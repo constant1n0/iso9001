@@ -21,6 +21,20 @@
 <h3>Instrucciones y criterios</h3><ul>{% for rid in order.revision_ids %}<li>{{ revision_labels[rid] }}</li>{% else %}<li>Sin revisiones vinculadas.</li>{% endfor %}</ul>
 <h3>Equipos y aptitud actual</h3><ul>{% for item in order.equipment %}<li>{{ item.codigo }} · {{ item.nombre }} · {{ suitability[item.id] }}</li>{% else %}<li>Sin equipos vinculados.</li>{% endfor %}</ul>
 <h3>Personas asignadas</h3><ul>{% for person in order.people %}<li>{{ person.nombre }}{{ ' (desactivada)' if not person.activo else '' }}</li>{% else %}<li>Sin personas asignadas.</li>{% endfor %}</ul></section>
+{% for section in record_sections %}
+<section class="card"><h2>{{ section.title }}</h2>
+{% if section.allowed and can('create', 'production') %}
+<a class="btn" href="{{ url_for('production.new_control' if section.slug == 'controles' else 'production.new_preservation', order_id=order.id) }}">Añadir registro</a>
+{% endif %}
+<p>Historial inmutable, más reciente primero.</p>
+{% for row in section.rows %}<article>
+<h3>{{ row.date }} · {{ row.kind.value if section.slug == 'controles' else row.aspect.value }} · {{ row.result.value }}</h3>
+<p>{{ row.responsible.nombre }} · {{ row.description }}</p>
+{% if section.slug == 'controles' %}<p>Evidencia: {{ row.evidence }} · Equipo: {{ row.equipment.codigo if row.equipment else '—' }}</p>
+{% if row.actions %}<p>Acciones: {{ row.actions }}</p>{% endif %}{% endif %}
+{% if row.nonconformity_id %}<p>No conformidad: #{{ row.nonconformity_id }}</p>{% endif %}
+</article>{% else %}<p>Sin registros.</p>{% endfor %}</section>
+{% endfor %}
 {% if can('update', 'production') %}{% for target in targets %}
 <form method="post" action="{{ url_for('production.transition_order', order_id=order.id) }}" class="form-card">
 {{ transition_form.hidden_tag() }}<input type="hidden" name="target" value="{{ target.name }}">

@@ -69,13 +69,36 @@ La aplicabilidad de 8.5.1 y 8.5.2 se lee del alcance aprobado, sin modificarlo.
 Todos los roles consultan; administradores y auditores crean, editan e inician o
 terminan órdenes. Solo desde la web: **planificada → en curso → terminada**,
 o **planificada/en curso → cancelada** con motivo obligatorio. Terminada y
-cancelada son de solo lectura. Solo un administrador puede eliminar una orden
-planificada, incluidos sus vínculos; queda su instantánea auditada.
+cancelada no admiten cambios en la orden. Solo un administrador puede eliminar una
+orden planificada sin registros, incluidos sus vínculos; queda su instantánea auditada.
 
 **Terminar una orden nunca equivale a liberar el producto.** «Terminada» significa
 trabajo terminado, NO autorización de entrega. La liberación (8.6) es independiente
-y todavía no está implementada. Tampoco se registran aquí ejecución, conservación,
-cambios, propiedad de terceros ni actividades posteriores a la entrega (PS2–PS5).
+y todavía no está implementada. No necesitas registros para terminar una orden.
+Siguen pendientes cambios, propiedad de terceros y actividades posteriores a la entrega (PS3–PS5).
+
+### Ejecución, control y preservación
+
+En la ficha de la orden, **Registros de ejecución y control** y **Preservación**
+muestran el historial por fecha e identificador, más reciente primero. Todos los roles
+consultan; administradores y auditores añaden registros. Nunca se editan ni eliminan:
+si necesitas corregir una evidencia, registra otra con la referencia a la anterior.
+
+- Ejecución/control: solo en curso. Elige inspección/control, medición, verificación
+  de condiciones u otra; indica fecha no futura, persona activa, descripción, resultado
+  (conforme/no conforme) y evidencia o referencia textual (no archivo). Si no es conforme,
+  enlaza una NC existente o indica las acciones; no se abre una NC automáticamente.
+- Equipo opcional: debe estar apto en la fecha del registro. Se usa la última comprobación
+  de esa fecha o anterior; si hay varias, la de mayor identificador. El vencimiento es
+  inclusivo. Se respeta la retirada actual, pues no existe historial fechado de retirada.
+- Preservación: en curso o terminada, para documentar también el almacenamiento posterior.
+  Indica fecha no futura, persona activa, condición/descripcion, resultado y aspecto:
+  identificación, manipulación (incluido control de contaminación), embalaje, almacenamiento,
+  transporte (incluida transmisión), protección u otro. Puedes enlazar una NC existente.
+- Las órdenes canceladas no admiten registros. Las personas, equipos y NC citados se
+  conservan: no puedes eliminarlos mientras sigan referenciados. Las citas no cambian
+  cuando una persona se desactiva o un equipo pierde aptitud.
+
 
 ## Equipos y calibraciones
 

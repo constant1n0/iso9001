@@ -53,6 +53,11 @@ class EveryModuleTestCase(McpDbCase):
             with self.subTest(module=slug):
                 if slug == 'design_changes':
                     self.approve_design_output(1)
+                if slug in ('production_control_records', 'production_preservation_records'):
+                    from app.models import ProductionOrder, ProductionState
+                    db.session.execute(ProductionOrder.__table__.update().where(
+                        ProductionOrder.id == 1).values(state=ProductionState.in_progress))
+                    db.session.commit()
                 if slug == 'design_control_records':
                     from app.models import DesignProject, DesignState
                     # Fixture state only: no additional lifecycle tool or audit event.
@@ -67,13 +72,15 @@ class EveryModuleTestCase(McpDbCase):
                 # A required text field, or any text field when none is required.
                 field = next(f.name for f in sorted(module.fields, key=lambda f: not f.required)
                              if f.type == "string")
-                if slug in ('comprobaciones_equipo', 'communication_log', 'design_control_records', 'design_changes'):
+                if slug in ('comprobaciones_equipo', 'communication_log', 'design_control_records', 'design_changes',
+                            'production_control_records', 'production_preservation_records'):
                     persisted_before = await self.call(actor, "qms_get", {
                         "module": slug, "id": record["id"]})
                     self.assertFalse(persisted_before.is_error, persisted_before.content)
                 updated = await self.call(actor, "qms_update", {
                     "module": slug, "id": record["id"], "data": {field: "Cambiado"}})
-                if slug in ('comprobaciones_equipo', 'communication_log', 'design_control_records', 'design_changes'):
+                if slug in ('comprobaciones_equipo', 'communication_log', 'design_control_records', 'design_changes',
+                            'production_control_records', 'production_preservation_records'):
                     self.assertTrue(updated.is_error, updated.content)
                     self.assertIn('No tienes permiso' if slug == 'design_changes' else
                                   'no se modifican', error_text(updated))
@@ -85,9 +92,9 @@ class EveryModuleTestCase(McpDbCase):
                 self.assertEqual(record["id"], updated.structured_content["id"])
         db.session.expire_all()
         rows = [row for row in audit_rows() if row.channel == 'mcp']
-        # Four modules refuse updates; NC and communication each update their parent;
+        # Six modules refuse updates; NC and communication each update their parent;
         # output creation also creates one audited DD4 version metadata row.
-        self.assertEqual(len(writable) + (len(writable) - 4) + 3, len(rows))
+        self.assertEqual(len(writable) + (len(writable) - 6) + 3, len(rows))
         self.assertEqual({"mcp"}, {r.channel for r in rows})
         self.assertEqual({7}, {r.actor_user_id for r in rows})
         self.assertEqual({"create", "update"}, {r.action for r in rows})

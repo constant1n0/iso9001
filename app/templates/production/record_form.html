@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% from '_partials/forms.html' import field %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1>{{ title }} · {{ order.code }}</h1>
+<p>El registro será inmutable. No autoriza la entrega del producto o servicio.</p>
+<form method="post" class="form-card">{{ form.hidden_tag() }}
+{% for item in form if item.type not in ('CSRFTokenField', 'HiddenField') %}{{ field(item) }}{% endfor %}
+<button class="btn btn-primary" type="submit">Registrar</button>
+<a class="btn" href="{{ url_for('production.show_order', order_id=order.id) }}">Volver a la orden</a>
+</form>
+{% endblock %}

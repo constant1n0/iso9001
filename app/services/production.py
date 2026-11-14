@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 from ..audit_notifications import local_today
 from ..models import (Cliente, DesignApprovalState, DesignOutput, DesignOutputVersion,
                       DocumentRevision, EquipoMedicion, Person, ProcesoOperacion,
-                      ProductionKind, ProductionOrder, ProductionState)
+                      ProductionKind, ProductionOrder, ProductionState,
+                      ProductionControlRecord, ProductionPreservationRecord)
 from . import audit, crud, design, design_io, equipment, fields, people, policy
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
@@ -183,6 +184,9 @@ def _delete(session: Session, who: Actor, record_id: int) -> None:
     if who.channel != 'web':
         raise PermissionDenied()
     row = _lock(session, record_id)
+    if any(session.scalar(select(model.id).where(model.order_id == row.id).limit(1))
+           is not None for model in (ProductionControlRecord, ProductionPreservationRecord)):
+        raise Conflict('No puedes eliminar una orden con registros.')
     if row.state is not ProductionState.planned:
         raise ValidationError('Solo puedes eliminar órdenes planificadas.')
     audit.record(session, who, 'delete', row, before=_snapshot(row))

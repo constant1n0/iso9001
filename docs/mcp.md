@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 46 módulos: `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
+`qms_modules` enumera 48 módulos: `production_control_records`, `production_preservation_records`, `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -85,6 +85,26 @@ Filtros: `state` (`planned`, `in_progress`, `finished`, `cancelled`), `kind`,
 `process_id`, `customer_id`, `lot` (fragmento). Todos leen; administradores y
 auditores escriben. MCP nunca elimina ni cambia estados; las órdenes terminadas o
 canceladas son de solo lectura. Terminar trabajo NO autoriza la entrega (8.6).
+
+Registros de producción (PS2): `production_control_records` y
+`production_preservation_records` permiten crear, consultar y listar, nunca actualizar
+ni eliminar. Todos leen; administradores y auditores crean con ámbito `write`.
+Ambos requieren `order_id`, `date` (YYYY-MM-DD, no futura), `responsible_id` (persona
+activa al elegirla), `description` y `result` (`conforming`/`nonconforming`).
+`nonconformity_id` es opcional, cita una NC existente y no la modifica.
+
+- Control: requiere `kind` (`inspection`, `measurement`, `conditions`, `other`) y
+  `evidence` textual; opcionales `equipment_id` y `actions`. Un resultado
+  `nonconforming` requiere NC o acciones. El equipo debe estar apto en la fecha:
+  última comprobación en esa fecha o anterior (desempate por id), vencimiento inclusivo
+  y retirada actual. Solo órdenes `in_progress`.
+- Preservación: requiere `aspect` (`identification`, `handling`, `packaging`,
+  `storage`, `transport`, `protection`, `other`); permite `in_progress` o `finished`.
+  La NC es opcional incluso con resultado no conforme.
+- Filtros AND: `order_id`, `kind` o `aspect` según el módulo y `result`.
+  Orden: fecha descendente, luego id descendente. Repeticiones y fechas anteriores
+  permitidas. Canceladas, siempre de solo lectura. Sin adjuntos, cambios ni borrados.
+  Terminar no exige registros y nunca equivale a liberar (8.6).
 
 Diseño y desarrollo (8.3.1–8.3.6):
 

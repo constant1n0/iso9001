@@ -3460,6 +3460,101 @@ class ProductionOrder(RecordMetadataMixin, db.Model):
         return sorted(row.id for row in self.people)
 
 
+class ProductionControlKind(enum.Enum):
+    """Monitoring at the stages chosen by the organization (8.5.1)."""
+
+    inspection = 'inspección/control'
+    measurement = 'medición'
+    conditions = 'verificación de condiciones'
+    other = 'otra'
+
+
+class PreservationAspect(enum.Enum):
+    """Preservation includes contamination control within handling/protection."""
+
+    identification = 'identificación'
+    handling = 'manipulación'
+    packaging = 'embalaje'
+    storage = 'almacenamiento'
+    transport = 'transporte'
+    protection = 'protección'
+    other = 'otro'
+
+
+class ProductionResult(enum.Enum):
+    """Evidence outcomes, not release decisions."""
+
+    conforming = 'conforme'
+    nonconforming = 'no conforme'
+
+
+def _production_record_constraints(table: str, *, control: bool = False) -> tuple:
+    """Restrictive citations and B-tree FK/history indexes for both registers."""
+    references = (('order_id', 'production_orders.id'), ('responsible_id', 'personas.id'),
+                  ('nonconformity_id', 'no_conformidades.id'))
+    if control:
+        references += (('equipment_id', 'equipos_medicion.id'),)
+    return (
+        db.PrimaryKeyConstraint('id', name=f'pk_{table}'),
+        db.CheckConstraint('length(trim(description)) > 0', name=f'ck_{table}_description'),
+        *(db.ForeignKeyConstraint([column], [target], name=f'fk_{table}_{column}',
+                                  ondelete='RESTRICT', onupdate='RESTRICT')
+          for column, target in references),
+        *(db.Index(f'ix_{table}_{column}', column) for column in (
+            *(column for column, _ in references), 'created_by_id', 'updated_by_id')),
+        db.Index(f'ix_{table}_history', 'order_id', 'date', 'id'),
+    )
+
+
+class ProductionControlRecord(RecordMetadataMixin, db.Model):
+    """Immutable execution/control evidence, independent of finishing or release."""
+
+    __tablename__ = 'production_control_records'
+    __table_args__ = (
+        *_production_record_constraints(__tablename__, control=True),
+        db.CheckConstraint('length(trim(evidence)) > 0',
+                           name='ck_production_control_records_evidence'),
+        db.CheckConstraint("result = 'conforming' OR nonconformity_id IS NOT NULL OR "
+                           '(actions IS NOT NULL AND length(trim(actions)) > 0)',
+                           name='ck_production_control_records_actions'),
+    )
+    id = db.Column(db.Integer, nullable=False)
+    order_id = db.Column(db.Integer, nullable=False)
+    kind = db.Column(text_enum(ProductionControlKind, 'ck_production_control_records_kind'),
+                     nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    responsible_id = db.Column(db.Integer, nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    result = db.Column(text_enum(ProductionResult, 'ck_production_control_records_result'),
+                       nullable=False)
+    evidence = db.Column(db.Text, nullable=False)
+    equipment_id = db.Column(db.Integer)
+    nonconformity_id = db.Column(db.Integer)
+    actions = db.Column(db.Text)
+    responsible = db.relationship('Person')
+    equipment = db.relationship('EquipoMedicion')
+    nonconformity = db.relationship('NoConformidad')
+
+
+class ProductionPreservationRecord(RecordMetadataMixin, db.Model):
+    """Immutable preservation evidence, also allowed after work has finished."""
+
+    __tablename__ = 'production_preservation_records'
+    __table_args__ = _production_record_constraints(__tablename__)
+    id = db.Column(db.Integer, nullable=False)
+    order_id = db.Column(db.Integer, nullable=False)
+    aspect = db.Column(text_enum(PreservationAspect, 'ck_production_preservation_records_aspect'),
+                       nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    responsible_id = db.Column(db.Integer, nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    result = db.Column(text_enum(ProductionResult, 'ck_production_preservation_records_result'),
+                       nullable=False)
+    nonconformity_id = db.Column(db.Integer)
+    responsible = db.relationship('Person')
+    nonconformity = db.relationship('NoConformidad')
+
+
 # Registro de auditoría append-only: quién cambió qué y cuándo (ISO 9001 7.5.3)
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
