@@ -9,11 +9,13 @@ from sqlalchemy import or_, select
 from ..audit_notifications import local_today
 from ..extensions import db
 from ..forms import (BaseForm, DesignTransitionForm, ProductionOrderForm, person_choices,
-                     ProductionControlForm, ProductionPreservationForm)
+                     ProductionControlForm, ProductionPreservationForm,
+                     ProductionChangeForm, DesignChangeRejectionForm)
 from ..models import (DesignApprovalState, DesignOutput, DesignOutputVersion, EquipoMedicion,
-                      Person, ProductionKind, ProductionState, NoConformidad)
+                      Person, ProductionKind, ProductionState, NoConformidad,
+                      DesignChange, DesignChangeState, CambioSGC)
 from ..services import (clientes, design_io, equipment, people, process_operations,
-                        production, production_records, qms_scope)
+                        production, production_records, production_changes, qms_scope)
 from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
 from .auditoria_routes import committed
@@ -65,6 +67,7 @@ def show_order(order_id: int) -> ResponseReturnValue:
         suitability={item.id: equipment.status(db.session, item, today=local_today()) for item in row.equipment},
         targets=production.TRANSITIONS.get(row.state, ()), transition_form=DesignTransitionForm(),
         editable=row.state in production.TRANSITIONS,
+        changes=production_changes.changes.list_(db.session, who, order_id=row.id),
         record_sections=[dict(slug=slug, title=title, rows=register.list_(db.session, who, order_id=row.id),
                               allowed=production_records.allowed(register.SPEC, row.state))
                          for slug, title, register in RECORD_SECTIONS])
@@ -226,3 +229,103 @@ def _action(order_id: int, *, deleting: bool) -> ResponseReturnValue:
         return redirect(url_for('production.list_orders' if deleting else 'production.show_order',
                                 **({} if deleting else {'order_id': order_id})))
     return redirect(url_for('production.show_order', order_id=order_id))
+
+
+@bp.route('/cambios/')
+@login_required
+@require_permission('read', 'production')
+def list_changes() -> ResponseReturnValue:
+    """Filter retained change history by state and affected order."""
+    selected = request.args.get('state', '')
+    state = selected if selected in DesignChangeState.__members__ else None
+    order_id = request.args.get('order_id', type=int)
+    return render_template('production/change_list.html', states=DesignChangeState,
+        selected=state, order_id=order_id,
+        orders=production.orders.list_(db.session, current_actor()),
+        changes=production_changes.changes.list_(db.session, current_actor(),
+                                                state=state, order_id=order_id))
+
+
+@bp.route('/cambios/<int:change_id>')
+@login_required
+@require_permission('read', 'production')
+def show_change(change_id: int) -> ResponseReturnValue:
+    """Show review, citations and the independent decision."""
+    row = production_changes.changes.get(db.session, current_actor(), change_id)
+    return render_template('production/change_detail.html', change=row,
+        may_decide=production_changes.may_decide(db.session, current_actor(), row),
+        action_form=BaseForm(), rejection_form=DesignChangeRejectionForm())
+
+
+@bp.route('/cambios/nuevo', methods=['GET', 'POST'])
+@login_required
+@require_permission('create', 'production')
+def new_change() -> ResponseReturnValue:
+    """Propose through the shared audited service."""
+    return _edit_change(None)
+
+
+@bp.route('/cambios/<int:change_id>/editar', methods=['GET', 'POST'])
+@login_required
+@require_permission('update', 'production')
+def edit_change(change_id: int) -> ResponseReturnValue:
+    """Edit only proposals, refusing even decided no-op submissions."""
+    return _edit_change(change_id)
+
+
+def _edit_change(change_id: int | None) -> ResponseReturnValue:
+    who = current_actor()
+    row = None if change_id is None else production_changes.changes.get(db.session, who, change_id)
+    if row is not None and row.state is not DesignChangeState.proposed:
+        flash(production_changes.design_changes.IMMUTABLE, 'danger')
+        return redirect(url_for('production.show_change', change_id=change_id))
+    form = ProductionChangeForm(obj=row)
+    form.order_ids.choices = [(o.id, o.code) for o in production.orders.list_(db.session, who)
+        if o.state is not ProductionState.cancelled or o.id in getattr(row, 'order_ids', [])]
+    form.design_change_id.choices = [('', '— Sin cambio del diseño —'), *((c.id, f'#{c.id} · {c.reason}')
+        for c in db.session.scalars(select(DesignChange).where(or_(
+            DesignChange.state == DesignChangeState.authorized,
+            DesignChange.id == getattr(row, 'design_change_id', None))).order_by(DesignChange.id)))]
+    form.qms_change_id.choices = [('', '— Sin cambio del SGC —'), *((c.id, f'#{c.id} · {c.titulo}')
+        for c in db.session.scalars(select(CambioSGC).order_by(CambioSGC.id)))]
+    if request.method == 'GET':
+        form.order_ids.data = getattr(row, 'order_ids', [])
+    title = 'Proponer cambio de producción' if row is None else 'Editar cambio de producción'
+    refused = _refused(form)
+    if request.method == 'POST' and (missing := {f.name for f in form
+            if f.name != 'csrf_token'} - set(request.form)):
+        flash(f'Faltan campos del formulario: {", ".join(sorted(missing))}.', 'danger')
+        refused = True
+    if not refused and form.validate_on_submit():
+        data = form_data(form, production_changes.SPEC.writable)
+        result = saved(lambda: production_changes.changes.create(db.session, who, data) if row is None
+            else production_changes.changes.update(db.session, who, row.id, data))
+        if result:
+            return redirect(url_for('production.show_change', change_id=result.id))
+    return render_template('production/change_form.html', form=form, title=title), 400 if refused else 200
+
+
+@bp.route('/cambios/<int:change_id>/autorizar', methods=['POST'])
+@login_required
+@require_permission('update', 'production')
+def authorize_change(change_id: int) -> ResponseReturnValue:
+    """Web-only independent administrator authorization."""
+    return _decide_change(change_id, rejecting=False)
+
+
+@bp.route('/cambios/<int:change_id>/rechazar', methods=['POST'])
+@login_required
+@require_permission('update', 'production')
+def reject_change(change_id: int) -> ResponseReturnValue:
+    """Retain the proposal and explicit rejection reason."""
+    return _decide_change(change_id, rejecting=True)
+
+
+def _decide_change(change_id: int, *, rejecting: bool) -> ResponseReturnValue:
+    form = DesignChangeRejectionForm() if rejecting else BaseForm()
+    refused = _refused(form)
+    if not refused and form.validate_on_submit():
+        committed(lambda: production_changes.reject(db.session, current_actor(), change_id,
+            reason=form.reason.data) if rejecting else production_changes.authorize(
+                db.session, current_actor(), change_id, today=local_today()))
+    return redirect(url_for('production.show_change', change_id=change_id)), 400 if refused else 302
