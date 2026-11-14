@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% from '_partials/ui.html' import page_header %}
+{% block title %}Cambios de producción{% endblock %}
+{% block content %}
+{% call page_header('8.5.6 · Control de cambios', 'Cambios de producción') %}
+<a class="btn" href="{{ url_for('production.list_orders') }}">Órdenes</a>
+{% if can('create', 'production') %}<a class="btn" href="{{ url_for('production.new_change') }}">Proponer cambio</a>{% endif %}
+{% endcall %}
+<form method="get" class="form-card"><label>Estado <select name="state"><option value="">Todos</option>{% for state in states %}<option value="{{ state.name }}"{{ ' selected' if state.name == selected else '' }}>{{ state.value }}</option>{% endfor %}</select></label>
+<label>Orden <select name="order_id"><option value="">Todas</option>{% for order in orders %}<option value="{{ order.id }}"{{ ' selected' if order.id == order_id else '' }}>{{ order.code }}</option>{% endfor %}</select></label><button class="btn">Filtrar</button></form>
+<section class="card">{% for row in changes %}<p><a href="{{ url_for('production.show_change', change_id=row.id) }}">#{{ row.id }} · {{ row.reason }}</a> · {{ row.state.value }}</p>{% else %}<p>Sin cambios.</p>{% endfor %}</section>
+{% endblock %}

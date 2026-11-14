@@ -34,7 +34,7 @@ nunca puede eliminar.
 
   | Herramienta | Finalidad |
   |---|---|
-  | `qms_modules` | Los 44 módulos con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
+  | `qms_modules` | Los módulos disponibles con sus campos, los valores admitidos, los filtros y lo que puede hacer quien llama |
   | `qms_list` | Una página acotada de un módulo, con los filtros que enumera `qms_modules` |
   | `qms_get` | Un registro por su `id` |
   | `qms_create` | Crea un registro |
@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera 48 módulos: `production_control_records`, `production_preservation_records`, `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
+`qms_modules` enumera los módulos: `production_changes`, `production_control_records`, `production_preservation_records`, `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -105,6 +105,21 @@ activa al elegirla), `description` y `result` (`conforming`/`nonconforming`).
   Orden: fecha descendente, luego id descendente. Repeticiones y fechas anteriores
   permitidas. Canceladas, siempre de solo lectura. Sin adjuntos, cambios ni borrados.
   Terminar no exige registros y nunca equivale a liberar (8.6).
+
+Cambios de producción (PS3, 8.5.6): `production_changes` admite crear, consultar,
+listar y actualizar **solo propuestas**. Todos leen con ámbito `read`;
+administradores y auditores escriben con `write`. Obligatorios: `reason`,
+`description`, `actions` no vacíos y `order_ids` (lista no vacía de enteros,
+normalizada, de órdenes no canceladas; se admiten terminadas). Sustituir la lista
+reemplaza las órdenes; omitirla conserva. Opcionales: `review` (obligatoria antes
+de autorizar desde la web), `design_change_id` (cambio del diseño autorizado) y
+`qms_change_id` (cambio del SGC en cualquier estado); `null` quita las citas.
+Filtros AND: `order_id`, `state` (`proposed`, `authorized`, `rejected`); orden por
+id descendente. MCP solo ve `proposed`: los otros filtros devuelven una lista vacía,
+y consultar por id una decisión se rechaza. Las lecturas incluyen `order_ids`.
+No acepta estado ni datos de autorización/rechazo. Solo un administrador web con
+persona distinta de todos los responsables decide. Ningún cambio se elimina;
+las decisiones son inmutables y las citas RESTRICT. No bloquea órdenes ni libera.
 
 Diseño y desarrollo (8.3.1–8.3.6):
 

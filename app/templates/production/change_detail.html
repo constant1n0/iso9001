@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% from '_partials/ui.html' import page_header %}
+{% from '_partials/forms.html' import field %}
+{% block title %}Cambio de producción #{{ change.id }}{% endblock %}
+{% block content %}
+{% call page_header('8.5.6 · Control de cambios', 'Cambio de producción #' ~ change.id) %}
+<a class="btn" href="{{ url_for('production.list_changes') }}">Volver al registro</a>
+{% if change.state.name == 'proposed' and can('update', 'production') %}<a class="btn" href="{{ url_for('production.edit_change', change_id=change.id) }}">Editar cambio</a>{% endif %}
+{% endcall %}
+<section class="card"><p><strong>Estado:</strong> {{ change.state.value }}</p>
+{% for key, label in [('reason', 'Motivo'), ('description', 'Descripción del cambio'), ('review', 'Revisión de los resultados'), ('actions', 'Acciones')] %}<h2>{{ label }}</h2><p>{{ change[key] or '—' }}</p>{% endfor %}
+<h2>Órdenes afectadas</h2>{% for order in change.orders %}<p><a href="{{ url_for('production.show_order', order_id=order.id) }}">{{ order.code }}</a></p>{% endfor %}
+{% if change.design_change_id %}<p>Cambio del diseño: #{{ change.design_change_id }}</p>{% endif %}
+{% if change.qms_change_id %}<p>Cambio del SGC: #{{ change.qms_change_id }}</p>{% endif %}
+{% if change.authorized_by %}<p>Persona que autoriza: {{ change.authorized_by.nombre }} · {{ change.authorized_at }}</p>{% endif %}
+{% if change.rejection_reason %}<p>Motivo del rechazo: {{ change.rejection_reason }}</p>{% endif %}
+<p>Este registro no bloquea las órdenes ni autoriza la entrega. La liberación (8.6) es independiente.</p></section>
+{% if may_decide %}
+<form method="post" action="{{ url_for('production.authorize_change', change_id=change.id) }}">{{ action_form.hidden_tag() }}<button class="btn">Autorizar cambio</button></form>
+<form method="post" action="{{ url_for('production.reject_change', change_id=change.id) }}">{{ rejection_form.hidden_tag() }}{{ field(rejection_form.reason) }}<button class="btn">Rechazar cambio</button></form>
+{% endif %}
+{% endblock %}

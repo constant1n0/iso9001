@@ -75,7 +75,24 @@ orden planificada sin registros, incluidos sus vínculos; queda su instantánea 
 **Terminar una orden nunca equivale a liberar el producto.** «Terminada» significa
 trabajo terminado, NO autorización de entrega. La liberación (8.6) es independiente
 y todavía no está implementada. No necesitas registros para terminar una orden.
-Siguen pendientes cambios, propiedad de terceros y actividades posteriores a la entrega (PS3–PS5).
+Siguen pendientes propiedad de terceros y actividades posteriores a la entrega (PS4–PS5).
+
+### Cambios de producción (8.5.6)
+
+Desde **Cambios de producción** (`/produccion/cambios/`), consulta el historial
+por estado u orden. Cada ficha de orden enumera los cambios que la afectan.
+Administradores y auditores proponen y editan cambios **propuestos**: motivo,
+descripción, acciones y al menos una orden no cancelada (también terminadas).
+Puedes citar un cambio del diseño autorizado y/o un cambio del SGC en cualquier
+estado. Completa la **Revisión de los resultados** antes de autorizar.
+
+Solo un administrador desde la web, con persona vinculada distinta de **todos**
+los responsables de las órdenes afectadas, puede **Autorizar cambio** o
+**Rechazar cambio**. Rechazar requiere motivo. Autorizados y rechazados son
+inmutables; ningún cambio se elimina, ni siquiera propuesto: recházalo.
+Las órdenes, cambios citados y persona que autoriza quedan protegidos del borrado.
+El registro conserva la autorización, pero **no bloquea transiciones de las órdenes
+ni libera el producto**. MCP solo crea, consulta, lista y actualiza propuestas.
 
 ### Ejecución, control y preservación
 

@@ -82,6 +82,19 @@ class BaseForm(FlaskForm):
         locales = ('es_ES', 'es')
 
 
+class ProductionChangeForm(BaseForm):
+    """Proposed production change; decisions use separate web-only forms."""
+
+    reason = TextAreaField('Motivo', validators=[DataRequired()])
+    description = TextAreaField('Descripción del cambio', validators=[DataRequired()])
+    review = TextAreaField('Revisión de los resultados (obligatoria antes de autorizar)')
+    actions = TextAreaField('Acciones', validators=[DataRequired()])
+    order_ids = SelectMultipleField('Órdenes afectadas', coerce=int, choices=[],
+                                     validators=[DataRequired()])
+    design_change_id = SelectField('Cambio del diseño autorizado', coerce=optional_id, choices=[])
+    qms_change_id = SelectField('Cambio del SGC', coerce=optional_id, choices=[])
+
+
 class ProductionOrderForm(BaseForm):
     """Order identity and controlled conditions; lifecycle is a separate POST."""
 

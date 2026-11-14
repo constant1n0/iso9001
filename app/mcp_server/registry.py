@@ -38,7 +38,7 @@ from ..services import (
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
     training_resources, design, design_changes, design_controls, design_io, production,
-    production_records,
+    production_records, production_changes,
 )
 from ..services.policy import Resource
 
@@ -723,6 +723,21 @@ _PRODUCTION_RECORD_MODULES = (
          production_records.preservation, 'aspect', PreservationAspect, False))),
 )
 
+_PRODUCTION_CHANGE_MODULES = (
+    Module('production_changes', 'Proposed production changes (8.5.6)', Resource.PRODUCTION,
+        production_changes.changes, (
+            _f('reason', required=True), _f('description', required=True),
+            _f('actions', required=True), _f('review', note='Required before web authorization.'),
+            _f('design_change_id', 'integer', note='Authorized design change; null clears.'),
+            _f('qms_change_id', 'integer', note='QMS change in any state; null clears.'),
+            _f('order_ids', 'integer_list', True, note=(
+                'Nonempty replacement set, no cancelled orders; finished allowed. '
+                'MCP creates/reads/updates proposals only, never decides or deletes. '
+                'No order gating or release authority.')),
+        ), (_f('state', 'enum', members=DesignChangeState), _f('order_id', 'integer')),
+        extras=lambda row: {'order_ids': row.order_ids}),
+)
+
 _PRODUCTION_MODULES = (
     Module('production_orders', 'Production/service orders (8.5.1/8.5.2)', Resource.PRODUCTION,
            production.orders, (
@@ -1106,6 +1121,7 @@ _MODULES = (
     *_DESIGN_CONTROL_MODULES,
     *_PRODUCTION_MODULES,
     *_PRODUCTION_RECORD_MODULES,
+    *_PRODUCTION_CHANGE_MODULES,
     Module("confirmaciones_lectura", "Read confirmations", Resource.READ_CONFIRMATIONS,
            _DatedWrites(read_confirmations), (
         _f("persona_id", "integer", True, note="Existing person (personas), active when newly chosen."),
