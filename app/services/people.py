@@ -65,6 +65,7 @@ from sqlalchemy.orm import Session
 from ..models import (
     DesignChange, DesignOutputVersion, DesignControlRecord, DesignPlannedControl,
     DesignProject, DesignStage, ProductionOrder, PRODUCTION_ASSOCIATIONS,
+    ProductionControlRecord, ProductionPreservationRecord,
     COMMUNICATION_ASSOCIATIONS, CommunicationLog, CommunicationPlan,
     EquipoMedicion, KnowledgeItem, KNOWLEDGE_ASSOCIATIONS,
     AccionCorrectiva, AccionRevision, AccionRiesgo, AlcanceSGC, Auditoria, CambioSGC,
@@ -100,6 +101,7 @@ STILL_REFERENCED = (
 # which SQLite only enforces on request, so ``delete`` also checks them.
 REFERENCES = (
     ProductionOrder.owner_id, PRODUCTION_ASSOCIATIONS['person_ids'].c.target_id,
+    ProductionControlRecord.responsible_id, ProductionPreservationRecord.responsible_id,
     DesignProject.owner_id, DesignStage.owner_id, DesignProject.completed_by_id,
     DesignChange.authorized_by_id, DesignOutputVersion.approved_by_id,
     DesignPlannedControl.responsible_id, DesignControlRecord.responsible_id,

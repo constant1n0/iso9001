@@ -8,10 +8,12 @@ from sqlalchemy import or_, select
 
 from ..audit_notifications import local_today
 from ..extensions import db
-from ..forms import BaseForm, DesignTransitionForm, ProductionOrderForm, person_choices
+from ..forms import (BaseForm, DesignTransitionForm, ProductionOrderForm, person_choices,
+                     ProductionControlForm, ProductionPreservationForm)
 from ..models import (DesignApprovalState, DesignOutput, DesignOutputVersion, EquipoMedicion,
-                      Person, ProductionKind, ProductionState)
-from ..services import clientes, design_io, equipment, people, process_operations, production, qms_scope
+                      Person, ProductionKind, ProductionState, NoConformidad)
+from ..services import (clientes, design_io, equipment, people, process_operations,
+                        production, production_records, qms_scope)
 from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
 from .auditoria_routes import committed
@@ -62,7 +64,63 @@ def show_order(order_id: int) -> ResponseReturnValue:
         revision_labels={rid: labels.get(rid, 'Revisión vinculada') for rid in row.revision_ids},
         suitability={item.id: equipment.status(db.session, item, today=local_today()) for item in row.equipment},
         targets=production.TRANSITIONS.get(row.state, ()), transition_form=DesignTransitionForm(),
-        editable=row.state in production.TRANSITIONS)
+        editable=row.state in production.TRANSITIONS,
+        record_sections=[dict(slug=slug, title=title, rows=register.list_(db.session, who, order_id=row.id),
+                              allowed=production_records.allowed(register.SPEC, row.state))
+                         for slug, title, register in RECORD_SECTIONS])
+
+
+RECORD_SECTIONS = (
+    ('controles', 'Registros de ejecución y control', production_records.controls),
+    ('preservacion', 'Preservación', production_records.preservation),
+)
+
+
+@bp.route('/<int:order_id>/controles/nuevo', methods=['GET', 'POST'])
+@login_required
+@require_permission('create', 'production')
+def new_control(order_id: int) -> ResponseReturnValue:
+    """Append immutable execution evidence; no edit/delete endpoints exist."""
+    return _new_record(order_id, control=True)
+
+
+@bp.route('/<int:order_id>/preservacion/nuevo', methods=['GET', 'POST'])
+@login_required
+@require_permission('create', 'production')
+def new_preservation(order_id: int) -> ResponseReturnValue:
+    """Append preservation, including storage after work finishes."""
+    return _new_record(order_id, control=False)
+
+
+def _new_record(order_id: int, *, control: bool) -> ResponseReturnValue:
+    """Populate explicit GET defaults and reuse the strict PS1 payload boundary."""
+    who = current_actor()
+    order = production.orders.get(db.session, who, order_id)
+    register = production_records.controls if control else production_records.preservation
+    form = (ProductionControlForm if control else ProductionPreservationForm)()
+    if control:
+        del form['aspect']
+        form.equipment_id.choices = [('', '— Sin equipo —'), *((item.id, f'{item.codigo} · {item.nombre}')
+            for item in db.session.scalars(select(EquipoMedicion).order_by(EquipoMedicion.codigo)))]
+    form.responsible_id.choices = person_choices(people.choices(db.session, who))
+    form.nonconformity_id.choices = [('', '— Sin no conformidad —'), *((nc.id, f'NC #{nc.id} · {nc.descripcion[:80]}')
+        for nc in db.session.scalars(select(NoConformidad).order_by(NoConformidad.id)))]
+    if request.method == 'GET':
+        form['kind' if control else 'aspect'].data = 'inspection' if control else 'identification'
+        form.result.data, form.date.data = 'conforming', local_today()
+    title = 'Registrar ejecución y control' if control else 'Registrar preservación'
+    if _refused(form):
+        return render_template('production/record_form.html', form=form, order=order, title=title), 400
+    if request.method == 'POST' and (missing := {field.name for field in form
+            if field.name != 'csrf_token'} - set(request.form)):
+        flash(f'Faltan campos del formulario: {", ".join(sorted(missing))}.', 'danger')
+        return render_template('production/record_form.html', form=form, order=order, title=title), 400
+    if form.validate_on_submit() and saved(lambda: register.create(db.session, who,
+            {'order_id': order.id} | form_data(form, tuple(f.name for f in register.SPEC.fields
+                                                          if f.name != 'order_id')),
+            today=local_today())):
+        return redirect(url_for('production.show_order', order_id=order.id))
+    return render_template('production/record_form.html', form=form, order=order, title=title)
 
 
 def _form(row: Any = None) -> ProductionOrderForm:

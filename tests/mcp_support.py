@@ -129,6 +129,10 @@ SEEDS = {
                                'responsible_id': 1, 'result': 'conforming',
                                'evidence': 'Minutes M-1'},
     'production_orders': {'code': 'O-1', 'kind': 'production', 'title': 'Container', 'process_id': 1},
+    'production_control_records': {'order_id': 1, 'kind': 'inspection', 'date': '2020-01-01',
+        'responsible_id': 1, 'description': 'Check dimensions', 'result': 'conforming', 'evidence': 'R-1'},
+    'production_preservation_records': {'order_id': 1, 'aspect': 'storage', 'date': '2020-01-01',
+        'responsible_id': 1, 'description': 'Dry storage', 'result': 'conforming'},
     'design_changes': {'project_id': 1, 'reason': 'Requirement changed',
                        'impact': 'Drawing changes', 'review': 'Safety checked',
                        'actions': 'Revise drawing', 'output_ids': [1]},
@@ -184,6 +188,15 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
     def seed(self, slug: str, **overrides) -> int:
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
+        if slug in ('production_control_records', 'production_preservation_records'):
+            from app.models import ProductionOrder, ProductionState
+            if db.session.get(Person, 1) is None:
+                self.seed('personas')
+            if db.session.get(ProductionOrder, 1) is None:
+                self.seed('production_orders')
+            db.session.execute(ProductionOrder.__table__.update().where(
+                ProductionOrder.id == 1).values(state=ProductionState.in_progress))
+            db.session.commit()
         if slug == 'production_orders':
             from app.models import ProcesoOperacion
             if db.session.get(ProcesoOperacion, 1) is None:

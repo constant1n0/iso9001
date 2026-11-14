@@ -29,6 +29,7 @@ from ..models import (
     KnowledgeType, CommunicationChannel, CommunicationScope, DesignState,
     DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult,
     DesignChangeState, ProductionKind, ProductionState,
+    ProductionControlKind, PreservationAspect, ProductionResult,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
@@ -37,6 +38,7 @@ from ..services import (
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
     training_resources, design, design_changes, design_controls, design_io, production,
+    production_records,
 )
 from ..services.policy import Resource
 
@@ -698,6 +700,29 @@ _DESIGN_CONTROL_MODULES = (
         _f('result', 'enum', members=DesignControlResult))),
 )
 
+_PRODUCTION_RECORD_MODULES = (
+    *(Module(slug, label, Resource.PRODUCTION, _DatedWrites(register), (
+        _f('order_id', 'integer', True, note=(
+            'Immutable evidence; no update/delete. In-progress orders only; preservation '
+            'also allows finished orders. Cancelled orders are read-only.')),
+        _f(selector, 'enum', True, members=members),
+        _f('date', 'date', True, note='Never future; backdates/repeats allowed.'),
+        _f('responsible_id', 'integer', True, note='Active person when selected.'),
+        _f('description', required=True),
+        _f('result', 'enum', True, members=ProductionResult),
+        _f('nonconformity_id', 'integer', note='Existing NC, never created implicitly.'),
+        *((_f('evidence', required=True, note='Text/reference, not an upload.'),
+           _f('equipment_id', 'integer', note='Suitable on record date; current retirement flag.'),
+           _f('actions', note='Nonconforming requires NC or nonblank actions.')) if control else ()),
+    ), (_f('order_id', 'integer'), _f(selector, 'enum', members=members),
+        _f('result', 'enum', members=ProductionResult)))
+      for slug, label, register, selector, members, control in (
+        ('production_control_records', 'Execution/control evidence (8.5.1)',
+         production_records.controls, 'kind', ProductionControlKind, True),
+        ('production_preservation_records', 'Preservation evidence (8.5.4)',
+         production_records.preservation, 'aspect', PreservationAspect, False))),
+)
+
 _PRODUCTION_MODULES = (
     Module('production_orders', 'Production/service orders (8.5.1/8.5.2)', Resource.PRODUCTION,
            production.orders, (
@@ -1080,6 +1105,7 @@ _MODULES = (
     *_DESIGN_MODULES,
     *_DESIGN_CONTROL_MODULES,
     *_PRODUCTION_MODULES,
+    *_PRODUCTION_RECORD_MODULES,
     Module("confirmaciones_lectura", "Read confirmations", Resource.READ_CONFIRMATIONS,
            _DatedWrites(read_confirmations), (
         _f("persona_id", "integer", True, note="Existing person (personas), active when newly chosen."),

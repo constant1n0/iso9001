@@ -29,6 +29,7 @@ from .models import (
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
     KnowledgeType, CommunicationChannel, CommunicationScope,
     DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult, ProductionKind,
+    ProductionControlKind, PreservationAspect, ProductionResult,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -97,6 +98,26 @@ class ProductionOrderForm(BaseForm):
     revision_ids = SelectMultipleField('Instrucciones y criterios: revisiones exactas', coerce=int, choices=[])
     equipment_ids = SelectMultipleField('Equipos', coerce=int, choices=[])
     person_ids = SelectMultipleField('Personas asignadas', coerce=int, choices=[])
+
+
+class ProductionPreservationForm(BaseForm):
+    """Dated immutable preservation; routes inject parent id, never accept it."""
+
+    date = DateField('Fecha', validators=[DataRequired()])
+    responsible_id = SelectField('Responsable', coerce=optional_id, choices=[], validators=[DataRequired()])
+    aspect = SelectField('Aspecto', choices=[(m.name, m.value) for m in PreservationAspect])
+    description = TextAreaField('Condición o descripción', validators=[DataRequired()])
+    result = SelectField('Resultado', choices=[(m.name, m.value) for m in ProductionResult])
+    nonconformity_id = SelectField('No conformidad relacionada', coerce=optional_id, choices=[])
+
+
+class ProductionControlForm(ProductionPreservationForm):
+    """Execution evidence; the route removes the preservation-only aspect."""
+
+    kind = SelectField('Tipo', choices=[(m.name, m.value) for m in ProductionControlKind])
+    evidence = TextAreaField('Evidencia o referencia', validators=[DataRequired()])
+    equipment_id = SelectField('Equipo utilizado (apto en la fecha)', coerce=optional_id, choices=[])
+    actions = TextAreaField('Acciones (obligatorias si no conforme y sin NC)')
 
 
 class DesignProjectForm(BaseForm):

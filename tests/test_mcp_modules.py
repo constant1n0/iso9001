@@ -11,7 +11,7 @@ from mcp_support import ADMIN, AUDITOR, OPERATIVO, McpDbCase, mcp_actor
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUGS = {
-    'production_orders',
+    'production_orders', 'production_control_records', 'production_preservation_records',
     'design_projects', 'design_stages', 'design_inputs', 'design_outputs',
     'design_planned_controls', 'design_control_records', 'design_changes',
     "communication", "communication_log", "knowledge",
@@ -44,6 +44,7 @@ SHARED_CONTEXT = ("cuestiones_contexto", "alcances_sgc")
 SHARED_CHANGES = ("cambios_sgc", "tareas_cambio")
 SHARED_EQUIPMENT = ("equipos_medicion", "comprobaciones_equipo")
 SHARED_COMMUNICATION = ('communication', 'communication_log')
+SHARED_PRODUCTION = ('production_orders', 'production_control_records', 'production_preservation_records')
 SHARED_DESIGN = ('design_projects', 'design_stages', 'design_inputs', 'design_outputs',
                  'design_planned_controls', 'design_control_records', 'design_changes')
 # (module, legacy free-text name, person link that can fill it)
@@ -78,7 +79,7 @@ class RegistryTestCase(unittest.TestCase):
         modules = registry().MODULES
         shared = (SHARED_RESOURCE + SHARED_AUDITS + SHARED_OBJECTIVES + SHARED_REVIEWS
                   + SHARED_RISKS + SHARED_PROVIDERS + SHARED_CONTEXT + SHARED_CHANGES
-                  + SHARED_EQUIPMENT + SHARED_COMMUNICATION + SHARED_DESIGN)
+                  + SHARED_EQUIPMENT + SHARED_COMMUNICATION + SHARED_DESIGN + SHARED_PRODUCTION)
         resources = [m.resource for slug, m in modules.items() if slug not in shared]
         self.assertEqual(len(resources), len(set(resources)))
         self.assertEqual({Resource.COMPETENCE}, {modules[s].resource for s in SHARED_RESOURCE})
@@ -98,6 +99,7 @@ class RegistryTestCase(unittest.TestCase):
         self.assertEqual({Resource.COMMUNICATION},
                          {modules[s].resource for s in SHARED_COMMUNICATION})
         self.assertEqual({Resource.DESIGN}, {modules[s].resource for s in SHARED_DESIGN})
+        self.assertEqual({Resource.PRODUCTION}, {modules[s].resource for s in SHARED_PRODUCTION})
         self.assertFalse({Resource.DESIGN, Resource.COMMUNICATION, Resource.COMPETENCE, Resource.AUDITS, Resource.QUALITY_OBJECTIVES,
                           Resource.MANAGEMENT_REVIEW, Resource.RISKS_OPPORTUNITIES,
                           Resource.EXTERNAL_PROVIDERS, Resource.ORGANIZATION_CONTEXT,
