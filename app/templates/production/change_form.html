@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% from '_partials/ui.html' import page_header, form_card %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+{{ page_header('8.5.6 · Control de cambios', title) }}
+<p>Elige al menos una orden no cancelada; las terminadas también se admiten. Mantén Ctrl (o Cmd) para seleccionar varias. La revisión de los resultados es obligatoria antes de autorizar.</p>
+{{ form_card(form, url_for('production.list_changes')) }}
+{% endblock %}

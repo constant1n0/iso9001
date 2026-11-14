@@ -133,6 +133,8 @@ SEEDS = {
         'responsible_id': 1, 'description': 'Check dimensions', 'result': 'conforming', 'evidence': 'R-1'},
     'production_preservation_records': {'order_id': 1, 'aspect': 'storage', 'date': '2020-01-01',
         'responsible_id': 1, 'description': 'Dry storage', 'result': 'conforming'},
+    'production_changes': {'reason': 'New tolerance', 'description': 'Adjust tooling',
+                           'actions': 'Recheck', 'order_ids': [1]},
     'design_changes': {'project_id': 1, 'reason': 'Requirement changed',
                        'impact': 'Drawing changes', 'review': 'Safety checked',
                        'actions': 'Revise drawing', 'output_ids': [1]},
@@ -197,6 +199,10 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
             db.session.execute(ProductionOrder.__table__.update().where(
                 ProductionOrder.id == 1).values(state=ProductionState.in_progress))
             db.session.commit()
+        if slug == 'production_changes':
+            from app.models import ProductionOrder
+            if db.session.get(ProductionOrder, 1) is None:
+                self.seed('production_orders')
         if slug == 'production_orders':
             from app.models import ProcesoOperacion
             if db.session.get(ProcesoOperacion, 1) is None:

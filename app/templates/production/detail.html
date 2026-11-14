@@ -21,6 +21,10 @@
 <h3>Instrucciones y criterios</h3><ul>{% for rid in order.revision_ids %}<li>{{ revision_labels[rid] }}</li>{% else %}<li>Sin revisiones vinculadas.</li>{% endfor %}</ul>
 <h3>Equipos y aptitud actual</h3><ul>{% for item in order.equipment %}<li>{{ item.codigo }} · {{ item.nombre }} · {{ suitability[item.id] }}</li>{% else %}<li>Sin equipos vinculados.</li>{% endfor %}</ul>
 <h3>Personas asignadas</h3><ul>{% for person in order.people %}<li>{{ person.nombre }}{{ ' (desactivada)' if not person.activo else '' }}</li>{% else %}<li>Sin personas asignadas.</li>{% endfor %}</ul></section>
+<section class="card"><h2>Cambios de producción</h2>
+<a class="btn" href="{{ url_for('production.list_changes', order_id=order.id) }}">Ver registro de cambios</a>
+{% if can('create', 'production') %}<a class="btn" href="{{ url_for('production.new_change') }}">Proponer cambio</a>{% endif %}
+{% for change in changes %}<p><a href="{{ url_for('production.show_change', change_id=change.id) }}">#{{ change.id }} · {{ change.reason }}</a> · {{ change.state.value }}</p>{% else %}<p>Sin cambios.</p>{% endfor %}</section>
 {% for section in record_sections %}
 <section class="card"><h2>{{ section.title }}</h2>
 {% if section.allowed and can('create', 'production') %}

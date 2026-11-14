@@ -3555,6 +3555,68 @@ class ProductionPreservationRecord(RecordMetadataMixin, db.Model):
     nonconformity = db.relationship('NoConformidad')
 
 
+production_change_orders = db.Table(
+    'production_change_orders',
+    db.Column('change_id', db.Integer, nullable=False),
+    db.Column('order_id', db.Integer, nullable=False),
+    db.PrimaryKeyConstraint('change_id', 'order_id', name='pk_production_change_orders'),
+    *(db.ForeignKeyConstraint([column], [target],
+        name=f'fk_production_change_orders_{column}', ondelete='RESTRICT', onupdate='RESTRICT')
+      for column, target in (('change_id', 'production_changes.id'),
+                             ('order_id', 'production_orders.id'))),
+    db.Index('ix_production_change_orders_order_id', 'order_id'),
+)
+
+
+class ProductionChange(RecordMetadataMixin, db.Model):
+    """Reviewed production changes (8.5.6), never order gates or release decisions."""
+
+    __tablename__ = 'production_changes'
+    __table_args__ = (
+        db.PrimaryKeyConstraint('id', name='pk_production_changes'),
+        *(db.CheckConstraint(f'length(trim({column})) > 0',
+            name=f'ck_production_changes_{column}')
+          for column in ('reason', 'description', 'actions')),
+        db.CheckConstraint(
+            "(state = 'authorized' AND authorized_by_id IS NOT NULL AND "
+            "authorized_at IS NOT NULL AND review IS NOT NULL AND length(trim(review)) > 0) "
+            "OR (state != 'authorized' AND authorized_by_id IS NULL AND authorized_at IS NULL)",
+            name='ck_production_changes_authorization'),
+        db.CheckConstraint(
+            "(state = 'rejected' AND rejection_reason IS NOT NULL AND "
+            "length(trim(rejection_reason)) > 0) OR "
+            "(state != 'rejected' AND rejection_reason IS NULL)",
+            name='ck_production_changes_rejection'),
+        *(db.ForeignKeyConstraint([column], [target], name=f'fk_production_changes_{column}',
+            ondelete='RESTRICT', onupdate='RESTRICT') for column, target in (
+                ('design_change_id', 'design_changes.id'), ('qms_change_id', 'cambios_sgc.id'),
+                ('authorized_by_id', 'personas.id'))),
+        *(db.Index(f'ix_production_changes_{column}', column) for column in (
+            'design_change_id', 'qms_change_id', 'authorized_by_id', 'state',
+            'created_by_id', 'updated_by_id')),
+    )
+    id = db.Column(db.Integer, nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    actions = db.Column(db.Text, nullable=False)
+    review = db.Column(db.Text)
+    design_change_id = db.Column(db.Integer)
+    qms_change_id = db.Column(db.Integer)
+    state = db.Column(text_enum(DesignChangeState, 'ck_production_changes_state'),
+        nullable=False, default=DesignChangeState.proposed, server_default='proposed')
+    authorized_by_id = db.Column(db.Integer)
+    authorized_at = db.Column(db.Date)
+    rejection_reason = db.Column(db.Text)
+    authorized_by = db.relationship('Person', foreign_keys=[authorized_by_id])
+    orders = db.relationship('ProductionOrder', secondary=production_change_orders,
+                             order_by='ProductionOrder.id', lazy='selectin')
+
+    @property
+    def order_ids(self) -> list[int]:
+        """Stable affected-order set for forms, MCP and parent audit snapshots."""
+        return sorted(row.id for row in self.orders)
+
+
 # Registro de auditoría append-only: quién cambió qué y cuándo (ISO 9001 7.5.3)
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
