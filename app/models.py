@@ -3355,6 +3355,111 @@ class DesignControlRecord(RecordMetadataMixin, db.Model):
     planned_control = db.relationship('DesignPlannedControl')
 
 
+class ProductionKind(enum.Enum):
+    """Orders cover manufacturing and services without requiring serial numbers."""
+
+    production = 'producción'
+    service = 'servicio'
+
+
+class ProductionState(enum.Enum):
+    """Work lifecycle only; finished never grants release authority (8.6)."""
+
+    planned = 'planificada'
+    in_progress = 'en curso'
+    finished = 'terminada (trabajo terminado, NO es una autorización de entrega)'
+    cancelled = 'cancelada'
+
+
+def _production_association(name: str, target: str) -> db.Table:
+    """Restrictive exact citations; association changes belong to the parent audit."""
+    return db.Table(
+        name, db.Column('order_id', db.Integer, nullable=False),
+        db.Column('target_id', db.Integer, nullable=False),
+        db.PrimaryKeyConstraint('order_id', 'target_id', name=f'pk_{name}'),
+        db.ForeignKeyConstraint(['order_id'], ['production_orders.id'],
+                                name=f'fk_{name}_order_id',
+                                ondelete='RESTRICT', onupdate='RESTRICT'),
+        db.ForeignKeyConstraint(['target_id'], [target], name=f'fk_{name}_target_id',
+                                ondelete='RESTRICT', onupdate='RESTRICT'),
+        db.Index(f'ix_{name}_target_id', 'target_id'),
+    )
+
+
+PRODUCTION_ASSOCIATIONS = {
+    'revision_ids': _production_association('production_revisions', 'document_revisions.id'),
+    'equipment_ids': _production_association('production_equipment', 'equipos_medicion.id'),
+    'person_ids': _production_association('production_people', 'personas.id'),
+}
+
+
+class ProductionOrder(RecordMetadataMixin, db.Model):
+    """Production/service identification and controlled conditions (8.5.1/8.5.2)."""
+
+    __tablename__ = 'production_orders'
+    __table_args__ = (
+        db.PrimaryKeyConstraint('id', name='pk_production_orders'),
+        db.UniqueConstraint('code', name='uq_production_orders_code'),
+        *(db.CheckConstraint(f'length(trim({column})) > 0',
+                             name=f'ck_production_orders_{column}')
+          for column in ('code', 'title')),
+        db.CheckConstraint('planned_end >= planned_start', name='ck_production_orders_dates'),
+        db.CheckConstraint(
+            "(state = 'cancelled' AND cancellation_reason IS NOT NULL AND "
+            "length(trim(cancellation_reason)) > 0) OR "
+            "(state != 'cancelled' AND cancellation_reason IS NULL)",
+            name='ck_production_orders_cancellation'),
+        *(db.ForeignKeyConstraint([column], [target],
+                                  name=f'fk_production_orders_{column}',
+                                  ondelete='RESTRICT', onupdate='RESTRICT')
+          for column, target in (('process_id', 'procesos_operacion.id_proceso'),
+                                 ('customer_id', 'clientes.id'), ('owner_id', 'personas.id'),
+                                 ('design_output_id', 'design_outputs.id'))),
+        *(db.Index(f'ix_production_orders_{column}', column) for column in (
+            'process_id', 'customer_id', 'owner_id', 'design_output_id', 'state', 'kind',
+            'created_by_id', 'updated_by_id')),
+    )
+    id = db.Column(db.Integer, nullable=False)
+    code = db.Column(db.String(50), nullable=False)
+    kind = db.Column(text_enum(ProductionKind, 'ck_production_orders_kind'), nullable=False)
+    title = db.Column(db.Text, nullable=False)
+    process_id = db.Column(db.Integer, nullable=False)
+    customer_id = db.Column(db.Integer)
+    design_output_id = db.Column(db.Integer)
+    lot = db.Column(db.Text)
+    owner_id = db.Column(db.Integer)
+    planned_start = db.Column(db.Date)
+    planned_end = db.Column(db.Date)
+    state = db.Column(text_enum(ProductionState, 'ck_production_orders_state'),
+                      nullable=False, default=ProductionState.planned, server_default='planned')
+    cancellation_reason = db.Column(db.Text)
+    process = db.relationship('ProcesoOperacion')
+    customer = db.relationship('Cliente')
+    owner = db.relationship('Person', foreign_keys=[owner_id])
+    design_output = db.relationship('DesignOutput')
+    revisions = db.relationship('DocumentRevision', secondary=PRODUCTION_ASSOCIATIONS['revision_ids'],
+                               order_by='DocumentRevision.id', lazy='selectin')
+    equipment = db.relationship('EquipoMedicion', secondary=PRODUCTION_ASSOCIATIONS['equipment_ids'],
+                               order_by='EquipoMedicion.id', lazy='selectin')
+    people = db.relationship('Person', secondary=PRODUCTION_ASSOCIATIONS['person_ids'],
+                            order_by='Person.id', lazy='selectin')
+
+    @property
+    def revision_ids(self) -> list[int]:
+        """Exact revision ids in stable order for audit, forms and MCP."""
+        return sorted(row.id for row in self.revisions)
+
+    @property
+    def equipment_ids(self) -> list[int]:
+        """Equipment citations, including equipment no longer suitable."""
+        return sorted(row.id for row in self.equipment)
+
+    @property
+    def person_ids(self) -> list[int]:
+        """Assigned people, retaining historical inactive citations."""
+        return sorted(row.id for row in self.people)
+
+
 # Registro de auditoría append-only: quién cambió qué y cuándo (ISO 9001 7.5.3)
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'

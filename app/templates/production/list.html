@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% from '_partials/ui.html' import page_header, empty_state %}
+{% block title %}Producción y servicio{% endblock %}
+{% block content %}
+{% call page_header('8.5 · Producción y servicio', 'Órdenes de producción y servicio') %}
+{% if can('create', 'production') %}<a class="btn btn--primary" href="{{ url_for('production.new_order') }}">Nueva orden</a>{% endif %}
+{% endcall %}
+{% include 'production/_applicability.html' %}
+<form method="get" class="form-card">
+{% for key, label in [('state', 'Estado'), ('kind', 'Tipo'), ('process_id', 'Proceso'), ('customer_id', 'Cliente')] %}
+<label for="{{ key }}">{{ label }}</label><select id="{{ key }}" name="{{ key }}"><option value="">Todos</option>
+{% for value, text in choices[key] %}<option value="{{ value }}"{% if selected.get(key) == value %} selected{% endif %}>{{ text }}</option>{% endfor %}</select>{% endfor %}
+<label for="lot">Lote o referencia</label><input id="lot" name="lot" value="{{ selected.get('lot', '') }}">
+<button class="btn" type="submit">Filtrar</button><a class="btn" href="{{ url_for('production.list_orders') }}">Limpiar filtros</a></form>
+{% if orders %}<div class="card table-wrap"><table class="table"><thead><tr><th>Código</th><th>Producto o servicio</th><th>Tipo</th><th>Proceso</th><th>Estado</th><th>Lote o referencia</th></tr></thead><tbody>
+{% for order in orders %}<tr><td><a href="{{ url_for('production.show_order', order_id=order.id) }}">{{ order.code }}</a></td><td>{{ order.title }}</td><td>{{ order.kind.value }}</td><td>{{ order.process.proceso }}</td><td>{{ order.state.value }}</td><td>{{ order.lot or '—' }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}{{ empty_state('No hay órdenes con estos filtros.') }}{% endif %}
+{% endblock %}

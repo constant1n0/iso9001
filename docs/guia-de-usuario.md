@@ -44,12 +44,38 @@ Documentación técnica:
 - [Objetivos de la calidad](#objetivos-de-la-calidad)
 - [Cambios en el SGC](#cambios-en-el-sgc)
 - [Diseño y desarrollo](#diseño-y-desarrollo)
+- [Producción y servicio](#producción-y-servicio)
 - [Proveedores externos](#proveedores-externos)
 - [Revisión por la dirección](#revisión-por-la-dirección)
 - [Clientes, reclamaciones y satisfacción](#clientes-reclamaciones-y-satisfacción)
 - [Otros registros](#otros-registros)
 - [Informes y notificaciones por correo electrónico](#informes-y-notificaciones-por-correo-electrónico)
 - [Términos](#términos)
+
+## Producción y servicio
+
+En **Producción y servicio** (`/produccion/`), crea una orden de producción o
+servicio con código propio único, descripción y proceso obligatorio. Puedes añadir
+cliente, versión exacta aprobada de una salida del diseño, lote o referencia,
+responsable y fechas previstas (fin no anterior al inicio). No necesitas números de serie.
+
+Las condiciones controladas enlazan revisiones documentales exactas aprobadas o
+vigentes que puedas consultar, equipos actualmente aptos y personas activas.
+Puedes sustituir o vaciar cada conjunto mientras la orden esté planificada o en curso.
+Los vínculos ya guardados se conservan si cambian la vigencia, aptitud o actividad;
+la ficha muestra la aptitud actual y oculta los datos de revisiones restringidas.
+La aplicabilidad de 8.5.1 y 8.5.2 se lee del alcance aprobado, sin modificarlo.
+
+Todos los roles consultan; administradores y auditores crean, editan e inician o
+terminan órdenes. Solo desde la web: **planificada → en curso → terminada**,
+o **planificada/en curso → cancelada** con motivo obligatorio. Terminada y
+cancelada son de solo lectura. Solo un administrador puede eliminar una orden
+planificada, incluidos sus vínculos; queda su instantánea auditada.
+
+**Terminar una orden nunca equivale a liberar el producto.** «Terminada» significa
+trabajo terminado, NO autorización de entrega. La liberación (8.6) es independiente
+y todavía no está implementada. Tampoco se registran aquí ejecución, conservación,
+cambios, propiedad de terceros ni actividades posteriores a la entrega (PS2–PS5).
 
 ## Equipos y calibraciones
 

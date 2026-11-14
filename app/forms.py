@@ -28,7 +28,7 @@ from .models import (
     TipoConfirmacion, TipoEncuesta, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
     KnowledgeType, CommunicationChannel, CommunicationScope,
-    DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult,
+    DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult, ProductionKind,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -79,6 +79,24 @@ class BaseForm(FlaskForm):
 
     class Meta:
         locales = ('es_ES', 'es')
+
+
+class ProductionOrderForm(BaseForm):
+    """Order identity and controlled conditions; lifecycle is a separate POST."""
+
+    code = StringField('Código', validators=[DataRequired(), Length(max=50)])
+    kind = SelectField('Tipo', choices=[(m.name, m.value) for m in ProductionKind])
+    title = TextAreaField('Producto o servicio', validators=[DataRequired()])
+    process_id = SelectField('Proceso', coerce=optional_id, choices=[], validators=[DataRequired()])
+    customer_id = SelectField('Cliente', coerce=optional_id, choices=[])
+    design_output_id = SelectField('Versión aprobada del diseño', coerce=optional_id, choices=[])
+    lot = StringField('Lote o referencia (opcional)')
+    owner_id = person_field('Responsable')
+    planned_start = DateField('Inicio previsto', validators=[Optional()])
+    planned_end = DateField('Fin previsto', validators=[Optional()])
+    revision_ids = SelectMultipleField('Instrucciones y criterios: revisiones exactas', coerce=int, choices=[])
+    equipment_ids = SelectMultipleField('Equipos', coerce=int, choices=[])
+    person_ids = SelectMultipleField('Personas asignadas', coerce=int, choices=[])
 
 
 class DesignProjectForm(BaseForm):

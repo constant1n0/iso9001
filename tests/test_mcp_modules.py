@@ -11,6 +11,7 @@ from mcp_support import ADMIN, AUDITOR, OPERATIVO, McpDbCase, mcp_actor
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUGS = {
+    'production_orders',
     'design_projects', 'design_stages', 'design_inputs', 'design_outputs',
     'design_planned_controls', 'design_control_records', 'design_changes',
     "communication", "communication_log", "knowledge",
@@ -106,10 +107,12 @@ class RegistryTestCase(unittest.TestCase):
     def test_declared_fields_match_what_each_service_requires(self) -> None:
         from app.services import (
             audit_findings, audit_programmes, audits, management_reviews, nonconformities,
-            communication, design, knowledge, people, process_operations, providers, qms_changes, qms_scope,
+            communication, design, knowledge, people, process_operations, production, providers, qms_changes, qms_scope,
         )
 
         bespoke = {
+            'production_orders': (production.WRITABLE,
+                                  frozenset({'code', 'kind', 'title', 'process_id'})),
             'design_projects': (design.PROJECT_WRITABLE | {'starter_stages'},
                                 frozenset({'title', 'description', 'owner_id'})),
             'communication': (communication.WRITABLE,
