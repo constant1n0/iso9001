@@ -65,7 +65,9 @@ def _locked(session: Session, record_id: int) -> ProductionChange:
     return row
 
 
-def _orders(session: Session, ids: list[int]) -> list[ProductionOrder]:
+def _orders(session: Session, ids: list[int], *,
+            eligible: list[int] | None = None) -> list[ProductionOrder]:
+    """Lock every id in order; only ``eligible`` ones (all by default) must not be cancelled."""
     # Reuse PS1's lock/refresh path and its association-expiry invariants.
     rows = []
     for record_id in sorted(set(ids)):
@@ -73,7 +75,8 @@ def _orders(session: Session, ids: list[int]) -> list[ProductionOrder]:
             rows.append(production._lock(session, record_id))
         except NotFound as exc:
             raise ValidationError(INVALID_ORDERS) from exc
-    if not rows or any(row.state is ProductionState.cancelled for row in rows):
+    checked = rows if eligible is None else [row for row in rows if row.id in set(eligible)]
+    if not rows or any(row.state is ProductionState.cancelled for row in checked):
         raise ValidationError(INVALID_ORDERS)
     return rows
 
@@ -115,7 +118,10 @@ def _update(session: Session, who: Actor, record_id: int,
     row = _locked(session, record_id)
     values = crud._clean(SPEC, session, data, row)
     ids = values.pop('order_ids', row.order_ids)
-    locked = _orders(session, sorted(set(ids) | set(row.order_ids)))
+    if not ids:
+        raise ValidationError(INVALID_ORDERS)
+    # Lock removed and retained orders alike, but a cancelled order may be removed.
+    locked = _orders(session, sorted(set(ids) | set(row.order_ids)), eligible=ids)
     _citations(session, values, row)
     linked = [order for order in locked if order.id in ids]
     changes = {key: value for key, value in values.items() if getattr(row, key) != value}
@@ -143,10 +149,12 @@ def may_decide(session: Session, who: Actor, row: ProductionChange) -> bool:
         and all(order.owner_id != person_id for order in row.orders))
 
 
-def _decision(session: Session, who: Actor, record_id: int) -> tuple[ProductionChange, int]:
+def _decision(session: Session, who: Actor, record_id: int, *,
+              rejecting: bool = False) -> tuple[ProductionChange, int]:
     _web_admin(who)
     row = _locked(session, record_id)
-    orders = _orders(session, row.order_ids)
+    # Rejecting a proposal whose order was cancelled must stay possible.
+    orders = _orders(session, row.order_ids, eligible=[] if rejecting else None)
     _citations(session, {}, row)
     try:
         # Reuse linked-user resolution, person share lock and post-lock refresh.
@@ -173,7 +181,7 @@ def authorize(session: Session, who: Actor, record_id: int, *, today: date) -> P
 
 def reject(session: Session, who: Actor, record_id: int, *, reason: str | None) -> ProductionChange:
     """Retain rejected proposals with reason and the same independent web authority."""
-    row, _ = _decision(session, who, record_id)
+    row, _ = _decision(session, who, record_id, rejecting=True)
     reason = fields.text({'reason': reason}, 'reason')
     if not reason:
         raise ValidationError('Indica el motivo del rechazo.')

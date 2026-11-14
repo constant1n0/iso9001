@@ -85,6 +85,22 @@ class ProductionChanges(ChangeCase):
         self.reject(lambda: self.decide(pending), self.changes.INVALID_ORDERS)
         self.assertEqual('finished', self.service.orders.get(db.session, self.who, 1).state.name)
 
+    def test_cancelled_order_can_be_removed_or_its_proposal_rejected(self):
+        # Native review R3-cancelled-order-trap: cancelling an affected order must
+        # not strand the proposal.
+        a, b = self.create(), self.create()
+        both = self.propose(order_ids=[a.id, b.id], review='Checked')
+        only_a = self.propose(order_ids=[a.id], review='Checked')
+        self.service.transition(db.session, self.who, a.id, 'cancelled', cancellation_reason='Stop')
+        db.session.commit()
+        self.reject(lambda: self.decide(both), self.changes.INVALID_ORDERS)
+        self.changes.changes.update(db.session, self.who, both.id, {'order_ids': [b.id]})
+        db.session.commit()
+        self.assertEqual([b.id], self.changes.changes.get(db.session, self.who, both.id).order_ids)
+        self.decide(both)
+        self.decide(only_a, reject=True, reason='Order cancelled')
+        self.assertEqual('rejected', self.changes.changes.get(db.session, self.who, only_a.id).state.name)
+
     def test_citations_design_authorized_only_qms_any_state(self):
         project = design.projects.create(db.session, self.who,
             dict(title='Design', description='Product', owner_id=1))
