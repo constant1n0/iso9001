@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% from '_partials/ui.html' import page_header, action_form %}
+{% block title %}{{ item.identification }}{% endblock %}
+{% block content %}
+{% call page_header('8.5.3 · Propiedad de terceros', item.identification) %}
+<a class="btn" href="{{ url_for('production.list_property') }}">Propiedad de terceros</a>
+{% if can('create', 'production') %}<a class="btn" href="{{ url_for('production.new_property_incident', item_id=item.id) }}">Registrar incidencia</a>{% endif %}
+{% if item.status.name == 'custody' and can('update', 'production') %}<a class="btn" href="{{ url_for('production.edit_property', item_id=item.id) }}">Editar custodia</a>{% endif %}
+{% endcall %}
+<div class="card"><p>Dueño: {{ (item.customer or item.provider).nombre }} · {{ item.status.value }}</p>
+<p>{{ item.description }} · Referencia: {{ item.reference or '—' }} · Recibida: {{ item.received_date }}</p>
+<p>Custodia: {{ item.responsible.nombre }} · {{ item.location }} · Estado en la recepción: {{ item.condition }}</p>
+{% for order in item.orders %}<a href="{{ url_for('production.show_order', order_id=order.id) }}">{{ order.code }}</a> {% endfor %}
+{% if item.terminal_date %}<p>{{ item.terminal_date }} · {{ item.terminal_note }}</p>{% endif %}</div>
+<p>Devolver o dar de baja no libera el producto. Los estados terminales son de solo lectura; aún puedes registrar incidencias notificadas al dueño.</p>
+{% if item.status.name == 'custody' and can('update', 'production') %}
+<form method="post" action="{{ url_for('production.transition_property', item_id=item.id) }}" class="form-card">
+{{ transition_form.hidden_tag() }}{% for f in transition_form if f.name != 'csrf_token' %}{{ f.label }}{{ f() }}{% endfor %}<button class="btn">Registrar devolución o baja</button></form>{% endif %}
+{% if item.status.name == 'custody' and not incidents and not item.order_ids and can('delete', 'production') %}{{ action_form(url_for('production.delete_property', item_id=item.id), 'Eliminar propiedad', '¿Eliminar propiedad sin vínculos ni incidencias?') }}{% endif %}
+<h2>Incidencias (inmutables)</h2>
+{% for incident in incidents %}<div class="card"><p>{{ incident.date }} · {{ incident.kind.value }} · {{ incident.description }}</p>
+<p>Dueño notificado: sí · {{ incident.notification_date }} · {{ incident.notification_means }}</p>
+<p>Reclamación: {{ incident.complaint_id or '—' }} · No conformidad: {{ incident.nonconformity_id or '—' }}</p></div>{% else %}<p>Sin incidencias.</p>{% endfor %}
+{% endblock %}

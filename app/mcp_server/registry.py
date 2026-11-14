@@ -29,7 +29,7 @@ from ..models import (
     KnowledgeType, CommunicationChannel, CommunicationScope, DesignState,
     DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult,
     DesignChangeState, ProductionKind, ProductionState,
-    ProductionControlKind, PreservationAspect, ProductionResult,
+    ProductionControlKind, PreservationAspect, ProductionResult, PropertyStatus, PropertyIncidentKind,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
@@ -38,7 +38,7 @@ from ..services import (
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
     training_resources, design, design_changes, design_controls, design_io, production,
-    production_records, production_changes,
+    production_records, production_changes, production_property,
 )
 from ..services.policy import Resource
 
@@ -1122,6 +1122,29 @@ _MODULES = (
     *_PRODUCTION_MODULES,
     *_PRODUCTION_RECORD_MODULES,
     *_PRODUCTION_CHANGE_MODULES,
+    Module('customer_property', 'Customer/provider property (8.5.3)', Resource.PRODUCTION,
+        _DatedWrites(production_property.items), (
+            *(_f(k, required=True) for k in ('identification', 'description', 'location', 'condition')),
+            _f('reference'), _f('received_date', 'date', True, note='Never future.'),
+            _f('responsible_id', 'integer', True, note='Active when newly selected.'),
+            _f('customer_id', 'integer', note='Exactly one owner: customer_id or provider_id.'),
+            _f('provider_id', 'integer'), _f('order_ids', 'integer_list', note=(
+                'Replacement set; new links non-cancelled, existing retained. '
+                'Return/disposal and deletion web-only. Terminal items read-only, incidents still allowed.')),
+        ), (_f('status', 'enum', members=PropertyStatus),
+            _f('owner_type', 'enum', allowed=('customer', 'provider')),
+            _f('customer_id', 'integer'), _f('provider_id', 'integer')),
+        extras=lambda row: {'order_ids': row.order_ids}),
+    Module('property_incidents', 'Immutable notified property incidents', Resource.PRODUCTION,
+        _DatedWrites(production_property.incidents), (
+            _f('item_id', 'integer', True, note='Property, including terminal items. Create/read/list only.'),
+            _f('date', 'date', True, note='Never future.'),
+            _f('notification_date', 'date', True, note='At least date, never future.'),
+            _f('kind', 'enum', True, members=PropertyIncidentKind),
+            _f('description', required=True), _f('notification_means', required=True),
+            _f('owner_notified', 'boolean', True, note='Must be true; notification is mandatory.'),
+            _f('complaint_id', 'integer'), _f('nonconformity_id', 'integer'),
+        ), (_f('item_id', 'integer'),)),
     Module("confirmaciones_lectura", "Read confirmations", Resource.READ_CONFIRMATIONS,
            _DatedWrites(read_confirmations), (
         _f("persona_id", "integer", True, note="Existing person (personas), active when newly chosen."),

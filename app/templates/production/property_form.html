@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% from '_partials/ui.html' import page_header, form_card %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+{{ page_header('8.5.3 · Propiedad de terceros', title) }}
+<p>Elige exactamente un dueño: cliente o proveedor. Las incidencias requieren notificación al dueño. Ni la devolución ni la baja liberan producto.</p>
+{{ form_card(form, url_for('production.list_property')) }}
+{% endblock %}

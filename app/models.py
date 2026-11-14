@@ -3617,6 +3617,105 @@ class ProductionChange(RecordMetadataMixin, db.Model):
         return sorted(row.id for row in self.orders)
 
 
+class PropertyStatus(enum.Enum):
+    """Custody lifecycle, independent of product release."""
+
+    custody = 'en custodia'
+    returned = 'devuelta'
+    disposed = 'dada de baja'
+
+
+class PropertyIncidentKind(enum.Enum):
+    """ISO 9001 8.5.3 events reported to the owner."""
+
+    loss = 'pérdida'
+    damage = 'daño'
+    unsuitable = 'no apta para su uso'
+    other = 'otra'
+
+
+def _property_constraints(table: str, references: tuple) -> tuple:
+    """Named restrictive citations and B-tree reverse lookup indexes."""
+    return (db.PrimaryKeyConstraint('id', name=f'pk_{table}'),
+        *(db.ForeignKeyConstraint([key], [target], name=f'fk_{table}_{key}',
+            ondelete='RESTRICT', onupdate='RESTRICT') for key, target in references),
+        *(db.Index(f'ix_{table}_{key}', key) for key in (
+            *(key for key, _ in references), 'created_by_id', 'updated_by_id')))
+
+
+property_orders = db.Table('property_orders',
+    db.Column('item_id', db.Integer, nullable=False),
+    db.Column('order_id', db.Integer, nullable=False),
+    db.PrimaryKeyConstraint('item_id', 'order_id', name='pk_property_orders'),
+    *(db.ForeignKeyConstraint([key], [target], name=f'fk_property_orders_{key}',
+        ondelete='RESTRICT', onupdate='RESTRICT') for key, target in (
+            ('item_id', 'customer_property.id'), ('order_id', 'production_orders.id'))),
+    db.Index('ix_property_orders_order_id', 'order_id'))
+
+
+class CustomerProperty(RecordMetadataMixin, db.Model):
+    """Customer or external provider property and its current custody."""
+
+    __tablename__ = 'customer_property'
+    __table_args__ = (
+        *_property_constraints(__tablename__, (('customer_id', 'clientes.id'),
+            ('provider_id', 'proveedores.id'), ('responsible_id', 'personas.id'))),
+        db.CheckConstraint('(customer_id IS NOT NULL) != (provider_id IS NOT NULL)',
+                           name='ck_customer_property_owner'),
+        *(db.CheckConstraint(f'length(trim({key})) > 0', name=f'ck_customer_property_{key}')
+          for key in ('identification', 'description', 'location', 'condition')),
+        db.CheckConstraint("(status = 'custody' AND terminal_date IS NULL AND terminal_note IS NULL) OR "
+            "(status != 'custody' AND terminal_date IS NOT NULL AND terminal_note IS NOT NULL "
+            "AND length(trim(terminal_note)) > 0)", name='ck_customer_property_terminal'),
+        db.Index('ix_customer_property_status', 'status'))
+    id = db.Column(db.Integer, nullable=False)
+    customer_id = db.Column(db.Integer)
+    provider_id = db.Column(db.Integer)
+    identification = db.Column(db.Text, nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    reference = db.Column(db.Text)
+    received_date = db.Column(db.Date, nullable=False)
+    responsible_id = db.Column(db.Integer, nullable=False)
+    location = db.Column(db.Text, nullable=False)
+    condition = db.Column(db.Text, nullable=False)
+    status = db.Column(text_enum(PropertyStatus, 'ck_customer_property_status'),
+                       nullable=False, default=PropertyStatus.custody, server_default='custody')
+    terminal_date = db.Column(db.Date)
+    terminal_note = db.Column(db.Text)
+    customer = db.relationship('Cliente')
+    provider = db.relationship('Proveedor')
+    responsible = db.relationship('Person')
+    orders = db.relationship('ProductionOrder', secondary=property_orders,
+                             order_by='ProductionOrder.id', lazy='selectin')
+
+    @property
+    def order_ids(self) -> list[int]:
+        """Stable citation set for forms, audit and MCP."""
+        return sorted(row.id for row in self.orders)
+
+
+class PropertyIncident(RecordMetadataMixin, db.Model):
+    """Immutable incident with mandatory evidence of notification to the owner."""
+
+    __tablename__ = 'property_incidents'
+    __table_args__ = (
+        *_property_constraints(__tablename__, (('item_id', 'customer_property.id'),
+            ('complaint_id', 'reclamaciones.id'), ('nonconformity_id', 'no_conformidades.id'))),
+        db.CheckConstraint('length(trim(description)) > 0', name='ck_property_incidents_description'),
+        db.CheckConstraint('owner_notified AND notification_date >= date AND '
+            'length(trim(notification_means)) > 0', name='ck_property_incidents_notification'))
+    id = db.Column(db.Integer, nullable=False)
+    item_id = db.Column(db.Integer, nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    kind = db.Column(text_enum(PropertyIncidentKind, 'ck_property_incidents_kind'), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    owner_notified = db.Column(db.Boolean, nullable=False)
+    notification_date = db.Column(db.Date, nullable=False)
+    notification_means = db.Column(db.Text, nullable=False)
+    complaint_id = db.Column(db.Integer)
+    nonconformity_id = db.Column(db.Integer)
+
+
 # Registro de auditoría append-only: quién cambió qué y cuándo (ISO 9001 7.5.3)
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
