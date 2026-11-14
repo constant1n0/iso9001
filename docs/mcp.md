@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera los módulos: `production_changes`, `production_control_records`, `production_preservation_records`, `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
+`qms_modules` enumera los módulos: `customer_property`, `property_incidents`, `production_changes`, `production_control_records`, `production_preservation_records`, `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -71,6 +71,21 @@ nunca puede eliminar.
 `cambios_sgc`, `tareas_cambio`, `clientes`, `reclamaciones` y `confirmaciones_lectura`. Cada campo tiene un `type`, un indicador
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
+
+Propiedad de terceros (PS4, 8.5.3): `customer_property` permite consultar, listar,
+crear y actualizar custodia: `customer_id` o `provider_id` (exactamente uno),
+`identification`, `description`, `received_date` no futura, `responsible_id` activo
+al seleccionarlo, `location`, `condition`; opcionales `reference` y `order_ids`
+(conjunto sustitutorio; nuevas órdenes no canceladas, existentes conservadas).
+Filtros: `owner_type` (`customer`/`provider`), `status` (`custody`/`returned`/`disposed`),
+`customer_id`, `provider_id`. Devolución, baja y borrado son **solo web**; los campos
+terminales no se escriben por MCP. Los estados terminales son de solo lectura.
+`property_incidents` solo crea/consulta/lista: `item_id`, `date` no futura, `kind`
+(`loss`/`damage`/`unsuitable`/`other`), `description`, `owner_notified` obligatoriamente
+`true`, `notification_date` igual o posterior a `date` y no futura, `notification_means`;
+opcionales `complaint_id`, `nonconformity_id`. Filtro `item_id`. Incidencias inmutables,
+también admitidas tras devolución/baja. Todos leen; administradores y auditores escriben.
+No hay liberación de producto ni herramientas de borrado.
 
 Producción y servicio (8.5.1/8.5.2, PS1): `production_orders` permite consultar,
 listar, crear y actualizar. Obligatorios: `code` (único, hasta 50 caracteres),

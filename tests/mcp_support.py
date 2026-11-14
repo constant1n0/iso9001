@@ -135,6 +135,11 @@ SEEDS = {
         'responsible_id': 1, 'description': 'Dry storage', 'result': 'conforming'},
     'production_changes': {'reason': 'New tolerance', 'description': 'Adjust tooling',
                            'actions': 'Recheck', 'order_ids': [1]},
+    'customer_property': {'customer_id': 1, 'identification': 'Gauge', 'description': 'Gauge',
+        'received_date': '2020-01-01', 'responsible_id': 1, 'location': 'Store', 'condition': 'Intact'},
+    'property_incidents': {'item_id': 1, 'date': '2020-01-02', 'kind': 'damage',
+        'description': 'Scratch', 'owner_notified': True, 'notification_date': '2020-01-02',
+        'notification_means': 'Email'},
     'design_changes': {'project_id': 1, 'reason': 'Requirement changed',
                        'impact': 'Drawing changes', 'review': 'Safety checked',
                        'actions': 'Revise drawing', 'output_ids': [1]},
@@ -190,6 +195,15 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
     def seed(self, slug: str, **overrides) -> int:
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
+        if slug == 'customer_property':
+            if db.session.get(Cliente, 1) is None:
+                self.seed('clientes')
+            if db.session.get(Person, 1) is None:
+                self.seed('personas')
+        if slug == 'property_incidents':
+            from app.models import CustomerProperty
+            if db.session.get(CustomerProperty, 1) is None:
+                self.seed('customer_property')
         if slug in ('production_control_records', 'production_preservation_records'):
             from app.models import ProductionOrder, ProductionState
             if db.session.get(Person, 1) is None:

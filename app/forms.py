@@ -29,7 +29,7 @@ from .models import (
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
     KnowledgeType, CommunicationChannel, CommunicationScope,
     DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult, ProductionKind,
-    ProductionControlKind, PreservationAspect, ProductionResult,
+    ProductionControlKind, PreservationAspect, ProductionResult, PropertyIncidentKind,
 )
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, TextAreaField, BooleanField, SubmitField, DateField, IntegerField, SelectField, EmailField, SelectMultipleField
@@ -80,6 +80,42 @@ class BaseForm(FlaskForm):
 
     class Meta:
         locales = ('es_ES', 'es')
+
+
+class PropertyForm(BaseForm):
+    """Custody fields; lifecycle and incidents use separate POST forms."""
+
+    customer_id = SelectField('Dueño: cliente', coerce=optional_id, choices=[])
+    provider_id = SelectField('Dueño: proveedor', coerce=optional_id, choices=[])
+    identification = StringField('Identificación', validators=[DataRequired()])
+    description = TextAreaField('Descripción', validators=[DataRequired()])
+    reference = StringField('Referencia o número de serie')
+    received_date = DateField('Fecha de recepción', validators=[DataRequired()])
+    responsible_id = person_field('Responsable de custodia')
+    location = StringField('Ubicación', validators=[DataRequired()])
+    condition = TextAreaField('Estado en la recepción', validators=[DataRequired()])
+    order_ids = SelectMultipleField('Órdenes vinculadas (elige «Sin órdenes» para vaciar)', coerce=optional_id, choices=[])
+
+
+class PropertyTransitionForm(BaseForm):
+    """Web-only return or disposal evidence."""
+
+    target = SelectField('Destino', choices=[('returned', 'Devuelta'), ('disposed', 'Dada de baja')])
+    terminal_date = DateField('Fecha de devolución o baja', validators=[DataRequired()])
+    terminal_note = TextAreaField('Nota de devolución o baja', validators=[DataRequired()])
+
+
+class PropertyIncidentForm(BaseForm):
+    """Append-only incident; the URL supplies its immutable parent."""
+
+    date = DateField('Fecha', validators=[DataRequired()])
+    kind = SelectField('Tipo', choices=[(m.name, m.value) for m in PropertyIncidentKind])
+    description = TextAreaField('Descripción', validators=[DataRequired()])
+    owner_notified = SelectField('Dueño notificado', choices=[('true', 'Sí'), ('false', 'No')])
+    notification_date = DateField('Fecha de notificación', validators=[DataRequired()])
+    notification_means = StringField('Medio o referencia de notificación', validators=[DataRequired()])
+    complaint_id = SelectField('Reclamación', coerce=optional_id, choices=[])
+    nonconformity_id = SelectField('No conformidad', coerce=optional_id, choices=[])
 
 
 class ProductionChangeForm(BaseForm):

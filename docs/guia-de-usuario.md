@@ -75,7 +75,28 @@ orden planificada sin registros, incluidos sus vínculos; queda su instantánea 
 **Terminar una orden nunca equivale a liberar el producto.** «Terminada» significa
 trabajo terminado, NO autorización de entrega. La liberación (8.6) es independiente
 y todavía no está implementada. No necesitas registros para terminar una orden.
-Siguen pendientes propiedad de terceros y actividades posteriores a la entrega (PS4–PS5).
+Siguen pendientes las actividades posteriores a la entrega (PS5).
+
+### Propiedad de clientes y proveedores (8.5.3)
+
+En **Propiedad de terceros** (`/produccion/propiedad/`), filtra por tipo de dueño,
+estado, cliente o proveedor. Para recibir propiedad, elige **exactamente un dueño**
+(cliente o proveedor) e indica identificación, descripción, fecha de recepción no
+futura, persona responsable activa, ubicación y estado en la recepción. Referencia
+ o serie y órdenes son opcionales; los nuevos vínculos requieren órdenes no canceladas.
+Los vínculos existentes se conservan aunque la persona se desactive o la orden se cancele.
+Para vaciar las órdenes, selecciona «Sin órdenes».
+
+Todos los roles consultan; administradores y auditores registran y editan la custodia.
+Desde la ficha, **Registrar devolución o baja** requiere fecha no futura y nota.
+Devuelta y dada de baja son de solo lectura, pero aún admiten incidencias.
+Cada incidencia es inmutable: fecha no futura, tipo (pérdida, daño, no apta para su
+uso u otra), descripción y **notificación obligatoria al dueño**, con fecha igual
+ o posterior a la incidencia y no futura, y medio/referencia. No se admite notificación
+pendiente. Puedes citar una reclamación y/o NC existente; no se crean automáticamente.
+Solo un administrador web elimina propiedad en custodia sin incidencias ni órdenes.
+Las citas se conservan mediante restricciones de borrado. MCP no devuelve, da de baja
+ni elimina. **Ninguna operación libera el producto (8.6).**
 
 ### Cambios de producción (8.5.6)
 

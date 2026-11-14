@@ -10,12 +10,15 @@ from ..audit_notifications import local_today
 from ..extensions import db
 from ..forms import (BaseForm, DesignTransitionForm, ProductionOrderForm, person_choices,
                      ProductionControlForm, ProductionPreservationForm,
-                     ProductionChangeForm, DesignChangeRejectionForm)
+                     ProductionChangeForm, DesignChangeRejectionForm, PropertyForm,
+                     PropertyTransitionForm, PropertyIncidentForm)
 from ..models import (DesignApprovalState, DesignOutput, DesignOutputVersion, EquipoMedicion,
                       Person, ProductionKind, ProductionState, NoConformidad,
-                      DesignChange, DesignChangeState, CambioSGC)
+                      DesignChange, DesignChangeState, CambioSGC, PropertyStatus,
+                      Cliente, Proveedor, Reclamacion)
 from ..services import (clientes, design_io, equipment, people, process_operations,
-                        production, production_records, production_changes, qms_scope)
+                        production, production_records, production_changes, qms_scope,
+                        production_property)
 from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
 from .auditoria_routes import committed
@@ -23,6 +26,140 @@ from .design_routes import _control_payload_refused
 from .people_routes import form_data, saved
 
 bp = Blueprint('production', __name__, url_prefix='/produccion')
+
+
+def _property_choices() -> dict:
+    return {'owner_type': [('customer', 'Cliente'), ('provider', 'Proveedor')],
+        'status': [(m.name, m.value) for m in PropertyStatus],
+        **{key: [(str(r.id), r.nombre) for r in db.session.scalars(select(model).order_by(model.id))]
+           for key, model in (('customer_id', Cliente), ('provider_id', Proveedor))}}
+
+
+@bp.route('/propiedad/')
+@login_required
+@require_permission('read', 'production')
+def list_property() -> ResponseReturnValue:
+    """Ignore unknown selector values, including nonexistent owner ids."""
+    choices = _property_choices()
+    selected = {k: v for k in choices if (v := request.args.get(k, '')) in dict(choices[k])}
+    filters = {k: int(v) if k.endswith('_id') else v for k, v in selected.items()}
+    return render_template('production/property_list.html', choices=choices, selected=selected,
+        items=production_property.items.list_(db.session, current_actor(), **filters))
+
+
+@bp.route('/propiedad/<int:item_id>')
+@login_required
+@require_permission('read', 'production')
+def show_property(item_id: int) -> ResponseReturnValue:
+    """Retain the complete incident history even for returned or disposed items."""
+    return render_template('production/property_detail.html',
+        item=production_property.items.get(db.session, current_actor(), item_id),
+        incidents=production_property.incidents.list_(db.session, current_actor(), item_id=item_id),
+        transition_form=PropertyTransitionForm(), delete_form=BaseForm())
+
+
+@bp.route('/propiedad/nueva', methods=['GET', 'POST'])
+@login_required
+@require_permission('create', 'production')
+def new_property() -> ResponseReturnValue:
+    """Receive customer/provider property through the shared service."""
+    return _edit_property(None)
+
+
+@bp.route('/propiedad/<int:item_id>/editar', methods=['GET', 'POST'])
+@login_required
+@require_permission('update', 'production')
+def edit_property(item_id: int) -> ResponseReturnValue:
+    """Edit custody only; terminal fields are never accepted here."""
+    return _edit_property(item_id)
+
+
+def _property_submit(form: Any, operation: Any, title: str) -> ResponseReturnValue:
+    refused = _refused(form)
+    if request.method == 'POST' and (missing := {f.name for f in form if f.name != 'csrf_token'} - set(request.form)):
+        flash(f'Faltan campos del formulario: {", ".join(sorted(missing))}.', 'danger')
+        refused = True
+    picked = request.form.getlist('order_ids') if request.method == 'POST' else []
+    if '' in picked and any(value != '' for value in picked):
+        # «Sin órdenes» plus an order contradict each other: refuse, never pick one.
+        flash('Elige «Sin órdenes» o una o varias órdenes, no ambas cosas.', 'danger')
+        refused = True
+    if not refused and form.validate_on_submit() and (result := saved(operation)):
+        return redirect(url_for('production.show_property', item_id=getattr(result, 'item_id', result.id)))
+    return render_template('production/property_form.html', form=form, title=title), 400 if refused else 200
+
+
+def _edit_property(item_id: int | None) -> ResponseReturnValue:
+    who = current_actor()
+    row = None if item_id is None else production_property.items.get(db.session, who, item_id)
+    if row is not None and row.status is not PropertyStatus.custody:
+        flash(production_property.READ_ONLY, 'danger')
+        return redirect(url_for('production.show_property', item_id=item_id))
+    form = PropertyForm(obj=row)
+    choices = _property_choices()
+    for key in ('customer_id', 'provider_id'):
+        form[key].choices = [('', '— Ninguno —'), *choices[key]]
+    form.responsible_id.choices = person_choices(people.choices(db.session, who, include=getattr(row, 'responsible_id', None)))
+    form.order_ids.choices = [('', '— Sin órdenes —'), *((o.id, o.code) for o in production.orders.list_(db.session, who)
+        if o.state is not ProductionState.cancelled or o.id in getattr(row, 'order_ids', []))]
+    if request.method == 'GET':
+        form.order_ids.data = getattr(row, 'order_ids', []) or [None]
+        form.received_date.data = row.received_date if row else local_today()
+    def operation() -> Any:
+        data = form_data(form, production_property.SPEC.writable)
+        data['order_ids'] = [value for value in data['order_ids'] if value is not None]
+        return (production_property.items.create(db.session, who, data, today=local_today()) if row is None
+            else production_property.items.update(db.session, who, row.id, data, today=local_today()))
+    return _property_submit(form, operation, 'Recibir propiedad' if row is None else 'Editar custodia')
+
+
+@bp.route('/propiedad/<int:item_id>/incidencias/nueva', methods=['GET', 'POST'])
+@login_required
+@require_permission('create', 'production')
+def new_property_incident(item_id: int) -> ResponseReturnValue:
+    """Append a notified incident, also after return/disposal; no edit/delete routes."""
+    production_property.items.get(db.session, current_actor(), item_id)
+    form = PropertyIncidentForm()
+    for key, model, label in (('complaint_id', Reclamacion, 'descripcion'),
+                              ('nonconformity_id', NoConformidad, 'descripcion')):
+        form[key].choices = [('', '— Ninguna —'), *((r.id, f'#{r.id} · {getattr(r, label)[:80]}')
+            for r in db.session.scalars(select(model).order_by(model.id))) ]
+    if request.method == 'GET':
+        form.date.data = form.notification_date.data = local_today()
+        form.kind.data, form.owner_notified.data = 'damage', 'true'
+    def operation() -> Any:
+        data = form_data(form, production_property.INCIDENT_SPEC.writable - {'item_id'})
+        data['owner_notified'] = form.owner_notified.data == 'true'
+        return production_property.incidents.create(db.session, current_actor(),
+            data | {'item_id': item_id}, today=local_today())
+    return _property_submit(form, operation, 'Registrar incidencia notificada al dueño')
+
+
+@bp.route('/propiedad/<int:item_id>/transicion', methods=['POST'])
+@login_required
+@require_permission('update', 'production')
+def transition_property(item_id: int) -> ResponseReturnValue:
+    """Return/dispose via explicit CSRF-protected POST only."""
+    form = PropertyTransitionForm()
+    refused = _refused(form)
+    if not refused and form.validate_on_submit():
+        committed(lambda: production_property.transition(db.session, current_actor(), item_id,
+            form.target.data, terminal_date=form.terminal_date.data,
+            terminal_note=form.terminal_note.data, today=local_today()))
+    return redirect(url_for('production.show_property', item_id=item_id)), 400 if refused else 302
+
+
+@bp.route('/propiedad/<int:item_id>/eliminar', methods=['POST'])
+@login_required
+@require_permission('delete', 'production')
+def delete_property(item_id: int) -> ResponseReturnValue:
+    """Only administrators delete unlinked custody items without incidents."""
+    form = BaseForm()
+    refused = _refused(form)
+    if not refused and form.validate_on_submit() and committed(
+            lambda: production_property.items.delete(db.session, current_actor(), item_id)):
+        return redirect(url_for('production.list_property'))
+    return redirect(url_for('production.show_property', item_id=item_id)), 400 if refused else 302
 
 
 def _applicability() -> dict | None:
