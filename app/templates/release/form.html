@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% from '_partials/ui.html' import page_header, form_card %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+{{ page_header('8.6 · Liberación', title) }}
+<p>Solo borradores. La decisión de liberación llegará en la próxima entrega. No se modifica la orden.</p>
+{{ form_card(form, url_for('release.list_releases')) }}
+{% endblock %}

@@ -30,7 +30,7 @@ from ..models import (
     DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult,
     DesignChangeState, ProductionKind, ProductionState,
     ProductionControlKind, PreservationAspect, ProductionResult, PropertyStatus, PropertyIncidentKind,
-    PostDeliveryKind, PostDeliveryStatus,
+    PostDeliveryKind, PostDeliveryStatus, ReleaseStatus,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
@@ -39,7 +39,7 @@ from ..services import (
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
     training_resources, design, design_changes, design_controls, design_io, production,
-    production_records, production_changes, production_property, production_post_delivery,
+    production_records, production_changes, production_property, production_post_delivery, product_release,
 )
 from ..services.policy import Resource
 
@@ -1123,6 +1123,20 @@ _MODULES = (
     *_PRODUCTION_MODULES,
     *_PRODUCTION_RECORD_MODULES,
     *_PRODUCTION_CHANGE_MODULES,
+    Module('product_releases', 'Draft product/service releases (8.6)', Resource.RELEASE,
+        product_release.releases, (
+            _f('order_id', 'integer', True, note='Finished order; immutable citation. At most one non-rejected release per order. Draft writes only; no decision or deletion.'),
+            _f('notes'),
+        ), (_f('status', 'enum', members=ReleaseStatus), _f('order_id', 'integer'),
+            _f('customer_id', 'integer', note='Customer inherited from the order.'))),
+    Module('release_verifications', 'Release verification evidence (8.6)', Resource.RELEASE,
+        _DatedWrites(product_release.verifications), (
+            _f('release_id', 'integer', True, note='Draft release. MCP create/read/list only; web-only edit/delete while draft.'),
+            _f('person_id', 'integer', True, note='Person active when newly selected.'),
+            _f('criterion', required=True), _f('evidence', required=True, note='Text/reference, not a file.'),
+            _f('result', 'enum', True, members=ProductionResult),
+            _f('date', 'date', True, note='Never future; no lower bound.'),
+        ), (_f('release_id', 'integer'),)),
     Module('post_delivery_activities', 'Post-delivery activities (8.5.5)', Resource.PRODUCTION,
         _DatedRegister(production_post_delivery.activities), (
             _f('description', required=True, note='Obligation; pending activities only for writes. Terminal history remains readable.'),

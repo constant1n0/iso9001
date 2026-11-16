@@ -82,6 +82,25 @@ class BaseForm(FlaskForm):
         locales = ('es_ES', 'es')
 
 
+class ProductReleaseForm(BaseForm):
+    """Draft identity; decision fields are never accepted here."""
+
+    order_id = SelectField('Orden terminada', coerce=optional_id, choices=[],
+                           validators=[DataRequired()])
+    notes = TextAreaField('Notas')
+
+
+class ReleaseVerificationForm(BaseForm):
+    """The route supplies the immutable release citation."""
+
+    criterion = TextAreaField('Criterio', validators=[DataRequired()])
+    result = SelectField('Resultado', choices=[(m.name, m.value) for m in ProductionResult])
+    evidence = TextAreaField('Evidencia o referencia', validators=[DataRequired()])
+    person_id = SelectField('Persona', coerce=optional_id, choices=[],
+                            validators=[DataRequired()])
+    date = DateField('Fecha', validators=[DataRequired()])
+
+
 class PostDeliveryForm(BaseForm):
     """Pending obligation; dated outcomes use separate web-only forms."""
 

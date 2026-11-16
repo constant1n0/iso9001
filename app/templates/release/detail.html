@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% from '_partials/ui.html' import page_header, delete_form %}
+{% block title %}Liberación #{{ item.id }}{% endblock %}
+{% block content %}
+{% call page_header('8.6 · Liberación', 'Liberación #' ~ item.id) %}
+<a class="btn" href="{{ url_for('release.list_releases') }}">Volver al registro</a>
+{% if item.status.name == 'draft' %}
+{% if can('update', 'release') %}<a class="btn" href="{{ url_for('release.edit_release', release_id=item.id) }}">Editar borrador</a>{% endif %}
+{% if can('delete', 'release') %}{{ delete_form(url_for('release.delete_release', release_id=item.id), '¿Eliminar el borrador y sus verificaciones?') }}{% endif %}
+{% endif %}{% endcall %}
+<section class="card"><h2>{{ item.status.value }}</h2>
+<p>Orden: <a href="{{ url_for('production.show_order', order_id=item.order_id) }}">{{ item.order.code }}</a> · {{ item.order.title }}</p>
+<p>Cliente: {{ item.order.customer.nombre if item.order.customer else '—' }} · Lote: {{ item.order.lot or '—' }}</p>
+<p>{{ item.notes or 'Sin notas.' }}</p><p>La decisión llegará en la próxima entrega. El borrador no autoriza la entrega ni modifica la orden.</p></section>
+<section class="card"><h2>Verificaciones</h2>
+{% if item.status.name == 'draft' and can('create', 'release') %}<a class="btn" href="{{ url_for('release.new_verification', release_id=item.id) }}">Añadir verificación</a>{% endif %}
+{% for check in checks %}<article><h3>{{ check.criterion }} · {{ check.result.value }}</h3>
+<p>{{ check.evidence }} · {{ check.person.nombre }} · {{ check.date }}</p>
+{% if item.status.name == 'draft' and can('update', 'release') %}
+<a class="btn" href="{{ url_for('release.edit_verification', release_id=item.id, check_id=check.id) }}">Editar verificación</a>
+<form method="post" action="{{ url_for('release.delete_verification', release_id=item.id, check_id=check.id) }}">{{ action_form.hidden_tag() }}<button class="btn" type="submit">Eliminar verificación</button></form>
+{% endif %}</article>{% else %}<p>Sin verificaciones.</p>{% endfor %}</section>
+{% endblock %}

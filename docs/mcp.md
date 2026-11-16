@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera los módulos: `post_delivery_activities`, `customer_property`, `property_incidents`, `production_changes`, `production_control_records`, `production_preservation_records`, `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
+`qms_modules` enumera los módulos: `product_releases`, `release_verifications`, `post_delivery_activities`, `customer_property`, `property_incidents`, `production_changes`, `production_control_records`, `production_preservation_records`, `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -71,6 +71,19 @@ nunca puede eliminar.
 `cambios_sgc`, `tareas_cambio`, `clientes`, `reclamaciones` y `confirmaciones_lectura`. Cada campo tiene un `type`, un indicador
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
+
+Liberación (8.6, primera entrega): `product_releases` crea, consulta, lista y
+actualiza **borradores**: `order_id` obligatorio (orden terminada, cita inmutable)
+y `notes` opcional. Como máximo una liberación no rechazada por orden. Filtros AND:
+`status` (`draft`, `released`, `rejected`), `order_id`, `customer_id` (de la orden).
+Las lecturas muestran etiquetas españolas y columnas de decisión de solo lectura.
+`release_verifications` solo crea/consulta/lista, nunca actualiza: `release_id`
+(borrador), `criterion`, `result` (`conforming`/`nonconforming`), `evidence` textual,
+`person_id` activo al elegirlo y `date` YYYY-MM-DD no futura, sin límite inferior.
+Filtro `release_id`. Todos leen; administradores y auditores crean con ámbito
+`write`. Edición y borrado de verificaciones solo web mientras sea borrador;
+borrado del borrador solo por administrador web. Nunca decide ni elimina por MCP.
+La autorización/rechazo llegará en la próxima entrega; ninguna escritura cambia la orden.
 
 Posventa (PS5, 8.5.5): `post_delivery_activities` consulta/lista todo el historial,
 crea y actualiza solo pendientes. Obligatorios: `description` (obligación), `kind`

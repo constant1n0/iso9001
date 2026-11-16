@@ -3788,6 +3788,82 @@ class PostDeliveryActivity(RecordMetadataMixin, db.Model):
         return sorted(row.id for row in self.orders)
 
 
+class ReleaseStatus(enum.Enum):
+    """Release decision is independent of the order's work lifecycle."""
+
+    draft = 'borrador'
+    released = 'liberada'
+    rejected = 'rechazada'
+
+
+class ProductRelease(RecordMetadataMixin, db.Model):
+    """Finished-order release register; T1 exposes draft operations only."""
+
+    __tablename__ = 'product_releases'
+    __table_args__ = (
+        *_property_constraints(__tablename__, (('order_id', 'production_orders.id'),
+            ('decided_by_id', 'personas.id'), ('decided_by_user_id', 'users.id'),
+            ('concession_approver_id', 'personas.id'))),
+        db.CheckConstraint(
+            "(status = 'draft' AND decision_date IS NULL AND decided_by_id IS NULL "
+            "AND decided_by_user_id IS NULL AND decision_note IS NULL AND concession IS NULL "
+            "AND concession_reason IS NULL AND concession_approver_id IS NULL "
+            "AND customer_approval_date IS NULL AND customer_approval_means IS NULL) OR "
+            "(status != 'draft' AND decision_date IS NOT NULL AND decided_by_id IS NOT NULL "
+            "AND decided_by_user_id IS NOT NULL AND concession IS NOT NULL)",
+            name='ck_product_releases_decision'),
+        db.CheckConstraint(
+            "(concession IS NULL OR NOT concession) AND concession_reason IS NULL "
+            "AND concession_approver_id IS NULL AND customer_approval_date IS NULL "
+            "AND customer_approval_means IS NULL OR (concession AND status = 'released' "
+            "AND concession_reason IS NOT NULL AND length(trim(concession_reason)) > 0 "
+            "AND concession_approver_id IS NOT NULL)", name='ck_product_releases_concession'),
+        db.CheckConstraint("status != 'rejected' OR (decision_note IS NOT NULL "
+            "AND length(trim(decision_note)) > 0)", name='ck_product_releases_rejection'),
+        db.CheckConstraint('(customer_approval_date IS NULL AND customer_approval_means IS NULL) OR '
+            '(customer_approval_date IS NOT NULL AND customer_approval_means IS NOT NULL '
+            'AND length(trim(customer_approval_means)) > 0)', name='ck_product_releases_customer'),
+        db.Index('uq_product_releases_open_order', 'order_id', unique=True,
+            sqlite_where=db.text("status != 'rejected'"),
+            postgresql_where=db.text("status != 'rejected'")),
+        db.Index('ix_product_releases_status', 'status'))
+    id = db.Column(db.Integer, nullable=False)
+    order_id = db.Column(db.Integer, nullable=False)
+    notes = db.Column(db.Text)
+    status = db.Column(text_enum(ReleaseStatus, 'ck_product_releases_status'), nullable=False,
+                       default=ReleaseStatus.draft, server_default='draft')
+    decision_date = db.Column(db.Date)
+    decided_by_id = db.Column(db.Integer)
+    decided_by_user_id = db.Column(db.Integer)
+    decision_note = db.Column(db.Text)
+    concession = db.Column(db.Boolean)
+    concession_reason = db.Column(db.Text)
+    concession_approver_id = db.Column(db.Integer)
+    customer_approval_date = db.Column(db.Date)
+    customer_approval_means = db.Column(db.Text)
+    order = db.relationship('ProductionOrder', backref=db.backref(
+        'releases', order_by='ProductRelease.id', passive_deletes='all'))
+
+
+class ReleaseVerification(RecordMetadataMixin, db.Model):
+    """Conformity evidence editable only under the draft release's row lock."""
+
+    __tablename__ = 'release_verifications'
+    __table_args__ = (
+        *_property_constraints(__tablename__, (('release_id', 'product_releases.id'),
+                                              ('person_id', 'personas.id'))),
+        *(db.CheckConstraint(f'length(trim({key})) > 0', name=f'ck_release_verifications_{key}')
+          for key in ('criterion', 'evidence')))
+    id = db.Column(db.Integer, nullable=False)
+    release_id = db.Column(db.Integer, nullable=False)
+    criterion = db.Column(db.Text, nullable=False)
+    result = db.Column(text_enum(ProductionResult, 'ck_release_verifications_result'), nullable=False)
+    evidence = db.Column(db.Text, nullable=False)
+    person_id = db.Column(db.Integer, nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    person = db.relationship('Person')
+
+
 # Registro de auditoría append-only: quién cambió qué y cuándo (ISO 9001 7.5.3)
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
