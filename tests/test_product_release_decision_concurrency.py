@@ -59,8 +59,10 @@ class DecisionContention(unittest.TestCase):
                     remove = audit.install_audit_guard(session)
                     try:
                         session.execute(text("SET LOCAL statement_timeout = '10s'"))
-                        # Warm draft identity must not bypass the post-wait refresh.
-                        service.releases.get(session, who, 1)
+                        # Warm draft identity must not bypass the post-wait refresh;
+                        # keep a strong reference so the identity map retains it.
+                        warm = service.releases.get(session, who, 1)
+                        assert warm.status.name == 'draft'
                         backend.put(session.scalar(text('SELECT pg_backend_pid()')))
                         service.reject(session, who, 1, reason='Competing verdict', today=TODAY)
                         session.commit()
