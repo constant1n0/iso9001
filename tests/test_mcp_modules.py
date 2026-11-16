@@ -11,6 +11,7 @@ from mcp_support import ADMIN, AUDITOR, OPERATIVO, McpDbCase, mcp_actor
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUGS = {
+    'product_releases', 'release_verifications',
     'post_delivery_activities', 'customer_property', 'property_incidents',
     'production_orders', 'production_control_records', 'production_preservation_records', 'production_changes',
     'design_projects', 'design_stages', 'design_inputs', 'design_outputs',
@@ -29,6 +30,7 @@ SLUGS = {
 }
 # The two competence registers share one policy resource (decision Q1 of qms-people),
 # and so do audits, their programmes and their findings (decision AP7 of audit-programme).
+SHARED_RELEASE = ('product_releases', 'release_verifications')
 SHARED_RESOURCE = ("competencias_requeridas", "competencias_acreditadas")
 SHARED_AUDITS = ("auditorias", "programas_auditoria", "hallazgos_auditoria")
 # Quality objectives and their measurements (decision QO4 of quality-objectives).
@@ -80,9 +82,10 @@ class RegistryTestCase(unittest.TestCase):
         modules = registry().MODULES
         shared = (SHARED_RESOURCE + SHARED_AUDITS + SHARED_OBJECTIVES + SHARED_REVIEWS
                   + SHARED_RISKS + SHARED_PROVIDERS + SHARED_CONTEXT + SHARED_CHANGES
-                  + SHARED_EQUIPMENT + SHARED_COMMUNICATION + SHARED_DESIGN + SHARED_PRODUCTION)
+                  + SHARED_EQUIPMENT + SHARED_COMMUNICATION + SHARED_DESIGN + SHARED_PRODUCTION + SHARED_RELEASE)
         resources = [m.resource for slug, m in modules.items() if slug not in shared]
         self.assertEqual(len(resources), len(set(resources)))
+        self.assertEqual({Resource.RELEASE}, {modules[s].resource for s in SHARED_RELEASE})
         self.assertEqual({Resource.COMPETENCE}, {modules[s].resource for s in SHARED_RESOURCE})
         self.assertEqual({Resource.AUDITS}, {modules[s].resource for s in SHARED_AUDITS})
         self.assertEqual({Resource.QUALITY_OBJECTIVES},

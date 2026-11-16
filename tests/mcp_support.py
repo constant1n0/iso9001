@@ -142,6 +142,9 @@ SEEDS = {
     'property_incidents': {'item_id': 1, 'date': '2020-01-02', 'kind': 'damage',
         'description': 'Scratch', 'owner_notified': True, 'notification_date': '2020-01-02',
         'notification_means': 'Email'},
+    'product_releases': {'order_id': 1, 'notes': 'Draft'},
+    'release_verifications': {'release_id': 1, 'criterion': 'Fits drawing',
+        'result': 'conforming', 'evidence': 'Report R-1', 'person_id': 1, 'date': '2020-01-01'},
     'design_changes': {'project_id': 1, 'reason': 'Requirement changed',
                        'impact': 'Drawing changes', 'review': 'Safety checked',
                        'actions': 'Revise drawing', 'output_ids': [1]},
@@ -197,6 +200,14 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
     def seed(self, slug: str, **overrides) -> int:
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
+        if slug == 'product_releases':
+            self.finish_release_order()
+        if slug == 'release_verifications':
+            from app.models import ProductRelease
+            if db.session.get(ProductRelease, 1) is None:
+                self.seed('product_releases')
+            if db.session.get(Person, 1) is None:
+                self.seed('personas')
         if slug == 'post_delivery_activities' and db.session.get(Person, 1) is None:
             self.seed('personas')
         if slug == 'customer_property':
@@ -277,6 +288,20 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
         row = module.service.create(db.session, admin, data)
         db.session.commit()
         return sa_inspect(row).mapper.primary_key_from_instance(row)[0]
+
+    def finish_release_order(self) -> None:
+        """Prepare a finished order through its existing lifecycle service."""
+        from app.models import ProductionOrder, ProductionState
+        from app.services import production
+        if db.session.get(ProductionOrder, 1) is None:
+            self.seed('production_orders')
+        who = Actor(None, 'fixture', ADMIN, 'web')
+        row = db.session.get(ProductionOrder, 1)
+        if row.state is ProductionState.planned:
+            production.transition(db.session, who, row.id, 'in_progress')
+        if row.state is ProductionState.in_progress:
+            production.transition(db.session, who, row.id, 'finished')
+        db.session.commit()
 
     def approve_design_output(self, output_id: int) -> None:
         """Seed approval through the web service with a real independent linked user."""

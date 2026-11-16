@@ -275,6 +275,8 @@ DESIGN = dict(title='New design', description='Product', owner_id='1')
 DESIGN_STAGE = dict(name='Stage', owner_id='1')
 
 ENDPOINTS = [
+    Endpoint('RELEASE', 'read', 'GET', '/liberacion/', 200),
+    Endpoint('RELEASE', 'create', 'GET', '/liberacion/nueva', 200),
     *_html('PRODUCTION', '/produccion/',
            ('nuevo', dict(code='O-NEW', kind='production', title='Container', process_id='1')),
            ('1/editar', dict(code='O-1', kind='service', title='Service', process_id='1')), '1/eliminar'),
@@ -497,6 +499,7 @@ ADMIN_AUDITOR = {ADMIN, AUDITOR}
 ALL = set(RoleEnum)
 JSON_REGISTER = (ALL, ADMIN_AUDITOR, {ADMIN})
 ALLOWED = {
+    'RELEASE': JSON_REGISTER,
     'PRODUCTION': JSON_REGISTER,
     'DESIGN': JSON_REGISTER,
     "COMMUNICATION": JSON_REGISTER,

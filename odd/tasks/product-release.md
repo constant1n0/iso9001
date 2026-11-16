@@ -1,0 +1,23 @@
+# Product and service release (ISO 9001 8.6)
+
+Objective: register the release of finished production/service orders with planned verifications, conformity evidence, traceable authorization and recorded concessions. Branches: one per slice from the then-current main (`feat/release-register` for T1) · Baseline: `4e48444` · Delivery: `stacked-to-main` (two slices, each ≤ ~1,500 changed lines so native review fits; each correction's regression test inside its reviewed range) · Runner: `/home/dcm/workspace/iso9001-worktrees/fixes-2026/venv/bin/python -m unittest discover -s tests -p '...'` (PostgreSQL tests skip locally; CI runs them).
+
+## Specs
+
+- **S1** — User: «adelante» to start 8.6 after 8.5 (`odd/tasks/production-provision.md` S3: «La liberación (8.6) se diseña ya como enlace, pero se implementa como módulo siguiente. Terminar una orden nunca equivale a liberar el producto.»). Gap analysis `docs/analisis-brechas-iso-9001.md:143`: «8.6 Liberación de los productos y servicios | N | Ninguna | Sin registro de liberación»; `:327`: «La aplicabilidad de 7.1.5, 8.3, 8.5 y 8.6 depende de la actividad de la organización y de sus exclusiones justificadas.»
+- **S2** — Selected «Sobre una orden terminada — recomendado»: «Cada liberación cita una orden de 8.5 en estado terminada; sin orden no hay liberación. Reutiliza trazabilidad, lote y cliente de la orden.»
+- **S3** — Selected «Lista de verificaciones en la liberación — recomendado»: «La liberación lleva sus comprobaciones (criterio, resultado conforme/no conforme, evidencia, persona, fecha). Solo se autoriza si todas son conformes, salvo concesión.»
+- **S4** — Selected «Sí, con concesión registrada — recomendado»: «Liberación «con concesión»: motivo obligatorio, persona que la aprueba y, opcionalmente, aprobación del cliente (fecha y medio). Visible y filtrable.»
+- **S5** — Selected «Administrador web distinto del responsable — recomendado»: «Igual que los cambios de producción: administrador por web con persona vinculada distinta del responsable de la orden; decisión inmutable y trazada a esa persona.»
+- Assumptions (not user requirements): a release needs at least one verification; states borrador → liberada / rechazada (rejection with reason, never deleted once decided); at most one non-rejected release per order; an order is never transitioned by a release; MCP may create/edit draft releases and their verifications but never authorizes, rejects or deletes; 9.1.3 a) conformity data stays out of scope.
+
+## Tasks
+
+- **T1** [S1, S2, S3] delegated (context backstop) — implemented, independent verification pending (risk items 1, 2, 4) — Release register: release of exactly one terminada order (draft; at most one non-rejected per order), verification list (criterion, result conforme/no conforme, evidence, active person, date not future; immutable once the release is decided), web screens `/liberacion/`, MCP draft create/read/update and verifications create/read, migration from `e0a2c4d6f8b1`, docs.
+- **T2** [S3, S4, S5] pending — Decision: authorize (all verifications conforme, or concession with reason, approving person and optional customer approval date/means) or reject with reason; web-only administrator whose linked person differs from the order owner; immutable decision traced to that person; concession filter; gap analysis 8.6 covered.
+
+## Log
+
+- **L1** Original user request: «adelante» (start 8.6 after raising the CI timeout, PR #201 merged 4e48444).
+- **L2** Product decisions S2–S5 taken by the user in one questionnaire (2026-11-16). Assumptions listed under Specs. Two slices T1–T2. T1 delegated because the parent context is past the ~150k backstop.
+- **L3** T1 writer result (S1, S2, S3 register part): migration `f1b3d5e7a9c2` (down `e0a2c4d6f8b1`); `ProductRelease` of exactly one finished order (one non-rejected per order: partial unique index + order-row lock), decision-ready nullable columns guarded by CHECKs and unwritable in T1; `ReleaseVerification` (criterion, conforme/no conforme, evidence, active person, date not future) writable only while borrador, release row locked for child writes; new `Resource.RELEASE`; web `/liberacion/` (admins/auditors edit drafts and verifications, only web administrators delete drafts); order page lists its releases read-only; MCP `product_releases` (drafts read/list/create/update) and `release_verifications` (create/read/list only); never changes orders. 1,177 changed lines. Writer checks: release 16 OK/1 PG skip, production 108 OK/5 skips, MCP 99 OK, policy 17 OK, access 5 OK, full 2,225 OK (128 skips); 12 assertion-level REDs observed. Parent spot check: allowed surfaces only.

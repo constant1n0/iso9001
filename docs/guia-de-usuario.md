@@ -45,6 +45,7 @@ Documentación técnica:
 - [Cambios en el SGC](#cambios-en-el-sgc)
 - [Diseño y desarrollo](#diseño-y-desarrollo)
 - [Producción y servicio](#producción-y-servicio)
+- [Liberación](#liberación)
 - [Proveedores externos](#proveedores-externos)
 - [Revisión por la dirección](#revisión-por-la-dirección)
 - [Clientes, reclamaciones y satisfacción](#clientes-reclamaciones-y-satisfacción)
@@ -74,7 +75,7 @@ orden planificada sin registros, incluidos sus vínculos; queda su instantánea 
 
 **Terminar una orden nunca equivale a liberar el producto.** «Terminada» significa
 trabajo terminado, NO autorización de entrega. La liberación (8.6) es independiente
-y todavía no está implementada. No necesitas registros para terminar una orden.
+y dispone de un registro de borradores; la decisión sigue pendiente. No necesitas registros para terminar una orden.
 Las actividades posteriores a la entrega se registran en **Posventa** (8.5.5).
 
 ### Actividades de posventa (8.5.5)
@@ -156,6 +157,27 @@ si necesitas corregir una evidencia, registra otra con la referencia a la anteri
   conservan: no puedes eliminarlos mientras sigan referenciados. Las citas no cambian
   cuando una persona se desactiva o un equipo pierde aptitud.
 
+
+## Liberación
+
+En **Liberación** (`/liberacion/`), todos los roles consultan el registro y filtran
+por estado, orden o cliente de la orden. Administradores y auditores crean un
+**borrador** sobre exactamente una orden terminada; no puede cambiar de orden.
+Se heredan cliente, lote y trazabilidad. Solo puede existir una liberación no
+rechazada por orden. Las notas son opcionales y la ficha de la orden enlaza sus liberaciones.
+
+Añade verificaciones con **Criterio**, **Resultado** (conforme/no conforme),
+**Evidencia o referencia** textual, **Persona** activa al elegirla y **Fecha** no
+futura (se admiten fechas anteriores a la orden). Mientras sea borrador, administradores
+y auditores pueden editar y eliminar verificaciones; se conserva una persona ya
+citada si después se desactiva. Solo un administrador web elimina el borrador junto
+con sus verificaciones; todas las escrituras dejan auditoría y las citas están protegidas.
+Una liberación decidida y sus verificaciones son inmutables y nunca se eliminan.
+
+**La decisión de autorizar o rechazar llegará en la próxima entrega.** Tener
+borrador o verificaciones no autoriza la entrega ni cambia la orden. MCP crea,
+consulta, lista y edita borradores; para verificaciones solo crea, consulta y lista,
+nunca edita, elimina ni decide.
 
 ## Equipos y calibraciones
 
