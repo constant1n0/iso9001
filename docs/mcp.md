@@ -72,18 +72,27 @@ nunca puede eliminar.
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
 
-Liberación (8.6, primera entrega): `product_releases` crea, consulta, lista y
+Liberación (8.6): `product_releases` crea, consulta, lista y
 actualiza **borradores**: `order_id` obligatorio (orden terminada, cita inmutable)
 y `notes` opcional. Como máximo una liberación no rechazada por orden. Filtros AND:
 `status` (`draft`, `released`, `rejected`), `order_id`, `customer_id` (de la orden).
-Las lecturas muestran etiquetas españolas y columnas de decisión de solo lectura.
+Las lecturas incluyen `status` con etiqueta española (`borrador`, `liberada`,
+`rechazada`) y estas columnas de solo lectura: `decision_date`, `decided_by_id`
+(persona), `decided_by_user_id` (usuario), `decision_note` (motivo del rechazo),
+`concession`, `concession_reason`, `concession_approver_id`,
+`customer_approval_date` y `customer_approval_means`. En borrador son nulas;
+las fechas se devuelven en formato YYYY-MM-DD y las decisiones siguen consultables.
 `release_verifications` solo crea/consulta/lista, nunca actualiza: `release_id`
 (borrador), `criterion`, `result` (`conforming`/`nonconforming`), `evidence` textual,
 `person_id` activo al elegirlo y `date` YYYY-MM-DD no futura, sin límite inferior.
 Filtro `release_id`. Todos leen; administradores y auditores crean con ámbito
 `write`. Edición y borrado de verificaciones solo web mientras sea borrador;
 borrado del borrador solo por administrador web. Nunca decide ni elimina por MCP.
-La autorización/rechazo llegará en la próxima entrega; ninguna escritura cambia la orden.
+La autorización y el rechazo son decisiones inmutables de un administrador web
+con persona activa vinculada distinta del responsable de la orden. No existe
+herramienta de transición MCP ni se aceptan columnas de decisión en create/update.
+Los borradores decididos y sus verificaciones rechazan nuevas escrituras.
+Ninguna escritura cambia la orden.
 
 Posventa (PS5, 8.5.5): `post_delivery_activities` consulta/lista todo el historial,
 crea y actualiza solo pendientes. Obligatorios: `description` (obligación), `kind`

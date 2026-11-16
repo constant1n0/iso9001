@@ -1,7 +1,7 @@
-"""Draft release and verification writes lock/refresh before validating citations.
+"""Release drafts and independent web decisions (8.6), never order transitions.
 
-Decision columns are deliberately unwritable. MCP creates/reads verifications;
-web writers edit/delete them. Services audit and flush, never commit or change orders.
+Writers lock/refresh the release; decisions then lock/refresh its order. Decision
+columns are never ordinary writable fields. Services audit and flush, never commit.
 """
 from collections.abc import Mapping
 from datetime import date
@@ -10,8 +10,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from ..models import (ProductRelease, ReleaseVerification, ProductionOrder,
-                      ProductionResult, ProductionState, ReleaseStatus, Person)
-from . import audit, crud, design, fields, people, policy, production
+                      ProductionResult, ProductionState, ReleaseStatus, Person, RoleEnum)
+from . import audit, crud, design, design_changes, fields, people, policy, production
 from .actor import Actor
 from .errors import Conflict, NotFound, PermissionDenied, ValidationError
 from .policy import Action, Resource
@@ -153,9 +153,102 @@ def _child_delete(session: Session, who: Actor, record_id: int) -> None:
     _remove(session, who, _locked_child(session, record_id))
 
 
+def _decision(session: Session, who: Actor, record_id: int) -> tuple[ProductRelease, ProductionOrder, int]:
+    """Resolve independent active authority after release→order locks and refreshes."""
+    policy.require(who, Action.UPDATE, Resource.RELEASE)
+    if who.channel != 'web' or who.role is not RoleEnum.ADMINISTRADOR:
+        raise PermissionDenied()
+    row = _lock(session, record_id)
+    _editable(row)
+    order = production._lock(session, row.order_id)
+    try:
+        person_id = design_changes.approval_person(session, who, order)
+    except ValidationError as exc:
+        if str(exc) == design_changes.SEPARATION:
+            raise ValidationError('La decisión requiere una persona distinta del responsable de la orden.') from exc
+        raise
+    people.check_reference(session, 'decided_by_id', person_id)
+    return row, order, person_id
+
+
+def _record_decision(session: Session, who: Actor, row: ProductRelease,
+                     person_id: int, status: ReleaseStatus, today: date,
+                     values: dict[str, Any]) -> ProductRelease:
+    """Use shared attribution/audit machinery for one immutable decision."""
+    day = fields.required_date({'today': today}, 'today')
+    before = audit.snapshot(row)
+    row.status, row.decision_date = status, day
+    row.decided_by_id, row.decided_by_user_id = person_id, who.user_id
+    for key, value in values.items():
+        setattr(row, key, value)
+    design._record_update(session, who, row, before)
+    design._flush(session)
+    return row
+
+
+def authorize(session: Session, who: Actor, record_id: int, *, today: date,
+              concession: bool = False, concession_reason: str | None = None,
+              concession_approver_id: int | None = None,
+              customer_approval_date: date | None = None,
+              customer_approval_means: str | None = None) -> ProductRelease:
+    """Authorize conforming evidence or an explicit, fully recorded concession.
+
+    ``today`` comes from the adapter clock, never the submitted payload. The
+    concession approver may also be the deciding person (the pertinent authority).
+    """
+    row, order, person_id = _decision(session, who, record_id)
+    if order.state is not ProductionState.finished:
+        raise ValidationError('Elige una orden terminada.')
+    checks = list(session.scalars(select(ReleaseVerification).where(
+        ReleaseVerification.release_id == row.id)
+        .execution_options(populate_existing=True)))
+    if not checks:
+        raise ValidationError('Añade al menos una verificación antes de autorizar.')
+    if not isinstance(concession, bool):
+        raise ValidationError('El campo «concession» debe ser verdadero o falso.')
+    if not concession and any(c.result is ProductionResult.nonconforming for c in checks):
+        raise ValidationError('Hay verificaciones no conformes; registra una concesión para autorizar.')
+    values = dict(concession=concession, concession_reason=concession_reason,
+        concession_approver_id=concession_approver_id,
+        customer_approval_date=customer_approval_date,
+        customer_approval_means=customer_approval_means)
+    if concession:
+        values['concession_reason'] = fields.text(values, 'concession_reason', required=True)
+        approver = fields.integer(values, 'concession_approver_id', required=True)
+        production._target(session, Person, approver, 'concession_approver_id')
+        people.check_reference(session, 'concession_approver_id', approver)
+        values['concession_approver_id'] = approver
+        means = fields.text(values, 'customer_approval_means')
+        if (customer_approval_date is None) != (means is None):
+            raise ValidationError('Indica la fecha y el medio de aprobación del cliente, o deja ambos vacíos.')
+        if customer_approval_date is not None:
+            day = fields.required_date(values, 'customer_approval_date')
+            if day > today:
+                raise ValidationError('La fecha de aprobación del cliente no puede ser futura.')
+        values['customer_approval_means'] = means
+    elif any(value is not None and value != '' for key, value in values.items() if key != 'concession'):
+        raise ValidationError('Marca «Con concesión» para registrar sus datos.')
+    else:
+        values = dict.fromkeys(values) | {'concession': False}
+    return _record_decision(session, who, row, person_id, ReleaseStatus.released, today, values)
+
+
+def reject(session: Session, who: Actor, record_id: int, *, reason: str | None,
+           today: date) -> ProductRelease:
+    """Retain rejection, its reason and independent authority; free the order slot."""
+    row, _, person_id = _decision(session, who, record_id)
+    reason = fields.text({'reason': reason}, 'reason')
+    if not reason:
+        raise ValidationError('Indica el motivo del rechazo.')
+    return _record_decision(session, who, row, person_id, ReleaseStatus.rejected,
+                            today, {'decision_note': reason, 'concession': False})
+
+
 def _conditions(status: Any = None, order_id: int | None = None,
-                customer_id: int | None = None) -> list:
+                customer_id: int | None = None, concession: bool | None = None) -> list:
     where = []
+    if concession is not None:
+        where.append(ProductRelease.concession.is_(fields.boolean({'concession': concession}, 'concession')))
     if status is not None:
         where.append(ProductRelease.status == fields.enum_member({'status': status}, 'status', ReleaseStatus))
     if order_id is not None:

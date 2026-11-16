@@ -5,13 +5,13 @@
 {% call page_header('8.6 · Productos y servicios', 'Liberación') %}
 {% if can('create', 'release') %}<a class="btn" href="{{ url_for('release.new_release') }}">Nueva liberación</a>{% endif %}
 {% endcall %}
-<p>Registro de borradores y verificaciones. La decisión llegará en la próxima entrega.</p>
+<p>Registro de liberaciones y verificaciones con decisiones inmutables.</p>
 <form method="get" class="form-card">
-{% for key, label in [('status', 'Estado'), ('order_id', 'Orden'), ('customer_id', 'Cliente')] %}
+{% for key, label in [('status', 'Estado'), ('order_id', 'Orden'), ('customer_id', 'Cliente'), ('concession', 'Concesión')] %}
 <label for="{{ key }}">{{ label }}</label><select id="{{ key }}" name="{{ key }}"><option value="">Todos</option>
 {% for value, text in choices[key] %}<option value="{{ value }}" {% if selected.get(key) == value %}selected{% endif %}>{{ text }}</option>{% endfor %}</select>
 {% endfor %}<button class="btn" type="submit">Filtrar</button></form>
 <section class="card">{% for item in items %}
-<p><a href="{{ url_for('release.show_release', release_id=item.id) }}">#{{ item.id }} · {{ item.order.code }}</a> · {{ item.status.value }} · {{ item.notes or '—' }}</p>
+<p><a href="{{ url_for('release.show_release', release_id=item.id) }}">#{{ item.id }} · {{ item.order.code }}</a> · {{ item.status.value }}{{ ' · Con concesión' if item.concession else '' }} · {{ item.notes or '—' }}</p>
 {% else %}<p>Sin liberaciones.</p>{% endfor %}</section>
 {% endblock %}

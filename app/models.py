@@ -3797,7 +3797,7 @@ class ReleaseStatus(enum.Enum):
 
 
 class ProductRelease(RecordMetadataMixin, db.Model):
-    """Finished-order release register; T1 exposes draft operations only."""
+    """Finished-order release register with immutable, independent decisions."""
 
     __tablename__ = 'product_releases'
     __table_args__ = (
@@ -3843,6 +3843,9 @@ class ProductRelease(RecordMetadataMixin, db.Model):
     customer_approval_means = db.Column(db.Text)
     order = db.relationship('ProductionOrder', backref=db.backref(
         'releases', order_by='ProductRelease.id', passive_deletes='all'))
+    decided_by = db.relationship('Person', foreign_keys=[decided_by_id])
+    concession_approver = db.relationship('Person', foreign_keys=[concession_approver_id])
+    decided_by_user = db.relationship('User', foreign_keys=[decided_by_user_id])
 
 
 class ReleaseVerification(RecordMetadataMixin, db.Model):

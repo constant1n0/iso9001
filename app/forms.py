@@ -90,6 +90,22 @@ class ProductReleaseForm(BaseForm):
     notes = TextAreaField('Notas')
 
 
+class ReleaseAuthorizationForm(BaseForm):
+    """Explicit concession; decision date and identity come only from the server."""
+
+    concession = BooleanField('Con concesión')
+    concession_reason = TextAreaField('Motivo de la concesión')
+    concession_approver_id = person_field('Persona que aprueba la concesión')
+    customer_approval_date = DateField('Fecha de aprobación del cliente', validators=[Optional()])
+    customer_approval_means = StringField('Medio o referencia de aprobación del cliente')
+
+
+class ReleaseRejectionForm(BaseForm):
+    """A rejection always retains its reason."""
+
+    reason = TextAreaField('Motivo del rechazo', validators=[DataRequired()])
+
+
 class ReleaseVerificationForm(BaseForm):
     """The route supplies the immutable release citation."""
 

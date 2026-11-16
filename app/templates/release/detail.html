@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% from '_partials/ui.html' import page_header, delete_form %}
+{% from '_partials/forms.html' import field %}
 {% block title %}Liberación #{{ item.id }}{% endblock %}
 {% block content %}
 {% call page_header('8.6 · Liberación', 'Liberación #' ~ item.id) %}
@@ -11,7 +12,23 @@
 <section class="card"><h2>{{ item.status.value }}</h2>
 <p>Orden: <a href="{{ url_for('production.show_order', order_id=item.order_id) }}">{{ item.order.code }}</a> · {{ item.order.title }}</p>
 <p>Cliente: {{ item.order.customer.nombre if item.order.customer else '—' }} · Lote: {{ item.order.lot or '—' }}</p>
-<p>{{ item.notes or 'Sin notas.' }}</p><p>La decisión llegará en la próxima entrega. El borrador no autoriza la entrega ni modifica la orden.</p></section>
+<p>{{ item.notes or 'Sin notas.' }}</p><p>El borrador no autoriza la entrega. Ninguna decisión modifica la orden.</p>
+{% include 'release/_decision.html' %}</section>
+{% if item.status.name == 'draft' and administrator %}
+<section class="card"><h2>Decidir la liberación</h2>
+<p>Debes tener una persona activa vinculada, distinta del responsable de la orden. La decisión es inmutable y lleva la fecha de hoy.</p>
+<form method="post" action="{{ url_for('release.authorize_release', release_id=item.id) }}" class="form-card">
+{{ authorization.hidden_tag() }}
+{{ field(authorization.concession) }}{{ field(authorization.concession_reason) }}
+{{ field(authorization.concession_approver_id) }}
+<p>La persona que aprueba la concesión puede ser quien decide la liberación.</p>
+{{ field(authorization.customer_approval_date) }}{{ field(authorization.customer_approval_means) }}
+<p>La aprobación del cliente es opcional: indica fecha no futura y medio, o deja ambos vacíos.</p>
+<button class="btn" type="submit">Autorizar liberación</button></form>
+<form method="post" action="{{ url_for('release.reject_release', release_id=item.id) }}" class="form-card">
+{{ rejection.hidden_tag() }}{{ field(rejection.reason) }}
+<button class="btn" type="submit">Rechazar liberación</button></form></section>
+{% endif %}
 <section class="card"><h2>Verificaciones</h2>
 {% if item.status.name == 'draft' and can('create', 'release') %}<a class="btn" href="{{ url_for('release.new_verification', release_id=item.id) }}">Añadir verificación</a>{% endif %}
 {% for check in checks %}<article><h3>{{ check.criterion }} · {{ check.result.value }}</h3>

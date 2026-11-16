@@ -1123,9 +1123,9 @@ _MODULES = (
     *_PRODUCTION_MODULES,
     *_PRODUCTION_RECORD_MODULES,
     *_PRODUCTION_CHANGE_MODULES,
-    Module('product_releases', 'Draft product/service releases (8.6)', Resource.RELEASE,
+    Module('product_releases', 'Product/service releases and decisions (8.6)', Resource.RELEASE,
         product_release.releases, (
-            _f('order_id', 'integer', True, note='Finished order; immutable citation. At most one non-rejected release per order. Draft writes only; no decision or deletion.'),
+            _f('order_id', 'integer', True, note='Finished order; immutable citation. At most one non-rejected release per order. Draft writes only; reads include immutable decisions and concessions. No decision or deletion through MCP.'),
             _f('notes'),
         ), (_f('status', 'enum', members=ReleaseStatus), _f('order_id', 'integer'),
             _f('customer_id', 'integer', note='Customer inherited from the order.'))),

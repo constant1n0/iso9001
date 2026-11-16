@@ -75,7 +75,7 @@ orden planificada sin registros, incluidos sus vínculos; queda su instantánea 
 
 **Terminar una orden nunca equivale a liberar el producto.** «Terminada» significa
 trabajo terminado, NO autorización de entrega. La liberación (8.6) es independiente
-y dispone de un registro de borradores; la decisión sigue pendiente. No necesitas registros para terminar una orden.
+y dispone de un registro con autorización independiente. No necesitas registros para terminar una orden.
 Las actividades posteriores a la entrega se registran en **Posventa** (8.5.5).
 
 ### Actividades de posventa (8.5.5)
@@ -161,7 +161,8 @@ si necesitas corregir una evidencia, registra otra con la referencia a la anteri
 ## Liberación
 
 En **Liberación** (`/liberacion/`), todos los roles consultan el registro y filtran
-por estado, orden o cliente de la orden. Administradores y auditores crean un
+por estado, orden, cliente de la orden o **Con concesión** (también **Sin concesión**).
+Los valores de filtro desconocidos se ignoran. Administradores y auditores crean un
 **borrador** sobre exactamente una orden terminada; no puede cambiar de orden.
 Se heredan cliente, lote y trazabilidad. Solo puede existir una liberación no
 rechazada por orden. Las notas son opcionales y la ficha de la orden enlaza sus liberaciones.
@@ -174,10 +175,31 @@ citada si después se desactiva. Solo un administrador web elimina el borrador j
 con sus verificaciones; todas las escrituras dejan auditoría y las citas están protegidas.
 Una liberación decidida y sus verificaciones son inmutables y nunca se eliminan.
 
-**La decisión de autorizar o rechazar llegará en la próxima entrega.** Tener
-borrador o verificaciones no autoriza la entrega ni cambia la orden. MCP crea,
-consulta, lista y edita borradores; para verificaciones solo crea, consulta y lista,
-nunca edita, elimina ni decide.
+### Autorizar o rechazar
+
+Solo un **administrador por web**, con una **persona vinculada activa distinta del
+responsable de la orden**, puede decidir desde la ficha de un borrador. Se conserva
+la persona, el usuario y la fecha de hoy, que no puedes modificar. La autorización
+requiere al menos una verificación y que todas sean **conformes**, salvo concesión.
+Una orden que haya dejado de estar terminada no se puede autorizar.
+
+Para autorizar **Con concesión**, marca la casilla e indica un motivo y la persona
+activa que la aprueba. Esta puede ser la misma persona que decide la liberación:
+es la autoridad pertinente. Puedes registrar una concesión aunque todas las
+verificaciones sean conformes. La aprobación del cliente es opcional, pero debes
+indicar **fecha no futura y medio/referencia juntos**, o dejar ambos vacíos.
+Los datos de concesión no se aceptan si no marcas la casilla.
+
+Para **rechazar**, indica el motivo. La liberación queda conservada y puedes crear
+otra sobre la misma orden. Ni una autorización ni un rechazo se pueden editar,
+eliminar o volver a decidir; tampoco sus verificaciones. La ficha de la liberación
+y la de la orden muestran la decisión, quién la tomó, la concesión y la aprobación
+del cliente. Las personas citadas y el usuario de la decisión están protegidos
+frente al borrado; puedes desactivar una persona sin perder la trazabilidad.
+
+**Tener borrador o verificaciones no autoriza la entrega. Ninguna decisión cambia
+la orden.** MCP crea, consulta, lista y edita borradores; para verificaciones solo
+crea, consulta y lista, nunca edita, elimina ni decide.
 
 ## Equipos y calibraciones
 
