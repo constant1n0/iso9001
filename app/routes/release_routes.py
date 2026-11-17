@@ -6,8 +6,9 @@ from flask_login import login_required
 from sqlalchemy import select
 from ..audit_notifications import local_today
 from ..extensions import db
-from ..forms import BaseForm, ProductReleaseForm, ReleaseVerificationForm, person_choices
-from ..models import Cliente, ProductionState, ReleaseStatus
+from ..forms import (BaseForm, ProductReleaseForm, ReleaseVerificationForm,
+                     ReleaseAuthorizationForm, ReleaseRejectionForm, person_choices)
+from ..models import Cliente, ProductionState, ReleaseStatus, RoleEnum
 from ..services import people, production, product_release as service
 from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
@@ -18,9 +19,9 @@ from .production_routes import _refused
 bp = Blueprint('release', __name__, url_prefix='/liberacion')
 
 
-def _refuse(form: Any) -> bool:
+def _refuse(form: Any, *, optional: frozenset[str] = frozenset()) -> bool:
     refused = _refused(form)
-    if request.method == 'POST' and (missing := {f.name for f in form if f.name != 'csrf_token'} - set(request.form)):
+    if request.method == 'POST' and (missing := {f.name for f in form if f.name != 'csrf_token'} - optional - set(request.form)):
         flash(f'Faltan campos del formulario: {", ".join(sorted(missing))}.', 'danger')
         refused = True
     return refused
@@ -33,10 +34,12 @@ def list_releases() -> ResponseReturnValue:
     """Ignore unrecognized filters, including nonexistent citation ids."""
     who = current_actor()
     choices = {'status': [(m.name, m.value) for m in ReleaseStatus],
+        'concession': [('true', 'Con concesión'), ('false', 'Sin concesión')],
         'order_id': [(str(o.id), o.code) for o in production.orders.list_(db.session, who)],
         'customer_id': [(str(c.id), c.nombre) for c in db.session.scalars(select(Cliente).order_by(Cliente.id))]}
     selected = {k: v for k in choices if (v := request.args.get(k, '')) in dict(choices[k])}
-    filters = {k: int(v) if k.endswith('_id') else v for k, v in selected.items()}
+    filters = {k: (v == 'true') if k == 'concession' else
+        int(v) if k.endswith('_id') else v for k, v in selected.items()}
     return render_template('release/list.html', choices=choices, selected=selected,
         items=service.releases.list_(db.session, who, **filters))
 
@@ -45,9 +48,60 @@ def list_releases() -> ResponseReturnValue:
 @login_required
 @require_permission('read', 'release')
 def show_release(release_id: int) -> ResponseReturnValue:
-    """Show inherited traceability and verification evidence, never a decision action."""
-    return render_template('release/detail.html', item=service.releases.get(db.session, current_actor(), release_id),
-        checks=service.verifications.list_(db.session, current_actor(), release_id=release_id), action_form=BaseForm())
+    """Show immutable decisions and administrator-only draft decision forms."""
+    return _detail(release_id)
+
+
+def _detail(release_id: int, authorization: Any = None,
+            rejection: Any = None) -> str:
+    who = current_actor()
+    authorization = authorization or ReleaseAuthorizationForm(formdata=None)
+    authorization.concession_approver_id.choices = person_choices(people.choices(db.session, who))
+    return render_template('release/detail.html',
+        item=service.releases.get(db.session, who, release_id),
+        checks=service.verifications.list_(db.session, who, release_id=release_id),
+        action_form=BaseForm(), authorization=authorization,
+        rejection=rejection or ReleaseRejectionForm(formdata=None),
+        administrator=who.role is RoleEnum.ADMINISTRADOR)
+
+
+@bp.route('/<int:release_id>/autorizar', methods=['POST'])
+@login_required
+@require_permission('update', 'release')
+def authorize_release(release_id: int) -> ResponseReturnValue:
+    """Authorize with server clock and linked independent person, never posted ids."""
+    return _decide(release_id, rejecting=False)
+
+
+@bp.route('/<int:release_id>/rechazar', methods=['POST'])
+@login_required
+@require_permission('update', 'release')
+def reject_release(release_id: int) -> ResponseReturnValue:
+    """Retain the rejection reason and immutable authority."""
+    return _decide(release_id, rejecting=True)
+
+
+def _decide(release_id: int, *, rejecting: bool) -> ResponseReturnValue:
+    who = current_actor()
+    if who.role is not RoleEnum.ADMINISTRADOR:
+        flash('Solo un administrador puede decidir la liberación.', 'danger')
+        return redirect(url_for('release.show_release', release_id=release_id))
+    form = ReleaseRejectionForm() if rejecting else ReleaseAuthorizationForm()
+    if not rejecting:
+        form.concession_approver_id.choices = person_choices(people.choices(db.session, who))
+    # An unchecked native checkbox is not a successful control. Every text/date/
+    # select control must still be present, including blank optional values.
+    refused = _refuse(form, optional=frozenset() if rejecting else frozenset({'concession'}))
+    if not refused and form.validate_on_submit():
+        operation = (lambda: service.reject(db.session, who, release_id,
+            reason=form.reason.data, today=local_today())) if rejecting else (
+            lambda: service.authorize(db.session, who, release_id, today=local_today(),
+                **form_data(form, {'concession', 'concession_reason', 'concession_approver_id',
+                                  'customer_approval_date', 'customer_approval_means'})))
+        if saved(operation):
+            return redirect(url_for('release.show_release', release_id=release_id))
+    return _detail(release_id, rejection=form if rejecting else None,
+                   authorization=None if rejecting else form), 400 if refused else 200
 
 
 @bp.route('/nueva', methods=['GET', 'POST'])

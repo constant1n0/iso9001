@@ -1,0 +1,9 @@
+{# Shared read-only decision evidence on release and order pages. #}
+{% if item.status.name != 'draft' %}
+<p>Decisión: {{ item.status.value }} · {{ item.decision_date }} · {{ item.decided_by.nombre }} (usuario: {{ item.decided_by_user.username }})</p>
+{% if item.decision_note %}<p>Motivo del rechazo: {{ item.decision_note }}</p>{% endif %}
+{% if item.concession %}
+<p><strong>Con concesión</strong>: {{ item.concession_reason }} · Aprobada por: {{ item.concession_approver.nombre }}</p>
+{% if item.customer_approval_date %}<p>Aprobación del cliente: {{ item.customer_approval_date }} · {{ item.customer_approval_means }}</p>{% endif %}
+{% else %}<p>Sin concesión.</p>{% endif %}
+{% endif %}
