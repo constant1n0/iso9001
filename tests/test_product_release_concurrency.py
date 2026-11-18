@@ -20,14 +20,25 @@ URI = os.environ.get('TEST_POSTGRES_URI')
 
 def assert_waiting_on_row(test: unittest.TestCase, observer, pid: int,
                           table: str) -> None:
-    """Distinguish the intended row lock from FK or unique-index contention."""
+    """Distinguish the intended row lock from FK or unique-index contention.
+
+    pg_stat_activity truncates query text (track_activity_query_size), so the
+    FROM and FOR UPDATE clauses of a wide SELECT are not visible there. A
+    waiter on a SELECT ... FOR UPDATE row lock holds the tuple lock on that
+    table in AccessExclusiveLock mode; FK checks (FOR KEY SHARE) take it in
+    AccessShareLock mode and unique-index waits take no tuple lock at all.
+    """
     activity = observer.execute(text(
         'SELECT query, wait_event_type FROM pg_stat_activity WHERE pid = :pid'),
         {'pid': pid}).one()
     test.assertEqual('Lock', activity.wait_event_type)
-    test.assertRegex(activity.query, rf'FROM\s+[^\s]*\b{table}\b')
-    test.assertRegex(activity.query, rf'WHERE\s+[^\s]*\b{table}\.id\s*=')
-    test.assertIn('FOR UPDATE', activity.query)
+    test.assertRegex(activity.query, r'^\s*SELECT\b')
+    test.assertIn(f'{table}.id', activity.query)
+    modes = observer.scalars(text(
+        "SELECT l.mode FROM pg_locks l JOIN pg_class c ON c.oid = l.relation "
+        "WHERE l.pid = :pid AND l.locktype = 'tuple' AND c.relname = :table"),
+        {'pid': pid, 'table': table}).all()
+    test.assertIn('AccessExclusiveLock', modes)
 
 
 @unittest.skipUnless(URI or os.environ.get('CI'), 'TEST_POSTGRES_URI is not set')
