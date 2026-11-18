@@ -1,5 +1,6 @@
 """PS4 forms, MCP boundary and additive SQLite migration probes."""
 import importlib.util
+import re
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
@@ -51,6 +52,45 @@ class PropertyScreens(PropertyCase):
         self.assertEqual(200, self.client.get('/produccion/propiedad/nueva').status_code)
         self.assertEqual(404, self.client.post('/produccion/propiedad/1/incidencias/1/editar').status_code)
         self.assertEqual(404, self.client.post('/produccion/propiedad/1/incidencias/1/eliminar').status_code)
+
+    def test_filters_include_exact_rows_and_combine_with_and(self) -> None:
+        """Each selector excludes distractors; unknown selectors are ignored."""
+        from app.services import clientes, providers
+        customer = clientes.create(db.session, self.who, {'nombre': 'Second customer'})
+        provider = providers.providers.create(db.session, self.who, {
+            'nombre': 'Second provider', 'tipo_suministro': 'producto'})
+        db.session.commit()
+        first = self.item()
+        returned = self.item()
+        second = self.item(customer_id=customer.id)
+        supplied = self.item(customer_id=None, provider_id=1)
+        other = self.item(customer_id=None, provider_id=provider.id)
+        self.property.transition(db.session, self.who, returned.id, 'returned',
+            terminal_date=TODAY, terminal_note='Returned', today=TODAY)
+        db.session.commit()
+        self.login()
+        all_ids = [first.id, returned.id, second.id, supplied.id, other.id]
+        cases = (
+            ('', all_ids), ('owner_type=customer', all_ids[:3]),
+            ('owner_type=provider', all_ids[3:]),
+            ('status=custody', [first.id, second.id, supplied.id, other.id]),
+            ('status=returned', [returned.id]), ('customer_id=1', all_ids[:2]),
+            (f'customer_id={customer.id}', [second.id]),
+            ('provider_id=1', [supplied.id]),
+            (f'provider_id={provider.id}', [other.id]),
+            ('owner_type=customer&status=custody&customer_id=1', [first.id]),
+            ('owner_type=customer&provider_id=1', []),
+            ('owner_type=bogus&status=bogus&customer_id=999&provider_id=no', all_ids),
+        )
+        before = hashes()
+        for query, expected in cases:
+            with self.subTest(query=query):
+                response = self.client.get('/produccion/propiedad/?' + query)
+                self.assertEqual(200, response.status_code)
+                ids = re.findall(r'href="/produccion/propiedad/(\d+)"',
+                                 response.get_data(as_text=True))
+                self.assertEqual(sorted(expected), sorted(map(int, ids)))
+                self.assertEqual(before, hashes())
 
     def test_web_roles_csrf_terminal_and_incident_forms(self):
         self.item()

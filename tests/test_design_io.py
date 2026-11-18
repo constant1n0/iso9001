@@ -146,6 +146,78 @@ class DesignIOTests(DesignCase):
             # A separate controlled document permits the second register's same probe.
             doc_id, revision_id = approved_revision(self.who, code=name, publish=True)
 
+    def test_new_citations_lock_exact_revision_after_parent_and_refresh(self) -> None:
+        """SQLite SQL-order probe guards the PostgreSQL shared citation lock."""
+        _, revision_id = approved_revision(self.who)
+        for name in ('inputs', 'outputs'):
+            row = self.add(name)
+            register = self.register(name)
+            for operation in ('create', 'update'):
+                seen = []
+                def capture(state):
+                    if state.is_select and state.statement._for_update_arg is not None:
+                        compiled = state.statement.compile(dialect=postgresql.dialect())
+                        seen.append((str(compiled), compiled.params,
+                                     state.execution_options.get('populate_existing')))
+                event.listen(db.session(), 'do_orm_execute', capture)
+                try:
+                    if operation == 'create':
+                        result = register.create(db.session, self.who,
+                            (INPUT if name == 'inputs' else OUTPUT) |
+                            {'project_id': self.pid, 'revision_id': revision_id})
+                    else:
+                        result = register.update(db.session, self.who, row.id,
+                                                 {'revision_id': revision_id})
+                    db.session.commit()
+                finally:
+                    event.remove(db.session(), 'do_orm_execute', capture)
+                self.assertIn('FROM design_projects', seen[0][0])
+                citations = [entry for entry in seen if 'FROM document_revisions' in entry[0]]
+                self.assertEqual(1, len(citations), (name, operation, seen))
+                sql, params, refresh = citations[0]
+                self.assertIn('FOR SHARE', sql)
+                self.assertEqual([revision_id], list(params.values()))
+                self.assertTrue(refresh)
+                self.assertEqual(revision_id, register.get(
+                    db.session, self.who, result.id).revision_id)
+
+    def test_citation_revalidates_revision_changed_before_lock_acquisition(self) -> None:
+        """A stale readable revision must not survive the shared-lock refresh."""
+        from app.models import DocumentRevision
+        _, revision_id = approved_revision(self.who)
+        # Keep a strong warm identity; the Core update simulates a competing commit.
+        warm = db.session.get(DocumentRevision, revision_id)
+        self.assertEqual('aprobado', warm.estado.name)
+        for name in ('inputs', 'outputs'):
+            register = self.register(name)
+            row = self.add(name)
+            for operation in ('create', 'update'):
+                def invalidate(state):
+                    if (state.is_select and state.statement._for_update_arg is not None
+                            and 'FROM document_revisions' in str(state.statement)):
+                        db.session.execute(DocumentRevision.__table__.update().where(
+                            DocumentRevision.id == revision_id).values(estado='obsoleto')
+                            .execution_options(synchronize_session=False))
+                event.listen(db.session(), 'do_orm_execute', invalidate)
+                try:
+                    from app.services.errors import ValidationError
+                    before = hashes()
+                    values = {'revision_id': revision_id}
+                    with self.assertRaises(ValidationError) as caught:
+                        if operation == 'create':
+                            register.create(db.session, self.who,
+                                (INPUT if name == 'inputs' else OUTPUT) |
+                                {'project_id': self.pid} | values)
+                        else:
+                            register.update(db.session, self.who, row.id, values)
+                    self.assertEqual(INVALID_REVISION, str(caught.exception))
+                    self.assertEqual(before[1], hashes()[1])
+                    # The simulated competing write belongs to this transaction.
+                    db.session.rollback()
+                    self.assertEqual(before, hashes())
+                finally:
+                    event.remove(db.session(), 'do_orm_execute', invalidate)
+
     def test_unreadable_revision_refused_without_data_or_audit_change(self):
         from app.services import design_io
         _, rid = approved_revision(self.who)

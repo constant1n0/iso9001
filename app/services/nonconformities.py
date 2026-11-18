@@ -77,7 +77,9 @@ from sqlalchemy.orm import Session
 from ..models import (
     AccionCorrectiva, CambioSGC, EstadoNoConformidad, GravedadNoConformidad, HallazgoAuditoria,
     NoConformidad, OrigenNoConformidad, ProcesoOperacion, Proveedor, ResultadoVerificacion,
-    RoleEnum, TratamientoSalidaNoConforme,
+    RoleEnum, TratamientoSalidaNoConforme, KnowledgeItem, Mejora, Reclamacion,
+    ProductionControlRecord, ProductionPreservationRecord, PropertyIncident,
+    PostDeliveryActivity,
 )
 from . import audit, crud, fields, people, policy
 from .actor import Actor
@@ -117,6 +119,13 @@ CONCESSION_INCOMPLETE = "La concesión requiere una persona que la autorice y un
 CONCESSION_ONLY = "Solo una concesión puede indicar la persona que la autoriza y su fecha."
 CITED_BY_CHANGES = (
     "No se puede eliminar una no conformidad a la que se refieren cambios en el SGC."
+)
+# RESTRICT citations; corrective actions and audit findings have explicit cleanup below.
+REFERENCES = (
+    KnowledgeItem.no_conformidad_id, Mejora.no_conformidad_id,
+    Reclamacion.no_conformidad_id, ProductionControlRecord.nonconformity_id,
+    ProductionPreservationRecord.nonconformity_id, PropertyIncident.nonconformity_id,
+    PostDeliveryActivity.nonconformity_id,
 )
 
 
@@ -639,13 +648,18 @@ def delete(session: Session, actor: Actor, nc_id: int) -> None:
     """Hard-delete a nonconformity and its corrective actions, with full audit snapshots.
 
     The audit finding that cites it keeps existing, without the link. One a
-    change to the QMS cites is refused (``Conflict``) before anything is
-    deleted; a citation added after the check meets the foreign key at the flush.
+    change to the QMS or another RESTRICT citation names is refused (``Conflict``)
+    before anything is deleted, even when SQLite foreign keys are disabled.
+    PostgreSQL foreign keys still protect against concurrent new citations.
     """
     policy.require(actor, Action.DELETE, Resource.NONCONFORMITIES)
     nc = lock(session, nc_id)
     if _cited_by_changes(session, nc.id):
         raise Conflict(CITED_BY_CHANGES)
+    if any(session.scalar(select(exists().where(column == nc.id)))
+           for column in REFERENCES):
+        # Preserve the existing FK-conflict feedback on PostgreSQL and SQLite.
+        raise Conflict()
     for action in _actions(session, nc.id):
         audit.record(session, actor, "delete", action)
         session.delete(action)

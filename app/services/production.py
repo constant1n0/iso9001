@@ -230,7 +230,8 @@ def _conditions(state: Any = None, kind: Any = None, process_id: int | None = No
         if value is not None:
             where.append(getattr(ProductionOrder, key) == fields.integer({key: value}, key, required=True))
     if lot:
-        where.append(ProductionOrder.lot.ilike(f'%{lot}%'))
+        literal = lot.replace('\\', '\\\\').replace('%', r'\%').replace('_', r'\_')
+        where.append(ProductionOrder.lot.ilike(f'%{literal}%', escape='\\'))
     return where
 
 

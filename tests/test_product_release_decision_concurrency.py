@@ -15,6 +15,7 @@ from app.services.actor import Actor
 from app.services.errors import ValidationError
 from test_equipment_concurrency import _worker_backend
 from test_product_release import CHECK, TODAY
+from test_product_release_concurrency import assert_waiting_on_row
 
 URI = os.environ.get('TEST_POSTGRES_URI')
 
@@ -90,7 +91,9 @@ class DecisionContention(unittest.TestCase):
                         blockers = observer.scalar(text('SELECT pg_blocking_pids(:pid)'), {'pid': waiting})
                         if holder_pid in blockers or done.wait(0.02):
                             break
-                self.assertIn(holder_pid, blockers)
+                    self.assertIn(holder_pid, blockers)
+                    assert_waiting_on_row(self, observer, waiting, 'product_releases')
+                self.assertFalse(done.is_set())
                 holder.commit()
             finally:
                 holder.rollback()
