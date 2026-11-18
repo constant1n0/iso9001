@@ -18,6 +18,18 @@ from test_equipment_concurrency import _worker_backend
 URI = os.environ.get('TEST_POSTGRES_URI')
 
 
+def assert_waiting_on_row(test: unittest.TestCase, observer, pid: int,
+                          table: str) -> None:
+    """Distinguish the intended row lock from FK or unique-index contention."""
+    activity = observer.execute(text(
+        'SELECT query, wait_event_type FROM pg_stat_activity WHERE pid = :pid'),
+        {'pid': pid}).one()
+    test.assertEqual('Lock', activity.wait_event_type)
+    test.assertRegex(activity.query, rf'FROM\s+[^\s]*\b{table}\b')
+    test.assertRegex(activity.query, rf'WHERE\s+[^\s]*\b{table}\.id\s*=')
+    test.assertIn('FOR UPDATE', activity.query)
+
+
 @unittest.skipUnless(URI or os.environ.get('CI'), 'TEST_POSTGRES_URI is not set')
 class ReleaseContention(unittest.TestCase):
     def test_concurrent_creation_waits_then_refuses_duplicate(self):
@@ -77,7 +89,9 @@ class ReleaseContention(unittest.TestCase):
                         blockers = observer.scalar(text('SELECT pg_blocking_pids(:pid)'), {'pid': waiting})
                         if holder_pid in blockers or done.wait(0.02):
                             break
-                self.assertIn(holder_pid, blockers)
+                    self.assertIn(holder_pid, blockers)
+                    assert_waiting_on_row(self, observer, waiting, 'production_orders')
+                self.assertFalse(done.is_set())
                 holder.commit()
             finally:
                 holder.rollback()

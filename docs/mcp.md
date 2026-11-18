@@ -132,7 +132,8 @@ omitir conserva. Nuevos vínculos: revisiones legibles aprobadas/vigentes, equip
 aptos y personas activas. Se conservan los vínculos anteriores; las lecturas solo
 exponen identificadores de revisión, nunca datos documentales restringidos.
 Filtros: `state` (`planned`, `in_progress`, `finished`, `cancelled`), `kind`,
-`process_id`, `customer_id`, `lot` (fragmento). Todos leen; administradores y
+`process_id`, `customer_id`, `lot` (fragmento literal, sin distinguir mayúsculas;
+`%`, `_` y `\` no son comodines). Todos leen; administradores y
 auditores escriben. MCP nunca elimina ni cambia estados; las órdenes terminadas o
 canceladas son de solo lectura. Terminar trabajo NO autoriza la entrega (8.6).
 
@@ -156,8 +157,9 @@ activa al elegirla), `description` y `result` (`conforming`/`nonconforming`).
   permitidas. Canceladas, siempre de solo lectura. Sin adjuntos, cambios ni borrados.
   Terminar no exige registros y nunca equivale a liberar (8.6).
 
-Cambios de producción (PS3, 8.5.6): `production_changes` admite crear, consultar,
-listar y actualizar **solo propuestas**. Todos leen con ámbito `read`;
+Cambios de producción (PS3, 8.5.6): `production_changes` permite consultar y
+listar **todo el historial**, incluidas las decisiones autorizadas y rechazadas;
+solo crea y actualiza **propuestas**. Todos leen con ámbito `read`;
 administradores y auditores escriben con `write`. Obligatorios: `reason`,
 `description`, `actions` no vacíos y `order_ids` (lista no vacía de enteros,
 normalizada, de órdenes no canceladas; se admiten terminadas). Sustituir la lista
@@ -165,8 +167,8 @@ reemplaza las órdenes; omitirla conserva. Opcionales: `review` (obligatoria ant
 de autorizar desde la web), `design_change_id` (cambio del diseño autorizado) y
 `qms_change_id` (cambio del SGC en cualquier estado); `null` quita las citas.
 Filtros AND: `order_id`, `state` (`proposed`, `authorized`, `rejected`); orden por
-id descendente. MCP solo ve `proposed`: los otros filtros devuelven una lista vacía,
-y consultar por id una decisión se rechaza. Las lecturas incluyen `order_ids`.
+id descendente. `qms_list` admite los tres estados y `qms_get` también devuelve
+las decisiones por id. Las lecturas incluyen `order_ids`.
 No acepta estado ni datos de autorización/rechazo. Solo un administrador web con
 persona distinta de todos los responsables decide. Ningún cambio se elimina;
 las decisiones son inmutables y las citas RESTRICT. No bloquea órdenes ni libera.

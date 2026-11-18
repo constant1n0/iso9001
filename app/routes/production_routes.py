@@ -435,7 +435,11 @@ def _refused(form: Any) -> bool:
         if unknown:
             flash(f'Campos no permitidos: {", ".join(sorted(unknown))}.', 'danger')
             return True
-    return _control_payload_refused(form, 0)
+    if _control_payload_refused(form, 0):
+        # Keep the shared boundary's duplicate-field and multi-select rules.
+        flash('Envía cada campo una sola vez y no repitas las opciones seleccionadas.', 'danger')
+        return True
+    return False
 
 
 @bp.route('/nuevo', methods=['GET', 'POST'])
