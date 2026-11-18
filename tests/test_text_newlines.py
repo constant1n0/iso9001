@@ -31,6 +31,14 @@ class FieldsTextNewlinesTestCase(unittest.TestCase):
             fields.text({"k": "ab\r\ncde"}, "k", max_length=5)
 
 
+class ScopeJustificationNewlinesTestCase(unittest.TestCase):
+    def test_applicability_justification_crlf_is_stored_as_lf(self) -> None:
+        from app.services import qms_scope
+        entries = {"8.3": {"aplica": False, "justificacion": "Según plano\nSin diseño propio"}}
+        data = {qms_scope.APPLICABILITY: {"8.3": {"justificacion": "Según plano\r\nSin diseño propio"}}}
+        self.assertEqual(entries, qms_scope._applied(data, entries))
+
+
 class BrowserCrlfRoundTripTestCase(PostDeliveryCase):
     def form(self, path):
         response = self.client.get(path)

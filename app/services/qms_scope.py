@@ -452,7 +452,8 @@ def _applied(data: Mapping[str, Any], entries: Entries) -> Entries:
             reason = change["justificacion"]
             if reason is not None and not isinstance(reason, str):
                 raise ValidationError(BAD_JUSTIFICATION.format(code=code))
-            entry["justificacion"] = (reason or "").strip() or None  # blank is none
+            # Blank is none; browser CRLF becomes LF so an unchanged edit is a no-op.
+            entry["justificacion"] = fields.text({"justificacion": reason}, "justificacion")
         if not entry["aplica"] and entry["justificacion"] is None:
             raise ValidationError(JUSTIFICATION_REQUIRED.format(code=code,
                                                                 title=_TITLES[code]))
