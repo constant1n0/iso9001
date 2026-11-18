@@ -41,13 +41,15 @@ def text(data: Mapping[str, Any], key: str, *, required: bool = False,
     """Text value: required ones must be non-blank; optional blank ones become ``None``.
 
     Forms post an empty string for a blank optional field while stored rows hold
-    NULL, so normalising here keeps an unchanged edit a no-op.
+    NULL, and browsers post textarea line breaks as CRLF while stored text holds
+    LF, so normalising both here keeps an unchanged edit a no-op.
     """
     value = data[key]
     if value is None and not required:
         return None
     if not isinstance(value, str):
         raise ValidationError(f"El campo «{key}» debe ser texto.")
+    value = value.replace("\r\n", "\n").replace("\r", "\n")
     blank = not value.strip()
     if blank and not required:
         return None
