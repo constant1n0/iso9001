@@ -1,6 +1,7 @@
 """Spanish PS1 screens; CSRF-protected lifecycle and strict submitted-field boundary."""
 from typing import Any
 
+from wtforms import SelectMultipleField
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
 from flask_login import login_required
@@ -435,10 +436,16 @@ def _refused(form: Any) -> bool:
         if unknown:
             flash(f'Campos no permitidos: {", ".join(sorted(unknown))}.', 'danger')
             return True
-    if _control_payload_refused(form, 0):
-        # Keep the shared boundary's duplicate-field and multi-select rules.
-        flash('Envía cada campo una sola vez y no repitas las opciones seleccionadas.', 'danger')
-        return True
+    return _control_payload_refused(form, 0)
+
+
+def _repeated(form: Any) -> bool:
+    """Whether the post repeats a single field or an option of a multi-select."""
+    for name in request.form:
+        values, field = request.form.getlist(name), form._fields.get(name)
+        multiple = isinstance(field, SelectMultipleField)
+        if (len(values) > 1 and not multiple) or len(values) != len(set(values)):
+            return True
     return False
 
 
@@ -468,6 +475,8 @@ def _edit(order_id: int | None) -> ResponseReturnValue:
     form = _form(row)
     title = 'Nueva orden' if row is None else 'Editar orden'
     if _refused(form):
+        if request.method == 'POST' and _repeated(form):
+            flash('Envía cada campo una sola vez y no repitas las opciones seleccionadas.', 'danger')
         return render_template('production/form.html', form=form, title=title), 400
     if form.validate_on_submit():
         data = form_data(form, tuple(f.name for f in production.SPEC.fields) + tuple(production.LINKS))

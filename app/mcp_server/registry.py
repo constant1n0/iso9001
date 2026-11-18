@@ -733,7 +733,7 @@ _PRODUCTION_CHANGE_MODULES = (
             _f('qms_change_id', 'integer', note='QMS change in any state; null clears.'),
             _f('order_ids', 'integer_list', True, note=(
                 'Nonempty replacement set, no cancelled orders; finished allowed. '
-                'MCP creates/reads/updates proposals only, never decides or deletes. '
+                'MCP reads every change, creates and updates proposals only, never decides or deletes. '
                 'No order gating or release authority.')),
         ), (_f('state', 'enum', members=DesignChangeState), _f('order_id', 'integer')),
         extras=lambda row: {'order_ids': row.order_ids}),
