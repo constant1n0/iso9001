@@ -274,6 +274,31 @@ class RegistryTestCase(unittest.TestCase):
 
 
 class ModulesToolTestCase(McpDbCase):
+    async def test_review_preview_exposes_conformity_live_and_frozen(self) -> None:
+        from datetime import date
+        from app.extensions import db
+        from app.services import management_reviews as mr
+        from app.services.actor import Actor
+        from test_conformity_analysis import ConformityFixtures
+
+        fixtures = ConformityFixtures()
+        person = self.seed('personas')
+        review = self.seed('revisiones_direccion', asistente_ids=[person])
+        args = {'module': 'revisiones_direccion', 'id': review}
+        result = await self.call(mcp_actor(AUDITOR), 'qms_get', args)
+        self.assertFalse(result.is_error)
+        record = result.structured_content
+        self.assertIn('conformidad', record['preview'])
+        with self.app.app_context():
+            mr.hold(db.session, Actor(None, 'admin', ADMIN, 'web'), review,
+                    today=date(2026, 10, 12))
+            db.session.commit()
+            fixtures.decision(date(2026, 6, 1))
+        frozen = await self.call(mcp_actor(ADMIN), 'qms_get', args)
+        self.assertEqual(record['preview'], frozen.structured_content['preview'])
+        denied = await self.call(mcp_actor(OPERATIVO), 'qms_get', args)
+        self.assertTrue(denied.is_error)
+
     async def test_the_tool_is_registered_read_only(self) -> None:
         tools = {t.name: t for t in await self.list_tools()}
         annotations = tools["qms_modules"].annotations

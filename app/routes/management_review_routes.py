@@ -71,7 +71,7 @@ from ..models import (
     ResultadoEvaluacion, RevisionDireccion, TipoAccionRevision, TipoContexto, TipoHallazgo,
 )
 from ..services import management_reviews as mr
-from ..services import people
+from ..services import conformity_analysis, people
 from ..services.actor import Actor
 from ..services.errors import NotFound, PermissionDenied
 from ..utils.pdf import pdf_response, render_pdf
@@ -193,7 +193,9 @@ def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
     (input b, OC5 of ``organization-context``) show only when ``contexto`` holds
     ``cuestiones`` and ``alcance``, and the changes to the QMS (input c, CP6 of
     ``change-planning``) only when the inputs hold ``cambios``. A block's ``nota``
-    says when its list was cut at ``LIST_LIMIT``.
+    says when its list was cut at ``LIST_LIMIT``. Product/service conformity
+    (input c, 9.1.3 a) likewise appears only with ``conformidad``; the same
+    blocks render both on screen and in the minutes.
     """
     def n(*path: str) -> str:
         return _number(_at(datos, *path))
@@ -342,6 +344,21 @@ def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
             (p.get('nombre'), _number(p.get('total')))
             for p in rows('proveedores', 'no_conformidades', 'por_proveedor')))
     ] if isinstance(_at(datos, 'proveedores'), Mapping) else []
+    conformity = _at(datos, 'conformidad')
+    conformity_blocks = []
+    if isinstance(conformity, Mapping):
+        metrics = conformity_analysis.FIGURES
+        conformity_blocks.append(_block('Conformidad de productos y servicios', [
+            (label, n('conformidad', 'totales', key)) for key, label in metrics]))
+        for dimension, count, title, heading in (
+                ('por_proceso', 'procesos', 'Por proceso de la orden', 'Proceso'),
+                ('por_cliente', 'clientes', 'Por cliente de la orden', 'Cliente')):
+            conformity_blocks.append(_block(
+                title, [], (heading, *(label for _, label in metrics)),
+                ((row.get('nombre'), *(_number(row.get(key)) for key, _ in metrics))
+                 for row in rows('conformidad', dimension)),
+                _cut(datos, ('conformidad', count), ('conformidad', dimension),
+                     'primeros por nombre')))
     cambios = [_block('Cambios en el SGC', [
         ('Cambios propuestos en el periodo', n('cambios', 'propuestos')),
         ('Cambios aprobados en el periodo', n('cambios', 'aprobados')),
@@ -376,7 +393,7 @@ def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
         'comentario_acciones_previas': [previas],
         'comentario_contexto': contexto,
         'comentario_desempeno': [satisfaccion, objetivos, indicadores, no_conformidades,
-                                 auditorias, *proveedores, *cambios],
+                                 auditorias, *proveedores, *conformity_blocks, *cambios],
         'comentario_recursos': [capacitaciones],
         'comentario_riesgos': [],  # no register: the comment covers it
         'comentario_mejora': [mejoras],

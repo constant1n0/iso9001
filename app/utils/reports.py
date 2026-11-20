@@ -28,7 +28,7 @@ from ..models import (
     EstadoObjetivo, HallazgoAuditoria, MedicionObjetivo, NoConformidad, ObjetivoCalidad,
     ResultadoVerificacion, SatisfaccionCliente, TipoHallazgo,
 )
-from ..services import quality_objectives
+from ..services import conformity_analysis, quality_objectives
 from .pdf import render_pdf
 
 E = TypeVar("E", bound=Enum)
@@ -108,6 +108,10 @@ def _monthly_report_context(fecha: date, *, today: date | None = None) -> dict:
     and those meeting their target or with an overdue measurement, are judged
     on the month's last day, or on ``today`` when earlier (``_objective_figures``).
 
+    Conformity follows ``conformity_analysis.in_period`` for the full month:
+    decisions, their verifications and distinct dated production NC citations,
+    with every process/customer group (unlike the bounded review lists).
+
     ``today`` is the day the report is generated, its ``generado`` date; it
     defaults to the local date in ``APP_TIMEZONE``. ``periodo`` names the month.
     """
@@ -133,6 +137,8 @@ def _monthly_report_context(fecha: date, *, today: date | None = None) -> dict:
         fecha=fecha,
         periodo=f"{_MONTH_NAMES[start.month - 1]} de {start.year}",
         generado=today,
+        conformidad=conformity_analysis.in_period(db.session, start, end - timedelta(days=1)),
+        conformity_figures=conformity_analysis.FIGURES,
         total_auditorias=Auditoria.query.filter(in_month(Auditoria.fecha)).count(),
         auditorias_completadas=Auditoria.query.filter(
             in_month(Auditoria.fecha), Auditoria.estado == EstadoAuditoriaEnum.COMPLETADA

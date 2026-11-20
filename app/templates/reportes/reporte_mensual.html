@@ -64,6 +64,37 @@
     ]) }}
     <p class="muted">Situación de los objetivos activos a {{ objetivos_fecha_corte.strftime('%d/%m/%Y') }}.</p>
 </div>
+{% macro conformity_value(value) -%}
+{{ (value | int if value == value | int else value | string | replace('.', ',')) if value is not none else '—' }}
+{%- endmacro %}
+<div class="section">
+    <h2>Conformidad de productos y servicios</h2>
+    <table class="fields">
+        {% for key, label in conformity_figures %}
+        <tr><th>{{ label }}</th><td>{{ conformity_value(conformidad.totales[key]) }}</td></tr>
+        {% endfor %}
+    </table>
+    <p class="muted">Liberaciones por fecha de decisión; verificaciones de esas liberaciones. No conformidades distintas citadas por controles, preservación e incidencias de propiedad por su fecha, o por posventa realizada por fecha de resultado. Una no conformidad puede figurar en varios grupos, pero solo una vez en el total.</p>
+</div>
+{# PDF-only tables: the shared fields theme sizes two-column key/value rows. #}
+<style>
+.conformity-table { table-layout: fixed; font-size: 7pt; }
+.conformity-table th, .conformity-table td { width: auto; padding: 1.5mm 1mm; overflow-wrap: anywhere; }
+.conformity-table th { font-size: 6pt; letter-spacing: normal; }
+</style>
+{% for dimension, heading, title in [('por_proceso', 'Proceso', 'Por proceso de la orden'), ('por_cliente', 'Cliente', 'Por cliente de la orden')] %}
+<div class="section">
+    <h2>{{ title }}</h2>
+    <table class="fields conformity-table">
+        <thead><tr><th>{{ heading }}</th>{% for key, label in conformity_figures %}<th>{{ label }}</th>{% endfor %}</tr></thead>
+        <tbody>
+            {% for row in conformidad[dimension] %}
+            <tr><td>{{ row.nombre }}</td>{% for key, label in conformity_figures %}<td>{{ conformity_value(row[key]) }}</td>{% endfor %}</tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endfor %}
 <div class="section">
     <h2>Alcance</h2>
     <p>Indicadores del sistema de gestión de calidad registrados en el mes del informe: las no conformidades por su fecha de detección, con su estado al generar el informe; las acciones correctivas por su fecha de verificación; las auditorías completadas por su fecha, y los hallazgos por la fecha de su auditoría. Las mediciones de los objetivos de calidad se cuentan por su fecha; los objetivos activos, con su estado al generar el informe, se valoran con sus mediciones hasta el último día del mes, o hasta el día en que se genera el informe si es anterior. La satisfacción media se expresa sobre 10.</p>
