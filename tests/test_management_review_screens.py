@@ -559,6 +559,58 @@ class ConformityScreensTestCase(ReviewScreensBase):
         self.assertNotIn('Conformidad de productos y servicios', self.inputs(old))
 
 
+class RiskEffectivenessScreensTestCase(ReviewScreensBase):
+    def test_effectiveness_renders_on_screen_and_minutes_with_existing_visibility(self) -> None:
+        from test_risk_effectiveness import RiskEffectivenessFixtures
+        from test_communication_independent import hashes
+
+        fixtures = RiskEffectivenessFixtures()
+        rid = self.review([self.ana])
+        self.login(AUDITOR)
+        with self.app.app_context():
+            fixtures.risk_action(result="no_eficaz", description="Retry qualification",
+                                 title="Supply disruption")
+            fixtures.risk_action(kind="oportunidad", result="eficaz")
+            fixtures.risk_action(kind="oportunidad")
+            before = hashes()
+        for html in (self.inputs(rid), self.pdf_html(f"{BASE}/{rid}/pdf", ROUTES)):
+            self.assertIn("Eficacia de las acciones de riesgos y oportunidades", html)
+            for text in ("Eficaces", "No eficaces", "Sin evaluar", "Retry qualification",
+                         "Supply disruption", "<td>Riesgos</td><td>1</td><td>0</td>",
+                         "<td>Oportunidades</td><td>2</td><td>1</td>"):
+                self.assertIn(text, html)
+        self.assertEqual("1", self.figure(self.inputs(rid), "Sin evaluar"))
+        with self.app.app_context():
+            self.assertEqual(before, hashes())
+        self.advance(rid, "hold")
+        frozen = self.inputs(rid)
+        pdf = self.pdf_html(f"{BASE}/{rid}/pdf", ROUTES)
+        with self.app.app_context():
+            fixtures.risk_action(result="no_eficaz")
+        self.assertEqual(frozen, self.inputs(rid))
+        self.assertEqual(pdf, self.pdf_html(f"{BASE}/{rid}/pdf", ROUTES))
+        self.login(ADMIN)
+        self.assertIn("Eficacia de las acciones", self.inputs(rid))
+        self.login(OPERATIVO)
+        self.denied("get", f"{BASE}/{rid}")
+        self.denied("get", f"{BASE}/{rid}/pdf")
+
+    def test_legacy_screen_and_minutes_are_byte_identical_without_empty_block(self) -> None:
+        import hashlib
+
+        rid = self.held_with(OLD_FROZEN)
+        self.login(AUDITOR)
+        # SHA-256 of the pre-T2 rendering with this exact legacy fixture.
+        for html, expected in (
+                (self.inputs(rid),
+                 "d8af4683ac46f955f84a3012c81ec14f8830989eb0e152decccd20c391ba5cd3"),
+                (self.pdf_html(f"{BASE}/{rid}/pdf", ROUTES),
+                 "1d34c0b0e03f67fa784a14b45c1d17f7f856b7d3e76a199d5c9c5ae42bfba229")):
+            with self.subTest(expected=expected):
+                self.assertNotIn("Eficacia de las acciones de riesgos y oportunidades", html)
+                self.assertEqual(expected, hashlib.sha256(html.encode()).hexdigest())
+
+
 class RolesTestCase(ReviewScreensBase):
     def test_auditors_write_drafts_and_actions_but_never_hold_close_or_delete(self) -> None:
         rid = self.review([self.ana])

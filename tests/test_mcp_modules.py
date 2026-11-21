@@ -299,6 +299,58 @@ class ModulesToolTestCase(McpDbCase):
         denied = await self.call(mcp_actor(OPERATIVO), 'qms_get', args)
         self.assertTrue(denied.is_error)
 
+    async def test_review_preview_exposes_risk_effectiveness_live_and_frozen(self) -> None:
+        from app.extensions import db
+        from app.services import management_reviews as mr
+        from test_risk_effectiveness import RiskEffectivenessFixtures, ADMIN, TODAY
+        from test_communication_independent import hashes
+
+        fixtures = RiskEffectivenessFixtures()
+        person = self.seed("personas")
+        review = self.seed("revisiones_direccion", asistente_ids=[person])
+        fixtures.risk_action(result="no_eficaz", kind="oportunidad")
+        args = {"module": "revisiones_direccion", "id": review}
+        before = hashes()
+        live = await self.call(mcp_actor(AUDITOR, scopes=("read",)), "qms_get", args)
+        self.assertFalse(live.is_error)
+        preview = live.structured_content["preview"]
+        self.assertEqual(1, preview.get("eficacia_riesgos", {}).get(
+            "totales", {}).get("no_eficaz"))
+        self.assertIn("conformidad", preview)
+        self.assertEqual(before, hashes())
+        mr.hold(db.session, ADMIN, review, today=TODAY)
+        db.session.commit()
+        fixtures.risk_action(result="eficaz")
+        frozen = await self.call(mcp_actor(ADMIN.role), "qms_get", args)
+        self.assertEqual(preview, frozen.structured_content["preview"])
+        for who in (mcp_actor(OPERATIVO), mcp_actor(ADMIN.role, scopes=("write",))):
+            before = hashes()
+            denied = await self.call(who, "qms_get", args)
+            self.assertTrue(denied.is_error)
+            self.assertEqual(before, hashes())
+
+    async def test_legacy_review_preview_is_byte_identical_without_effectiveness(self) -> None:
+        from app.extensions import db
+        from app.models import RevisionDireccion
+        from test_management_review_screens import OLD_FROZEN
+        from test_communication_independent import hashes
+
+        review = self.seed("revisiones_direccion")
+        db.session.execute(RevisionDireccion.__table__.update().where(
+            RevisionDireccion.id == review).values(
+                estado="celebrada", datos_entrada=OLD_FROZEN))
+        db.session.commit()
+        before = hashes()
+        for role in (ADMIN, AUDITOR):
+            result = await self.call(mcp_actor(role), "qms_get", {
+                "module": "revisiones_direccion", "id": review})
+            self.assertFalse(result.is_error)
+            expected = json.dumps(OLD_FROZEN, ensure_ascii=False, sort_keys=True)
+            actual = json.dumps(result.structured_content["preview"],
+                                ensure_ascii=False, sort_keys=True)
+            self.assertEqual(expected.encode(), actual.encode())
+        self.assertEqual(before, hashes())
+
     async def test_the_tool_is_registered_read_only(self) -> None:
         tools = {t.name: t for t in await self.list_tools()}
         annotations = tools["qms_modules"].annotations

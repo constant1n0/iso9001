@@ -2226,10 +2226,10 @@ registros del periodo, junto a su comentario:
   Cada lista muestra como mucho diez y avisa cuando hay más (**Se muestran los
   10 más recientes de …**);
 - **d)** la capacitación: sesiones, horas y temas;
-- **e)** la eficacia de las acciones tomadas para abordar los riesgos y las
-  oportunidades: cada acción registra la suya (véase
-  [Acciones](#acciones)), pero la revisión todavía no la resume, así que la
-  cubre el comentario;
+- **e)** la **Eficacia de las acciones de riesgos y oportunidades** (9.1.3 e):
+  acciones completadas en el periodo, eficaces, no eficaces y sin evaluar,
+  con una fila para riesgos y otra para oportunidades y la lista de acciones
+  no eficaces, junto al comentario; se define abajo;
 - **f)** las mejoras implantadas en el periodo.
 
 Los sucesos fechados cuentan todo el periodo, incluidos sus extremos. Las
@@ -2285,6 +2285,31 @@ informe mensual muestra todos. Los totales nunca se recortan. Al celebrar la
 revisión, las cifras y los nombres se congelan junto a proveedores; las
 revisiones antiguas sin esta entrada no la muestran. Consúltala con los
 mismos permisos de la revisión (administrador o auditor).
+
+#### Eficacia de las acciones de riesgos y oportunidades (9.1.3 e)
+
+La entrada e) resume solo acciones en estado **Completada** cuya **Fecha de
+finalización** (`fecha_completada`) cae entre el inicio y el fin del periodo,
+ambos incluidos. No cuentan pendientes, en curso ni canceladas, ni se usa la
+fecha límite, de identificación o de evaluación para incluirlas. Como las
+liberaciones, se usa todo el periodo solicitado, sin recortarlo por la fecha
+de corte.
+
+**Eficaces** y **No eficaces** cuentan el resultado registrado al consultar;
+**Sin evaluar** son las completadas sin evaluación de eficacia. Una evaluación
+posterior al periodo cuenta por su resultado actual: no se reconstruye su
+estado histórico al cierre. El total y las filas de **Riesgos** y
+**Oportunidades** no se recortan. **Acciones no eficaces** muestra descripción,
+tipo, título del riesgo u oportunidad y fecha de finalización: hasta diez,
+por finalización más reciente y, en caso de empate, identificador de acción
+ascendente. Si hay más, avisa: **Se muestran los 10 más recientes de …**.
+Descripciones y títulos se limitan a 120 caracteres.
+
+Solo consulta registros: no cambia acciones ni evaluaciones. Tiene los mismos
+permisos de la revisión (administrador o auditor). Al celebrarla se congelan
+recuentos, resultados y textos para la pantalla, el acta y la vista previa MCP;
+las revisiones antiguas sin esta entrada no añaden bloques nuevos. El informe
+mensual no incluye este resumen.
 
 ### Acciones (9.3.3)
 

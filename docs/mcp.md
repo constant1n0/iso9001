@@ -760,7 +760,7 @@ elimina, celebra ni cierra una revisión.
     servidor cuando es anterior; cada sección (`acciones_previas`,
     `contexto`, `satisfaccion`, `objetivos`, `indicadores`,
     `no_conformidades`, `auditorias`, `mejoras`, `capacitaciones`,
-    `proveedores`, `conformidad`) incluye sucesos del periodo completo; la fecha
+    `proveedores`, `conformidad`, `eficacia_riesgos`) incluye sucesos del periodo completo; la fecha
     de corte valora situaciones (por ejemplo, evaluaciones vencidas), no
     recorta las fechas de los sucesos. Sus listas contienen
     como máximo diez elementos. `contexto` (9.3.2 b) incluye `cuestiones`: las
@@ -791,6 +791,19 @@ elimina, celebra ni cierra una revisión.
     lista a diez por nombre (nombres de hasta 120 caracteres). Se congela con
     el resto de entradas y no aparece en revisiones celebradas antes de su
     incorporación. No hay herramienta ni permiso nuevos.
+    `eficacia_riesgos` (9.3.2 e, 9.1.3 e) cuenta acciones de riesgos y
+    oportunidades en estado `completada` por `fecha_completada` entre los
+    extremos inclusivos, no por fecha de evaluación ni fecha de corte.
+    `totales` y `por_tipo` (`riesgos`, `oportunidades`) contienen `total`,
+    `eficaz`, `no_eficaz` y `sin_evaluar` (completadas sin evaluación), según el
+    resultado actual aunque la evaluación sea posterior al periodo.
+    `no_eficaces_lista` contiene hasta diez por finalización descendente e id
+    ascendente: `id`, `descripcion`, `tipo` (`riesgo`/`oportunidad`),
+    `registro_id`, `titulo` del registro y `fecha_completada` ISO. Descripción
+    y título tienen hasta 120 caracteres; los recuentos no se recortan.
+    Se congela con las demás entradas; las revisiones antiguas sin la clave
+    conservan su vista previa sin ella. No escribe ni modifica evaluaciones,
+    ni añade herramientas o permisos.
   - Filtros: `estado` y `anio` (el año de la reunión).
 - `acciones_revision`: `revision_id`, `tipo` (`mejora`, `cambio_sgc`,
   `recursos`), `descripcion`, `responsable_id` (una persona) y `fecha_limite`

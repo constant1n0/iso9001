@@ -84,7 +84,7 @@ from ..models import (
 )
 from . import (
     audit, conformity_analysis, context_issues, crud, fields, people, policy,
-    providers, qms_changes,
+    providers, qms_changes, risk_effectiveness,
     quality_objectives, risks,
 )
 from .actor import Actor
@@ -686,6 +686,13 @@ def inputs(session: Session, actor: Actor, desde: date, hasta: date, *, today: d
       cut-off only judges states. Group lists are name-ordered, limited to
       ``LIST_LIMIT``; ``procesos``/``clientes`` count all groups. Older reviews
       froze no such section.
+    - ``eficacia_riesgos`` (9.3.2 e, 9.1.3 e): completed risk/opportunity
+      actions by inclusive ``fecha_completada``, with current effectiveness
+      (``eficaz``, ``no_eficaz``, or ``sin_evaluar`` without evaluation), totals
+      and counts by parent type. Evaluation dates do not bound membership.
+      ``no_eficaces_lista`` lists the latest completions first, id breaking
+      ties, bounded by ``LIST_LIMIT`` and ``SHORT_TEXT``. Older reviews froze
+      no such section.
     - ``cambios`` (9.3.2 c, decision CP6 of ``change-planning``,
       ``qms_changes.in_period``): the changes to the QMS proposed
       (``propuestos``), approved (``aprobados``), implemented (``implantados``),
@@ -753,6 +760,7 @@ def _inputs(session: Session, desde: date, hasta: date, *, today: date,
         "capacitaciones": _training(session, desde, hasta),
         "proveedores": _providers(session, desde, hasta, cut_off),
         "conformidad": _conformity(session, desde, hasta),
+        "eficacia_riesgos": _risk_effectiveness(session, desde, hasta),
         "cambios": _qms_changes(session, desde, hasta, cut_off),
     })
 
@@ -1044,6 +1052,15 @@ def _conformity(session: Session, desde: date, hasta: date) -> dict[str, Any]:
         found[count] = len(found[dimension])
         found[dimension] = [row | {"nombre": _short(row["nombre"])}
                             for row in found[dimension][:LIST_LIMIT]]
+    return found
+
+
+def _risk_effectiveness(session: Session, desde: date, hasta: date) -> dict[str, Any]:
+    """Apply the review's established list and short-text limits to the analysis."""
+    found = risk_effectiveness.in_period(session, desde, hasta)
+    found["no_eficaces_lista"] = [
+        row | {key: _short(row[key]) for key in ("descripcion", "titulo")}
+        for row in found["no_eficaces_lista"][:LIST_LIMIT]]
     return found
 
 

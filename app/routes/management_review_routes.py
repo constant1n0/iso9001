@@ -71,7 +71,7 @@ from ..models import (
     ResultadoEvaluacion, RevisionDireccion, TipoAccionRevision, TipoContexto, TipoHallazgo,
 )
 from ..services import management_reviews as mr
-from ..services import conformity_analysis, people
+from ..services import conformity_analysis, people, risk_effectiveness
 from ..services.actor import Actor
 from ..services.errors import NotFound, PermissionDenied
 from ..utils.pdf import pdf_response, render_pdf
@@ -195,7 +195,8 @@ def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
     ``change-planning``) only when the inputs hold ``cambios``. A block's ``nota``
     says when its list was cut at ``LIST_LIMIT``. Product/service conformity
     (input c, 9.1.3 a) likewise appears only with ``conformidad``; the same
-    blocks render both on screen and in the minutes.
+    blocks render both on screen and in the minutes. Risk/opportunity action
+    effectiveness (input e, 9.1.3 e) appears only with ``eficacia_riesgos``.
     """
     def n(*path: str) -> str:
         return _number(_at(datos, *path))
@@ -389,13 +390,33 @@ def input_sections(datos: Mapping[str, Any]) -> list[dict[str, Any]]:
         ('Mejoras implantadas en el periodo', n('mejoras', 'total')),
     ], ('Mejora', 'Fecha'), ((m.get('descripcion'), _day(m.get('fecha')))
                              for m in rows('mejoras', 'lista')))
+    effectiveness = []
+    if isinstance(_at(datos, 'eficacia_riesgos'), Mapping):
+        metrics = risk_effectiveness.FIGURES
+        effectiveness = [_block('Eficacia de las acciones de riesgos y oportunidades', [
+            (label, n('eficacia_riesgos', 'totales', key)) for key, label in metrics],
+            ('Tipo', *(label for _, label in metrics)), (
+                (label, *(n('eficacia_riesgos', 'por_tipo', kind, key)
+                          for key, _ in metrics))
+                for kind, label in (('riesgos', 'Riesgos'),
+                                    ('oportunidades', 'Oportunidades'))),
+            ('Sin datos de los registros: se valora en el comentario.'
+             if _at(datos, 'eficacia_riesgos', 'totales', 'total') == 0 else None)),
+            _block('Acciones no eficaces', [],
+                   ('Descripción', 'Tipo', 'Riesgo u oportunidad', 'Finalizada'), (
+                       (a.get('descripcion'),
+                        'Riesgo' if a.get('tipo') == 'riesgo' else 'Oportunidad',
+                        a.get('titulo'), _day(a.get('fecha_completada')))
+                       for a in rows('eficacia_riesgos', 'no_eficaces_lista')),
+                   _cut(datos, ('eficacia_riesgos', 'totales', 'no_eficaz'),
+                        ('eficacia_riesgos', 'no_eficaces_lista'), 'más recientes'))]
     blocks = {
         'comentario_acciones_previas': [previas],
         'comentario_contexto': contexto,
         'comentario_desempeno': [satisfaccion, objetivos, indicadores, no_conformidades,
                                  auditorias, *proveedores, *conformity_blocks, *cambios],
         'comentario_recursos': [capacitaciones],
-        'comentario_riesgos': [],  # no register: the comment covers it
+        'comentario_riesgos': effectiveness,
         'comentario_mejora': [mejoras],
     }
     return [{'titulo': titulo, 'comentario': field, 'bloques': blocks[field]}
