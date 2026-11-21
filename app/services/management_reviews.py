@@ -83,7 +83,8 @@ from ..models import (
     SatisfaccionCliente, TipoAccionRevision, TipoHallazgo,
 )
 from . import (
-    audit, context_issues, crud, fields, people, policy, providers, qms_changes,
+    audit, conformity_analysis, context_issues, crud, fields, people, policy,
+    providers, qms_changes,
     quality_objectives, risks,
 )
 from .actor import Actor
@@ -678,6 +679,13 @@ def inputs(session: Session, actor: Actor, desde: date, hasta: date, *, today: d
       ``proveedor`` origin detected in the period, those naming no provider
       (``sin_proveedor``) and, in ``por_proveedor``, the most cited providers
       first, then by name. Reviews held before EP-3 froze no such section.
+    - ``conformidad`` (9.3.2 c, 9.1.3 a): ``conformity_analysis.in_period``
+      gives ``totales``, ``por_proceso`` and ``por_cliente`` for decided releases,
+      their verifications and distinct dated production NC citations. Dated
+      events use the full inclusive period, like provider evaluations; the
+      cut-off only judges states. Group lists are name-ordered, limited to
+      ``LIST_LIMIT``; ``procesos``/``clientes`` count all groups. Older reviews
+      froze no such section.
     - ``cambios`` (9.3.2 c, decision CP6 of ``change-planning``,
       ``qms_changes.in_period``): the changes to the QMS proposed
       (``propuestos``), approved (``aprobados``), implemented (``implantados``),
@@ -744,6 +752,7 @@ def _inputs(session: Session, desde: date, hasta: date, *, today: date,
         "mejoras": _improvements(session, desde, hasta),
         "capacitaciones": _training(session, desde, hasta),
         "proveedores": _providers(session, desde, hasta, cut_off),
+        "conformidad": _conformity(session, desde, hasta),
         "cambios": _qms_changes(session, desde, hasta, cut_off),
     })
 
@@ -1026,6 +1035,16 @@ def _providers(session: Session, desde: date, hasta: date, cut_off: date) -> dic
                               for provider_id, nombre, total in most_cited],
         },
     }
+
+
+def _conformity(session: Session, desde: date, hasta: date) -> dict[str, Any]:
+    """Bound the analysis lists and names just like the other frozen inputs."""
+    found = conformity_analysis.in_period(session, desde, hasta)
+    for dimension, count in (("por_proceso", "procesos"), ("por_cliente", "clientes")):
+        found[count] = len(found[dimension])
+        found[dimension] = [row | {"nombre": _short(row["nombre"])}
+                            for row in found[dimension][:LIST_LIMIT]]
+    return found
 
 
 def _qms_changes(session: Session, desde: date, hasta: date, cut_off: date) -> dict[str, Any]:

@@ -522,6 +522,43 @@ class WebFlowTestCase(ReviewScreensBase):
                       self.html(f"{BASE}/?estado=celebrada"))
 
 
+class ConformityScreensTestCase(ReviewScreensBase):
+    def test_conformity_renders_and_freezes_in_page_and_minutes(self) -> None:
+        from test_conformity_analysis import ConformityFixtures
+
+        fixtures = ConformityFixtures()
+        rid = self.review([self.ana])
+        self.login(AUDITOR)
+        empty = self.inputs(rid)
+        self.assertIn('Conformidad de productos y servicios', empty)
+        self.assertEqual('—', self.figure(empty, 'Verificaciones conformes (%)'))
+        with self.app.app_context():
+            release = fixtures.decision()
+            fixtures.check(release)
+        page = self.inputs(rid)
+        self.assertEqual('1', self.figure(page, 'Liberadas sin concesión'))
+        self.assertEqual('100', self.figure(page, 'Verificaciones conformes (%)'))
+        for title in ('Por proceso de la orden', 'Por cliente de la orden', 'Sin cliente'):
+            self.assertIn(title, page)
+        pdf = self.pdf_html(f'{BASE}/{rid}/pdf', ROUTES)
+        self.assertIn('Conformidad de productos y servicios', pdf)
+        self.assertIn('<td>Sin cliente</td>', pdf)
+        self.advance(rid, 'hold')
+        frozen = self.inputs(rid)
+        with self.app.app_context():
+            fixtures.decision(date(2026, 5, 1))
+        self.assertEqual(frozen, self.inputs(rid))
+        self.assertEqual('1', self.pdf_fields(
+            self.pdf_html(f'{BASE}/{rid}/pdf', ROUTES))['Liberadas sin concesión'])
+        self.login(OPERATIVO)
+        self.denied('get', f'{BASE}/{rid}')
+        self.denied('get', f'{BASE}/{rid}/pdf')
+        self.login(ADMIN)
+        self.assertIn('Conformidad de productos y servicios', self.inputs(rid))
+        old = self.held_with(OLD_FROZEN)
+        self.assertNotIn('Conformidad de productos y servicios', self.inputs(old))
+
+
 class RolesTestCase(ReviewScreensBase):
     def test_auditors_write_drafts_and_actions_but_never_hold_close_or_delete(self) -> None:
         rid = self.review([self.ana])

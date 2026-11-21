@@ -2215,7 +2215,8 @@ registros del periodo, junto a su comentario:
   evaluación vencida en la fecha de corte, las evaluaciones del periodo con su
   puntuación media y sus resultados, los proveedores con una evaluación **No
   apto** en el periodo, y las no conformidades de origen **Proveedor**
-  detectadas en el periodo, con los diez proveedores más citados; y los
+  detectadas en el periodo, con los diez proveedores más citados; la
+  **Conformidad de productos y servicios** (9.1.3 a), definida abajo; y los
   cambios en el SGC (6.3): los propuestos, aprobados, implantados, con la
   eficacia revisada (eficaces y no eficaces) y cancelados en el periodo, cada
   uno contado por la fecha de esa etapa; los implantados o revisados en el
@@ -2231,9 +2232,11 @@ registros del periodo, junto a su comentario:
   cubre el comentario;
 - **f)** las mejoras implantadas en el periodo.
 
-Las cifras cuentan el periodo hasta su final, o hasta hoy si el final es
-posterior (la **Fecha de corte**); los recuentos de cuestiones vigentes y la
-versión del alcance son los del momento en que se calculan. Las revisiones
+Los sucesos fechados cuentan todo el periodo, incluidos sus extremos. Las
+situaciones al cierre (por ejemplo, objetivos o evaluaciones vencidas) se
+valoran hasta su final, o hasta hoy si es anterior (la **Fecha de corte**);
+los recuentos de cuestiones vigentes y la versión del alcance son los del
+momento en que se calculan. Las revisiones
 celebradas antes de que existiera el registro de proveedores no muestran la
 parte de los proveedores, ni las celebradas antes del registro de cuestiones
 del contexto muestran las cuestiones ni el alcance, ni las celebradas antes
@@ -2242,6 +2245,46 @@ en el momento y
 se marcan como **Datos provisionales**. Celebrar la revisión las congela, de
 modo que la revisión y su acta siguen mostrando lo que se presentó aunque los
 registros cambien después.
+
+#### Conformidad de productos y servicios (9.1.3 a)
+
+Esta entrada de c) y el apartado del informe mensual muestran los mismos
+indicadores, sin crear ni modificar registros:
+
+- **Liberadas sin concesión**, **Liberadas con concesión** y **Rechazadas**:
+  decisiones cuya **fecha de decisión** está entre el inicio y el fin del
+  periodo, ambos incluidos. Los borradores no cuentan. Un rechazo y una
+  liberación posterior son dos decisiones distintas, aunque sean de una orden.
+- **Verificaciones de liberaciones decididas**: todas las verificaciones de
+  esas decisiones, aunque la fecha de la verificación esté fuera del periodo.
+  **Verificaciones conformes (%)** y **Verificaciones no conformes (%)** dividen
+  cada resultado por ese total, redondeado a dos decimales; sin verificaciones
+  se muestra **—**, no un 0 %.
+- **No conformidades de producción**: identificadores distintos de NC citados
+  por registros de control o preservación, o incidencias de propiedad, cuya
+  fecha cae en el periodo; también por actividades de posventa **realizadas**
+  cuya fecha de resultado cae en él. No cuentan posventas pendientes ni
+  anuladas. Se usa la fecha de la evidencia, no la detección de la NC; el
+  origen y el estado actual de la NC no la excluyen. No se exige liberación.
+  Citar una NC varias veces solo la cuenta una vez en el total.
+
+Las tablas **Por proceso de la orden** y **Por cliente de la orden** repiten
+las mismas métricas. Usan el proceso y cliente actuales de las órdenes
+vinculadas, no el dueño de una propiedad ni el cliente de una actividad de
+posventa. Las citas sin orden cuentan en **Sin orden** (proceso) y **Sin
+cliente**; las órdenes sin cliente también cuentan en **Sin cliente**.
+Una NC vinculada a varias órdenes cuenta una vez por grupo afectado, por lo
+que sumar grupos puede superar el total de NC distintas. Se muestran solo
+los grupos con decisiones o citas en el periodo.
+
+Como las evaluaciones de proveedores, estos sucesos se cuentan en todo el
+periodo solicitado: la fecha de corte valora situaciones, no recorta las
+fechas de las decisiones ni de las citas. La revisión y su acta muestran
+hasta diez grupos por tabla, ordenados por nombre, y avisan si hay más; el
+informe mensual muestra todos. Los totales nunca se recortan. Al celebrar la
+revisión, las cifras y los nombres se congelan junto a proveedores; las
+revisiones antiguas sin esta entrada no la muestran. Consúltala con los
+mismos permisos de la revisión (administrador o auditor).
 
 ### Acciones (9.3.3)
 
@@ -2462,6 +2505,12 @@ Cada cifra cuenta:
 | **Objetivos activos** | Los objetivos que están **Activo** al generar el informe y que empezaron, como tarde, el último día del mes |
 | **Objetivos activos que cumplen la meta** | De ellos, los que cumplen su meta con las mediciones hasta el último día del mes |
 | **Objetivos activos con medición vencida** | De ellos, los que tienen una medición vencida el último día del mes |
+
+El apartado **Conformidad de productos y servicios** añade los totales del mes
+natural y las tablas por proceso y por cliente con las
+[definiciones de la entrada de conformidad](#conformidad-de-productos-y-servicios-913-a).
+Sigue el patrón de cifras de acciones correctivas y objetivos de calidad;
+el informe mensual no tiene un apartado de proveedores.
 
 Un objetivo cerrado después de terminar el mes ya no cuenta como activo,
 porque el sistema no guarda la fecha de los cambios de estado.

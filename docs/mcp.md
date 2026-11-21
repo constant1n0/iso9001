@@ -760,7 +760,9 @@ elimina, celebra ni cierra una revisión.
     servidor cuando es anterior; cada sección (`acciones_previas`,
     `contexto`, `satisfaccion`, `objetivos`, `indicadores`,
     `no_conformidades`, `auditorias`, `mejoras`, `capacitaciones`,
-    `proveedores`) recuenta el periodo hasta esa fecha, y sus listas contienen
+    `proveedores`, `conformidad`) incluye sucesos del periodo completo; la fecha
+    de corte valora situaciones (por ejemplo, evaluaciones vencidas), no
+    recorta las fechas de los sucesos. Sus listas contienen
     como máximo diez elementos. `contexto` (9.3.2 b) incluye `cuestiones`: las
     cuestiones del contexto nuevas, modificadas y superadas en el periodo, con
     su lista (`cambio` es `nueva` o `modificada`), y los recuentos actuales de
@@ -773,6 +775,22 @@ elimina, celebra ni cierra una revisión.
     resultados, los proveedores con una evaluación `no_apto` en el periodo y
     las no conformidades de origen `proveedor` del periodo por proveedor; las
     revisiones celebradas antes de que existiera no la tienen.
+    `conformidad` (9.1.3 a) contiene `totales`, `por_proceso` y `por_cliente`:
+    `liberadas` (sin concesión), `con_concesion`, `rechazadas` por fecha de
+    decisión inclusiva, sin borradores; `verificaciones` de esas decisiones,
+    cualquiera que sea su fecha, `porcentaje_conformes` y
+    `porcentaje_no_conformes` (números redondeados a dos decimales, `null` sin
+    verificaciones; la interfaz muestra «—»), y `no_conformidades` distintas.
+    Estas son NC citadas por controles, preservación e incidencias de propiedad
+    por su fecha, o por posventas realizadas por fecha de resultado; no se usa
+    la detección de la NC ni se exige liberación. Cada fila añade `id` y
+    `nombre` del proceso o cliente actual de la orden; sin orden, proceso
+    `null`/«Sin orden»; sin cliente, `null`/«Sin cliente». Una NC puede contar
+    en varios grupos, pero una vez en cada grupo y una vez en el total.
+    `procesos` y `clientes` indican cuántos grupos hay antes de limitar cada
+    lista a diez por nombre (nombres de hasta 120 caracteres). Se congela con
+    el resto de entradas y no aparece en revisiones celebradas antes de su
+    incorporación. No hay herramienta ni permiso nuevos.
   - Filtros: `estado` y `anio` (el año de la reunión).
 - `acciones_revision`: `revision_id`, `tipo` (`mejora`, `cambio_sgc`,
   `recursos`), `descripcion`, `responsable_id` (una persona) y `fecha_limite`
