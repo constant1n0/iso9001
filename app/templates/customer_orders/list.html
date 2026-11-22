@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% from '_partials/ui.html' import page_header %}
+{% block title %}Pedidos y contratos{% endblock %}
+{% block content %}
+{% call page_header('8.2 · Requisitos del cliente', 'Pedidos y contratos') %}
+{% if can('create', 'customer_order') %}<a class="btn" href="{{ url_for('customer_orders.new_order') }}">Nuevo pedido o contrato</a>{% endif %}{% endcall %}
+<form method="get" class="form-card">
+{% for key, label in [('status', 'Estado'), ('kind', 'Tipo'), ('customer_id', 'Cliente')] %}
+<label for="{{ key }}">{{ label }}</label><select id="{{ key }}" name="{{ key }}"><option value="">Todos</option>
+{% for value, text in choices[key] %}<option value="{{ value }}" {% if selected.get(key) == value %}selected{% endif %}>{{ text }}</option>{% endfor %}</select>
+{% endfor %}<button class="btn" type="submit">Filtrar</button></form>
+<section class="card">{% for item in items %}<p><a href="{{ url_for('customer_orders.show_order', order_id=item.id) }}">{{ item.code }}</a> · {{ item.customer.nombre }} · {{ item.kind.value }} · {{ item.received_date }} · {{ item.status.value }}</p>
+{% else %}<p>Sin pedidos.</p>{% endfor %}</section>
+{% endblock %}

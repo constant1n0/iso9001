@@ -28,6 +28,7 @@ from .models import (
     TipoConfirmacion, TipoEncuesta, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
     KnowledgeType, CommunicationChannel, CommunicationScope,
+    CustomerOrderKind, RequirementCheck, OrderReviewResult,
     DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult, ProductionKind,
     ProductionControlKind, PreservationAspect, ProductionResult, PropertyIncidentKind, PostDeliveryKind,
 )
@@ -1106,6 +1107,51 @@ class ProveedorForm(BaseForm):
     criterios_seleccion = TextAreaField('Criterios de selección')
     fecha_proxima_evaluacion = DateField('Próxima evaluación', validators=[Optional()])
     notas = TextAreaField('Notas')
+
+
+class CustomerOrderRevisionForm(BaseForm):
+    """Draft requirements; historical revisions are read-only."""
+
+    requirements = TextAreaField('Requisitos', validators=[DataRequired()])
+    delivery_requirements = TextAreaField('Requisitos de entrega')
+    post_delivery_requirements = TextAreaField('Requisitos de posventa')
+    change_reason = TextAreaField('Motivo del cambio (obligatorio desde la revisión 2)')
+    communicated_to = TextAreaField('Cambio comunicado a (obligatorio desde la revisión 2)')
+
+
+class CustomerOrderForm(CustomerOrderRevisionForm):
+    """First draft identity and requirements are saved together."""
+
+    code = StringField('Código interno', validators=[DataRequired(), Length(max=50)])
+    customer_id = SelectField('Cliente', coerce=optional_id, choices=[], validators=[DataRequired()])
+    kind = _choice('Tipo', CustomerOrderKind)
+    customer_reference = StringField('Referencia del cliente')
+    received_date = DateField('Fecha de recepción', validators=[DataRequired()])
+
+
+ORDER_CHECKS = dict(a='a) Requisitos del cliente', b='b) Entrega y posventa',
+    c='c) No declarados pero necesarios', d='d) Legales y reglamentarios', e='e) Propios')
+
+
+class CustomerOrderReviewForm(BaseForm):
+    """Immutable decision; reviewer and day never enter the posted form."""
+
+    differences_resolved = SelectField('Diferencias resueltas', choices=[('false', 'No'), ('true', 'Sí')])
+    undocumented = SelectField('Sin declaración documentada del cliente', choices=[('false', 'No'), ('true', 'Sí')])
+    confirmation_date = DateField('Fecha de confirmación del cliente', validators=[Optional()])
+    confirmation_means = StringField('Medio o referencia de confirmación')
+    result = _choice('Resultado', OrderReviewResult)
+
+
+for _letter, _label in ORDER_CHECKS.items():
+    setattr(CustomerOrderReviewForm, f'check_{_letter}', _choice(_label, RequirementCheck))
+    setattr(CustomerOrderReviewForm, f'note_{_letter}', TextAreaField(f'Nota {_letter})'))
+
+
+class CustomerOrderCancellationForm(BaseForm):
+    """Web-only cancellation justification."""
+
+    reason = TextAreaField('Motivo de cancelación', validators=[DataRequired()])
 
 
 class ClienteForm(BaseForm):

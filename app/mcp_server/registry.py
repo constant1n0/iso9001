@@ -30,7 +30,7 @@ from ..models import (
     DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult,
     DesignChangeState, ProductionKind, ProductionState,
     ProductionControlKind, PreservationAspect, ProductionResult, PropertyStatus, PropertyIncidentKind,
-    PostDeliveryKind, PostDeliveryStatus, ReleaseStatus,
+    PostDeliveryKind, PostDeliveryStatus, ReleaseStatus, CustomerOrderKind, CustomerOrderStatus,
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
@@ -40,6 +40,7 @@ from ..services import (
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
     training_resources, design, design_changes, design_controls, design_io, production,
     production_records, production_changes, production_property, production_post_delivery, product_release,
+    customer_orders,
 )
 from ..services.policy import Resource
 
@@ -757,6 +758,26 @@ _PRODUCTION_MODULES = (
         _f('customer_id', 'integer'), _f('lot')), extras=production.link_ids),
 )
 
+_CUSTOMER_ORDER_MODULES = (
+    Module('customer_orders', 'Customer orders and contracts (8.2)', Resource.CUSTOMER_ORDER,
+        _DatedWrites(customer_orders.orders), (
+            _f('code', required=True, note='Unique, up to 50 characters.'),
+            _f('customer_id', 'integer', True),
+            _f('kind', 'enum', True, members=CustomerOrderKind),
+            _f('customer_reference'), _f('received_date', 'date', True, note='Never future.'),
+            *(_f(k, required=k == 'requirements', note='Latest unreviewed revision only.')
+              for k in customer_orders.CONTENT),
+        ), (_f('status', 'enum', members=CustomerOrderStatus),
+            _f('kind', 'enum', members=CustomerOrderKind), _f('customer_id', 'integer')),
+        extras=lambda row: {'status': row.status}),
+    Module('customer_order_revisions', 'Numbered customer requirements (8.2.4)', Resource.CUSTOMER_ORDER,
+        customer_orders.revisions, (
+            _f('order_id', 'integer', True, note='Immutable parent; previous revision must be reviewed. Never review/cancel/delete via MCP.'),
+            *(_f(k, required=k == 'requirements', note='Reason and recipients required after revision 1. Only latest unreviewed editable; reads include immutable review checks, result, reviewer and date.')
+              for k in customer_orders.CONTENT),
+        ), (_f('order_id', 'integer'),)),
+)
+
 _MODULES = (
     Module('equipos_medicion', 'Measuring equipment', Resource.MEASURING_EQUIPMENT,
            equipment.equipment, (
@@ -858,6 +879,7 @@ _MODULES = (
         _f("duracion_horas", "integer"), _f("evaluacion_final"), _f("persona_id", "integer"),
     ), (_f("tema"), _f("fecha", "date"), _f("personal"))),
     *_customer_modules(),
+    *_CUSTOMER_ORDER_MODULES,
     Module("satisfaccion_clientes", "Customer satisfaction", Resource.CUSTOMER_SATISFACTION,
            satisfaction, (
         _f("cliente_id", "integer", True, note="Customer (clientes)."),

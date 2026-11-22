@@ -12,7 +12,7 @@ from sqlalchemy import exists, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..models import Cliente, Reclamacion, SatisfaccionCliente
+from ..models import Cliente, Reclamacion, SatisfaccionCliente, CustomerOrder
 from . import audit, crud, fields, people, policy
 from .actor import Actor
 from .errors import Conflict, NotFound, ValidationError
@@ -69,8 +69,10 @@ def delete(session: Session, actor: Actor, customer_id: int) -> None:
                                .execution_options(populate_existing=True))
     if found is None:
         raise NotFound(SPEC.not_found)
-    for model, message in ((SatisfaccionCliente, HAS_SURVEYS), (Reclamacion, HAS_COMPLAINTS)):
-        if session.scalar(select(exists().where(model.cliente_id == customer_id))):
+    for column, message in ((SatisfaccionCliente.cliente_id, HAS_SURVEYS),
+            (Reclamacion.cliente_id, HAS_COMPLAINTS),
+            (CustomerOrder.customer_id, 'No se puede eliminar un cliente que tiene pedidos.')):
+        if session.scalar(select(exists().where(column == customer_id))):
             raise Conflict(message)
     audit.record(session, actor, 'delete', found)
     session.delete(found)

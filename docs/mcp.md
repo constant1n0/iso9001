@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera los módulos: `product_releases`, `release_verifications`, `post_delivery_activities`, `customer_property`, `property_incidents`, `production_changes`, `production_control_records`, `production_preservation_records`, `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
+`qms_modules` enumera los módulos: `customer_orders`, `customer_order_revisions`, `product_releases`, `release_verifications`, `post_delivery_activities`, `customer_property`, `property_incidents`, `production_changes`, `production_control_records`, `production_preservation_records`, `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -71,6 +71,29 @@ nunca puede eliminar.
 `cambios_sgc`, `tareas_cambio`, `clientes`, `reclamaciones` y `confirmaciones_lectura`. Cada campo tiene un `type`, un indicador
 `required`, los valores `allowed` de los enumerados y, cuando los indicadores
 no bastan, una breve `note`.
+
+Pedidos y contratos (8.2): `customer_orders` crea y actualiza borradores con
+`code` único, `customer_id`, `kind` (`order`, `contract`, `accepted_offer`),
+`received_date` YYYY-MM-DD no futura y `requirements` obligatorios; opcionales
+`customer_reference`, `delivery_requirements`, `post_delivery_requirements`,
+`change_reason` y `communicated_to`. Devuelve `status` derivado (etiqueta española);
+filtros `status` (`pending`, `accepted`, `rejected`, `cancelled`), `kind`, `customer_id`.
+La identidad queda fija tras la primera revisión. Las escrituras de requisitos
+se aplican a la última revisión sin revisar; omitir campos conserva su contenido.
+
+`customer_order_revisions` consulta todo el historial y crea la siguiente revisión
+solo tras revisar la anterior: `order_id`, `requirements`, `change_reason` y
+`communicated_to` obligatorios desde la revisión 2; entrega y posventa opcionales.
+Filtro `order_id`. Solo actualiza la última sin revisar; `order_id` nunca cambia.
+Cada registro devuelve `number` y las columnas de revisión de requisitos, todas
+de solo lectura: `check_a`…`check_e` (cumple/no cumple/no aplica), `note_a`…`note_e`,
+`differences_resolved`, `undocumented`, `confirmation_date`, `confirmation_means`,
+`result`, `reviewer_id` y `review_date`; son nulas antes de revisar.
+Todos leen; administradores y auditores escriben con ámbito `write`. MCP nunca
+revisa, cancela ni elimina, ni enviando columnas de decisión. Las revisiones
+revisadas son inmutables. Solo la última aceptada compromete; abrir otra retira
+ese compromiso hasta aceptarla. Aceptar exige cinco cumple/no aplica y diferencias
+resueltas; la confirmación sin requisitos documentados exige fecha y medio.
 
 Liberación (8.6): `product_releases` crea, consulta, lista y
 actualiza **borradores**: `order_id` obligatorio (orden terminada, cita inmutable)

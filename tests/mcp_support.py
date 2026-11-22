@@ -39,6 +39,10 @@ SEEDS = {
     "auditorias": {"area_auditada": "Calidad", "fecha": "2026-10-01", "auditor": "Ana", "resultado": "Sin hallazgos"},
     "capacitaciones": {"tema": "Seguridad", "fecha": "2026-10-01", "personal": "Ana"},
     "clientes": {"nombre": "ACME"},
+    'customer_orders': {'code': 'C-1', 'customer_id': 1, 'kind': 'order',
+        'received_date': '2020-01-01', 'requirements': 'Containers'},
+    'customer_order_revisions': {'order_id': 1, 'requirements': 'Changed',
+        'change_reason': 'New needs', 'communicated_to': 'Customer'},
     "reclamaciones": {"cliente_id": 1, "descripcion": "Entrega retrasada"},
     "satisfaccion_clientes": {"cliente_id": 1, "tipo_encuesta": "otra", "canal": "otro",
                               "fecha_encuesta": "2026-10-01", "puntuacion": 8},
@@ -200,6 +204,18 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
     def seed(self, slug: str, **overrides) -> int:
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
+        if slug == 'customer_orders' and db.session.get(Cliente, 1) is None:
+            self.seed('clientes')
+        if slug == 'customer_order_revisions':
+            from app.models import CustomerOrder
+            from app.services import customer_orders
+            if db.session.get(CustomerOrder, 1) is None:
+                self.seed('customer_orders')
+            row = customer_orders.latest(db.session, 1)  # parent creation already seeds revision 1
+            if overrides:
+                customer_orders.revisions.update(db.session, self.cli(), row.id, overrides)
+                db.session.commit()
+            return row.id
         if slug == 'product_releases':
             self.finish_release_order()
         if slug == 'release_verifications':
@@ -288,6 +304,21 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
         row = module.service.create(db.session, admin, data)
         db.session.commit()
         return sa_inspect(row).mapper.primary_key_from_instance(row)[0]
+
+    def prepare_customer_revision(self) -> None:
+        """Fixture-only accepted review so generic loops may append revision two."""
+        from app.models import CustomerOrder, CustomerOrderRevision
+        if db.session.get(CustomerOrder, 1) is None:
+            self.seed('customer_orders')
+        if db.session.get(Person, 1) is None:
+            self.seed('personas')
+        row = db.session.scalar(db.select(CustomerOrderRevision).where(
+            CustomerOrderRevision.order_id == 1).order_by(CustomerOrderRevision.number.desc()).limit(1))
+        if row.result is None:
+            db.session.execute(CustomerOrderRevision.__table__.update().where(CustomerOrderRevision.id == row.id).values(
+                result='accepted', reviewer_id=1, review_date=date(2020, 1, 1),
+                differences_resolved=True, undocumented=False, **{f'check_{c}': 'conforming' for c in 'abcde'}))
+            db.session.commit()
 
     def finish_release_order(self) -> None:
         """Prepare a finished order through its existing lifecycle service."""
