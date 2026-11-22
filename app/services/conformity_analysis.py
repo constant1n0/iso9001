@@ -91,9 +91,11 @@ def in_period(session: Session, desde: date, hasta: date) -> dict[str, Any]:
                "con_concesion" if concession else "liberadas")
         for target in targets:
             target.counts[key] += 1
+    # Count the verifications of exactly the releases read above: re-running
+    # ``decided`` would see a release decided meanwhile, without its buckets.
     for release_id, result in session.execute(select(
             ReleaseVerification.release_id, ReleaseVerification.result).where(
-                ReleaseVerification.release_id.in_(decided))):
+                ReleaseVerification.release_id.in_(list(release_buckets)))):
         for target in release_buckets[release_id]:
             target.counts[result.name] += 1
 
