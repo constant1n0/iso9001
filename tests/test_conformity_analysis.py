@@ -247,3 +247,34 @@ class ConformityRules(ConformityFixtures, ServiceBase):
         self.assertEqual(live, frozen)
         self.assertNotEqual(frozen["conformidad"], self.analysis())
         self.assertEqual(live["proveedores"], frozen["proveedores"])
+
+
+class ConcurrentDecision(ConformityFixtures, ServiceBase):
+    """A release decided between the analysis queries must not break it."""
+
+    def test_release_decided_between_queries_is_left_out_consistently(self) -> None:
+        from unittest.mock import patch
+        from app.services import conformity_analysis
+        counted = self.decision()
+        self.check(counted)
+        draft = self.decision(status="draft")
+        self.check(draft, "nonconforming")
+        db.session.commit()
+        original, calls = db.session.execute, []
+
+        def decide_after_releases(statement, *args, **kwargs):
+            result = original(statement, *args, **kwargs)
+            calls.append(statement)
+            if len(calls) == 1:
+                original(ProductRelease.__table__.update()
+                         .where(ProductRelease.id == draft)
+                         .values(status="released", decision_date=START, decided_by_id=1,
+                                 decided_by_user_id=1, concession=False,
+                                 decision_note="Concurrent"))
+            return result
+
+        with patch.object(db.session, "execute", side_effect=decide_after_releases):
+            found = conformity_analysis.in_period(db.session, START, END)
+        self.assertEqual((1, 1, 100.0), (found["totales"]["liberadas"],
+                                         found["totales"]["verificaciones"],
+                                         found["totales"]["porcentaje_conformes"]))
