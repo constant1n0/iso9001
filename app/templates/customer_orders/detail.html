@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% from '_partials/ui.html' import page_header, delete_form %}
+{% from '_partials/forms.html' import field %}
+{% block title %}{{ item.code }}{% endblock %}
+{% block content %}
+{{ page_header('8.2 · Pedidos y contratos', item.code) }}
+<section class="card"><p>{{ item.customer.nombre }} · {{ item.kind.value }} · {{ item.customer_reference or '—' }} · {{ item.received_date }}</p>
+<h2>{{ item.status.value }}</h2><p>Solo una revisión aceptada de los últimos requisitos permite comprometer el suministro.</p>
+{% if item.cancellation_reason %}<p>{{ item.cancellation_reason }}</p>{% endif %}
+{% if not item.cancelled %}
+{% if can('update', 'customer_order') and not latest.result and latest.number == 1 %}<a class="btn" href="{{ url_for('customer_orders.edit_order', order_id=item.id) }}">Editar borrador</a>{% endif %}
+{% if can('create', 'customer_order') and latest.result %}<a class="btn" href="{{ url_for('customer_orders.new_revision', order_id=item.id) }}">Nueva revisión</a>{% endif %}
+{% if administrator %}<form method="post" action="{{ url_for('customer_orders.cancel_order', order_id=item.id) }}">{{ cancel_form.hidden_tag() }}{{ field(cancel_form.reason) }}<button class="btn" type="submit">Cancelar pedido</button></form>{% endif %}
+{% if administrator and not latest.result and latest.number == 1 %}{{ delete_form(url_for('customer_orders.delete_order', order_id=item.id), '¿Eliminar el pedido borrador?') }}{% endif %}
+{% endif %}</section>
+{% for revision in revisions %}<section class="card"><h2>Revisión {{ revision.number }}</h2>
+{% for key, label in [('requirements', 'Requisitos'), ('delivery_requirements', 'Entrega'), ('post_delivery_requirements', 'Posventa'), ('change_reason', 'Motivo del cambio'), ('communicated_to', 'Cambio comunicado a')] %}<h3>{{ label }}</h3><p class="pre-wrap">{{ revision[key] or '—' }}</p>{% endfor %}
+{% if revision.result %}<p>{{ revision.result.value }} · {{ revision.reviewer.nombre }} · {{ revision.review_date }}</p>
+{% for letter, label in checks.items() %}<p>{{ label }}: {{ revision['check_' ~ letter].value }} · {{ revision['note_' ~ letter] or '—' }}</p>{% endfor %}
+<p>Diferencias resueltas: {{ 'Sí' if revision.differences_resolved else 'No' }}. Sin declaración documentada: {{ 'Sí' if revision.undocumented else 'No' }}.</p>
+{% if revision.undocumented %}<p>Confirmación del cliente: {{ revision.confirmation_date }} · {{ revision.confirmation_means }}</p>{% endif %}
+{% elif revision.id == latest.id and not item.cancelled %}
+{% if can('update', 'customer_order') %}<a class="btn" href="{{ url_for('customer_orders.edit_revision', order_id=item.id, revision_id=revision.id) }}">Editar requisitos</a>{% endif %}
+{% if administrator %}<a class="btn" href="{{ url_for('customer_orders.review_revision', order_id=item.id, revision_id=revision.id) }}">Revisar requisitos</a>{% endif %}
+{% endif %}</section>{% endfor %}
+{% endblock %}

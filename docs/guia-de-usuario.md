@@ -48,10 +48,40 @@ Documentación técnica:
 - [Liberación](#liberación)
 - [Proveedores externos](#proveedores-externos)
 - [Revisión por la dirección](#revisión-por-la-dirección)
+- [Pedidos y contratos](#pedidos-y-contratos)
 - [Clientes, reclamaciones y satisfacción](#clientes-reclamaciones-y-satisfacción)
 - [Otros registros](#otros-registros)
 - [Informes y notificaciones por correo electrónico](#informes-y-notificaciones-por-correo-electrónico)
 - [Términos](#términos)
+
+## Pedidos y contratos
+
+En **Clientes → Pedidos y contratos** (`/pedidos/`), registra un pedido, contrato
+u oferta aceptada con código interno único (hasta 50 caracteres), cliente,
+fecha de recepción no futura y requisitos obligatorios. Referencia del cliente,
+requisitos de entrega y posventa son opcionales. Filtra por estado, tipo o cliente.
+Todos consultan; administradores y auditores crean y editan borradores.
+
+**Revisar requisitos** corresponde solo a administradores web con persona activa
+vinculada. Revisa las cinco comprobaciones de 8.2.3.1: cliente, entrega y posventa,
+no declarados pero necesarios, legales y propios; cada una tiene resultado
+**cumple**, **no cumple** o **no aplica**, y nota opcional. Aceptar requiere que
+ninguna sea «no cumple» y que **Diferencias resueltas** sea **Sí**. Sin declaración
+documentada del cliente, registra su confirmación con fecha no futura y medio.
+Se conservan resultado aceptado/rechazado, persona revisora y fecha de hoy del
+servidor; no puedes cambiarlos. No se exige separación entre autor y revisor.
+
+Solo el pedido cuya **última** revisión está aceptada está **comprometido**.
+Una revisión revisada es de solo lectura. **Nueva revisión**, tras aceptación o
+rechazo, exige motivo y a quién se ha comunicado el cambio; abre el siguiente
+número (1, 2, …) pendiente de revisión y deja las anteriores inmutables. Solo
+la última sin revisar se edita. La identidad comercial queda fija tras la primera
+revisión; los requisitos cambiados se guardan en la nueva. La cancelación exige
+motivo y administrador web y congela el pedido. Solo un administrador web elimina
+un pedido no cancelado con una única revisión sin revisar. Clientes y revisores
+citados quedan protegidos del borrado. MCP mantiene borradores y consulta las
+revisiones y sus revisiones de requisitos, pero nunca decide, cancela ni elimina.
+Los vínculos con producción y comunicaciones se incorporarán por separado.
 
 ## Producción y servicio
 
@@ -453,7 +483,7 @@ puede consultar.
 | (arriba) | **Panel** |
 | **Contexto** | **Contexto** 4.1, **Partes interesadas** 4.2, **Alcance del SGC** 4.3 |
 | **Calidad** | **Procesos** 4.4, **Riesgos** 6.1, **Oportunidades** 6.1, **Objetivos de calidad** 6.2, **Diseño y desarrollo** 8.3, **Indicadores de auditoría** 9.1, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
-| **Clientes** | **Cliente** 8.2, **Reclamaciones** 9.1.2, **Satisfacción** 9.1.2 |
+| **Clientes** | **Pedidos y contratos** 8.2, **Cliente** 8.2, **Reclamaciones** 9.1.2, **Satisfacción** 9.1.2 |
 | **Personas y competencia** | **Roles y responsabilidades** 5.3, **Personas** 7.2, **Competencias requeridas** 7.2, **Matriz de competencias** 7.2, **Capacitaciones** 7.2, **Confirmaciones de lectura** 7.3, **Plan de comunicación** 7.4, **Recursos de capacitación** 7.1 |
 | **Documentación** | **Documentos** 7.5 |
 | **Administración** | **Usuarios** 5.3 |
@@ -526,6 +556,7 @@ aprobar en cada módulo.
 | Proveedores externos y sus evaluaciones | Consultar, crear, editar, eliminar; aprobar, condicionar, bloquear | Consultar, crear, editar | Consultar |
 | Revisiones por la dirección y sus acciones | Consultar, crear, editar, eliminar; celebrar, cerrar | Consultar, crear, editar | Sin acceso |
 | Clientes | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
+| Pedidos y contratos | Consultar y mantener borradores; revisar, cancelar y eliminar borradores únicos desde la web | Consultar y mantener borradores | Consultar |
 | Reclamaciones | Consultar, crear, editar; responder, cerrar, cancelar y reabrir | Consultar, crear, editar; responder, cerrar y cancelar | Consultar, crear, editar; responder, cerrar y cancelar |
 | Mejoras, satisfacción del cliente, partes interesadas | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar, crear, editar |
 | Procesos, roles, recursos de capacitación, indicadores de auditoría | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |

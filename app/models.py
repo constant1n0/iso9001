@@ -27,7 +27,7 @@ from itsdangerous import BadData, URLSafeTimedSerializer as Serializer
 from sqlalchemy import BigInteger, Integer
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import declared_attr
+from sqlalchemy.orm import declared_attr, object_session
 
 from .extensions import db
 
@@ -3865,6 +3865,131 @@ class ReleaseVerification(RecordMetadataMixin, db.Model):
     person_id = db.Column(db.Integer, nullable=False)
     date = db.Column(db.Date, nullable=False)
     person = db.relationship('Person')
+
+
+class CustomerOrderKind(enum.Enum):
+    """Commercial records, distinct from production orders."""
+
+    order = 'pedido'
+    contract = 'contrato'
+    accepted_offer = 'oferta aceptada'
+
+
+class CustomerOrderStatus(enum.Enum):
+    """Derived from cancellation and the latest revision's review, never writable."""
+
+    pending = 'pendiente de revisión'
+    accepted = 'aceptado (comprometido)'
+    rejected = 'rechazado'
+    cancelled = 'cancelado'
+
+
+class RequirementCheck(enum.Enum):
+    """Fixed checklist outcomes for ISO 9001 8.2.3.1."""
+
+    conforming = 'cumple'
+    nonconforming = 'no cumple'
+    not_applicable = 'no aplica'
+
+
+class OrderReviewResult(enum.Enum):
+    """One immutable review per requirements revision."""
+
+    accepted = 'aceptado'
+    rejected = 'rechazado'
+
+
+class CustomerOrder(RecordMetadataMixin, db.Model):
+    """Commercial identity; commitment always follows the latest requirements."""
+
+    __tablename__ = 'customer_orders'
+    __table_args__ = (
+        *_property_constraints(__tablename__, (('customer_id', 'clientes.id'),)),
+        db.UniqueConstraint('code', name='uq_customer_orders_code'),
+        db.CheckConstraint('length(trim(code)) > 0', name='ck_customer_orders_code'),
+        db.CheckConstraint('(cancelled AND cancellation_reason IS NOT NULL AND '
+            'length(trim(cancellation_reason)) > 0) OR '
+            '(NOT cancelled AND cancellation_reason IS NULL)', name='ck_customer_orders_cancelled'),
+    )
+    id = db.Column(db.Integer, nullable=False)
+    customer_id = db.Column(db.Integer, nullable=False)
+    code = db.Column(db.String(50), nullable=False)
+    kind = db.Column(text_enum(CustomerOrderKind, 'ck_customer_orders_kind'), nullable=False)
+    customer_reference = db.Column(db.Text)
+    received_date = db.Column(db.Date, nullable=False)
+    cancelled = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    cancellation_reason = db.Column(db.Text)
+    customer = db.relationship('Cliente')
+
+    @property
+    def status(self) -> CustomerOrderStatus:
+        """An older accepted review never commits a new draft revision."""
+        if self.cancelled:
+            return CustomerOrderStatus.cancelled
+        result = object_session(self).scalar(db.select(CustomerOrderRevision.result).where(
+            CustomerOrderRevision.order_id == self.id).order_by(
+                CustomerOrderRevision.number.desc()).limit(1))
+        return CustomerOrderStatus[result.name] if result else CustomerOrderStatus.pending
+
+
+_ORDER_REVIEW_KEYS = ('reviewer_id', 'review_date', 'differences_resolved', 'undocumented',
+    *(f'check_{c}' for c in 'abcde'))
+_ORDER_REVIEW_OPTIONAL = ('confirmation_date', 'confirmation_means', *(f'note_{c}' for c in 'abcde'))
+_ORDER_REVIEW_COMPLETE = (
+    '(result IS NULL AND ' + ' AND '.join(f'{k} IS NULL' for k in
+        (*_ORDER_REVIEW_KEYS, *_ORDER_REVIEW_OPTIONAL)) + ') OR (result IS NOT NULL AND '
+    + ' AND '.join(f'{k} IS NOT NULL' for k in _ORDER_REVIEW_KEYS) + ')')
+_ORDER_REVIEW_ACCEPTANCE = "result IS NULL OR result != 'accepted' OR (differences_resolved AND " + (
+    ' AND '.join(f"check_{c} IN ('conforming', 'not_applicable')" for c in 'abcde')) + ')'
+_ORDER_CONFIRMATION = (
+    '(undocumented IS NULL AND confirmation_date IS NULL AND confirmation_means IS NULL) OR '
+    '(undocumented IS NOT NULL AND ((NOT undocumented AND confirmation_date IS NULL '
+    'AND confirmation_means IS NULL) OR (undocumented AND confirmation_date IS NOT NULL '
+    'AND confirmation_date <= review_date AND confirmation_means IS NOT NULL '
+    'AND length(trim(confirmation_means)) > 0)))')
+_ORDER_CHANGE = ('number = 1 OR (change_reason IS NOT NULL AND length(trim(change_reason)) > 0 '
+                 'AND communicated_to IS NOT NULL AND length(trim(communicated_to)) > 0)')
+
+
+class CustomerOrderRevision(RecordMetadataMixin, db.Model):
+    """Numbered requirements with inline one-to-one immutable review evidence."""
+
+    __tablename__ = 'customer_order_revisions'
+    __table_args__ = (
+        *_property_constraints(__tablename__, (('order_id', 'customer_orders.id'),
+                                               ('reviewer_id', 'personas.id'))),
+        db.UniqueConstraint('order_id', 'number', name='uq_customer_order_revisions_number'),
+        *(db.CheckConstraint(sql, name=f'ck_customer_order_revisions_{name}') for name, sql in (
+            ('number', 'number >= 1'), ('requirements', 'length(trim(requirements)) > 0'),
+            ('change', _ORDER_CHANGE), ('review', _ORDER_REVIEW_COMPLETE),
+            ('acceptance', _ORDER_REVIEW_ACCEPTANCE), ('confirmation', _ORDER_CONFIRMATION))),
+    )
+    id = db.Column(db.Integer, nullable=False)
+    order_id = db.Column(db.Integer, nullable=False)
+    number = db.Column(db.Integer, nullable=False)
+    requirements = db.Column(db.Text, nullable=False)
+    delivery_requirements = db.Column(db.Text)
+    post_delivery_requirements = db.Column(db.Text)
+    change_reason = db.Column(db.Text)
+    communicated_to = db.Column(db.Text)
+    result = db.Column(text_enum(OrderReviewResult, 'ck_customer_order_revisions_result'))
+    reviewer_id = db.Column(db.Integer)
+    review_date = db.Column(db.Date)
+    differences_resolved = db.Column(db.Boolean)
+    undocumented = db.Column(db.Boolean)
+    confirmation_date = db.Column(db.Date)
+    confirmation_means = db.Column(db.Text)
+    check_a = db.Column(text_enum(RequirementCheck, 'ck_order_check_a'))
+    check_b = db.Column(text_enum(RequirementCheck, 'ck_order_check_b'))
+    check_c = db.Column(text_enum(RequirementCheck, 'ck_order_check_c'))
+    check_d = db.Column(text_enum(RequirementCheck, 'ck_order_check_d'))
+    check_e = db.Column(text_enum(RequirementCheck, 'ck_order_check_e'))
+    note_a = db.Column(db.Text)
+    note_b = db.Column(db.Text)
+    note_c = db.Column(db.Text)
+    note_d = db.Column(db.Text)
+    note_e = db.Column(db.Text)
+    reviewer = db.relationship('Person', foreign_keys=[reviewer_id])
 
 
 # Registro de auditoría append-only: quién cambió qué y cuándo (ISO 9001 7.5.3)

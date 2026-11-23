@@ -11,7 +11,7 @@ from mcp_support import ADMIN, AUDITOR, OPERATIVO, McpDbCase, mcp_actor
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUGS = {
-    'product_releases', 'release_verifications',
+    'customer_orders', 'customer_order_revisions', 'product_releases', 'release_verifications',
     'post_delivery_activities', 'customer_property', 'property_incidents',
     'production_orders', 'production_control_records', 'production_preservation_records', 'production_changes',
     'design_projects', 'design_stages', 'design_inputs', 'design_outputs',
@@ -30,6 +30,7 @@ SLUGS = {
 }
 # The two competence registers share one policy resource (decision Q1 of qms-people),
 # and so do audits, their programmes and their findings (decision AP7 of audit-programme).
+SHARED_CUSTOMER_ORDERS = ('customer_orders', 'customer_order_revisions')
 SHARED_RELEASE = ('product_releases', 'release_verifications')
 SHARED_RESOURCE = ("competencias_requeridas", "competencias_acreditadas")
 SHARED_AUDITS = ("auditorias", "programas_auditoria", "hallazgos_auditoria")
@@ -82,9 +83,10 @@ class RegistryTestCase(unittest.TestCase):
         modules = registry().MODULES
         shared = (SHARED_RESOURCE + SHARED_AUDITS + SHARED_OBJECTIVES + SHARED_REVIEWS
                   + SHARED_RISKS + SHARED_PROVIDERS + SHARED_CONTEXT + SHARED_CHANGES
-                  + SHARED_EQUIPMENT + SHARED_COMMUNICATION + SHARED_DESIGN + SHARED_PRODUCTION + SHARED_RELEASE)
+                  + SHARED_EQUIPMENT + SHARED_COMMUNICATION + SHARED_DESIGN + SHARED_PRODUCTION + SHARED_RELEASE + SHARED_CUSTOMER_ORDERS)
         resources = [m.resource for slug, m in modules.items() if slug not in shared]
         self.assertEqual(len(resources), len(set(resources)))
+        self.assertEqual({Resource.CUSTOMER_ORDER}, {modules[s].resource for s in SHARED_CUSTOMER_ORDERS})
         self.assertEqual({Resource.RELEASE}, {modules[s].resource for s in SHARED_RELEASE})
         self.assertEqual({Resource.COMPETENCE}, {modules[s].resource for s in SHARED_RESOURCE})
         self.assertEqual({Resource.AUDITS}, {modules[s].resource for s in SHARED_AUDITS})

@@ -16,7 +16,7 @@ from app.mcp_server.registry import MODULES
 from app.models import AuditLog, EstadoNoConformidad, NoConformidad, User
 from app.services import audit
 
-JSON_REGISTERS = ('product_releases', 'release_verifications', 'post_delivery_activities', 'customer_property', 'property_incidents', 'production_changes', 'production_orders', 'design_projects', 'design_stages', 'design_inputs', 'design_outputs',
+JSON_REGISTERS = ('customer_orders', 'customer_order_revisions', 'product_releases', 'release_verifications', 'post_delivery_activities', 'customer_property', 'property_incidents', 'production_changes', 'production_orders', 'design_projects', 'design_stages', 'design_inputs', 'design_outputs',
                   'design_planned_controls', 'design_control_records', 'design_changes', "communication", "communication_log", "knowledge", "roles_responsabilidades", "recursos_capacitacion", "procesos",
                   "indicadores_auditoria", "riesgos", "oportunidades", "acciones_riesgo",
                   "proveedores", "evaluaciones_proveedor", "cuestiones_contexto",
@@ -51,6 +51,8 @@ class EveryModuleTestCase(McpDbCase):
         self.assertEqual({"documentos"}, MODULES.keys() - writable.keys())  # web only (DC-1)
         for slug, module in writable.items():
             with self.subTest(module=slug):
+                if slug == 'customer_order_revisions':
+                    self.prepare_customer_revision()
                 if slug == 'product_releases':
                     self.finish_release_order()
                 if slug == 'design_changes':
@@ -96,7 +98,7 @@ class EveryModuleTestCase(McpDbCase):
         rows = [row for row in audit_rows() if row.channel == 'mcp']
         # Eight modules refuse updates; NC and communication each update their parent;
         # output creation also creates one audited DD4 version metadata row.
-        self.assertEqual(len(writable) + (len(writable) - 8) + 3, len(rows))
+        self.assertEqual(len(writable) + (len(writable) - 8) + 4, len(rows))
         self.assertEqual({"mcp"}, {r.channel for r in rows})
         self.assertEqual({7}, {r.actor_user_id for r in rows})
         self.assertEqual({"create", "update"}, {r.action for r in rows})

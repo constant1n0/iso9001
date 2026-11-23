@@ -39,7 +39,7 @@ LATER_AUDITED_TABLES = frozenset(
      'design_changes', 'design_output_versions', 'production_orders',
      'production_control_records', 'production_preservation_records', 'production_changes',
      'customer_property', 'property_incidents', 'post_delivery_activities',
-     'product_releases', 'release_verifications'}
+     'product_releases', 'release_verifications', 'customer_orders', 'customer_order_revisions'}
 )
 
 
