@@ -3,6 +3,6 @@
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
 {{ page_header('8.5 · Producción y servicio', title) }}
-<p>Elige revisiones aprobadas o vigentes, equipos aptos y personas activas. Los vínculos ya guardados se conservan. Mantén Ctrl (o Cmd) para seleccionar varios elementos.</p>
+<p>Elige revisiones aprobadas o vigentes, equipos aptos y personas activas. El pedido del cliente es opcional; una nueva cita exige que esté aceptado y sea del mismo cliente si has indicado uno. Los vínculos ya guardados se conservan aunque cambie el estado del pedido. Mantén Ctrl (o Cmd) para seleccionar varios elementos.</p>
 {{ form_card(form, url_for('production.list_orders')) }}
 {% endblock %}

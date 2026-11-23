@@ -205,6 +205,7 @@ class ProductionOrderForm(BaseForm):
     process_id = SelectField('Proceso', coerce=optional_id, choices=[], validators=[DataRequired()])
     customer_id = SelectField('Cliente', coerce=optional_id, choices=[])
     design_output_id = SelectField('Versión aprobada del diseño', coerce=optional_id, choices=[])
+    customer_order_id = SelectField('Pedido aceptado (opcional)', coerce=optional_id, choices=[])
     lot = StringField('Lote o referencia (opcional)')
     owner_id = person_field('Responsable')
     planned_start = DateField('Inicio previsto', validators=[Optional()])
@@ -1146,6 +1147,13 @@ class CustomerOrderReviewForm(BaseForm):
 for _letter, _label in ORDER_CHECKS.items():
     setattr(CustomerOrderReviewForm, f'check_{_letter}', _choice(_label, RequirementCheck))
     setattr(CustomerOrderReviewForm, f'note_{_letter}', TextAreaField(f'Nota {_letter})'))
+
+
+class CustomerOrderLinksForm(BaseForm):
+    """Evidence remains editable after acceptance, but not cancellation."""
+
+    communication_ids = SelectMultipleField('Comunicaciones (elige «Sin comunicaciones» para vaciar)', coerce=optional_id, choices=[])
+    complaint_ids = SelectMultipleField('Reclamaciones (elige «Sin reclamaciones» para vaciar)', coerce=optional_id, choices=[])
 
 
 class CustomerOrderCancellationForm(BaseForm):

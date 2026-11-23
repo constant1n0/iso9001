@@ -115,10 +115,12 @@ class RegistryTestCase(unittest.TestCase):
     def test_declared_fields_match_what_each_service_requires(self) -> None:
         from app.services import (
             audit_findings, audit_programmes, audits, management_reviews, nonconformities,
-            communication, design, knowledge, people, process_operations, production, providers, qms_changes, qms_scope,
+            communication, customer_orders, design, knowledge, people, process_operations, production, providers, qms_changes, qms_scope,
         )
 
         bespoke = {
+            'customer_orders': (customer_orders.SPEC.writable | customer_orders.LINKS.keys(),
+                frozenset(f.name for f in customer_orders.SPEC.fields if f.required)),
             'production_orders': (production.WRITABLE,
                                   frozenset({'code', 'kind', 'title', 'process_id'})),
             'design_projects': (design.PROJECT_WRITABLE | {'starter_stages'},

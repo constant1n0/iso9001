@@ -13,6 +13,14 @@
 {% if administrator %}<form method="post" action="{{ url_for('customer_orders.cancel_order', order_id=item.id) }}">{{ cancel_form.hidden_tag() }}{{ field(cancel_form.reason) }}<button class="btn" type="submit">Cancelar pedido</button></form>{% endif %}
 {% if administrator and not latest.result and latest.number == 1 %}{{ delete_form(url_for('customer_orders.delete_order', order_id=item.id), '¿Eliminar el pedido borrador?') }}{% endif %}
 {% endif %}</section>
+<section class="card"><h2>Vínculos de evidencia</h2>
+{% if not item.cancelled and can('update', 'customer_order') %}<a class="btn" href="{{ url_for('customer_orders.edit_links', order_id=item.id) }}">Editar vínculos</a>{% endif %}
+<h3>Comunicaciones con el cliente (7.4)</h3>
+{% for row in item.communications %}<p>#{{ row.id }} · {{ row.date }} · {{ row.evidence }}</p>{% else %}<p>Sin comunicaciones.</p>{% endfor %}
+<h3>Reclamaciones</h3>
+{% for row in item.complaints %}<p>#{{ row.id }} · {{ row.descripcion }}</p>{% else %}<p>Sin reclamaciones.</p>{% endfor %}
+<h3>Órdenes de producción que citan el pedido</h3>
+{% for row in item.production_orders %}<p><a href="{{ url_for('production.show_order', order_id=row.id) }}">{{ row.code }}</a> · {{ row.state.value }}</p>{% else %}<p>Sin órdenes.</p>{% endfor %}</section>
 {% for revision in revisions %}<section class="card"><h2>Revisión {{ revision.number }}</h2>
 {% for key, label in [('requirements', 'Requisitos'), ('delivery_requirements', 'Entrega'), ('post_delivery_requirements', 'Posventa'), ('change_reason', 'Motivo del cambio'), ('communicated_to', 'Cambio comunicado a')] %}<h3>{{ label }}</h3><p class="pre-wrap">{{ revision[key] or '—' }}</p>{% endfor %}
 {% if revision.result %}<p>{{ revision.result.value }} · {{ revision.reviewer.nombre }} · {{ revision.review_date }}</p>

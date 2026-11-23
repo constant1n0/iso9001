@@ -18,7 +18,7 @@ from ..models import (Cliente, DesignApprovalState, DesignOutput, DesignOutputVe
                       DocumentRevision, EquipoMedicion, Person, ProcesoOperacion,
                       ProductionKind, ProductionOrder, ProductionState,
                       ProductionControlRecord, ProductionPreservationRecord,
-                      production_change_orders)
+                      production_change_orders, CustomerOrder, CustomerOrderStatus)
 from . import audit, crud, design, design_io, equipment, fields, people, policy
 from .actor import Actor
 from .attribution import stamp_created, stamp_updated
@@ -42,7 +42,7 @@ SPEC = crud.Spec(
         crud.Field('kind', partial(fields.enum_member, enum_cls=ProductionKind), required=True),
         crud.Field('title', partial(fields.text, required=True, strip=False), required=True),
         crud.Field('process_id', partial(fields.integer, required=True), required=True),
-        *(crud.Field(key, fields.integer) for key in ('customer_id', 'design_output_id', 'owner_id')),
+        *(crud.Field(key, fields.integer) for key in ('customer_id', 'design_output_id', 'owner_id', 'customer_order_id')),
         crud.Field('lot', fields.text),
         *(crud.Field(key, design._optional_date) for key in ('planned_start', 'planned_end')),
     ), order_by=(ProductionOrder.code, ProductionOrder.id),
@@ -107,6 +107,14 @@ def _clean(session: Session, who: Actor, data: Mapping[str, Any],
                 .execution_options(populate_existing=True))
             if version is None or version.state is not DesignApprovalState.approved:
                 raise ValidationError('Elige una versión aprobada de una salida del diseño.')
+    customer_order_id = values.get('customer_order_id', getattr(found, 'customer_order_id', None))
+    if customer_order_id is not None:
+        order = _target(session, CustomerOrder, customer_order_id, 'customer_order_id')
+        if customer_order_id != getattr(found, 'customer_order_id', None) and order.status is not CustomerOrderStatus.accepted:
+            raise ValidationError('Elige un pedido aceptado (comprometido).')
+        customer_id = values.get('customer_id', getattr(found, 'customer_id', None))
+        if customer_id is not None and customer_id != order.customer_id:
+            raise ValidationError('El pedido debe pertenecer al mismo cliente que la orden de producción.')
     code = values.get('code')
     if code is not None and session.scalar(select(ProductionOrder.id).where(
             ProductionOrder.code == code,

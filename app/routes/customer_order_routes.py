@@ -6,8 +6,9 @@ from flask_login import login_required
 from ..audit_notifications import local_today
 from ..extensions import db
 from ..forms import (BaseForm, CustomerOrderForm, CustomerOrderRevisionForm,
-    CustomerOrderReviewForm, CustomerOrderCancellationForm, ORDER_CHECKS)
+    CustomerOrderReviewForm, CustomerOrderCancellationForm, CustomerOrderLinksForm, ORDER_CHECKS)
 from ..models import CustomerOrderKind, CustomerOrderStatus, RoleEnum
+from ..services import communication_log, reclamaciones
 from ..services import clientes, customer_orders as service
 from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
@@ -99,6 +100,37 @@ def _child(order_id: int, revision_id: int) -> Any:
     if row.order_id != order_id:
         abort(404)
     return row
+
+
+@bp.route('/<int:order_id>/vinculos', methods=['GET', 'POST'])
+@login_required
+@require_permission('update', 'customer_order')
+def edit_links(order_id: int) -> ResponseReturnValue:
+    """Edit evidence separately from immutable reviewed requirements."""
+    who = current_actor()
+    row = service.orders.get(db.session, who, order_id)
+    form = CustomerOrderLinksForm(obj=row)
+    form.communication_ids.choices = [('', '— Sin comunicaciones —'), *((r.id,
+        f'#{r.id} · {r.date} · {r.evidence[:80]}')
+        for r in communication_log.items.list_(db.session, who))]
+    form.complaint_ids.choices = [('', '— Sin reclamaciones —'), *((r.id,
+        f'#{r.id} · {r.descripcion[:80]}')
+        for r in reclamaciones.list_(db.session, who, cliente_id=row.customer_id))]
+    if request.method == 'GET':
+        for key in service.LINKS:
+            form[key].data = getattr(row, key) or [None]
+    refused = _refuse(form)
+    for key, label in (('communication_ids', 'comunicaciones'), ('complaint_ids', 'reclamaciones')):
+        picked = request.form.getlist(key) if request.method == 'POST' else []
+        if '' in picked and any(value != '' for value in picked):
+            flash(f'Elige «Sin {label}» o uno o varios registros, no ambas cosas.', 'danger')
+            refused = True
+    if not refused and form.validate_on_submit():
+        data = {key: [i for i in form[key].data if i is not None] for key in service.LINKS}
+        if saved(lambda: service.orders.update(db.session, who, row.id, data, today=local_today())):
+            return redirect(url_for('customer_orders.show_order', order_id=row.id))
+    return render_template('customer_orders/form.html', form=form,
+        title='Editar vínculos de evidencia'), 400 if refused else 200
 
 
 @bp.route('/<int:order_id>/revisiones/nueva', methods=['GET', 'POST'])

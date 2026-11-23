@@ -18,7 +18,7 @@ from ..models import (DesignApprovalState, DesignOutput, DesignOutputVersion, Eq
                       Person, ProductionKind, ProductionState, NoConformidad,
                       DesignChange, DesignChangeState, CambioSGC, PropertyStatus,
                       Cliente, Proveedor, Reclamacion, PostDeliveryKind, PostDeliveryStatus)
-from ..services import (clientes, design_io, equipment, people, process_operations,
+from ..services import (clientes, customer_orders, design_io, equipment, people, process_operations,
                         production, production_records, production_changes, qms_scope,
                         production_property, production_post_delivery)
 from ..utils.permissions import require_permission
@@ -400,6 +400,9 @@ def _form(row: Any = None) -> ProductionOrderForm:
     form.process_id.choices = [('', '— Elige un proceso —'), *choices['process_id']]
     form.customer_id.choices = [('', '— Sin cliente —'), *choices['customer_id']]
     form.owner_id.choices = person_choices(people.choices(db.session, who, include=getattr(row, 'owner_id', None)))
+    form.customer_order_id.choices = [('', '— Sin pedido —'), *((o.id, o.code)
+        for o in customer_orders.orders.list_(db.session, who)
+        if o.status.name == 'accepted' or o.id == getattr(row, 'customer_order_id', None))]
     current = getattr(row, 'design_output_id', None)
     outputs = db.session.scalars(select(DesignOutput).join(DesignOutputVersion,
         DesignOutputVersion.output_id == DesignOutput.id).where(or_(

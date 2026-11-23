@@ -747,6 +747,7 @@ _PRODUCTION_MODULES = (
         _f('kind', 'enum', True, members=ProductionKind), _f('title', required=True),
         _f('process_id', 'integer', True), _f('customer_id', 'integer'),
         _f('design_output_id', 'integer', note='Exact approved design output version, retained.'),
+        _f('customer_order_id', 'integer', note='Optional accepted customer order; same customer if specified. Retained after status changes; null clears.'),
         _f('lot', note='Optional lot/reference, no serial number assumption.'),
         _f('owner_id', 'integer', note='Active person when newly selected; retained otherwise.'),
         _f('planned_start', 'date'), _f('planned_end', 'date', note='Not before planned_start.'),
@@ -767,9 +768,11 @@ _CUSTOMER_ORDER_MODULES = (
             _f('customer_reference'), _f('received_date', 'date', True, note='Never future.'),
             *(_f(k, required=k == 'requirements', note='Latest unreviewed revision only.')
               for k in customer_orders.CONTENT),
+            *(_f(k, 'integer_list', note='Replacement evidence set; editable unless cancelled. Complaints must belong to the same customer.')
+              for k in customer_orders.LINKS),
         ), (_f('status', 'enum', members=CustomerOrderStatus),
             _f('kind', 'enum', members=CustomerOrderKind), _f('customer_id', 'integer')),
-        extras=lambda row: {'status': row.status}),
+        extras=lambda row: {'status': row.status, **customer_orders.link_ids(row)}),
     Module('customer_order_revisions', 'Numbered customer requirements (8.2.4)', Resource.CUSTOMER_ORDER,
         customer_orders.revisions, (
             _f('order_id', 'integer', True, note='Immutable parent; previous revision must be reviewed. Never review/cancel/delete via MCP.'),

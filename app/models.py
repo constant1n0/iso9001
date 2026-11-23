@@ -3414,9 +3414,10 @@ class ProductionOrder(RecordMetadataMixin, db.Model):
                                   ondelete='RESTRICT', onupdate='RESTRICT')
           for column, target in (('process_id', 'procesos_operacion.id_proceso'),
                                  ('customer_id', 'clientes.id'), ('owner_id', 'personas.id'),
-                                 ('design_output_id', 'design_outputs.id'))),
+                                 ('design_output_id', 'design_outputs.id'),
+                                 ('customer_order_id', 'customer_orders.id'))),
         *(db.Index(f'ix_production_orders_{column}', column) for column in (
-            'process_id', 'customer_id', 'owner_id', 'design_output_id', 'state', 'kind',
+            'process_id', 'customer_id', 'owner_id', 'design_output_id', 'customer_order_id', 'state', 'kind',
             'created_by_id', 'updated_by_id')),
     )
     id = db.Column(db.Integer, nullable=False)
@@ -3426,6 +3427,8 @@ class ProductionOrder(RecordMetadataMixin, db.Model):
     process_id = db.Column(db.Integer, nullable=False)
     customer_id = db.Column(db.Integer)
     design_output_id = db.Column(db.Integer)
+    customer_order_id = db.Column(db.Integer, nullable=True)
+    customer_order = db.relationship('CustomerOrder')
     lot = db.Column(db.Text)
     owner_id = db.Column(db.Integer)
     planned_start = db.Column(db.Date)
@@ -3899,6 +3902,26 @@ class OrderReviewResult(enum.Enum):
     rejected = 'rechazado'
 
 
+def _customer_order_association(name: str, target: str) -> db.Table:
+    """Evidence citations; composite PK indexes the parent, B-tree the target."""
+    return db.Table(name,
+        db.Column('order_id', db.Integer, nullable=False),
+        db.Column('target_id', db.Integer, nullable=False),
+        db.PrimaryKeyConstraint('order_id', 'target_id', name=f'pk_{name}'),
+        *(db.ForeignKeyConstraint([key], [reference], name=f'fk_{name}_{key}',
+            ondelete='RESTRICT', onupdate='RESTRICT') for key, reference in (
+                ('order_id', 'customer_orders.id'), ('target_id', target))),
+        db.Index(f'ix_{name}_target_id', 'target_id'))
+
+
+CUSTOMER_ORDER_ASSOCIATIONS = {
+    'communication_ids': _customer_order_association(
+        'customer_order_communications', 'communication_log.id'),
+    'complaint_ids': _customer_order_association(
+        'customer_order_complaints', 'reclamaciones.id'),
+}
+
+
 class CustomerOrder(RecordMetadataMixin, db.Model):
     """Commercial identity; commitment always follows the latest requirements."""
 
@@ -3920,6 +3943,24 @@ class CustomerOrder(RecordMetadataMixin, db.Model):
     cancelled = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
     cancellation_reason = db.Column(db.Text)
     customer = db.relationship('Cliente')
+    communications = db.relationship('CommunicationLog',
+        secondary=CUSTOMER_ORDER_ASSOCIATIONS['communication_ids'],
+        order_by='CommunicationLog.id', lazy='selectin')
+    complaints = db.relationship('Reclamacion',
+        secondary=CUSTOMER_ORDER_ASSOCIATIONS['complaint_ids'],
+        order_by='Reclamacion.id', lazy='selectin')
+    production_orders = db.relationship('ProductionOrder', viewonly=True,
+        order_by='ProductionOrder.id')
+
+    @property
+    def communication_ids(self) -> list[int]:
+        """Stable evidence identifiers for forms, audit and MCP."""
+        return sorted(row.id for row in self.communications)
+
+    @property
+    def complaint_ids(self) -> list[int]:
+        """Stable complaint identifiers for forms, audit and MCP."""
+        return sorted(row.id for row in self.complaints)
 
     @property
     def status(self) -> CustomerOrderStatus:
