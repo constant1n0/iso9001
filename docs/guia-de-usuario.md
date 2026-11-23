@@ -81,7 +81,14 @@ motivo y administrador web y congela el pedido. Solo un administrador web elimin
 un pedido no cancelado con una única revisión sin revisar. Clientes y revisores
 citados quedan protegidos del borrado. MCP mantiene borradores y consulta las
 revisiones y sus revisiones de requisitos, pero nunca decide, cancela ni elimina.
-Los vínculos con producción y comunicaciones se incorporarán por separado.
+En la ficha, **Editar vínculos** permite citar comunicaciones realizadas del módulo
+7.4 y reclamaciones existentes del mismo cliente. Administradores y auditores
+pueden cambiar estos conjuntos incluso después de aceptar; un pedido cancelado
+es de solo lectura. Elige «Sin comunicaciones» o «Sin reclamaciones» para vaciar,
+sin combinar esa opción con registros. Los vínculos son evidencia: no cambian
+los requisitos ni sustituyen una revisión. Las reclamaciones y comunicaciones
+citadas quedan protegidas del borrado; las comunicaciones realizadas nunca se eliminan.
+La ficha lista también las órdenes de producción que citan el pedido, sin editarlas.
 
 ## Producción y servicio
 
@@ -89,6 +96,11 @@ En **Producción y servicio** (`/produccion/`), crea una orden de producción o
 servicio con código propio único, descripción y proceso obligatorio. Puedes añadir
 cliente, versión exacta aprobada de una salida del diseño, lote o referencia,
 responsable y fechas previstas (fin no anterior al inicio). No necesitas números de serie.
+El **Pedido aceptado** es opcional: una nueva cita exige un pedido comprometido
+y, si indicas cliente, debe ser el mismo. Puedes conservar una cita existente
+si después el pedido vuelve a pendiente, se rechaza o se cancela; también puedes
+quitarla. La ficha enlaza al pedido y muestra su estado actual. Los pedidos citados
+por producción no se pueden eliminar.
 
 Las condiciones controladas enlazan revisiones documentales exactas aprobadas o
 vigentes que puedas consultar, equipos actualmente aptos y personas activas.

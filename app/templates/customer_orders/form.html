@@ -3,6 +3,6 @@
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
 {{ page_header('8.2 · Requisitos del cliente', title) }}
-<p>Solo la última revisión sin revisar es editable. Aceptar exige cinco comprobaciones «cumple» o «no aplica» y diferencias resueltas. Si no hay declaración documentada del cliente, registra su confirmación con fecha y medio.</p>
+<p>Los vínculos de evidencia se editan también tras aceptar, pero nunca tras cancelar. Elige «Sin comunicaciones» o «Sin reclamaciones» para vaciar cada conjunto; no combines esa opción con registros. Solo la última revisión sin revisar es editable. Aceptar exige cinco comprobaciones «cumple» o «no aplica» y diferencias resueltas. Si no hay declaración documentada del cliente, registra su confirmación con fecha y medio.</p>
 {{ form_card(form, url_for('customer_orders.list_orders')) }}
 {% endblock %}

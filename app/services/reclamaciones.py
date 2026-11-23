@@ -16,7 +16,8 @@ from sqlalchemy import false, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..models import CanalContacto, EstadoReclamacion as State, NoConformidad, Reclamacion, RoleEnum
+from ..models import (CanalContacto, EstadoReclamacion as State, NoConformidad,
+                      Reclamacion, RoleEnum, CustomerOrder, CUSTOMER_ORDER_ASSOCIATIONS)
 from . import audit, clientes, crud, fields, people, policy
 from .actor import Actor
 from .attribution import stamp_updated
@@ -97,12 +98,24 @@ def update(session: Session, actor: Actor, complaint_id: int, data: Mapping[str,
     if found.estado in TERMINAL_STATES:
         raise ValidationError(READ_ONLY_MESSAGE)
     _dates(data, found, today)
+    if 'cliente_id' in data:
+        customer_id = fields.integer(data, 'cliente_id', required=True)
+        links = CUSTOMER_ORDER_ASSOCIATIONS['complaint_ids']
+        if session.scalar(select(CustomerOrder.id).join(links,
+                links.c.order_id == CustomerOrder.id).where(
+                links.c.target_id == complaint_id,
+                CustomerOrder.customer_id != customer_id).limit(1)) is not None:
+            raise ValidationError('La reclamación debe pertenecer al mismo cliente que el pedido.')
     return crud.update(SPEC, session, actor, complaint_id, data)
 
 
 def delete(session: Session, actor: Actor, complaint_id: int) -> None:
     policy.require(actor, Action.DELETE, Resource.COMPLAINTS)
     lock(session, complaint_id)
+    links = CUSTOMER_ORDER_ASSOCIATIONS['complaint_ids']
+    if session.scalar(select(links.c.order_id).where(
+            links.c.target_id == complaint_id).limit(1)) is not None:
+        raise Conflict('No puedes eliminar una reclamación citada por pedidos.')
     crud.delete(SPEC, session, actor, complaint_id)
 
 

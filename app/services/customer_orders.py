@@ -11,14 +11,18 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from ..models import (CustomerOrder, CustomerOrderRevision, CustomerOrderKind,
-    CustomerOrderStatus, RequirementCheck, OrderReviewResult, Person, RoleEnum)
+    CustomerOrderStatus, RequirementCheck, OrderReviewResult, Person, RoleEnum,
+    CommunicationLog, Reclamacion, ProductionOrder)
 from . import audit, clientes, crud, design, fields, people, policy, product_release
 from .actor import Actor
 from .policy import Action, Resource
-from .errors import NotFound, PermissionDenied, ValidationError
+from .errors import Conflict, NotFound, PermissionDenied, ValidationError
+from .attribution import stamp_updated
 from .quality_objectives import Register
 
 RESOURCE = Resource.CUSTOMER_ORDER
+LINKS = {'communication_ids': ('communications', CommunicationLog),
+         'complaint_ids': ('complaints', Reclamacion)}
 READ_ONLY = 'Solo puedes editar la última revisión sin revisar de un pedido no cancelado.'
 CONTENT = ('requirements', 'delivery_requirements', 'post_delivery_requirements',
            'change_reason', 'communicated_to')
@@ -60,6 +64,50 @@ def _lock(session: Session, record_id: int) -> CustomerOrder:
     return row
 
 
+def link_ids(row: CustomerOrder) -> dict[str, list[int]]:
+    """Ordered evidence identifiers shared by audit and MCP reads."""
+    return {key: getattr(row, key) for key in LINKS}
+
+
+def _links(session: Session, data: Mapping, customer_id: int,
+           order_id: int | None = None) -> dict:
+    """Validate every proposed evidence set before any audited mutation."""
+    from .production import _target
+    linked = {}
+    for key, (relation, model) in LINKS.items():
+        if key not in data:
+            continue
+        ids = data[key]
+        if not isinstance(ids, (list, tuple)) or any(not people.is_db_id(i) for i in ids):
+            raise ValidationError(f'El campo «{key}» debe ser una lista de identificadores.')
+        rows = [_target(session, model, value, key) for value in sorted(set(ids))]
+        if key == 'complaint_ids' and any(row.cliente_id != customer_id for row in rows):
+            raise ValidationError('La reclamación debe pertenecer al mismo cliente que el pedido.')
+        linked[relation] = rows
+    # Customer edits must also preserve consistency of already retained evidence.
+    if order_id is not None and 'complaint_ids' not in data:
+        from ..models import CUSTOMER_ORDER_ASSOCIATIONS as associations
+        if session.scalar(select(Reclamacion.id).join(associations['complaint_ids'],
+                associations['complaint_ids'].c.target_id == Reclamacion.id).where(
+                associations['complaint_ids'].c.order_id == order_id,
+                Reclamacion.cliente_id != customer_id).limit(1)) is not None:
+            raise ValidationError('La reclamación debe pertenecer al mismo cliente que el pedido.')
+    return linked
+
+
+def _set_links(session: Session, who: Actor, row: CustomerOrder, linked: dict) -> None:
+    """Replace evidence sets with one parent audit; identical sets write nothing."""
+    changes = {key: value for key, value in linked.items() if getattr(row, key) != value}
+    if changes:
+        before = audit.snapshot(row) | link_ids(row)
+        for key, value in changes.items():
+            setattr(row, key, value)
+        stamp_updated(row, who)
+        audit.record(session, who, 'update', row, before=before,
+                     after=audit.snapshot(row) | link_ids(row))
+        design._flush(session)
+
+
 def latest(session: Session, order_id: int) -> CustomerOrderRevision:
     """Refresh the latest revision after the caller has locked/read its parent."""
     return session.scalar(select(CustomerOrderRevision).where(CustomerOrderRevision.order_id == order_id)
@@ -97,11 +145,14 @@ def _date(values: dict, row: Any, today: date) -> None:
 
 def _create(session: Session, who: Actor, data: Mapping, *, today: date) -> CustomerOrder:
     policy.require(who, Action.CREATE, RESOURCE)
-    values = product_release._values(SPEC, session, data)
+    design._payload(data, SPEC.writable | LINKS.keys())
+    values = product_release._values(SPEC, session, {k: v for k, v in data.items() if k not in LINKS})
+    linked = _links(session, data, values['customer_id'])
     _date(values, None, today)
     content = {k: values.pop(k) for k in CONTENT if k in values}
     row = crud.create(PARENT_SPEC, session, who, values)
     _add_revision(session, who, row, 1, content)
+    _set_links(session, who, row, linked)
     return row
 
 
@@ -120,20 +171,28 @@ def _add_revision(session: Session, who: Actor, order: CustomerOrder, number: in
 def _update(session: Session, who: Actor, record_id: int, data: Mapping, *, today: date) -> CustomerOrder:
     policy.require(who, Action.UPDATE, RESOURCE)
     order = _lock(session, record_id)
+    session.expire(order, [relation for relation, _ in LINKS.values()])
     revision = latest(session, order.id)
-    _editable(order, revision)
+    design._payload(data, SPEC.writable | LINKS.keys())
+    core = {k: v for k, v in data.items() if k not in LINKS}
+    if order.cancelled and data and not core:
+        raise ValidationError('Un pedido cancelado es de solo lectura.')
+    if core or not data:
+        _editable(order, revision)
     # No revision row carries parent columns; validate each part against its own row.
-    design._payload(data, SPEC.writable)
     values = crud._clean(PARENT_SPEC, session,
         {k: v for k, v in data.items() if k in PARENT_SPEC.writable}, order)
     content = crud._clean(REVISION_SPEC, session,
         {k: v for k, v in data.items() if k in CONTENT}, revision)
+    linked = _links(session, data, values.get('customer_id', order.customer_id), order.id)
     _date(values, order, today)
     _change_values(content, revision.number, revision)
     if revision.number > 1 and any(getattr(order, k) != v for k, v in values.items()):
         raise ValidationError('La identidad del pedido queda fija tras la primera revisión.')
-    crud.update(PARENT_SPEC, session, who, order.id, values)
-    _revision_update(session, who, revision.id, content)
+    if core:
+        crud.update(PARENT_SPEC, session, who, order.id, values)
+        _revision_update(session, who, revision.id, content)
+    _set_links(session, who, order, linked)
     return order
 
 
@@ -212,10 +271,14 @@ def _delete(session: Session, who: Actor, record_id: int) -> None:
     policy.require(who, Action.DELETE, RESOURCE)
     _web_admin(who)
     order = _lock(session, record_id)
+    if session.scalar(select(ProductionOrder.id).where(
+            ProductionOrder.customer_order_id == order.id).limit(1)) is not None:
+        raise Conflict('No puedes eliminar un pedido citado por producción.')
     revision = latest(session, order.id)
     _editable(order, revision)
     if revision.number != 1:
         raise ValidationError('Solo puedes eliminar un pedido con una única revisión sin revisar.')
+    _set_links(session, who, order, {relation: [] for relation, _ in LINKS.values()})
     product_release._remove(session, who, revision)
     product_release._remove(session, who, order)
 

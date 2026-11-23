@@ -192,6 +192,14 @@ class OrderRules(OrderCase):
         migration = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(migration)
         self.assertEqual('f1b3d5e7a9c2', migration.down_revision)
+        # Remove later restrictive citations before exercising the T1 schema alone.
+        link_spec = importlib.util.spec_from_file_location('link_migration',
+            path.parent / 'b3d5f7a9c1e4_link_customer_orders.py')
+        links = importlib.util.module_from_spec(link_spec)
+        link_spec.loader.exec_module(links)
+        with db.engine.begin() as connection:
+            with patch.object(links, 'op', Operations(MigrationContext.configure(connection))):
+                links.downgrade()
         db.metadata.drop_all(db.engine, tables=[CustomerOrderRevision.__table__, CustomerOrder.__table__])
         with db.engine.begin() as connection:
             legacy = sorted(inspect(connection).get_table_names())
@@ -217,3 +225,6 @@ class OrderRules(OrderCase):
                 migration.downgrade()
                 self.assertEqual(before, snapshot())
                 self.assertEqual(set(legacy), set(inspect(connection).get_table_names()))
+                migration.upgrade()
+                with patch.object(links, 'op', Operations(MigrationContext.configure(connection))):
+                    links.upgrade()

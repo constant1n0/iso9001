@@ -15,6 +15,7 @@
 <p><strong>Proceso:</strong> {{ order.process.proceso }} · <strong>Cliente:</strong> {{ order.customer.nombre if order.customer else '—' }}</p>
 <p><strong>Lote o referencia:</strong> {{ order.lot or '—' }} · <strong>Responsable:</strong> {{ order.owner.nombre if order.owner else '—' }}</p>
 <p><strong>Inicio previsto:</strong> {{ order.planned_start or '—' }} · <strong>Fin previsto:</strong> {{ order.planned_end or '—' }}</p>
+{% if order.customer_order %}<p><strong>Pedido del cliente:</strong> <a href="{{ url_for('customer_orders.show_order', order_id=order.customer_order_id) }}">{{ order.customer_order.code }}</a> · {{ order.customer_order.status.value }}</p>{% endif %}
 {% if order.design_output %}<p><strong>Diseño:</strong> #{{ order.design_output.lineage_id }} · Versión {{ order.design_output.version }} · {{ order.design_output.text }}</p>{% endif %}
 {% if order.cancellation_reason %}<p><strong>Motivo de cancelación:</strong> {{ order.cancellation_reason }}</p>{% endif %}</section>
 <section class="card"><h2>Condiciones controladas</h2>

@@ -80,6 +80,14 @@ Pedidos y contratos (8.2): `customer_orders` crea y actualiza borradores con
 filtros `status` (`pending`, `accepted`, `rejected`, `cancelled`), `kind`, `customer_id`.
 La identidad queda fija tras la primera revisión. Las escrituras de requisitos
 se aplican a la última revisión sin revisar; omitir campos conserva su contenido.
+Las listas opcionales `communication_ids` (registros realizados de `communication_log`)
+y `complaint_ids` (`reclamaciones` del mismo cliente) sustituyen cada conjunto:
+`[]` vacía, omitir conserva, duplicados se normalizan; ids desconocidos, booleanos,
+texto o `null` se rechazan sin escrituras. Las lecturas devuelven ambos conjuntos
+ordenados. Una actualización que solo envía estas listas se admite también tras
+aceptar o rechazar, nunca tras cancelar; no cambia requisitos ni decisiones.
+Las reclamaciones citadas no pueden cambiar a otro cliente ni eliminarse;
+las comunicaciones realizadas son siempre inmutables.
 
 `customer_order_revisions` consulta todo el historial y crea la siguiente revisión
 solo tras revisar la anterior: `order_id`, `requirements`, `change_reason` y
@@ -148,7 +156,9 @@ No hay liberación de producto ni herramientas de borrado.
 Producción y servicio (8.5.1/8.5.2, PS1): `production_orders` permite consultar,
 listar, crear y actualizar. Obligatorios: `code` (único, hasta 50 caracteres),
 `kind` (`production` o `service`), `title` y `process_id`. Opcionales: `customer_id`,
-`design_output_id` (versión exacta aprobada), `lot`, `owner_id` (persona activa al
+`customer_order_id` (pedido de `customer_orders` aceptado al crear una nueva cita;
+si la orden tiene cliente, debe coincidir), `design_output_id` (versión exacta aprobada),
+`lot`, `owner_id` (persona activa al
 vincularla), `planned_start` y `planned_end` (YYYY-MM-DD, fin ≥ inicio).
 `revision_ids`, `equipment_ids` y `person_ids` sustituyen los conjuntos; `[]` vacía,
 omitir conserva. Nuevos vínculos: revisiones legibles aprobadas/vigentes, equipos
@@ -159,6 +169,10 @@ Filtros: `state` (`planned`, `in_progress`, `finished`, `cancelled`), `kind`,
 `%`, `_` y `\` no son comodines). Todos leen; administradores y
 auditores escriben. MCP nunca elimina ni cambia estados; las órdenes terminadas o
 canceladas son de solo lectura. Terminar trabajo NO autoriza la entrega (8.6).
+`customer_order_id` se devuelve también en lectura; `null` quita la cita y omitirla
+la conserva. Una cita existente sobrevive a cambios de estado del pedido, incluida
+la cancelación, sin permitir nuevas citas a pedidos no aceptados. El pedido citado
+queda protegido del borrado.
 
 Registros de producción (PS2): `production_control_records` y
 `production_preservation_records` permiten crear, consultar y listar, nunca actualizar
