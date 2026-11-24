@@ -47,6 +47,9 @@
     ('reclamacion', 'reclamacion.listar_reclamaciones', 'Reclamaciones', '9.1.2', can('read', 'complaints')),
     ('satisfaccion_cliente', 'satisfaccion_cliente.listar_encuestas', 'Satisfacción', '9.1.2', True),
   ]),
+  ('Infraestructura', [
+    ('infrastructure', 'infrastructure.list_items', 'Infraestructura', '7.1.3', can('read', 'infrastructure')),
+  ]),
   ('Medición', [
     ('equipment', 'equipment.list_equipment', 'Equipos y calibraciones', '7.1.5', can('read', 'measuring_equipment')),
   ]),

@@ -79,7 +79,7 @@ from ..models import (
     NoConformidad, OrigenNoConformidad, ProcesoOperacion, Proveedor, ResultadoVerificacion,
     RoleEnum, TratamientoSalidaNoConforme, KnowledgeItem, Mejora, Reclamacion,
     ProductionControlRecord, ProductionPreservationRecord, PropertyIncident,
-    PostDeliveryActivity,
+    PostDeliveryActivity, MantenimientoInfraestructura,
 )
 from . import audit, crud, fields, people, policy
 from .actor import Actor
@@ -125,7 +125,7 @@ REFERENCES = (
     KnowledgeItem.no_conformidad_id, Mejora.no_conformidad_id,
     Reclamacion.no_conformidad_id, ProductionControlRecord.nonconformity_id,
     ProductionPreservationRecord.nonconformity_id, PropertyIncident.nonconformity_id,
-    PostDeliveryActivity.nonconformity_id,
+    PostDeliveryActivity.nonconformity_id, MantenimientoInfraestructura.no_conformidad_id,
 )
 
 

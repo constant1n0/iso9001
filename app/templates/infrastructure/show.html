@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form %}
+{% block title %}{{ item.codigo }} · {{ item.nombre }}{% endblock %}
+{% block content %}
+{% call page_header('7.1.3 · Infraestructura', item.codigo ~ ' · ' ~ item.nombre) %}
+{% if can('update', 'infrastructure') %}<a class="btn" href="{{ url_for('infrastructure.edit_item', item_id=item.id) }}">Editar elemento</a>{% endif %}
+{% if can('create', 'infrastructure') and not item.retirado %}<a class="btn btn--primary" href="{{ url_for('infrastructure.new_maintenance', item_id=item.id) }}">Registrar mantenimiento</a>{% endif %}
+{% if can('delete', 'infrastructure') and total == 0 %}{{ delete_form(url_for('infrastructure.delete_item', item_id=item.id), '¿Eliminar el elemento?') }}{% endif %}
+{% endcall %}
+<article class="card"><h2>{{ 'Retirado' if item.retirado else 'Vencido' if late else 'En plazo' }}</h2>
+<dl>{% for label, value in [('Tipo', item.tipo.value), ('Ubicación', item.ubicacion), ('Responsable', owners.get(item.responsable_id)), ('Frecuencia', item.frecuencia), ('Próximo mantenimiento', item.fecha_proxima)] %}<dt>{{ label }}</dt><dd>{{ value or '—' }}</dd>{% endfor %}
+<dt>Procesos a los que da soporte</dt><dd>{% for process in item.procesos %}<a href="{{ url_for('proceso.show_process', process_id=process.id_proceso) }}">{{ process.proceso }}</a>{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}</dd></dl></article>
+<h2>Mantenimientos</h2>
+<p>Historial inmutable: no se edita ni se elimina. Cada intervención indica una nueva próxima fecha explícita; no se calcula a partir de la frecuencia. Una retirada impide registrar intervenciones nuevas.</p>
+{% for entry in entries %}
+<article class="card"><h3>{{ entry.fecha.strftime('%d/%m/%Y') }} · {{ entry.tipo.value }} · {{ entry.resultado.value }}</h3>
+<dl>{% for label, value in [('Realizado por', entry.realizado_por), ('Evidencia', entry.evidencia), ('Acciones realizadas', entry.acciones), ('Nueva próxima fecha', entry.fecha_proxima)] %}<dt>{{ label }}</dt><dd>{{ value or '—' }}</dd>{% endfor %}
+<dt>No conformidad citada</dt><dd>{% if entry.no_conformidad_id %}<a href="{{ url_for('no_conformidad.ver_no_conformidad', id=entry.no_conformidad_id) }}">NC-{{ entry.no_conformidad_id }}</a>{% else %}—{% endif %}</dd></dl></article>
+{% else %}<p>No hay mantenimientos registrados.</p>{% endfor %}
+<nav class="pagination" aria-label="Historial de mantenimientos">
+{% if page > 1 %}<a href="{{ url_for('infrastructure.show_item', item_id=item.id, page=page-1, per_page=per_page) }}">Anterior</a>{% endif %}
+<span>Página {{ page }} · {{ total }} mantenimientos</span>
+{% if page * per_page < total %}<a href="{{ url_for('infrastructure.show_item', item_id=item.id, page=page+1, per_page=per_page) }}">Siguiente</a>{% endif %}
+</nav>
+{% endblock %}

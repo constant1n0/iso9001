@@ -11,6 +11,7 @@ from mcp_support import ADMIN, AUDITOR, OPERATIVO, McpDbCase, mcp_actor
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUGS = {
+    'infraestructura', 'mantenimientos_infraestructura',
     'customer_orders', 'customer_order_revisions', 'product_releases', 'release_verifications',
     'post_delivery_activities', 'customer_property', 'property_incidents',
     'production_orders', 'production_control_records', 'production_preservation_records', 'production_changes',
@@ -47,6 +48,7 @@ SHARED_CONTEXT = ("cuestiones_contexto", "alcances_sgc")
 # Changes to the QMS and their tasks (decision CP5 of change-planning).
 SHARED_CHANGES = ("cambios_sgc", "tareas_cambio")
 SHARED_EQUIPMENT = ("equipos_medicion", "comprobaciones_equipo")
+SHARED_INFRASTRUCTURE = ('infraestructura', 'mantenimientos_infraestructura')
 SHARED_COMMUNICATION = ('communication', 'communication_log')
 SHARED_PRODUCTION = ('post_delivery_activities', 'customer_property', 'property_incidents', 'production_orders', 'production_control_records', 'production_preservation_records', 'production_changes')
 SHARED_DESIGN = ('design_projects', 'design_stages', 'design_inputs', 'design_outputs',
@@ -83,7 +85,7 @@ class RegistryTestCase(unittest.TestCase):
         modules = registry().MODULES
         shared = (SHARED_RESOURCE + SHARED_AUDITS + SHARED_OBJECTIVES + SHARED_REVIEWS
                   + SHARED_RISKS + SHARED_PROVIDERS + SHARED_CONTEXT + SHARED_CHANGES
-                  + SHARED_EQUIPMENT + SHARED_COMMUNICATION + SHARED_DESIGN + SHARED_PRODUCTION + SHARED_RELEASE + SHARED_CUSTOMER_ORDERS)
+                  + SHARED_INFRASTRUCTURE + SHARED_EQUIPMENT + SHARED_COMMUNICATION + SHARED_DESIGN + SHARED_PRODUCTION + SHARED_RELEASE + SHARED_CUSTOMER_ORDERS)
         resources = [m.resource for slug, m in modules.items() if slug not in shared]
         self.assertEqual(len(resources), len(set(resources)))
         self.assertEqual({Resource.CUSTOMER_ORDER}, {modules[s].resource for s in SHARED_CUSTOMER_ORDERS})
@@ -102,6 +104,8 @@ class RegistryTestCase(unittest.TestCase):
                          {modules[s].resource for s in SHARED_CONTEXT})
         self.assertEqual({Resource.QMS_CHANGES}, {modules[s].resource for s in SHARED_CHANGES})
         self.assertEqual({Resource.MEASURING_EQUIPMENT}, {modules[s].resource for s in SHARED_EQUIPMENT})
+        self.assertEqual({Resource.INFRASTRUCTURE},
+                         {modules[s].resource for s in SHARED_INFRASTRUCTURE})
         self.assertEqual({Resource.COMMUNICATION},
                          {modules[s].resource for s in SHARED_COMMUNICATION})
         self.assertEqual({Resource.DESIGN}, {modules[s].resource for s in SHARED_DESIGN})
@@ -119,6 +123,8 @@ class RegistryTestCase(unittest.TestCase):
         )
 
         bespoke = {
+            'infraestructura': (registry().infrastructure.WRITABLE,
+                frozenset(f.name for f in registry().infrastructure.SPEC.fields if f.required)),
             'customer_orders': (customer_orders.SPEC.writable | customer_orders.LINKS.keys(),
                 frozenset(f.name for f in customer_orders.SPEC.fields if f.required)),
             'production_orders': (production.WRITABLE,

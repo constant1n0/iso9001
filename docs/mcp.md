@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera los módulos: `customer_orders`, `customer_order_revisions`, `product_releases`, `release_verifications`, `post_delivery_activities`, `customer_property`, `property_incidents`, `production_changes`, `production_control_records`, `production_preservation_records`, `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
+`qms_modules` enumera los módulos: `infraestructura`, `mantenimientos_infraestructura`, `customer_orders`, `customer_order_revisions`, `product_releases`, `release_verifications`, `post_delivery_activities`, `customer_property`, `property_incidents`, `production_changes`, `production_control_records`, `production_preservation_records`, `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -487,6 +487,37 @@ Ejemplo de `qms_update` (los registros citados deben existir):
 
 ```json
 {"module": "knowledge", "id": 1, "data": {"process_ids": [2, 3], "document_ids": [4], "expert_ids": [5], "training_ids": [6], "requirement_ids": [7], "no_conformidad_id": 8}}
+```
+
+Infraestructura y mantenimiento (7.1.3):
+
+- `infraestructura`: obligatorios `codigo` único (máximo 50 caracteres), `nombre`,
+  `tipo` (`edificio`, `equipo_proceso`, `hardware_software`, `transporte`, `tic`),
+  `frecuencia` en texto libre y `fecha_proxima` (YYYY-MM-DD). Opcionales
+  `responsable_id` (persona activa al elegirla; vínculo histórico retenido),
+  `ubicacion`, `retirado` y `procesos` (lista de identificadores existentes que
+  sustituye el conjunto; `[]` lo vacía). No altera `ProcesoOperacion.recursos`.
+  Filtros `codigo`, `tipo`, `retirado` y `proceso_id`. Devuelve `procesos`
+  ordenados sin duplicados y `vencido` (no retirado, próxima fecha anterior a hoy).
+- `mantenimientos_infraestructura`: obligatorios `elemento_id`, `fecha`, `tipo`
+  (`preventivo`/`correctivo`), `resultado` (`conforme`/`no_conforme`),
+  `realizado_por`, `evidencia` textual y `fecha_proxima` explícita posterior a
+  `fecha`. No admite fechas futuras ni anteriores a la última intervención;
+  sí varias el mismo día, ordenadas por identificador. Los elementos retirados
+  rechazan nuevas intervenciones. `no_conforme` exige `acciones` no vacías,
+  incluso con `no_conformidad_id`: cita opcional de una NC existente elegida
+  manualmente, sin crear nada automáticamente. Filtros `elemento_id` y `resultado`.
+- La próxima fecha se aplica al elemento en la misma transacción y se auditan
+  ambos; no se calcula a partir de la frecuencia ni se envían notificaciones.
+  Administrador y Auditor escriben; todos consultan. `qms_update` rechaza el
+  historial con un error de inmutabilidad sin cambiar datos ni auditoría.
+  No hay borrado MCP. Web permite borrar solo elementos sin historial; los
+  demás se retiran. Las citas a personas, procesos y NC tienen FK RESTRICT.
+- Como en los demás módulos MCP, los filtros se validan contra `qms_modules`;
+  los selectores web ignoran valores desconocidos.
+
+```json
+{"module": "mantenimientos_infraestructura", "data": {"elemento_id": 1, "fecha": "2020-01-01", "tipo": "preventivo", "resultado": "conforme", "realizado_por": "Servicio técnico", "evidencia": "Parte M-1", "fecha_proxima": "2020-07-01"}}
 ```
 
 Equipos y comprobaciones (7.1.5):

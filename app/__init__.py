@@ -59,6 +59,7 @@ from .routes import (
     change_routes,
     design_routes, production_routes, release_routes, customer_order_routes,
     confirmacion_lectura_routes, equipment_routes, knowledge_routes, communication_routes,
+    infrastructure_routes,
 )
 from .utils.error_handlers import register_error_handlers
 from .utils.permissions import can
@@ -186,6 +187,7 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
     app.register_blueprint(customer_order_routes.bp)
     app.register_blueprint(confirmacion_lectura_routes.bp)
     app.register_blueprint(equipment_routes.bp)
+    app.register_blueprint(infrastructure_routes.bp)
     app.register_blueprint(knowledge_routes.bp)
     app.register_blueprint(communication_routes.bp)
 

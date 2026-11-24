@@ -274,7 +274,17 @@ COMMUNICATION = dict(title='Quality results', content='Explain performance', sco
 DESIGN = dict(title='New design', description='Product', owner_id='1')
 DESIGN_STAGE = dict(name='Stage', owner_id='1')
 
+INFRASTRUCTURE = dict(codigo='INF-NEW', nombre='Prensa', tipo='equipo_proceso',
+                      frecuencia='Cada mes', fecha_proxima='2099-01-01', responsable_id='')
+
 ENDPOINTS = [
+    *_html('INFRASTRUCTURE', '/infraestructura/', ('nuevo', INFRASTRUCTURE),
+           ('1/editar', INFRASTRUCTURE | {'codigo': 'INF-1'}), '1/eliminar'),
+    Endpoint('INFRASTRUCTURE', 'read', 'GET', '/infraestructura/1', 200),
+    Endpoint('INFRASTRUCTURE', 'create', 'POST', '/infraestructura/1/mantenimientos/nuevo',
+             302, dict(fecha='2020-01-01', tipo='preventivo', resultado='conforme',
+                       realizado_por='Ana', evidencia='Parte M-1', fecha_proxima='2099-01-01',
+                       no_conformidad_id='')),
     Endpoint('CUSTOMER_ORDER', 'read', 'GET', '/pedidos/', 200),
     Endpoint('CUSTOMER_ORDER', 'create', 'GET', '/pedidos/nuevo', 200),    Endpoint('RELEASE', 'read', 'GET', '/liberacion/', 200),
     Endpoint('RELEASE', 'create', 'GET', '/liberacion/nueva', 200),
@@ -500,6 +510,7 @@ ADMIN_AUDITOR = {ADMIN, AUDITOR}
 ALL = set(RoleEnum)
 JSON_REGISTER = (ALL, ADMIN_AUDITOR, {ADMIN})
 ALLOWED = {
+    'INFRASTRUCTURE': JSON_REGISTER,
     'CUSTOMER_ORDER': JSON_REGISTER,    'RELEASE': JSON_REGISTER,
     'PRODUCTION': JSON_REGISTER,
     'DESIGN': JSON_REGISTER,
@@ -680,6 +691,10 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                 title='Quality results', content='Explain performance', scope=CommunicationScope.ambas,
                 channel=CommunicationChannel.web, owner_id=1, frequency='Every month',
                 next_date=date(2026, 12, 1), audience_text='All staff'))
+            from app.models import ElementoInfraestructura, TipoInfraestructura
+            db.session.add(ElementoInfraestructura(codigo='INF-1', nombre='Prensa',
+                tipo=TipoInfraestructura.equipo_proceso, frecuencia='Cada mes',
+                fecha_proxima=date(2026, 12, 1)))
             db.session.add(EquipoMedicion(codigo='EQ-1', nombre='Balanza'))
             db.session.add(KnowledgeItem(kind=KnowledgeType.conocimiento,
                                         title='Tool set-up', summary='Keep evidence', owner_id=1))

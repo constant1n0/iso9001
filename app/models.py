@@ -2282,6 +2282,86 @@ class CommunicationLog(RecordMetadataMixin, db.Model):
     next_date = db.Column(db.Date, nullable=False)
 
 
+class TipoInfraestructura(enum.Enum):
+    edificio = 'Edificio'
+    equipo_proceso = 'Equipo de proceso'
+    hardware_software = 'Hardware/software'
+    transporte = 'Transporte'
+    tic = 'TIC'
+
+
+class TipoMantenimiento(enum.Enum):
+    preventivo = 'Preventivo'
+    correctivo = 'Correctivo'
+
+
+class ResultadoMantenimiento(enum.Enum):
+    conforme = 'Conforme'
+    no_conforme = 'No conforme'
+
+
+infraestructura_procesos = db.Table(
+    'infraestructura_procesos',
+    db.Column('elemento_id', db.Integer, db.ForeignKey(
+        'infraestructura.id', name='fk_infraestructura_procesos_elemento_id',
+        ondelete='RESTRICT', onupdate='RESTRICT'), primary_key=True),
+    db.Column('proceso_id', db.Integer, db.ForeignKey(
+        'procesos_operacion.id_proceso', name='fk_infraestructura_procesos_proceso_id',
+        ondelete='RESTRICT', onupdate='RESTRICT'), primary_key=True),
+    db.Index('ix_infraestructura_procesos_proceso_id', 'proceso_id'),
+)
+
+
+class ElementoInfraestructura(RecordMetadataMixin, db.Model):
+    """Infrastructure identity and the explicit next maintenance date (7.1.3)."""
+
+    __tablename__ = 'infraestructura'
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(50), nullable=False, unique=True)
+    nombre = db.Column(db.String(200), nullable=False)
+    tipo = db.Column(text_enum(TipoInfraestructura, 'ck_infraestructura_tipo'), nullable=False)
+    responsable_id = person_link('infraestructura', 'responsable_id')
+    ubicacion = db.Column(db.String(200))
+    frecuencia = db.Column(db.Text, nullable=False)
+    fecha_proxima = db.Column(db.Date, nullable=False)
+    retirado = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    procesos = db.relationship('ProcesoOperacion', secondary=infraestructura_procesos,
+                               order_by='ProcesoOperacion.id_proceso', lazy='selectin')
+
+    @property
+    def proceso_ids(self) -> list[int]:
+        """Supported process ids, unique and ascending, shared by audit and MCP."""
+        return sorted(row.id_proceso for row in self.procesos)
+
+
+class MantenimientoInfraestructura(RecordMetadataMixin, db.Model):
+    """Immutable intervention evidence, optionally citing an existing NC."""
+
+    __tablename__ = 'mantenimientos_infraestructura'
+    __table_args__ = (
+        db.CheckConstraint('length(trim(evidencia)) > 0', name='ck_mant_infra_evidencia'),
+        db.CheckConstraint('fecha_proxima > fecha', name='ck_mant_infra_proxima'),
+        db.CheckConstraint("resultado = 'conforme' OR (acciones IS NOT NULL AND "
+                           "length(trim(acciones)) > 0)", name='ck_mant_infra_acciones'),
+        db.Index('ix_mant_infra_historial', 'elemento_id', 'fecha', 'id'),
+        db.Index('ix_mant_infra_no_conformidad_id', 'no_conformidad_id'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    elemento_id = db.Column(db.Integer, db.ForeignKey(
+        'infraestructura.id', name='fk_mant_infra_elemento_id',
+        ondelete='RESTRICT', onupdate='RESTRICT'), nullable=False)
+    fecha = db.Column(db.Date, nullable=False)
+    tipo = db.Column(text_enum(TipoMantenimiento, 'ck_mant_infra_tipo'), nullable=False)
+    resultado = db.Column(text_enum(ResultadoMantenimiento, 'ck_mant_infra_resultado'), nullable=False)
+    realizado_por = db.Column(db.String(200), nullable=False)
+    evidencia = db.Column(db.Text, nullable=False)
+    acciones = db.Column(db.Text)
+    no_conformidad_id = db.Column(db.Integer, db.ForeignKey(
+        'no_conformidades.id', name='fk_mant_infra_no_conformidad_id',
+        ondelete='RESTRICT', onupdate='RESTRICT'))
+    fecha_proxima = db.Column(db.Date, nullable=False)
+
+
 class TipoComprobacionEquipo(enum.Enum):
     calibracion = 'Calibración'
     verificacion = 'Verificación'
