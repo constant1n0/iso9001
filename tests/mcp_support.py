@@ -31,6 +31,11 @@ def mcp_actor(role=ADMIN, scopes=("read", "write"), user_id=7) -> Actor:
 
 # Minimal valid payload per module, as an agent would send it (dates as ISO text).
 SEEDS = {
+    'infraestructura': {'codigo': 'INF-1', 'nombre': 'Prensa', 'tipo': 'equipo_proceso',
+                        'frecuencia': 'Cada mes', 'fecha_proxima': '2020-01-01'},
+    'mantenimientos_infraestructura': {'elemento_id': 1, 'fecha': '2020-01-01',
+        'tipo': 'preventivo', 'resultado': 'conforme', 'realizado_por': 'Ana',
+        'evidencia': 'Parte M-1', 'fecha_proxima': '2099-01-01'},
     "equipos_medicion": {"codigo": "EQ-1", "nombre": "Balanza"},
     "comprobaciones_equipo": {"equipo_id": 1, "fecha": "2020-01-01",
         "tipo": "calibracion", "resultado": "apto", "realizado_por": "Lab",
@@ -204,6 +209,10 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
     def seed(self, slug: str, **overrides) -> int:
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
+        if slug == 'mantenimientos_infraestructura':
+            from app.models import ElementoInfraestructura
+            if db.session.get(ElementoInfraestructura, 1) is None:
+                self.seed('infraestructura')
         if slug == 'customer_orders' and db.session.get(Cliente, 1) is None:
             self.seed('clientes')
         if slug == 'customer_order_revisions':

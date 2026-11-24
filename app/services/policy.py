@@ -95,6 +95,7 @@ class Resource(StrEnum):
     DESIGN = "design"
     COMMUNICATION = "communication"
     KNOWLEDGE = "knowledge"
+    INFRASTRUCTURE = "infrastructure"
     MEASURING_EQUIPMENT = "measuring_equipment"
     NONCONFORMITIES = "nonconformities"
     IMPROVEMENTS = "improvements"
@@ -153,6 +154,7 @@ _MATRIX: dict[Resource, Grant] = {
     Resource.DESIGN: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
     Resource.COMMUNICATION: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
     Resource.KNOWLEDGE: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
+    Resource.INFRASTRUCTURE: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
     Resource.MEASURING_EQUIPMENT: Grant(_ALL, _ADMIN_AUDITOR, _ADMIN),
     Resource.NONCONFORMITIES: _OPEN_REGISTER,
     Resource.IMPROVEMENTS: _OPEN_REGISTER,

@@ -32,6 +32,7 @@ LATER_AUDITED_TABLES = frozenset(
      "hallazgos_auditoria", "objetivos_calidad", "mediciones_objetivo",
      "revisiones_direccion", "acciones_revision", "riesgos", "oportunidades",
      "acciones_riesgo", "proveedores", "evaluaciones_proveedor", "cuestiones_contexto",
+     'infraestructura', 'mantenimientos_infraestructura',
      "equipos_medicion", "comprobaciones_equipo", "alcances_sgc", "clientes", "reclamaciones", "cambios_sgc", "tareas_cambio",
      "confirmaciones_lectura", "knowledge_items", "communication_plan", "communication_log",
      'design_projects', 'design_stages', 'design_inputs', 'design_outputs',
@@ -150,6 +151,31 @@ class MigrationsTestCase(unittest.TestCase):
                 self.assertEqual(1, connection.scalar(text('SELECT count(*) FROM no_conformidades')))
             downgrade(directory=MIGRATIONS_DIR, revision='c6e8f0a2b4d6')
             self.assertNotIn('equipos_medicion', inspect(db.engine).get_table_names())
+            upgrade(directory=MIGRATIONS_DIR)
+            self.assertEqual([], self._schema_differences())
+
+    def test_infrastructure_upgrade_downgrade_preserves_existing_records(self):
+        with self.app.app_context():
+            upgrade(directory=MIGRATIONS_DIR, revision='b3d5f7a9c1e4')
+            self._insert_legacy_user_and_nc(estado='abierta')
+            before = self._rows('SELECT * FROM no_conformidades')
+            upgrade(directory=MIGRATIONS_DIR)
+            inspector = inspect(db.engine)
+            for table in ('infraestructura', 'infraestructura_procesos', 'mantenimientos_infraestructura'):
+                self.assertIn(table, inspector.get_table_names())
+                for fk in inspector.get_foreign_keys(table):
+                    self.assertTrue(fk['name'])
+                    if fk['referred_table'] != 'users':
+                        self.assertEqual('RESTRICT', fk['options']['ondelete'])
+            checks = {c['name'] for c in inspector.get_check_constraints('mantenimientos_infraestructura')}
+            self.assertLessEqual({'ck_mant_infra_tipo', 'ck_mant_infra_resultado',
+                                  'ck_mant_infra_evidencia', 'ck_mant_infra_acciones',
+                                  'ck_mant_infra_proxima'}, checks)
+            self.assertEqual(before, self._rows('SELECT * FROM no_conformidades'))
+            self.assertEqual([], self._schema_differences())
+            downgrade(directory=MIGRATIONS_DIR, revision='b3d5f7a9c1e4')
+            self.assertNotIn('infraestructura', inspect(db.engine).get_table_names())
+            self.assertEqual(before, self._rows('SELECT * FROM no_conformidades'))
             upgrade(directory=MIGRATIONS_DIR)
             self.assertEqual([], self._schema_differences())
 

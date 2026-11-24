@@ -27,6 +27,7 @@ from ..models import (
     TipoAccionRevision, TipoContexto, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
     KnowledgeType, CommunicationChannel, CommunicationScope, DesignState,
+    TipoInfraestructura, TipoMantenimiento, ResultadoMantenimiento,
     DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult,
     DesignChangeState, ProductionKind, ProductionState,
     ProductionControlKind, PreservationAspect, ProductionResult, PropertyStatus, PropertyIncidentKind,
@@ -34,7 +35,7 @@ from ..models import (
 )
 from ..services import (
     audit_findings, audit_indicators, audit_programmes, audits, clientes, competence, context_issues,
-    reclamaciones, read_confirmations, equipment, knowledge, communication, communication_log,
+    reclamaciones, read_confirmations, equipment, infrastructure, knowledge, communication, communication_log,
     corrective_actions, document_revisions, documents, improvements, management_reviews,
     nonconformities, people, process_operations, providers, qms_changes, qms_scope,
     quality_objectives, risks, roles_responsibilities, satisfaction, stakeholders, training,
@@ -782,6 +783,30 @@ _CUSTOMER_ORDER_MODULES = (
 )
 
 _MODULES = (
+    Module('infraestructura', 'Infrastructure (7.1.3)', Resource.INFRASTRUCTURE,
+           infrastructure.items, (
+        _f('codigo', required=True), _f('nombre', required=True),
+        _f('tipo', 'enum', True, members=TipoInfraestructura),
+        _f('responsable_id', 'integer', note='Active person when newly selected; historical links retained.'),
+        _f('ubicacion'), _f('frecuencia', required=True, note='Free text; no date calculation.'),
+        _f('fecha_proxima', 'date', True), _f('retirado', 'boolean'),
+        _f('procesos', 'integer_list', note='Supported processes; replaces the set, [] clears it.'),
+    ), (_f('codigo'), _f('tipo', 'enum', members=TipoInfraestructura),
+        _f('retirado', 'boolean'), _f('proceso_id', 'integer')),
+        extras=lambda row: {'procesos': row.proceso_ids,
+                            'vencido': infrastructure.is_overdue(row, today=local_today())}),
+    Module('mantenimientos_infraestructura', 'Immutable maintenance history (7.1.3)',
+           Resource.INFRASTRUCTURE, _DatedWrites(infrastructure.maintenance), (
+        _f('elemento_id', 'integer', True, note='Unretired infrastructure element.'),
+        _f('fecha', 'date', True, note='Never future or before the latest entry; same-day entries allowed.'),
+        _f('tipo', 'enum', True, members=TipoMantenimiento),
+        _f('resultado', 'enum', True, members=ResultadoMantenimiento),
+        _f('realizado_por', required=True),
+        _f('evidencia', required=True, note='Text/reference, not an upload. Immutable; updates refused.'),
+        _f('acciones', note='Required for no_conforme, even when citing an NC.'),
+        _f('no_conformidad_id', 'integer', note='Optional existing NC, chosen manually; nothing created automatically.'),
+        _f('fecha_proxima', 'date', True, note='Explicit new date after fecha; atomically updates the element.'),
+    ), (_f('elemento_id', 'integer'), _f('resultado', 'enum', members=ResultadoMantenimiento))),
     Module('equipos_medicion', 'Measuring equipment', Resource.MEASURING_EQUIPMENT,
            equipment.equipment, (
         _f('codigo', required=True), _f('nombre', required=True), _f('numero_serie'),

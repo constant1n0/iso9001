@@ -28,6 +28,7 @@ Documentación técnica:
 - [Roles y acceso](#roles-y-acceso)
 - [Panel de control](#panel-de-control)
 - [Usuarios](#usuarios)
+- [Infraestructura y mantenimiento](#infraestructura-y-mantenimiento)
 - [Equipos y calibraciones](#equipos-y-calibraciones)
 - [Conocimientos y lecciones](#conocimientos-y-lecciones)
 - [Personas y competencia](#personas-y-competencia)
@@ -242,6 +243,43 @@ frente al borrado; puedes desactivar una persona sin perder la trazabilidad.
 **Tener borrador o verificaciones no autoriza la entrega. Ninguna decisión cambia
 la orden.** MCP crea, consulta, lista y edita borradores; para verificaciones solo
 crea, consulta y lista, nunca edita, elimina ni decide.
+
+## Infraestructura y mantenimiento
+
+En **Infraestructura → Infraestructura** (`/infraestructura/`), registra los
+recursos que dan soporte a los procesos (7.1.3): código único, nombre y tipo
+(**Edificio**, **Equipo de proceso**, **Hardware/software**, **Transporte** o
+**TIC**), ubicación, responsable y procesos soportados. La persona responsable
+es opcional y debe estar activa al elegirla; el vínculo histórico se conserva
+si después se desactiva. La selección de procesos sustituye el conjunto anterior;
+no modifica el texto de recursos del proceso.
+
+Indica una frecuencia de mantenimiento en texto libre y una próxima fecha
+explícita. La lista permite filtrar por código, tipo, estado y proceso; ignora
+valores de selector desconocidos. Un elemento no retirado figura **Vencido**
+desde el día siguiente a su próxima fecha, sin generar notificaciones.
+
+En la ficha, pulsa **Registrar mantenimiento**:
+1. Indica fecha (no futura ni anterior al último mantenimiento), tipo
+   **Preventivo** o **Correctivo**, resultado y quién lo realizó.
+2. Añade evidencia o referencia obligatoria, como el parte de intervención;
+   no se adjuntan ficheros. **No conforme** exige explicar las acciones realizadas,
+   incluso si se cita una no conformidad.
+3. Si procede, elige manualmente una **no conformidad ya existente**. Es opcional:
+   registrar un mantenimiento no crea ninguna no conformidad automáticamente.
+4. Indica la nueva próxima fecha, posterior a la intervención. Se conserva en
+   el historial y actualiza la ficha en la misma transacción, con auditoría de
+   ambos registros; nunca se calcula a partir de la frecuencia.
+
+El historial es inmutable en web y MCP: un error se rectifica mediante una nueva
+intervención, sin editar ni borrar la anterior. Se admiten varias el mismo día,
+ordenadas por identificador. Una **retirada** impide nuevos mantenimientos y
+conserva el historial. Todos consultan; Administrador y Auditor mantienen y
+registran. Solo Administrador puede eliminar elementos sin historial; con
+historial, retíralos. Las personas y no conformidades citadas quedan protegidas
+frente al borrado. La organización conserva la responsabilidad de realizar el
+mantenimiento y custodiar la evidencia; este registro no cubre todavía el
+ambiente para la operación de los procesos (7.1.4).
 
 ## Equipos y calibraciones
 

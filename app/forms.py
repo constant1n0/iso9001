@@ -28,6 +28,7 @@ from .models import (
     TipoConfirmacion, TipoEncuesta, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
     KnowledgeType, CommunicationChannel, CommunicationScope,
+    TipoInfraestructura, TipoMantenimiento, ResultadoMantenimiento,
     CustomerOrderKind, RequirementCheck, OrderReviewResult,
     DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult, ProductionKind,
     ProductionControlKind, PreservationAspect, ProductionResult, PropertyIncidentKind, PostDeliveryKind,
@@ -327,6 +328,31 @@ class KnowledgeForm(BaseForm):
     accion_revision_id = SelectField('Origen: acción de revisión por la dirección',
                                      coerce=optional_id, choices=[])
     submit = SubmitField('Guardar')
+
+
+class InfrastructureForm(BaseForm):
+    codigo = StringField('Código', validators=[DataRequired(), Length(max=50)])
+    nombre = StringField('Nombre', validators=[DataRequired(), Length(max=200)])
+    tipo = SelectField('Tipo', choices=[(m.name, m.value) for m in TipoInfraestructura])
+    responsable_id = person_field('Responsable')
+    ubicacion = StringField('Ubicación', validators=[Length(max=200)])
+    procesos = SelectMultipleField('Procesos a los que da soporte', coerce=int, choices=[])
+    frecuencia = TextAreaField('Frecuencia de mantenimiento', validators=[DataRequired()])
+    fecha_proxima = DateField('Próximo mantenimiento', validators=[DataRequired()])
+    retirado = BooleanField('Retirado')
+    submit = SubmitField('Guardar')
+
+
+class InfrastructureMaintenanceForm(BaseForm):
+    fecha = DateField('Fecha', validators=[DataRequired()])
+    tipo = SelectField('Tipo', choices=[(m.name, m.value) for m in TipoMantenimiento])
+    resultado = SelectField('Resultado', choices=[(m.name, m.value) for m in ResultadoMantenimiento])
+    realizado_por = StringField('Realizado por', validators=[DataRequired(), Length(max=200)])
+    evidencia = TextAreaField('Evidencia o referencia', validators=[DataRequired()])
+    acciones = TextAreaField('Acciones realizadas (obligatorias si no conforme)')
+    no_conformidad_id = SelectField('No conformidad existente (opcional)', coerce=optional_id, choices=[])
+    fecha_proxima = DateField('Nueva próxima fecha', validators=[DataRequired()])
+    submit = SubmitField('Registrar mantenimiento')
 
 
 class EquipoMedicionForm(BaseForm):

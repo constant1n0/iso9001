@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% block title %}Infraestructura{% endblock %}
+{% block content %}
+{% call page_header('7.1.3 · Recursos', 'Infraestructura') %}
+{% if can('create', 'infrastructure') %}<a class="btn btn--primary" href="{{ url_for('infrastructure.new_item') }}">Nuevo elemento</a>{% endif %}
+{% endcall %}
+<form method="get">
+  <label for="codigo">Código</label><input name="codigo" id="codigo" value="{{ codigo }}">
+  <label for="tipo">Tipo</label><select name="tipo" id="tipo"><option value="">Todos</option>{% for kind in types %}<option value="{{ kind.name }}" {% if tipo == kind.name %}selected{% endif %}>{{ kind.value }}</option>{% endfor %}</select>
+  <label for="retirado">Estado</label><select name="retirado" id="retirado"><option value="">Todos</option><option value="0" {% if retirado == '0' %}selected{% endif %}>En uso</option><option value="1" {% if retirado == '1' %}selected{% endif %}>Retirados</option></select>
+  <label for="proceso_id">Proceso</label><select name="proceso_id" id="proceso_id"><option value="">Todos</option>{% for process in processes %}<option value="{{ process.id_proceso }}" {% if proceso_id == process.id_proceso %}selected{% endif %}>{{ process.proceso }}</option>{% endfor %}</select>
+  <button class="btn" type="submit">Filtrar</button>
+</form>
+{% if items %}
+<div class="table-wrap"><table><thead><tr><th>Código</th><th>Elemento</th><th>Tipo</th><th>Ubicación</th><th>Próximo mantenimiento</th><th>Estado</th></tr></thead>
+<tbody>{% for item in items %}<tr><td><a href="{{ url_for('infrastructure.show_item', item_id=item.id) }}">{{ item.codigo }}</a></td><td>{{ item.nombre }}</td><td>{{ item.tipo.value }}</td><td>{{ item.ubicacion or '—' }}</td><td>{{ item.fecha_proxima }}</td><td>{{ 'Retirado' if item.retirado else 'Vencido' if late[item.id] else 'En plazo' }}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}{{ empty_state('No hay elementos que coincidan.') }}{% endif %}
+<nav class="pagination" aria-label="Páginas de infraestructura">
+{% if page > 1 %}<a href="{{ url_for('infrastructure.list_items', codigo=codigo, tipo=tipo, retirado=retirado, proceso_id=proceso_id, page=page-1, per_page=per_page) }}">Anterior</a>{% endif %}
+<span>Página {{ page }} · {{ total }} elementos</span>
+{% if page * per_page < total %}<a href="{{ url_for('infrastructure.list_items', codigo=codigo, tipo=tipo, retirado=retirado, proceso_id=proceso_id, page=page+1, per_page=per_page) }}">Siguiente</a>{% endif %}
+</nav>
+{% endblock %}
