@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, form_card %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+{{ page_header('7.1.4 · Ambiente de los procesos', title) }}
+<p>Indica la próxima fecha explícitamente. Una comprobación no conforme requiere las acciones realizadas. La fecha no puede ser futura ni anterior a la última comprobación; la nueva próxima fecha debe ser posterior. El historial no se modifica: registra una nueva comprobación.</p>
+{{ form_card(form, url_for('process_environment.list_items'), 'Guardar') }}
+{% endblock %}

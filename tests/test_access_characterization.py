@@ -277,7 +277,16 @@ DESIGN_STAGE = dict(name='Stage', owner_id='1')
 INFRASTRUCTURE = dict(codigo='INF-NEW', nombre='Prensa', tipo='equipo_proceso',
                       frecuencia='Cada mes', fecha_proxima='2099-01-01', responsable_id='')
 
+ENVIRONMENT = dict(proceso_id='2', factor='fisico', descripcion='Temperature', criterio='18–25 °C',
+                   frecuencia='Monthly', fecha_proxima='2099-01-01', responsable_id='')
+
 ENDPOINTS = [
+    *_html('PROCESS_ENVIRONMENT', '/ambiente/', ('nuevo', ENVIRONMENT),
+           ('1/editar', ENVIRONMENT), '1/eliminar'),
+    Endpoint('PROCESS_ENVIRONMENT', 'read', 'GET', '/ambiente/1', 200),
+    Endpoint('PROCESS_ENVIRONMENT', 'create', 'POST', '/ambiente/1/comprobaciones/nueva',
+             302, dict(fecha='2020-01-01', resultado='conforme', realizado_por='Ana',
+                       evidencia='21 °C', fecha_proxima='2099-01-01')),
     *_html('INFRASTRUCTURE', '/infraestructura/', ('nuevo', INFRASTRUCTURE),
            ('1/editar', INFRASTRUCTURE | {'codigo': 'INF-1'}), '1/eliminar'),
     Endpoint('INFRASTRUCTURE', 'read', 'GET', '/infraestructura/1', 200),
@@ -510,6 +519,7 @@ ADMIN_AUDITOR = {ADMIN, AUDITOR}
 ALL = set(RoleEnum)
 JSON_REGISTER = (ALL, ADMIN_AUDITOR, {ADMIN})
 ALLOWED = {
+    'PROCESS_ENVIRONMENT': JSON_REGISTER,
     'INFRASTRUCTURE': JSON_REGISTER,
     'CUSTOMER_ORDER': JSON_REGISTER,    'RELEASE': JSON_REGISTER,
     'PRODUCTION': JSON_REGISTER,
@@ -604,6 +614,7 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                     RolResponsabilidad(rol="Seed"),
                     RecursoCapacitacion(recurso_necesario="Seed"),
                     ProcesoOperacion(proceso="Seed"),
+                    ProcesoOperacion(proceso="Environment process"),
                     RolResponsabilidad(rol="Seed 2"),  # role 1 stays deletable
                     Person(nombre="Seed"),
                     Person(nombre="Unreferenced"),
@@ -691,6 +702,10 @@ class AccessCharacterizationTestCase(unittest.TestCase):
                 title='Quality results', content='Explain performance', scope=CommunicationScope.ambas,
                 channel=CommunicationChannel.web, owner_id=1, frequency='Every month',
                 next_date=date(2026, 12, 1), audience_text='All staff'))
+            from app.models import CondicionAmbiente, FactorAmbiente
+            db.session.add(CondicionAmbiente(proceso_id=2, factor=FactorAmbiente.fisico,
+                descripcion='Temperature', criterio='18–25 °C', frecuencia='Monthly',
+                fecha_proxima=date(2026, 12, 1)))
             from app.models import ElementoInfraestructura, TipoInfraestructura
             db.session.add(ElementoInfraestructura(codigo='INF-1', nombre='Prensa',
                 tipo=TipoInfraestructura.equipo_proceso, frecuencia='Cada mes',

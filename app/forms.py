@@ -28,7 +28,7 @@ from .models import (
     TipoConfirmacion, TipoEncuesta, TipoHallazgo, TipoProceso, TipoSuministro, TratamientoRiesgo,
     TratamientoSalidaNoConforme, TipoComprobacionEquipo, ResultadoComprobacionEquipo,
     KnowledgeType, CommunicationChannel, CommunicationScope,
-    TipoInfraestructura, TipoMantenimiento, ResultadoMantenimiento,
+    TipoInfraestructura, TipoMantenimiento, ResultadoMantenimiento, FactorAmbiente,
     CustomerOrderKind, RequirementCheck, OrderReviewResult,
     DesignInputType, DesignOutputType, DesignControlKind, DesignControlResult, ProductionKind,
     ProductionControlKind, PreservationAspect, ProductionResult, PropertyIncidentKind, PostDeliveryKind,
@@ -328,6 +328,28 @@ class KnowledgeForm(BaseForm):
     accion_revision_id = SelectField('Origen: acción de revisión por la dirección',
                                      coerce=optional_id, choices=[])
     submit = SubmitField('Guardar')
+
+
+class ProcessEnvironmentForm(BaseForm):
+    proceso_id = SelectField('Proceso', coerce=optional_id, choices=[], validators=[DataRequired()])
+    factor = SelectField('Factor', choices=[(m.name, m.value) for m in FactorAmbiente])
+    descripcion = TextAreaField('Descripción', validators=[DataRequired()])
+    criterio = TextAreaField('Criterio de aceptación', validators=[DataRequired()])
+    frecuencia = TextAreaField('Frecuencia de comprobación', validators=[DataRequired()])
+    responsable_id = person_field('Responsable')
+    fecha_proxima = DateField('Próxima comprobación', validators=[DataRequired()])
+    retirado = BooleanField('Retirada')
+    submit = SubmitField('Guardar')
+
+
+class ProcessEnvironmentCheckForm(BaseForm):
+    fecha = DateField('Fecha', validators=[DataRequired()])
+    resultado = SelectField('Resultado', choices=[(m.name, m.value) for m in ResultadoMantenimiento])
+    realizado_por = StringField('Realizado por', validators=[DataRequired(), Length(max=200)])
+    evidencia = TextAreaField('Evidencia o referencia', validators=[DataRequired()])
+    acciones = TextAreaField('Acciones realizadas (obligatorias si no conforme)')
+    fecha_proxima = DateField('Nueva próxima fecha', validators=[DataRequired()])
+    submit = SubmitField('Registrar comprobación')
 
 
 class InfrastructureForm(BaseForm):

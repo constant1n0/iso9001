@@ -52,7 +52,7 @@ from flask_login import login_required
 from ..extensions import db
 from ..forms import NO_MANAGER, ProcesoForm, RolForm, person_choices
 from ..models import ProcesoOperacion, RolResponsabilidad, TipoProceso
-from ..services import people, process_operations, roles_responsibilities
+from ..services import people, process_environment, process_operations, roles_responsibilities
 from ..services.actor import Actor
 from ..utils.permissions import require_permission
 from ..utils.web_actor import current_actor
@@ -119,9 +119,11 @@ def show_process(process_id: int) -> ResponseReturnValue:
     proceso = process_operations.get(db.session, actor, process_id)
     relacionados = process_operations.related(db.session, actor, process_id)
     citas = process_operations.cited_by(db.session, actor, process_id)
-    cited = citas.objetivos or citas.riesgos or citas.oportunidades
+    environment = process_environment.items.list_(db.session, actor, proceso_id=process_id)
+    cited = citas.objetivos or citas.riesgos or citas.oportunidades or environment
     return render_template(
         'procesos/detail.html', proceso=proceso, relacionados=relacionados, citas=citas,
+        environment=environment,
         responsable=people.names(db.session, actor, [proceso.responsable_id]).get(
             proceso.responsable_id),
         eliminable=not relacionados and not cited)

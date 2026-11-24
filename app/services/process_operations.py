@@ -38,8 +38,9 @@ A process that quality objectives cite cannot be deleted (``Conflict`` with
 (``CITED_BY_RISKS``), nor one related to other processes (``HAS_RELATIONS``),
 nor one linked to external providers (``LINKED_TO_PROVIDERS``), nor one that
 changes to the QMS affect (``LINKED_TO_CHANGES``, CP1 of ``change-planning``):
-nor one cited by nonconformities (``CITED_BY_NONCONFORMITIES``, 8.7).
-``delete`` checks all six, and the ``ON DELETE RESTRICT`` foreign keys, which
+nor one cited by nonconformities (``CITED_BY_NONCONFORMITIES``, 8.7), nor one
+with environment conditions (``CITED_BY_ENVIRONMENT``, 7.1.4).
+``delete`` checks these citations, and the ``ON DELETE RESTRICT`` foreign keys, which
 SQLite only enforces on request, refuse a citation, relation or link added
 after the check. Any other conflict keeps its own message.
 """
@@ -57,7 +58,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import (
-    NoConformidad, ObjetivoCalidad, Oportunidad, ProcesoOperacion, Riesgo, TipoProceso, cambio_procesos,
+    CondicionAmbiente, NoConformidad, ObjetivoCalidad, Oportunidad, ProcesoOperacion, Riesgo, TipoProceso, cambio_procesos,
     proceso_relaciones, proveedor_procesos,
 )
 from . import audit, crud, fields, nonconformities, people, policy, quality_objectives, risks
@@ -123,6 +124,7 @@ LINKED_TO_PROVIDERS = (
     "quítalo antes de esos proveedores."
 )
 LINKED_TO_CHANGES = "No se puede eliminar un proceso afectado por cambios en el SGC."
+CITED_BY_ENVIRONMENT = 'No se puede eliminar un proceso con condiciones de ambiente.'
 CITED_BY_NONCONFORMITIES = (
     "No se puede eliminar un proceso al que se refieren no conformidades; "
     "quítalo antes de esos registros."
@@ -297,7 +299,8 @@ def delete(session: Session, actor: Actor, record_id: int) -> None:
     ``CITED_BY_RISKS``, one with relations ``HAS_RELATIONS``, one linked to
     external providers ``LINKED_TO_PROVIDERS`` and one that changes to the QMS
     affect ``LINKED_TO_CHANGES``, or one cited by nonconformities
-    ``CITED_BY_NONCONFORMITIES``; so does one cited, related or
+    ``CITED_BY_NONCONFORMITIES``, or one with environment conditions
+    ``CITED_BY_ENVIRONMENT``; so does one cited, related or
     linked after the check, when the flush breaks one of those
     foreign keys and the database names it (PostgreSQL). A failed flush leaves
     the session unusable until rolled back, so nothing can be checked again:
@@ -318,6 +321,8 @@ def delete(session: Session, actor: Actor, record_id: int) -> None:
         raise Conflict(LINKED_TO_CHANGES)
     if _cited_by_nonconformities(session, found.id_proceso):
         raise Conflict(CITED_BY_NONCONFORMITIES)
+    if session.scalar(select(exists().where(CondicionAmbiente.proceso_id == found.id_proceso))):
+        raise Conflict(CITED_BY_ENVIRONMENT)
     try:
         crud.delete(SPEC, session, actor, found.id_proceso)
     except Conflict as exc:
@@ -448,7 +453,8 @@ RELATIONS_FKS = frozenset(fk.constraint.name for fk in proceso_relaciones.foreig
 # related" or "still linked".
 _CITED_BY = {OBJECTIVES_FK: CITED_BY_OBJECTIVES, **dict.fromkeys(RISKS_FKS, CITED_BY_RISKS),
              **dict.fromkeys(RELATIONS_FKS, HAS_RELATIONS), PROVIDERS_FK: LINKED_TO_PROVIDERS,
-             CHANGES_FK: LINKED_TO_CHANGES, NONCONFORMITIES_FK: CITED_BY_NONCONFORMITIES}
+             CHANGES_FK: LINKED_TO_CHANGES, NONCONFORMITIES_FK: CITED_BY_NONCONFORMITIES,
+             _foreign_key(CondicionAmbiente): CITED_BY_ENVIRONMENT}
 
 
 def _violated_constraint(exc: BaseException | None) -> str | None:

@@ -56,6 +56,10 @@ SEEDS = {
     "roles_responsabilidades": {"rol": "Director"},
     "recursos_capacitacion": {"recurso_necesario": "Formacion"},
     "procesos": {"proceso": "Compras"},
+    'condiciones_ambiente': {'proceso_id': 1, 'factor': 'fisico', 'descripcion': 'Temperature',
+        'criterio': '18–25 °C', 'frecuencia': 'Monthly', 'fecha_proxima': '2020-01-01'},
+    'comprobaciones_ambiente': {'condicion_id': 1, 'fecha': '2020-01-01', 'resultado': 'conforme',
+        'realizado_por': 'Ana', 'evidencia': '21 °C', 'fecha_proxima': '2099-01-01'},
     "indicadores_auditoria": {"area_auditoria": "Calidad"},
     "personas": {"nombre": "Ana Pérez"},
     "communication": {"title": "Quality results", "content": "Explain performance",
@@ -209,6 +213,14 @@ class McpDbCase(unittest.IsolatedAsyncioTestCase):
     def seed(self, slug: str, **overrides) -> int:
         """Create a record through its service (as an administrator) and return its id."""
         module = MODULES[slug]
+        if slug == 'condiciones_ambiente':
+            from app.models import ProcesoOperacion
+            if db.session.get(ProcesoOperacion, 1) is None:
+                self.seed('procesos')
+        if slug == 'comprobaciones_ambiente':
+            from app.models import CondicionAmbiente
+            if db.session.get(CondicionAmbiente, 1) is None:
+                self.seed('condiciones_ambiente')
         if slug == 'mantenimientos_infraestructura':
             from app.models import ElementoInfraestructura
             if db.session.get(ElementoInfraestructura, 1) is None:

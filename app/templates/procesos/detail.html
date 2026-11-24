@@ -72,6 +72,14 @@
     {% endfor %}
 </section>
 
+<section aria-labelledby="ambiente">
+    <div class="section-header"><h2 id="ambiente">Ambiente para la operación del proceso · 7.1.4</h2></div>
+    {% call(condition) registros_card('condiciones-ambiente', 'Condiciones de ambiente', environment, 'No hay condiciones de ambiente registradas.') %}
+    <a class="list__primary" href="{{ url_for('process_environment.show_item', item_id=condition.id) }}">{{ condition.descripcion }}</a>
+    <span class="list__secondary">{{ condition.factor.value }} · {{ 'Retirada' if condition.retirado else 'En uso' }} · {{ condition.criterio }}</span>
+    {% endcall %}
+</section>
+
 <section aria-labelledby="citas">
     <div class="section-header"><h2 id="citas">Registros que citan el proceso</h2></div>
     <div class="grid grid--3">

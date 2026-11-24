@@ -59,7 +59,7 @@ nunca puede eliminar.
 
 ## Módulos
 
-`qms_modules` enumera los módulos: `infraestructura`, `mantenimientos_infraestructura`, `customer_orders`, `customer_order_revisions`, `product_releases`, `release_verifications`, `post_delivery_activities`, `customer_property`, `property_incidents`, `production_changes`, `production_control_records`, `production_preservation_records`, `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
+`qms_modules` enumera los módulos: `condiciones_ambiente`, `comprobaciones_ambiente`, `infraestructura`, `mantenimientos_infraestructura`, `customer_orders`, `customer_order_revisions`, `product_releases`, `release_verifications`, `post_delivery_activities`, `customer_property`, `property_incidents`, `production_changes`, `production_control_records`, `production_preservation_records`, `production_orders`, `design_changes`, `design_projects`, `design_stages`, `design_inputs`, `design_outputs`, `design_planned_controls`, `design_control_records`, `communication`, `communication_log`, `knowledge`, `equipos_medicion`, `comprobaciones_equipo`, `no_conformidades`, `auditorias`,
 `programas_auditoria`, `hallazgos_auditoria`, `documentos`,
 `capacitaciones`, `satisfaccion_clientes`, `partes_interesadas`, `mejoras`,
 `roles_responsabilidades`, `recursos_capacitacion`, `procesos`,
@@ -520,6 +520,40 @@ Infraestructura y mantenimiento (7.1.3):
 {"module": "mantenimientos_infraestructura", "data": {"elemento_id": 1, "fecha": "2020-01-01", "tipo": "preventivo", "resultado": "conforme", "realizado_por": "Servicio técnico", "evidencia": "Parte M-1", "fecha_proxima": "2020-07-01"}}
 ```
 
+Ambiente de los procesos (7.1.4):
+
+- `condiciones_ambiente`: obligatorios `proceso_id` (exactamente un proceso
+  existente de `procesos`), `factor` (`fisico`, `social`, `psicologico`),
+  `descripcion`, `criterio` de aceptación, `frecuencia` libre y `fecha_proxima`
+  (YYYY-MM-DD). Opcionales `responsable_id` (persona activa al elegirla;
+  vínculo histórico retenido, `null` lo quita) y `retirado` (falso por defecto).
+  `qms_update` admite cambios parciales y retirada; un envío idéntico no audita.
+  No modifica el texto de recursos del proceso.
+- Filtros combinables: `proceso_id`, `factor`, `retirado` y `vencida` booleanos.
+  Por defecto se consultan todas las condiciones, incluidas las retiradas.
+  Las lecturas devuelven etiquetas españolas de factor y `vencida`: no retirada
+  con próxima fecha estrictamente anterior a hoy. La fecha vale durante todo ese día.
+- `comprobaciones_ambiente` solo crea, consulta y lista: `condicion_id`, `fecha`
+  no futura ni anterior a la última comprobación, `resultado` (`conforme` o
+  `no_conforme`), `realizado_por`, `evidencia` textual o referencia y `fecha_proxima`
+  explícita posterior a `fecha`, todos obligatorios. `no_conforme` exige `acciones`
+  no vacías. No acepta cita de NC. Se permiten varias comprobaciones el mismo día.
+  Filtros `condicion_id` y `resultado`; orden por fecha e id descendentes.
+- La nueva próxima fecha se aplica a la condición en la misma transacción auditada;
+  no se calcula ni genera notificaciones. Retiradas no admiten nuevas comprobaciones.
+  El historial es inmutable: `qms_update` se rechaza incluso vacío, sin cambiar datos
+  ni auditoría; no hay borrado MCP. Solo se eliminan condiciones sin historial en la web.
+  Los procesos y las personas citados se conservan por FK RESTRICT.
+- Todos leen con ámbito `read`; Administrador y Auditor escriben con `write`.
+  Los filtros MCP siguen la validación de `qms_modules`, como los demás módulos;
+  los selectores web ignoran valores desconocidos.
+
+Ejemplo de comprobación (la condición 1 debe existir y estar en uso):
+
+```json
+{"module": "comprobaciones_ambiente", "data": {"condicion_id": 1, "fecha": "2020-01-01", "resultado": "conforme", "realizado_por": "Ana", "evidencia": "Lectura de temperatura: 21 °C", "fecha_proxima": "2020-02-01"}}
+```
+
 Equipos y comprobaciones (7.1.5):
 
 - `equipos_medicion`: `codigo` único y `nombre` obligatorios; `numero_serie`,
@@ -757,7 +791,7 @@ leen ambos módulos, y solo los tokens de ADMIN o AUDITOR (con el ámbito
   indirectamente (`null` lo deja sin línea de reporte).
 - Solo en la web: las eliminaciones, que rechazan un proceso relacionado con
   otros, citado por objetivos, riesgos u oportunidades o vinculado a
-  proveedores, y un rol con
+  proveedores o con condiciones de ambiente, y un rol con
   requisitos de competencia o con roles que le reportan. Las páginas
   `/procesos/` y `/roles/` muestran además los registros que citan un proceso,
   y la línea de reporte, las personas y los requisitos de competencia de un

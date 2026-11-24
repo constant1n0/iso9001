@@ -29,6 +29,7 @@ Documentación técnica:
 - [Panel de control](#panel-de-control)
 - [Usuarios](#usuarios)
 - [Infraestructura y mantenimiento](#infraestructura-y-mantenimiento)
+- [Ambiente de los procesos](#ambiente-de-los-procesos)
 - [Equipos y calibraciones](#equipos-y-calibraciones)
 - [Conocimientos y lecciones](#conocimientos-y-lecciones)
 - [Personas y competencia](#personas-y-competencia)
@@ -278,8 +279,41 @@ conserva el historial. Todos consultan; Administrador y Auditor mantienen y
 registran. Solo Administrador puede eliminar elementos sin historial; con
 historial, retíralos. Las personas y no conformidades citadas quedan protegidas
 frente al borrado. La organización conserva la responsabilidad de realizar el
-mantenimiento y custodiar la evidencia; este registro no cubre todavía el
-ambiente para la operación de los procesos (7.1.4).
+mantenimiento y custodiar la evidencia. El ambiente para la operación de los
+procesos se registra por separado en el apartado siguiente (7.1.4).
+
+## Ambiente de los procesos
+
+En **Infraestructura → Ambiente de los procesos** (`/ambiente/`), conserva las
+condiciones necesarias para operar cada proceso (7.1.4). Todos consultan;
+Administrador y Auditor crean, editan, retiran y registran comprobaciones.
+
+1. Pulsa **Nueva condición**. Elige exactamente un **Proceso** y un **Factor**:
+   **Físico**, **Social** o **Psicológico**.
+2. Indica **Descripción**, **Criterio de aceptación**, **Frecuencia de comprobación**
+   en texto libre y **Próxima comprobación**, todos obligatorios. La persona
+   **Responsable** es opcional y debe estar activa al elegirla; se conserva el
+   vínculo si después se desactiva.
+3. Desde la ficha, pulsa **Registrar comprobación** e indica fecha no futura ni
+   anterior a la última registrada, resultado **Conforme** o **No conforme**,
+   quién la realizó y evidencia o referencia textual obligatoria (no un fichero).
+   **No conforme** exige explicar las acciones realizadas. No hay cita de NC.
+4. Indica la **Nueva próxima fecha**, obligatoria y posterior a la comprobación.
+   Se conserva en el historial y actualiza la condición en la misma transacción
+   auditada. Nunca se calcula a partir de la frecuencia.
+
+La lista filtra por proceso, factor, estado y plazo; ignora selectores desconocidos.
+**Vencida** significa no retirada con próxima fecha anterior a hoy: la fecha es
+válida durante todo ese día. No se envían notificaciones. La ficha del proceso
+muestra sus condiciones con enlaces; no cambia su texto de recursos.
+
+El historial es inmutable en web y MCP: no se edita ni elimina. Para rectificar,
+registra otra comprobación; se admiten varias el mismo día, por orden de registro.
+Una condición **Retirada** conserva el historial y no admite comprobaciones nuevas.
+Solo Administrador web elimina condiciones sin historial; con historial, retíralas.
+Los procesos y personas citados no se pueden eliminar, incluso tras la retirada.
+La organización decide la suficiencia de los criterios, realiza las comprobaciones
+y custodia la evidencia; registrar condiciones no prueba que se hayan comprobado.
 
 ## Equipos y calibraciones
 
@@ -534,6 +568,7 @@ puede consultar.
 | **Contexto** | **Contexto** 4.1, **Partes interesadas** 4.2, **Alcance del SGC** 4.3 |
 | **Calidad** | **Procesos** 4.4, **Riesgos** 6.1, **Oportunidades** 6.1, **Objetivos de calidad** 6.2, **Diseño y desarrollo** 8.3, **Indicadores de auditoría** 9.1, **Auditorías** 9.2, **Programas de auditoría** 9.2.2, **Revisión por la dirección** 9.3, **No conformidades** 10.2, **Mejoras** 10.3 |
 | **Clientes** | **Pedidos y contratos** 8.2, **Cliente** 8.2, **Reclamaciones** 9.1.2, **Satisfacción** 9.1.2 |
+| **Infraestructura** | **Infraestructura** 7.1.3, **Ambiente de los procesos** 7.1.4 |
 | **Personas y competencia** | **Roles y responsabilidades** 5.3, **Personas** 7.2, **Competencias requeridas** 7.2, **Matriz de competencias** 7.2, **Capacitaciones** 7.2, **Confirmaciones de lectura** 7.3, **Plan de comunicación** 7.4, **Recursos de capacitación** 7.1 |
 | **Documentación** | **Documentos** 7.5 |
 | **Administración** | **Usuarios** 5.3 |
@@ -588,6 +623,7 @@ aprobar en cada módulo.
 | Usuarios | Consultar, crear, editar, desactivar, reactivar, enviar enlaces de restablecimiento | Consultar | Sin acceso |
 | Perfil propio | Todo | Todo | Todo |
 | Personas | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
+| Ambiente de los procesos | Consultar, crear, editar, retirar; eliminar sin historial; registrar comprobaciones inmutables | Consultar, crear, editar, retirar y registrar comprobaciones inmutables | Consultar |
 | Competencia (requisitos, competencias acreditadas, matriz) | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar |
 | Capacitaciones | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar, crear, editar |
 | Confirmaciones de lectura | Consultar, crear, editar, eliminar | Consultar, crear, editar | Consultar, crear, editar |
