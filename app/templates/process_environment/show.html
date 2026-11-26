@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, delete_form %}
+{% block title %}{{ item.descripcion }}{% endblock %}
+{% block content %}
+{% call page_header('7.1.4 · Ambiente de los procesos', item.descripcion) %}
+{% if can('update', 'process_environment') %}<a class="btn" href="{{ url_for('process_environment.edit_item', item_id=item.id) }}">Editar condición</a>{% endif %}
+{% if can('create', 'process_environment') and not item.retirado %}<a class="btn btn--primary" href="{{ url_for('process_environment.new_check', item_id=item.id) }}">Registrar comprobación</a>{% endif %}
+{% if can('delete', 'process_environment') and total == 0 %}{{ delete_form(url_for('process_environment.delete_item', item_id=item.id), '¿Eliminar la condición?') }}{% endif %}
+{% endcall %}
+<article class="card"><h2>{{ 'Retirada' if item.retirado else 'Vencida' if late else 'En plazo' }}</h2>
+<dl><dt>Proceso</dt><dd><a href="{{ url_for('proceso.show_process', process_id=item.proceso_id) }}">{{ item.process.proceso }}</a></dd>
+{% for label, value in [('Factor', item.factor.value), ('Criterio de aceptación', item.criterio), ('Responsable', owners.get(item.responsable_id)), ('Frecuencia', item.frecuencia), ('Próxima comprobación', item.fecha_proxima)] %}<dt>{{ label }}</dt><dd>{{ value or '—' }}</dd>{% endfor %}</dl></article>
+<h2>Comprobaciones</h2>
+<p>Historial inmutable: no se edita ni se elimina. Cada comprobación indica una nueva próxima fecha explícita; no se calcula a partir de la frecuencia. Una retirada impide registrar comprobaciones nuevas.</p>
+{% for entry in entries %}
+<article class="card"><h3>{{ entry.fecha.strftime('%d/%m/%Y') }} · {{ entry.resultado.value }}</h3>
+<dl>{% for label, value in [('Realizado por', entry.realizado_por), ('Evidencia', entry.evidencia), ('Acciones realizadas', entry.acciones), ('Nueva próxima fecha', entry.fecha_proxima)] %}<dt>{{ label }}</dt><dd>{{ value or '—' }}</dd>{% endfor %}</dl></article>
+{% else %}<p>No hay comprobaciones registradas.</p>{% endfor %}
+<nav class="pagination" aria-label="Historial de comprobaciones">
+{% if page > 1 %}<a href="{{ url_for('process_environment.show_item', item_id=item.id, page=page-1, per_page=per_page) }}">Anterior</a>{% endif %}
+<span>Página {{ page }} · {{ total }} comprobaciones</span>
+{% if page * per_page < total %}<a href="{{ url_for('process_environment.show_item', item_id=item.id, page=page+1, per_page=per_page) }}">Siguiente</a>{% endif %}
+</nav>
+{% endblock %}

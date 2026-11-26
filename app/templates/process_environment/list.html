@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "_partials/ui.html" import page_header, empty_state %}
+{% block title %}Ambiente de los procesos{% endblock %}
+{% block content %}
+{% call page_header('7.1.4 · Recursos', 'Ambiente de los procesos') %}
+{% if can('create', 'process_environment') %}<a class="btn btn--primary" href="{{ url_for('process_environment.new_item') }}">Nueva condición</a>{% endif %}
+{% endcall %}
+<form method="get">
+  <label for="proceso_id">Proceso</label><select name="proceso_id" id="proceso_id"><option value="">Todos</option>{% for process in processes %}<option value="{{ process.id_proceso }}" {% if proceso_id == process.id_proceso %}selected{% endif %}>{{ process.proceso }}</option>{% endfor %}</select>
+  <label for="factor">Factor</label><select name="factor" id="factor"><option value="">Todos</option>{% for member in factors %}<option value="{{ member.name }}" {% if factor == member.name %}selected{% endif %}>{{ member.value }}</option>{% endfor %}</select>
+  <label for="retirado">Estado</label><select name="retirado" id="retirado"><option value="">Todos</option><option value="0" {% if retirado == '0' %}selected{% endif %}>En uso</option><option value="1" {% if retirado == '1' %}selected{% endif %}>Retiradas</option></select>
+  <label for="vencida">Plazo</label><select name="vencida" id="vencida"><option value="">Todos</option><option value="1" {% if vencida == '1' %}selected{% endif %}>Vencidas</option><option value="0" {% if vencida == '0' %}selected{% endif %}>No vencidas</option></select>
+  <button class="btn" type="submit">Filtrar</button>
+</form>
+{% if items %}
+<div class="table-wrap"><table><thead><tr><th>Condición</th><th>Proceso</th><th>Factor</th><th>Criterio</th><th>Próxima comprobación</th><th>Estado</th></tr></thead>
+<tbody>{% for item in items %}<tr><td><a href="{{ url_for('process_environment.show_item', item_id=item.id) }}">{{ item.descripcion }}</a></td><td><a href="{{ url_for('proceso.show_process', process_id=item.proceso_id) }}">{{ item.process.proceso }}</a></td><td>{{ item.factor.value }}</td><td>{{ item.criterio }}</td><td>{{ item.fecha_proxima }}</td><td>{{ 'Retirada' if item.retirado else 'Vencida' if late[item.id] else 'En plazo' }}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}{{ empty_state('No hay condiciones que coincidan.') }}{% endif %}
+<nav class="pagination" aria-label="Páginas de condiciones de ambiente">
+{% if page > 1 %}<a href="{{ url_for('process_environment.list_items', factor=factor, retirado=retirado, vencida=vencida, proceso_id=proceso_id, page=page-1, per_page=per_page) }}">Anterior</a>{% endif %}
+<span>Página {{ page }} · {{ total }} condiciones</span>
+{% if page * per_page < total %}<a href="{{ url_for('process_environment.list_items', factor=factor, retirado=retirado, vencida=vencida, proceso_id=proceso_id, page=page+1, per_page=per_page) }}">Siguiente</a>{% endif %}
+</nav>
+{% endblock %}

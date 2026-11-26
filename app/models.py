@@ -2362,6 +2362,53 @@ class MantenimientoInfraestructura(RecordMetadataMixin, db.Model):
     fecha_proxima = db.Column(db.Date, nullable=False)
 
 
+class FactorAmbiente(enum.Enum):
+    fisico = 'Físico'
+    social = 'Social'
+    psicologico = 'Psicológico'
+
+
+class CondicionAmbiente(RecordMetadataMixin, db.Model):
+    """Required environment for exactly one process (ISO 9001 7.1.4)."""
+
+    __tablename__ = 'condiciones_ambiente'
+    id = db.Column(db.Integer, primary_key=True)
+    proceso_id = db.Column(db.Integer, db.ForeignKey(
+        'procesos_operacion.id_proceso', name='fk_condiciones_ambiente_proceso_id',
+        ondelete='RESTRICT', onupdate='RESTRICT'), nullable=False, index=True)
+    factor = db.Column(text_enum(FactorAmbiente, 'ck_condiciones_ambiente_factor'), nullable=False)
+    descripcion = db.Column(db.Text, nullable=False)
+    criterio = db.Column(db.Text, nullable=False)
+    frecuencia = db.Column(db.Text, nullable=False)
+    responsable_id = person_link('condiciones_ambiente', 'responsable_id')
+    fecha_proxima = db.Column(db.Date, nullable=False)
+    retirado = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    process = db.relationship('ProcesoOperacion', lazy='selectin')
+
+
+class ComprobacionAmbiente(RecordMetadataMixin, db.Model):
+    """Immutable check evidence and the next date explicitly chosen then."""
+
+    __tablename__ = 'comprobaciones_ambiente'
+    __table_args__ = (
+        db.CheckConstraint('length(trim(evidencia)) > 0', name='ck_comp_ambiente_evidencia'),
+        db.CheckConstraint('fecha_proxima > fecha', name='ck_comp_ambiente_proxima'),
+        db.CheckConstraint("resultado = 'conforme' OR (acciones IS NOT NULL AND "
+                           "length(trim(acciones)) > 0)", name='ck_comp_ambiente_acciones'),
+        db.Index('ix_comp_ambiente_historial', 'condicion_id', 'fecha', 'id'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    condicion_id = db.Column(db.Integer, db.ForeignKey(
+        'condiciones_ambiente.id', name='fk_comp_ambiente_condicion_id',
+        ondelete='RESTRICT', onupdate='RESTRICT'), nullable=False)
+    fecha = db.Column(db.Date, nullable=False)
+    resultado = db.Column(text_enum(ResultadoMantenimiento, 'ck_comp_ambiente_resultado'), nullable=False)
+    realizado_por = db.Column(db.String(200), nullable=False)
+    evidencia = db.Column(db.Text, nullable=False)
+    acciones = db.Column(db.Text)
+    fecha_proxima = db.Column(db.Date, nullable=False)
+
+
 class TipoComprobacionEquipo(enum.Enum):
     calibracion = 'Calibración'
     verificacion = 'Verificación'

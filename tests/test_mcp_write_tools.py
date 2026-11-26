@@ -16,7 +16,7 @@ from app.mcp_server.registry import MODULES
 from app.models import AuditLog, EstadoNoConformidad, NoConformidad, User
 from app.services import audit
 
-JSON_REGISTERS = ('infraestructura', 'mantenimientos_infraestructura', 'customer_orders', 'customer_order_revisions', 'product_releases', 'release_verifications', 'post_delivery_activities', 'customer_property', 'property_incidents', 'production_changes', 'production_orders', 'design_projects', 'design_stages', 'design_inputs', 'design_outputs',
+JSON_REGISTERS = ('condiciones_ambiente', 'comprobaciones_ambiente', 'infraestructura', 'mantenimientos_infraestructura', 'customer_orders', 'customer_order_revisions', 'product_releases', 'release_verifications', 'post_delivery_activities', 'customer_property', 'property_incidents', 'production_changes', 'production_orders', 'design_projects', 'design_stages', 'design_inputs', 'design_outputs',
                   'design_planned_controls', 'design_control_records', 'design_changes', "communication", "communication_log", "knowledge", "roles_responsabilidades", "recursos_capacitacion", "procesos",
                   "indicadores_auditoria", "riesgos", "oportunidades", "acciones_riesgo",
                   "proveedores", "evaluaciones_proveedor", "cuestiones_contexto",
@@ -76,14 +76,14 @@ class EveryModuleTestCase(McpDbCase):
                 # A required text field, or any text field when none is required.
                 field = next(f.name for f in sorted(module.fields, key=lambda f: not f.required)
                              if f.type == "string")
-                if slug in ('mantenimientos_infraestructura', 'comprobaciones_equipo', 'communication_log', 'design_control_records', 'design_changes',
+                if slug in ('comprobaciones_ambiente', 'mantenimientos_infraestructura', 'comprobaciones_equipo', 'communication_log', 'design_control_records', 'design_changes',
                             'production_control_records', 'production_preservation_records', 'property_incidents', 'release_verifications'):
                     persisted_before = await self.call(actor, "qms_get", {
                         "module": slug, "id": record["id"]})
                     self.assertFalse(persisted_before.is_error, persisted_before.content)
                 updated = await self.call(actor, "qms_update", {
                     "module": slug, "id": record["id"], "data": {field: "Cambiado"}})
-                if slug in ('mantenimientos_infraestructura', 'comprobaciones_equipo', 'communication_log', 'design_control_records', 'design_changes',
+                if slug in ('comprobaciones_ambiente', 'mantenimientos_infraestructura', 'comprobaciones_equipo', 'communication_log', 'design_control_records', 'design_changes',
                             'production_control_records', 'production_preservation_records', 'property_incidents', 'release_verifications'):
                     self.assertTrue(updated.is_error, updated.content)
                     self.assertIn('No tienes permiso' if slug in ('design_changes', 'release_verifications') else
@@ -96,9 +96,9 @@ class EveryModuleTestCase(McpDbCase):
                 self.assertEqual(record["id"], updated.structured_content["id"])
         db.session.expire_all()
         rows = [row for row in audit_rows() if row.channel == 'mcp']
-        # Nine modules refuse updates; NC, communication and maintenance update parents;
+        # Ten modules refuse updates; NC, communication, maintenance and checks update parents;
         # output creation also creates one audited DD4 version metadata row.
-        self.assertEqual(len(writable) + (len(writable) - 9) + 5, len(rows))
+        self.assertEqual(len(writable) + (len(writable) - 10) + 6, len(rows))
         self.assertEqual({"mcp"}, {r.channel for r in rows})
         self.assertEqual({7}, {r.actor_user_id for r in rows})
         self.assertEqual({"create", "update"}, {r.action for r in rows})
